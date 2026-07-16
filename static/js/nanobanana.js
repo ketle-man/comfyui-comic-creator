@@ -281,7 +281,7 @@ class NanobananaManager {
                 this.generatedImages.push({ url: `/ccc_nanobanana_output/${filename}`, b64: b64 });
                 // Eagle 自動保存
                 if (typeof saveToEagle === 'function' && typeof _eagleSettings !== 'undefined' && _eagleSettings.autoSaveNanobanana) {
-                    saveToEagle(`/ccc_nanobanana_output/${filename}`, filename, ['comfyui-comic-creater', 'nanobanana']);
+                    saveToEagle(`/ccc_nanobanana_output/${filename}`, filename, ['comfyui-comic-creator', 'nanobanana']);
                 }
             }
 

@@ -63,7 +63,7 @@ Place this folder inside ComfyUI's `custom_nodes/` directory:
 ```
 ComfyUI/
 └── custom_nodes/
-    └── comfyui-comic-creater/
+    └── comfyui-comic-creator/
         ├── __init__.py
         ├── py/
         ├── templates/
@@ -83,7 +83,7 @@ After restarting ComfyUI, a **CC** button appears in the top bar. Click it to op
 You can install it via ComfyUI Manager's "Install via Git URL" using the following URL:
 
 ```
-https://github.com/ketle-man/comfyui-comic-creater
+https://github.com/ketle-man/comfyui-comic-creator
 ```
 
 ## Optional setup
@@ -147,7 +147,7 @@ See the in-app **Help** tab (available in Japanese, English, and Chinese, with s
 ## Architecture
 
 ```
-comfyui-comic-creater/
+comfyui-comic-creator/
 ├── __init__.py              # ComfyUI extension entry point (WEB_DIRECTORY, route registration)
 ├── py/
 │   ├── ccc.py                 # aiohttp route handlers

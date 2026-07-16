@@ -139,7 +139,7 @@ def _load_env_file():
             if key and key not in os.environ:
                 os.environ[key] = value
     except Exception as e:
-        print(f"[comic-creater] .env の読み込みに失敗しました: {e}")
+        print(f"[comic-creator] .env の読み込みに失敗しました: {e}")
 
 _load_env_file()
 
@@ -237,7 +237,7 @@ async def serve_index(request):
     html_path = TEMPLATES_DIR / 'index.html'
     if html_path.exists():
         return web.Response(text=html_path.read_text(encoding='utf-8'), content_type='text/html', charset='utf-8')
-    return web.Response(text='<h1>Comic Creater - index.html not found</h1>', content_type='text/html')
+    return web.Response(text='<h1>Comic Creator - index.html not found</h1>', content_type='text/html')
 
 async def handle_refresh_assets(request):
     data = _generate_assets_json()
@@ -703,7 +703,7 @@ async def _api_post_dispatch(request):
 
 # ─── Route registration ───────────────────────────────────────────────────────
 
-class ComicCreater:
+class ComicCreator:
     @classmethod
     def add_routes(cls):
         app = PromptServer.instance.app
@@ -760,4 +760,4 @@ class ComicCreater:
         except Exception as e:
             print(f"[ccc] assets scan error: {e}")
 
-        print("[ccc] Comic Creater loaded → http://127.0.0.1:8189/ccc")
+        print("[ccc] Comic Creator loaded → http://127.0.0.1:8189/ccc")

@@ -63,7 +63,7 @@
 ```
 ComfyUI/
 └── custom_nodes/
-    └── comfyui-comic-creater/
+    └── comfyui-comic-creator/
         ├── __init__.py
         ├── py/
         ├── templates/
@@ -83,7 +83,7 @@ ComfyUI/
 可通过 ComfyUI Manager 的"Install via Git URL"输入以下地址安装：
 
 ```
-https://github.com/ketle-man/comfyui-comic-creater
+https://github.com/ketle-man/comfyui-comic-creator
 ```
 
 ## 可选设置
@@ -147,7 +147,7 @@ NANOBANANA_API_KEY=你的API密钥
 ## 架构
 
 ```
-comfyui-comic-creater/
+comfyui-comic-creator/
 ├── __init__.py              # ComfyUI扩展入口（WEB_DIRECTORY、路由注册）
 ├── py/
 │   ├── ccc.py                 # aiohttp 路由处理程序

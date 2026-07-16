@@ -5,7 +5,7 @@
  * Mask Editor One compatible extensions (Color/Alpha/Text/Vector/Shape
  * mask subtools, SAM3 segmentation, ABR brush picker). SAM3 and ABR
  * brush features require backend routes (/mask_editor/*) that do not
- * exist on comic-creater, so their UI is present but stays disabled.
+ * exist on comic-creator, so their UI is present but stays disabled.
  */
 
 import { LayerManager, Layer } from "./image-tab/LayerManager.js";
@@ -400,9 +400,9 @@ class ImageTab {
             processing: false,
             aborted: false,
         };
-        // BiRefNet 利用可否（comic-creater側に対応ルートが無い場合は常にfalse）
+        // BiRefNet 利用可否（comic-creator側に対応ルートが無い場合は常にfalse）
         this._birefnetAvailable = false;
-        // Mask Editor One SAM3 状態（comic-creater側に対応ルートが無い場合は常にfalse）
+        // Mask Editor One SAM3 状態（comic-creator側に対応ルートが無い場合は常にfalse）
         this._sam3Available = false;
         this._sam3Results   = [];   // [{mask_b64, score, area}, ...]
         this._sam3Prompt    = "";
@@ -410,7 +410,7 @@ class ImageTab {
         this._sam3Loading   = false;
         this._sam3Mode      = "add";        // "add" | "erase"
         this._sam3Selected  = new Set();    // 選択中の結果インデックス
-        // ABR brush（comic-creater側に対応ルートが無い場合は常にfalse）
+        // ABR brush（comic-creator側に対応ルートが無い場合は常にfalse）
         this._abrAvailable = false;
         this._abrBrushTree = [];
         // 全レイヤーに掛かる全体不透明度（imgeditタブの調整レイヤーパネルから移植）
@@ -3356,7 +3356,7 @@ class ImageTab {
         }
     }
 
-    // comic-creater既存のEagle連携（main.js の window.saveToEagle）を使って保存する。
+    // comic-creator既存のEagle連携（main.js の window.saveToEagle）を使って保存する。
     // workflow studio側の「Save to Gallery」に相当（wfmギャラリーが無いためEagleに差し替え）。
     async _saveToEagle() {
         if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
@@ -3378,7 +3378,7 @@ class ImageTab {
         const dataUrl = canvas.toDataURL("image/png");
 
         try {
-            const { ok, message } = await window.saveToEagle(dataUrl, safeName, ["comfyui-comic-creater", "image-tab"]);
+            const { ok, message } = await window.saveToEagle(dataUrl, safeName, ["comfyui-comic-creator", "image-tab"]);
             if (ok) this._toast(`Saved to Eagle: ${safeName}.png`, "success");
             else this._toast(message ? `Eagle save failed: ${message}` : "Eagle save failed", "error");
         } catch (err) {
@@ -4114,7 +4114,7 @@ class ImageTab {
         });
     }
 
-    // BiRefNet背景除去（Mask Editor One互換ルート。comic-creater側にバックエンドが無い場合は
+    // BiRefNet背景除去（Mask Editor One互換ルート。comic-creator側にバックエンドが無い場合は
     // _birefnetAvailable=false のためUI選択肢自体が無効化され、この経路には来ない）
     async _bgRemoveBiRefNet(dataUrl, onStatus) {
         const NODE_ID = "cc_image_tab_bgremove";
@@ -4291,7 +4291,7 @@ class ImageTab {
         }
     }
 
-    // ── G'MIC連携（comic-creater既存ルート /api/ccc/local-gmic/* を使用） ──
+    // ── G'MIC連携（comic-creator既存ルート /api/ccc/local-gmic/* を使用） ──
 
     async _gmicOpenGui() {
         if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
@@ -4432,7 +4432,7 @@ class ImageTab {
             // 設定タブの「G'MIC結果を自動保存」がONならEagleへも自動保存する（imgeditタブの挙動を移植）
             if (this._isEagleAutoSaveGmicEnabled() && typeof window.saveToEagle === "function") {
                 const gname = `gmic_image_tab_${Date.now()}.png`;
-                window.saveToEagle(layer.canvas.toDataURL("image/png"), gname, ["comfyui-comic-creater", "gmic"]);
+                window.saveToEagle(layer.canvas.toDataURL("image/png"), gname, ["comfyui-comic-creator", "gmic"]);
             }
 
             this._gmicState.lastResultJobId = null;

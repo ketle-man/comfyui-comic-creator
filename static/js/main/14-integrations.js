@@ -251,7 +251,7 @@ async function loadWfmGalleryTab() {
 // ==============================
 
 /**
- * Comic Creater側の画像(Blob)をWorkflow Studio(iframe)のGenerate UI Image入力スロットへ送信する。
+ * Comic Creator側の画像(Blob)をWorkflow Studio(iframe)のGenerate UI Image入力スロットへ送信する。
  * 送信元は Send CC ボタン押下時の戻り先分岐のため window._ccI2ITargetMode に記録しておく
  * （Workflow Studio側の gallery-tab.js がこのフラグを window.parent 経由で参照する）。
  * @param {Blob} blob
@@ -450,7 +450,7 @@ async function gmicInsertResult() {
         // Eagle 自動保存
         if (_eagleSettings.autoSaveGmic) {
             const gname = `gmic_${Date.now()}.png`;
-            saveToEagle(dataUrl, gname, ['comfyui-comic-creater', 'gmic']);
+            saveToEagle(dataUrl, gname, ['comfyui-comic-creator', 'gmic']);
         }
         const img = new Image();
         img.onload = async () => { await insertImage(dataUrl, img.width, img.height); };
