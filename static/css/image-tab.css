@@ -1,0 +1,619 @@
+/* =============================================
+   Image Tab
+   Ported from ComfyUI-Workflow-Studio's image-edit-tab.css.
+   Local variables map to comic-creater's existing :root palette.
+   ============================================= */
+
+#image-tab {
+    --it-bg: var(--bg-color, #1e1e1e);
+    --it-surface: var(--secondary-color, #2d2d2d);
+    --it-surface-hover: var(--hover-color, #3d3d3d);
+    --it-border: var(--border-color, #3e3e3e);
+    --it-text: var(--text-color, #e0e0e0);
+    --it-text-secondary: var(--text-secondary, #999999);
+    --it-primary: var(--primary-color, #0078d4);
+    --it-success: #4caf50;
+
+    padding: 0;
+    overflow: hidden;
+}
+
+#image-tab.tab-content.active {
+    display: flex;
+    height: 100%;
+}
+
+.ie-editor {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--it-bg);
+}
+
+/* =============================================
+   Left Toolbar
+   ============================================= */
+
+.ie-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 5px;
+    background: var(--it-surface);
+    border-right: 1px solid var(--it-border);
+    width: 46px;
+    flex-shrink: 0;
+}
+
+.ie-tool-btn {
+    width: 34px;
+    height: 34px;
+    border: 1px solid transparent;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--it-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, border-color 0.12s;
+    user-select: none;
+    position: relative;
+}
+
+.ie-tool-btn:hover {
+    background: var(--it-surface-hover);
+    border-color: var(--it-border);
+}
+
+.ie-tool-btn.active {
+    background: var(--it-primary);
+    border-color: var(--it-primary);
+    color: #fff;
+}
+
+/* =============================================
+   Buttons (local to Image tab)
+   ============================================= */
+
+.it-btn {
+    background: var(--it-surface-hover);
+    color: var(--it-text);
+    border: 1px solid var(--it-border);
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+}
+
+.it-btn:hover {
+    background: var(--it-border);
+}
+
+.it-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.it-btn-sm {
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+.it-btn-primary {
+    background: var(--it-primary);
+    border-color: var(--it-primary);
+    color: #fff;
+}
+
+.it-btn-primary:hover {
+    filter: brightness(1.1);
+}
+
+/* =============================================
+   Center column
+   ============================================= */
+
+.ie-center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+}
+
+/* Action bar */
+.ie-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--it-border);
+    background: var(--it-surface);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+/* Tool options bar */
+.ie-tool-options {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--it-border);
+    background: var(--it-surface);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    min-height: 36px;
+    font-size: 12px;
+}
+
+.ie-opt-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ie-opt-group label {
+    color: var(--it-text-secondary);
+    white-space: nowrap;
+}
+
+.ie-opt-select {
+    font-size: 12px;
+    padding: 2px 5px;
+    background: var(--it-surface);
+    color: var(--it-text);
+    border: 1px solid var(--it-border);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.ie-opt-input {
+    font-size: 12px;
+    padding: 2px 5px;
+    background: var(--it-surface);
+    color: var(--it-text);
+    border: 1px solid var(--it-border);
+    border-radius: 4px;
+}
+
+.ie-opt-active {
+    background: var(--it-primary) !important;
+    color: #fff !important;
+    border-color: var(--it-primary) !important;
+}
+
+/* Canvas wrap */
+.ie-canvas-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    background: #1a1a1a;
+    background-image:
+        linear-gradient(45deg, #222 25%, transparent 25%),
+        linear-gradient(-45deg, #222 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #222 75%),
+        linear-gradient(-45deg, transparent 75%, #222 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+
+.ie-canvas-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: top left;
+    line-height: 0;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.6);
+}
+
+.ie-canvas-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: block;
+}
+
+#ie-canvas-bg {
+    z-index: 1;
+}
+
+#ie-canvas-draw {
+    z-index: 2;
+    cursor: crosshair;
+}
+
+#ie-canvas-overlay {
+    z-index: 3;
+    cursor: default;
+    pointer-events: none; /* SelectTool.activate()でautoに変更 */
+}
+
+.ie-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--it-text-secondary);
+    font-size: 14px;
+    pointer-events: none;
+    gap: 8px;
+}
+
+.ie-placeholder-icon {
+    font-size: 40px;
+    opacity: 0.3;
+}
+
+/* Zoom bar */
+.ie-zoom-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-top: 1px solid var(--it-border);
+    background: var(--it-surface);
+    font-size: 12px;
+    flex-shrink: 0;
+    color: var(--it-text-secondary);
+}
+
+#ie-zoom-label {
+    min-width: 38px;
+    text-align: right;
+    color: var(--it-text);
+}
+
+/* =============================================
+   Properties Pane (left of Layers panel)
+   ============================================= */
+
+.ie-props-pane {
+    width: 160px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--it-border);
+    background: var(--it-surface);
+    overflow: hidden;
+}
+
+.ie-props-header {
+    display: flex;
+    align-items: center;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--it-border);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--it-text-secondary);
+    flex-shrink: 0;
+}
+
+.ie-props-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ie-props-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+}
+
+.ie-props-row label {
+    color: var(--it-text-secondary);
+    white-space: nowrap;
+}
+
+.ie-props-row input[type="range"] {
+    width: 100%;
+}
+
+.ie-props-row span {
+    font-size: 11px;
+    color: var(--it-text);
+    text-align: right;
+}
+
+/* Mask layer item highlight */
+.ie-layer-item[data-type="mask"] .ie-layer-type-icon {
+    color: #e25252;
+}
+
+/* =============================================
+   Right Panel (Layers)
+   ============================================= */
+
+.ie-right-panel {
+    width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--it-border);
+    background: var(--it-surface);
+    overflow: hidden;
+}
+
+.ie-layers-header {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 5px 6px;
+    border-bottom: 1px solid var(--it-border);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--it-text-secondary);
+    flex-shrink: 0;
+}
+
+.ie-layers-header > span {
+    flex: 1;
+}
+
+.ie-layer-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.ie-layer-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    user-select: none;
+    transition: background 0.1s;
+}
+
+.ie-layer-item:hover {
+    background: var(--it-surface-hover);
+}
+
+.ie-layer-item.active {
+    background: rgba(90, 110, 220, 0.22);
+    outline: 1px solid rgba(90, 110, 220, 0.4);
+}
+
+.ie-layer-item.multi-selected {
+    background: rgba(90, 110, 220, 0.12);
+    outline: 1px dashed rgba(90, 110, 220, 0.5);
+}
+
+.ie-layer-thumb {
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--it-border);
+    border-radius: 3px;
+    flex-shrink: 0;
+    object-fit: cover;
+    background:
+        repeating-conic-gradient(#888 0% 25%, transparent 0% 50%)
+        0 0 / 8px 8px;
+}
+
+.ie-layer-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ie-layer-vis-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0;
+    line-height: 1;
+    color: var(--it-text);
+    opacity: 0.85;
+    flex-shrink: 0;
+    transition: opacity 0.1s;
+}
+
+.ie-layer-vis-btn:hover {
+    opacity: 1;
+}
+
+.ie-adj-add-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-top: 1px solid var(--it-border);
+    flex-shrink: 0;
+}
+
+.ie-adj-add-row .ie-opt-select {
+    flex: 1;
+    min-width: 0;
+}
+
+.ie-global-opacity-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--it-border);
+    font-size: 11px;
+    flex-shrink: 0;
+    color: var(--it-text-secondary);
+}
+
+.ie-global-opacity-row label {
+    white-space: nowrap;
+}
+
+.ie-global-opacity-row input[type="range"] {
+    flex: 1;
+}
+
+#ie-global-opacity-label {
+    min-width: 32px;
+    text-align: right;
+    color: var(--it-text);
+}
+
+.ie-opacity-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-top: 1px solid var(--it-border);
+    font-size: 12px;
+    flex-shrink: 0;
+    color: var(--it-text-secondary);
+}
+
+.ie-opacity-row input[type="range"] {
+    flex: 1;
+}
+
+#ie-layer-opacity-label {
+    min-width: 32px;
+    text-align: right;
+    color: var(--it-text);
+}
+
+/* =============================================
+   Text Tool Overlay
+   ============================================= */
+
+.ie-text-overlay {
+    position: absolute;
+    z-index: 100;
+    background: var(--it-surface);
+    border: 1px solid var(--it-border);
+    border-radius: 6px;
+    padding: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 180px;
+}
+
+.ie-text-textarea {
+    width: 200px;
+    resize: vertical;
+    background: var(--it-bg);
+    color: var(--it-text);
+    border: 1px solid var(--it-border);
+    border-radius: 4px;
+    padding: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    min-height: 60px;
+}
+
+.ie-text-btn-row {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+/* =============================================
+   Close confirm dialog
+   ============================================= */
+
+.ie-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ie-confirm-box {
+    background: var(--it-surface);
+    border: 1px solid var(--it-border);
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 280px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.ie-confirm-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--it-text);
+    margin-bottom: 8px;
+}
+
+.ie-confirm-body {
+    font-size: 12px;
+    color: var(--it-text-secondary);
+    margin-bottom: 16px;
+}
+
+.ie-confirm-btns {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* =============================================
+   Toast
+   ============================================= */
+
+.ie-toast {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--it-surface);
+    color: var(--it-text);
+    border: 1px solid var(--it-border);
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    z-index: 200;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+
+.ie-toast.success {
+    border-color: var(--it-success);
+    color: var(--it-success);
+}
+
+.ie-toast.error {
+    border-color: #e2534a;
+    color: #e2534a;
+}
+
+/* =============================================
+   Scrollbar
+   ============================================= */
+
+.ie-layer-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.ie-layer-list::-webkit-scrollbar-thumb {
+    background: var(--it-border);
+    border-radius: 2px;
+}

@@ -1,0 +1,183 @@
+/* ComfyUI連携スタイル (Nanobananaタブと共用) */
+
+/* 接続設定 & ヘッダー */
+.comfyui-header-row {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.comfyui-status {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.comfyui-status.connected {
+  background-color: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+}
+
+.comfyui-status.disconnected {
+  background-color: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+}
+
+.comfyui-url-group {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+/* メインエディタエリア */
+.comfyui-editor-layout {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  min-height: 400px;
+  overflow: hidden;
+}
+
+.comfyui-left-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.comfyui-right-col {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  border-left: 1px solid var(--border-color);
+  padding-left: 20px;
+  flex-shrink: 0;
+}
+
+/* サブタブ */
+.comfyui-subtab-nav {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.comfyui-subtab-btn {
+  background: none;
+  border: none;
+  padding: 8px 16px;
+  color: var(--text-color);
+  cursor: pointer;
+  opacity: 0.6;
+  border-bottom: 2px solid transparent;
+}
+
+.comfyui-subtab-btn:hover {
+  opacity: 1;
+  background-color: var(--hover-color);
+}
+
+.comfyui-subtab-btn.active {
+  opacity: 1;
+  border-bottom-color: var(--primary-color);
+  font-weight: bold;
+}
+
+.comfyui-subtab-content {
+  padding-top: 15px;
+}
+
+.comfyui-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary, #1a1a1a);
+  color: var(--text-primary, #eee);
+}
+
+/* フィールドスタイル */
+.comfyui-field-group {
+  background-color: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+  border: 1px solid var(--border-color);
+}
+
+.comfyui-group-title {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: #aaa;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 5px;
+}
+
+.comfyui-field {
+  margin-bottom: 12px;
+}
+
+.comfyui-field:last-child {
+  margin-bottom: 0;
+}
+
+.comfyui-field-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.comfyui-label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.comfyui-label.positive { color: #88cc88; }
+.comfyui-label.negative { color: #cc8888; }
+
+.comfyui-select, .comfyui-number-input, .comfyui-text-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 生成プレビュー */
+.comfyui-generate-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.comfyui-progress-container {
+  text-align: center;
+}
+
+.comfyui-result-container {
+  flex: 1;
+  background-color: #000;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  min-height: 250px;
+}
+
+.comfyui-seed-panel {
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 10px;
+  border: 1px solid var(--border-color);
+}

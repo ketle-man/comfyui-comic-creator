@@ -1,0 +1,1720 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ComfyUI Comic Creator</title>
+    <link rel="icon" type="image/svg+xml" href="/ccc_static/favicon.svg" />
+    <link rel="alternate icon" href="/ccc_static/favicon.ico" />
+    <link rel="apple-touch-icon" href="/ccc_static/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/ccc_static/css/style.css" />
+    <link rel="stylesheet" href="/ccc_static/css/comfyui.css" />
+    <link rel="stylesheet" href="/ccc_static/css/image-tab.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic&family=BIZ+UDPMincho&family=Zen+Antique&family=Zen+Antique+Soft&family=Shippori+Antique+B1&family=Shippori+Mincho+B1&family=Hachi+Maru+Pop&family=Oswald&family=Archivo+Black&family=Dancing+Script&family=Anton&display=swap"
+      rel="stylesheet"
+    />
+
+  </head>
+  <body>
+    <div class="app-container">
+      <header>
+        <h1>ComfyUI Comic Creator</h1>
+        <nav class="tabs">
+          <button class="tab-btn active" data-tab="output" data-i18n="nav.page">ページ</button>
+          <button class="tab-btn" data-tab="layout" data-i18n="nav.layout">レイアウト</button>
+          <button class="tab-btn" data-tab="image" data-i18n="nav.image">Image</button>
+          <button class="tab-btn" data-tab="fontmgr" data-i18n="nav.font">フォント</button>
+          <button class="tab-btn wfm-gallery-tab-btn" data-tab="wfmgallery" data-i18n="nav.wfmgallery">workflow studio</button>
+          <button class="tab-btn" data-tab="nanobanana" data-i18n="nav.nanobanana">Nanobanana</button>
+          <button class="tab-btn" data-tab="project" data-i18n="nav.script">スクリプト</button>
+          <button class="tab-btn" data-tab="settings" data-i18n="nav.settings">設定</button>
+          <button class="tab-btn" data-tab="help" data-i18n="nav.help">ヘルプ</button>
+          <button type="button" id="ws-nav-reload-btn" class="ws-nav-btn" data-i18n="nav.wsReloadBtn" data-i18n-title="nav.wsReloadTitle" title="Workflow Studio の埋め込み表示を再読み込み">ws再読込</button>
+          <a id="ws-nav-open-tab-btn" class="ws-nav-btn" href="/wfm" target="_blank" rel="noopener" data-i18n="nav.wsOpenTabBtn" data-i18n-title="nav.wsOpenTabTitle" title="Workflow Studio を新しいタブで開く">ws新しいタブで開く</a>
+        </nav>
+      </header>
+
+      <div class="main-with-sidebar">
+        <!-- アセットパネル: 左サイドバー -->
+        <!-- 初期表示タブ（ページタブ）ではアセットパネルは非表示（switchTab が表示を制御） -->
+        <aside id="asset-panel" class="asset-panel" style="display:none;">
+          <div class="asset-panel-header">
+            <div class="asset-panel-tabs">
+              <button class="asset-panel-tab-btn active" data-panel-tab="assets" data-i18n-title="asset.tabAssets" title="アセット">A</button>
+              <button class="asset-panel-tab-btn" data-panel-tab="pages" data-i18n-title="nav.page" title="ページ">P</button>
+              <button class="asset-panel-tab-btn" data-panel-tab="templates" data-i18n-title="asset.tabTemplates" title="テンプレート">T</button>
+              <button class="asset-panel-tab-btn" data-panel-tab="fonts" data-i18n-title="nav.font" title="フォント">F</button>
+              <button class="asset-panel-tab-btn" data-panel-tab="images" title="Image" id="asset-panel-tab-images" style="display:none;">I</button>
+              <button class="asset-panel-tab-btn" data-panel-tab="script" data-i18n-title="nav.script" title="スクリプト" id="asset-panel-tab-script" style="display:none;">S</button>
+            </div>
+            <button id="asset-refresh-btn" class="asset-refresh-btn" data-i18n-title="asset.refreshTitle" title="アセット一覧を更新">↺</button>
+          </div>
+          <div id="asset-panel-view-assets" class="asset-panel-view active">
+            <div id="asset-tree" class="asset-panel-content">
+              <p class="empty-message" data-i18n="common.loading">読み込み中...</p>
+            </div>
+            <div class="asset-footer">
+              <button id="asset-insert-btn" class="btn secondary" data-i18n="asset.insertToPanel">
+                コマに挿入
+              </button>
+            </div>
+          </div>
+          <div id="asset-panel-view-pages" class="asset-panel-view">
+            <div id="page-thumb-grid" class="page-thumb-grid">
+              <p class="empty-message" data-i18n="asset.noPages">ページがありません</p>
+            </div>
+          </div>
+          <div id="asset-panel-view-templates" class="asset-panel-view">
+            <div id="asset-template-grid" class="page-thumb-grid">
+              <p class="empty-message" data-i18n="asset.noTemplates">テンプレートがありません</p>
+            </div>
+            <div class="asset-footer">
+              <button id="asset-template-insert-btn" class="btn secondary" disabled data-i18n="asset.insertAsPage" data-i18n-title="asset.insertAsPageTitle" title="選択したテンプレートを作品サイズにリサイズして新規ページとして追加します">ページとして挿入</button>
+            </div>
+          </div>
+          <div id="asset-panel-view-fonts" class="asset-panel-view">
+            <div class="asset-font-bg-row">
+              <label data-i18n="asset.bgLabel">背景:</label>
+              <select id="asset-font-bg-preset" data-i18n-title="asset.bgSelectTitle" title="サムネイルの背景色を選択">
+                <option value="" data-i18n="asset.bgDefault">デフォルト</option>
+                <option value="#000000" data-i18n="asset.bgBlack">黒</option>
+                <option value="#ffffff" data-i18n="asset.bgWhite">白</option>
+                <option value="#808080" data-i18n="asset.bgGray">グレー</option>
+                <option value="custom" data-i18n="asset.bgCustom">手動</option>
+              </select>
+              <input type="color" id="asset-font-bg-custom" value="#000000" style="display:none;" data-i18n-title="asset.bgCustomTitle" title="カスタム背景色" />
+            </div>
+            <div id="asset-font-grid" class="asset-font-grid">
+              <p class="empty-message" data-i18n="asset.noFontStyles">フォントタブでスタイル/プリセットを作成してください</p>
+            </div>
+          </div>
+          <div id="asset-panel-view-images" class="asset-panel-view">
+            <div id="image-asset-tree" class="asset-panel-content">
+              <p class="empty-message" data-i18n="common.loading">読み込み中...</p>
+            </div>
+            <div class="asset-footer">
+              <button id="image-asset-insert-btn" class="btn secondary">
+                Open
+              </button>
+            </div>
+          </div>
+          <div id="asset-panel-view-script" class="asset-panel-view">
+            <div class="asset-panel-content">
+              <div class="asset-panel-section-header" id="script-asset-work-header">
+                <span class="asset-panel-section-icon">▼</span>
+                <span class="asset-panel-section-label" data-i18n="asset.savedWorks">保存済み作品</span>
+              </div>
+              <div id="script-asset-work-list" class="script-asset-list">
+                <p class="empty-message" data-i18n="asset.noSavedWorks">保存済み作品はありません</p>
+              </div>
+              <div class="asset-panel-section-header" id="script-asset-page-work-header">
+                <span class="asset-panel-section-icon">▼</span>
+                <span class="asset-panel-section-label" data-i18n="asset.pageWorks">ページ作品</span>
+              </div>
+              <div id="script-asset-page-work-list" class="script-asset-list">
+                <p class="empty-message" data-i18n="asset.noPageWorks">ページタブに作品がありません</p>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- ツールペイン: レイアウトタブでのみ表示。ドロー/フキダシ/テキスト/画像/マスク/3Dポーズの切り替え -->
+        <aside id="tool-panel" class="tool-panel" style="display:none;">
+          <div class="tool-panel-header" data-i18n="layout.toolPanelHeader">ツール</div>
+          <div class="tool-panel-nav">
+            <button class="subtab-btn tool-panel-btn" data-subtab="edit" data-i18n="layout.toolDraw">ドロー</button>
+            <button class="subtab-btn tool-panel-btn active" data-subtab="balloon" data-i18n="layout.toolBalloon">フキダシ</button>
+            <button class="subtab-btn tool-panel-btn" data-subtab="text" data-i18n="layout.toolText">テキスト</button>
+            <button class="subtab-btn tool-panel-btn" data-subtab="gmic" data-i18n="layout.toolImage">画像</button>
+            <button class="subtab-btn tool-panel-btn" data-subtab="mask" data-i18n="layout.toolMask">マスク</button>
+            <button class="subtab-btn tool-panel-btn" data-subtab="pose3d" data-i18n="layout.toolPose3d">3Dポーズ</button>
+          </div>
+        </aside>
+
+        <main>
+          <!-- Layout Tab -->
+          <section id="layout-tab" class="tab-content">
+            <!-- 共通コントロール（ページ・コマ選択・画像操作） -->
+            <div class="page-controls">
+              <div class="control-row">
+                <label data-i18n="layout.pageLabel">ページ:</label>
+                <button id="layout-page-prev" class="btn small secondary" data-i18n-title="layout.pagePrevTitle" title="前のページ" disabled>◀</button>
+                <span id="layout-page-indicator" style="min-width:64px; text-align:center; font-size:13px;">- / -</span>
+                <button id="layout-page-next" class="btn small secondary" data-i18n-title="layout.pageNextTitle" title="次のページ" disabled>▶</button>
+                <button id="layout-page-delete" class="btn small danger" style="margin-left:8px;" data-i18n="layout.pageDeleteBtn" data-i18n-title="layout.pageDeleteTitle" title="表示中のページをゴミ箱に移動します" disabled>ページ削除</button>
+              </div>
+
+              <div class="control-row">
+                <label data-i18n="layout.panelLabel">コマ:</label>
+                <select id="panel-select" data-i18n-title="layout.panelSelectTitle" title="操作するコマを選択">
+                  <option value="" data-i18n="layout.panelSelectPlaceholder">選択してください</option>
+                </select>
+                <button id="layout-save-btn" class="btn small" style="margin-left:auto;" data-i18n="common.save" data-i18n-title="layout.saveBtnTitle" title="現在のページを保存します（作品で作業中の場合は作品にも登録）">保存</button>
+              </div>
+
+              <div class="control-row">
+                <button id="insert-image-btn" class="btn secondary" data-i18n="layout.insertImage">画像を挿入</button>
+                <button id="delete-image-btn" class="btn danger" data-i18n="common.delete">削除</button>
+                <button id="undo-btn" class="btn" data-i18n="layout.undoBtn">元に戻す</button>
+                <input type="file" id="image-upload" accept="image/*" class="hidden" data-i18n-title="layout.imageUploadTitle" title="画像ファイルを選択" />
+                <label style="margin-left:auto; white-space:nowrap;" data-i18n="layout.panelBorderWidthLabel">コマ枠線幅:</label>
+                <input type="number" id="panel-border-width" value="211" min="0" max="5000" step="0.01" style="width:70px" data-i18n-title="layout.panelBorderWidthTitle" title="コマ枠線の太さ（SVG座標系単位、小数点第2位まで）" />
+                <button id="layer-draw-open-imgedit" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.openImageTabBtn" data-i18n-title="layout.openImageTabTitle" title="選択中の画像をImageタブで開く" disabled>画像タブで編集</button>
+                <button id="layout-i2i-send-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px;" data-i18n="layout.sendToI2iBtn" data-i18n-title="layout.sendToI2iTitle" title="選択中の画像をWorkflow StudioのI2I入力へ送信" disabled>I2Iへ送る</button>
+                <button id="object-center-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px;" data-i18n-title="layout.objectCenterTitle" title="選択中のオブジェクトを中央（コマ内ならコマ中心、オーバーレイならページ中心）へ移動" disabled>OC</button>
+              </div>
+            </div>
+
+            <!-- ツール群コンテナ（サブタブ切り替えボタンはツールペインに移設済み） -->
+            <div class="layout-tools-row" style="display: flex; flex-wrap: wrap; align-items: center; gap: 15px; background: var(--bg-secondary); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+              <!-- ドローサブタブ (旧Edit) -->
+              <div id="subtab-edit" class="subtab-content" style="display:none; flex: 1; padding: 0; margin: 0;">
+                <!-- Editモード切り替えタブ -->
+                <div style="display:flex; gap:4px; margin-bottom:6px; border-bottom:1px solid var(--border-color); padding-bottom:4px;">
+                  <button class="edit-mode-tab-btn active" data-edit-mode="box" style="font-size:11px; padding:2px 8px; border:1px solid var(--border-color); border-radius:3px 3px 0 0; background:var(--bg-primary); color:var(--text-primary); cursor:pointer;" data-i18n="layout.editModeBox">ドロー</button>
+                  <button class="edit-mode-tab-btn" data-edit-mode="svg-color" style="font-size:11px; padding:2px 8px; border:1px solid var(--border-color); border-radius:3px 3px 0 0; background:var(--bg-secondary); color:var(--text-primary); cursor:pointer;" data-i18n="layout.editModeSvgColor">SVG色変更</button>
+                  <button class="edit-mode-tab-btn" data-edit-mode="svg-png" style="font-size:11px; padding:2px 8px; border:1px solid var(--border-color); border-radius:3px 3px 0 0; background:var(--bg-secondary); color:var(--text-primary); cursor:pointer;" data-i18n="layout.editModeSvgPng">SVG→PNG</button>
+                </div>
+
+                <!-- ボックスモード -->
+                <div id="edit-panel-box">
+                  <!-- レイヤーへの描画 -->
+                  <div id="edit-box-layer-controls">
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                      <div style="display:flex; align-items:center; gap:3px;">
+                        <span style="font-size:12px; white-space:nowrap;" data-i18n="layout.drawLabel">描画:</span>
+                        <div id="layer-draw-mode-group" class="seg-group">
+                          <button type="button" class="seg-btn" data-draw-mode="on">ON</button>
+                          <button type="button" class="seg-btn active" data-draw-mode="off">OFF</button>
+                        </div>
+                      </div>
+                      <div style="display:flex; align-items:center; gap:3px;">
+                        <input type="checkbox" id="layer-draw-rounded" />
+                        <label for="layer-draw-rounded" style="font-size:12px;" data-i18n="layout.rounded">角丸</label>
+                      </div>
+                      <div id="layer-draw-shape-group" class="seg-group">
+                        <button type="button" class="seg-btn active" data-shape="rect" data-i18n="layout.shapeRect">矩形</button>
+                        <button type="button" class="seg-btn" data-shape="ellipse" data-i18n="layout.shapeEllipse">楕円</button>
+                        <button type="button" class="seg-btn" data-shape="line" data-i18n="layout.shapeLine">直線</button>
+                        <button type="button" class="seg-btn" data-shape="curve" data-i18n="layout.shapeCurve">曲線</button>
+                        <button type="button" class="seg-btn" data-shape="polygon" data-i18n="layout.shapePolygon">多角形</button>
+                        <button type="button" class="seg-btn" data-shape="chain" data-i18n="layout.shapeChain">鎖</button>
+                        <button type="button" class="seg-btn" data-shape="rope" data-i18n="layout.shapeRope">ロープ</button>
+                        <button type="button" class="seg-btn" data-shape="original" data-i18n="layout.shapeOriginal">My曲線</button>
+                      </div>
+                      <!-- 互換用の非表示select（既存コードが値を参照） -->
+                      <select id="layer-draw-shape" style="display:none;">
+                        <option value="rect">矩形</option>
+                        <option value="ellipse">楕円</option>
+                        <option value="line">直線</option>
+                        <option value="curve">曲線</option>
+                        <option value="polygon">多角形</option>
+                        <option value="chain">鎖</option>
+                        <option value="rope">ロープ</option>
+                        <option value="original">My曲線</option>
+                      </select>
+                      <!-- My曲線用画像選択 -->
+                      <div id="layer-draw-original-wrap" style="display:none; align-items:center; gap:4px;">
+                        <label class="btn small" style="cursor:pointer; white-space:nowrap;">
+                          <span data-i18n="layout.selectImage">画像選択</span><input type="file" id="layer-draw-original-file" accept="image/*" style="display:none;" />
+                        </label>
+                        <span id="layer-draw-original-name" style="font-size:11px; color:var(--text-secondary); max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" data-i18n="layout.notSelected">未選択</span>
+                        <img id="layer-draw-original-preview" style="display:none; height:24px; width:auto; border:1px solid var(--border-color); border-radius:2px;" />
+                      </div>
+                      <!-- 塗り -->
+                      <div style="display:flex; align-items:center; gap:3px;">
+                        <label style="font-size:12px;" data-i18n="layout.fillLabel">塗り:</label>
+                        <input type="color" id="layer-draw-fill" value="#000000" data-i18n-title="layout.fillColorTitle" title="塗り色" />
+                        <label style="font-size:12px; display:flex; align-items:center; gap:2px;">
+                          <input type="checkbox" id="layer-draw-fill-none" />
+                          <span data-i18n="layout.none">なし</span>
+                        </label>
+                      </div>
+                      <!-- 線 -->
+                      <div style="display:flex; align-items:center; gap:3px;">
+                        <label style="font-size:12px;" data-i18n="layout.strokeLabel">線:</label>
+                        <input type="color" id="layer-draw-stroke" value="#000000" data-i18n-title="layout.strokeColorTitle" title="線色" />
+                        <input type="number" id="layer-draw-stroke-width" value="5" min="0" max="500" style="width:44px; font-size:12px;" data-i18n-title="layout.strokeWidthTitle" title="線幅(SVG単位)" />
+                        <label style="font-size:12px; display:flex; align-items:center; gap:2px;">
+                          <input type="checkbox" id="layer-draw-stroke-none" checked />
+                          <span data-i18n="layout.none">なし</span>
+                        </label>
+                      </div>
+                      <!-- 不透明度 -->
+                      <div style="display:flex; align-items:center; gap:3px;">
+                        <label style="font-size:12px;" data-i18n="layout.opacityLabel">不透明度:</label>
+                        <input type="range" id="layer-draw-opacity" min="0" max="100" value="100" style="width:60px;" />
+                        <span id="layer-draw-opacity-value" style="font-size:12px;">100%</span>
+                      </div>
+                      <button id="layer-draw-undo" class="btn small" style="white-space:nowrap;" data-i18n="common.undo">取消</button>
+                      <button id="layer-draw-shape-to-png" class="btn small secondary" style="white-space:nowrap;" data-i18n="draw.shapeToPngBtn" data-i18n-title="draw.shapeToPngBtnTitle" title="選択中の図形をPNG画像に変換して複製挿入します" disabled>図形をPNG変換</button>
+                    </div>
+                    <div id="layer-draw-status" style="font-size:11px; color:var(--text-secondary); margin-top:3px;"></div>
+                  </div>
+                </div>
+
+                <!-- SVG色変更モード -->
+                <div id="edit-panel-svg-color" style="display:none;">
+                  <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px;">
+                    <button id="svg-color-load-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.svgColorExtract">色を抽出</button>
+                    <span style="font-size:11px; color:var(--text-secondary);" data-i18n="layout.svgColorHint">※ 選択中のSVG画像の色一覧</span>
+                  </div>
+                  <div id="svg-color-list" style="display:flex; flex-wrap:wrap; gap:8px; max-height:300px; overflow-y:auto; padding:4px; border:1px solid var(--border-color); border-radius:4px; min-height:40px;">
+                    <span style="font-size:11px; color:var(--text-secondary); padding:4px;" data-i18n="layout.svgColorEmpty">「色を抽出」ボタンを押してください</span>
+                  </div>
+                  <div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
+                    <button id="svg-color-apply-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.svgColorApply">変更を適用</button>
+                    <span id="svg-color-status" style="font-size:11px; color:var(--text-secondary);"></span>
+                  </div>
+                </div>
+
+                <!-- SVG→PNGモード -->
+                <div id="edit-panel-svg-png" style="display:none;">
+                  <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px;">
+                    <label style="font-size:12px;" data-i18n="layout.widthLabel">幅:</label>
+                    <input type="number" id="svg-png-width" value="" data-i18n-placeholder="layout.originalSize" placeholder="元サイズ" style="width:70px; font-size:12px;" />
+                    <label style="font-size:12px;" data-i18n="layout.heightLabel">高さ:</label>
+                    <input type="number" id="svg-png-height" value="" data-i18n-placeholder="layout.originalSize" placeholder="元サイズ" style="width:70px; font-size:12px;" />
+                    <label style="font-size:12px; display:flex; align-items:center; gap:3px;">
+                      <input type="checkbox" id="svg-png-keep-aspect" checked />
+                      <span data-i18n="layout.keepAspect">縦横比固定</span>
+                    </label>
+                  </div>
+                  <div style="display:flex; gap:6px; align-items:center;">
+                    <button id="svg-png-convert-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.svgPngConvert">PNG変換して挿入</button>
+                    <span id="svg-png-status" style="font-size:11px; color:var(--text-secondary);"></span>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- フキダシサブタブ -->
+              <div id="subtab-balloon" class="subtab-content" style="flex: 1; padding: 0; margin: 0;">
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;">
+
+                  <!-- 第1行: 編集モード・色・反転 -->
+                  <div class="control-row" style="margin: 0; flex-wrap: wrap; gap: 6px;">
+                    <button type="button" id="toggle-edit-btn" class="btn btn-edit-toggle">
+                      <span id="edit-mode-text" data-i18n="layout.editModeOff">編集: OFF</span>
+                    </button>
+                    <div class="color-picker-group" style="margin-left: 6px;">
+                      <label data-i18n="layout.colorLabel">色:</label>
+                      <input type="color" id="box-color" value="#FFFFFF" data-i18n-title="layout.bgColorTitle" title="背景色を選択" />
+                      <label data-i18n="layout.frameLabel">枠:</label>
+                      <input type="color" id="border-color" value="#000000" data-i18n-title="layout.borderColorTitle" title="枠線色を選択" />
+                      <input type="number" id="border-width" value="80" min="0" max="100" step="1" style="width:40px" data-i18n-title="layout.borderWidthTitle" title="枠線の太さ" />
+                    </div>
+                    <button type="button" id="flip-h-btn" class="btn small" data-i18n-title="common.flipH" title="左右反転" style="margin-left:4px;">↔</button>
+                    <button type="button" id="flip-v-btn" class="btn small" data-i18n-title="common.flipV" title="上下反転">↕</button>
+                  </div>
+
+                  <!-- 第2行: 種類選択 -->
+                  <div class="control-row" style="margin: 0; flex-wrap: wrap; gap: 6px; align-items: center;">
+                    <span class="control-label" style="width: auto; margin-right: 4px;" data-i18n="layout.typeLabel">種類:</span>
+                    <!-- 旧来タイプ（oval/rect/bubble/spiky）用 -->
+                    <select id="shape-type" title="描画時のシェイプ種類（oval/rect）" style="display:none;">
+                      <option value="oval">楕円</option>
+                      <option value="rect">角丸矩形</option>
+                    </select>
+                    <!-- h2タイプ用セレクト（挿入ボタン） -->
+                    <select id="h2-shape-type" data-i18n-title="layout.balloonTypeTitle" title="フキダシの種類を選択">
+                      <option value="normal" data-i18n="layout.balloonNormal">通常 (楕円)</option>
+                      <option value="rect" data-i18n="layout.balloonRect">角丸矩形</option>
+                      <option value="thought" data-i18n="layout.balloonThought">思考 (泡)</option>
+                      <option value="bomb" data-i18n="layout.balloonBomb">バクダン</option>
+                    </select>
+                    <button type="button" id="h2-insert-btn" class="btn small" data-i18n="layout.insertBtn" data-i18n-title="layout.balloonInsertTitle" title="選択した種類のフキダシを挿入">挿入</button>
+                    <button type="button" id="h2-to-image-btn" class="btn small secondary" data-i18n="layer.toImage" data-i18n-title="layer.toImageTitle" title="選択中のフキダシをPNG画像に変換して複製挿入します" disabled>画像に変換</button>
+
+                  </div>
+
+                  <!-- 第3行: h2専用パラメータ（フキダシ選択時に表示） -->
+                  <div id="h2-params-panel" style="display:none; flex-wrap:wrap; gap:6px; align-items:center; background:var(--bg-secondary,#f5f5f5); border:1px solid var(--border-color,#ddd); border-radius:4px; padding:6px; width:100%;">
+
+                    <!-- 尻尾: 角度・長さ・幅・カーブ -->
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                      <span style="font-size:11px; color:var(--text-secondary); font-weight:bold;" data-i18n="layout.tailLabel">尻尾</span>
+                      <label style="font-size:11px;" data-i18n="layout.angleLabel">角度:</label>
+                      <input type="range" id="h2-tail-angle" min="0" max="360" value="45" style="width:70px;" />
+                      <span id="h2-tail-angle-val" style="font-size:11px; min-width:30px;">45°</span>
+
+                      <label style="font-size:11px;" data-i18n="layout.lengthLabel">長さ:</label>
+                      <input type="range" id="h2-tail-length" min="0" max="4000" value="60" style="width:70px;" />
+                      <span id="h2-tail-length-val" style="font-size:11px; min-width:24px;">60</span>
+
+                      <span id="h2-tail-width-group" style="display:contents;"><label style="font-size:11px;" data-i18n="layout.widthLabel">幅:</label>
+                      <input type="range" id="h2-tail-width" min="1" max="120" value="30" style="width:60px;" />
+                      <span id="h2-tail-width-val" style="font-size:11px; min-width:28px;">30°</span></span>
+
+                      <label style="font-size:11px; display:flex; align-items:center; gap:3px; cursor:pointer;">
+                        <input type="checkbox" id="h2-tail-curve-on" /><span data-i18n="layout.curveLabel">カーブ:</span>
+                      </label>
+                      <input type="range" id="h2-tail-curve" min="-300" max="300" value="0" style="width:60px;" disabled />
+                      <span id="h2-tail-curve-val" style="font-size:11px; min-width:24px;">0</span>
+                    </div>
+
+                    <!-- bomb 専用パラメータ -->
+                    <div id="h2-bomb-params" style="display:none; flex-wrap:wrap; gap:6px; align-items:center;">
+                      <span style="font-size:11px; color:#856404; font-weight:bold;" data-i18n="layout.balloonBomb">バクダン</span>
+                      <label style="font-size:11px;" data-i18n="layout.seedLabel">シード:</label>
+                      <input type="range" id="h2-seed" min="1" max="100" value="1" style="width:55px;" />
+                      <span id="h2-seed-val" style="font-size:11px; min-width:20px;">1</span>
+
+                      <label style="font-size:11px;" data-i18n="layout.spikeCountLabel">トゲ数:</label>
+                      <input type="range" id="h2-spike-count" min="12" max="100" value="24" style="width:55px;" />
+                      <span id="h2-spike-count-val" style="font-size:11px; min-width:20px;">24</span>
+
+                      <label style="font-size:11px;" data-i18n="layout.lengthLabel">長さ:</label>
+                      <input type="range" id="h2-spike-level" min="0" max="100" value="30" style="width:55px;" />
+                      <span id="h2-spike-level-val" style="font-size:11px; min-width:20px;">30</span>
+
+                      <label style="font-size:11px;" data-i18n="layout.varianceLabel">バラツキ:</label>
+                      <input type="range" id="h2-spike-variance" min="0" max="100" value="30" style="width:55px;" />
+                      <span id="h2-spike-variance-val" style="font-size:11px; min-width:20px;">30</span>
+                    </div>
+
+                    <!-- thought 専用パラメータ -->
+                    <div id="h2-thought-params" style="display:none; flex-wrap:wrap; gap:6px; align-items:center;">
+                      <span style="font-size:11px; color:#0c5460; font-weight:bold;" data-i18n="layout.thoughtLabel">思考</span>
+                      <label style="font-size:11px;" data-i18n="layout.bubbleSizeLabel">泡サイズ:</label>
+                      <input type="range" id="h2-thought-bubble" min="5" max="1000" value="800" style="width:70px;" />
+                      <span id="h2-thought-bubble-val" style="font-size:11px; min-width:20px;">800</span>
+                      <label style="font-size:11px;" data-i18n="layout.countLabel">個数:</label>
+                      <input type="range" id="h2-thought-count" min="1" max="15" value="5" style="width:70px;" />
+                      <span id="h2-thought-count-val" style="font-size:11px; min-width:20px;">5</span>
+                      <label style="font-size:11px;" data-i18n="layout.offsetLabel">離す:</label>
+                      <input type="range" id="h2-thought-offset" min="0" max="200" value="100" style="width:70px;" />
+                      <span id="h2-thought-offset-val" style="font-size:11px; min-width:24px;">100</span>
+                    </div>
+
+                    <!-- rect 専用パラメータ -->
+                    <div id="h2-rect-params" style="display:none; flex-wrap:wrap; gap:6px; align-items:center;">
+                      <span style="font-size:11px; color:#383d41; font-weight:bold;" data-i18n="layout.balloonRect">角丸矩形</span>
+                      <label style="font-size:11px;" data-i18n="layout.radiusLabel">角丸:</label>
+                      <input type="range" id="h2-rect-radius" min="0" max="500" value="80" style="width:70px;" />
+                      <span id="h2-rect-radius-val" style="font-size:11px; min-width:24px;">80</span>
+                    </div>
+
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- テキストサブタブ -->
+              <div id="subtab-text" class="subtab-content" style="display:none; flex: 1; padding: 0; margin: 0;">
+                <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: center;">
+                  <div class="control-row" style="margin: 0;">
+                    <!-- 以下操作ボタン類 -->
+                    <button type="button" id="text-flip-h-btn" class="btn small" data-i18n-title="common.flipH" title="左右反転">↔</button>
+                    <button type="button" id="text-flip-v-btn" class="btn small" data-i18n-title="common.flipV" title="上下反転">↕</button>
+
+                    <button type="button" id="toggle-text-btn" class="btn btn-text-toggle" style="margin-left:8px;">T</button>
+                    <div class="font-select-group" style="margin-left:4px; display:flex; align-items:center; flex-wrap:wrap; gap:2px;">
+                      <span id="font-tab-google" class="font-source-tab active-font-tab">Google</span>
+                      <span id="font-tab-system" class="font-source-tab" data-i18n="layout.fontTabSystem">システム</span>
+                      <span id="font-tab-favorites" class="font-source-tab" data-i18n="layout.fontTabCategory">カテゴリ</span>
+                      <select id="font-fav-cat-select" style="display:none; font-size:11px; max-width:90px;" data-i18n-title="layout.fontFavCatTitle" title="カテゴリで絞り込み／追加先カテゴリ">
+                        <option value="" data-i18n="layout.fontCatAll">すべて</option>
+                      </select>
+                      <select id="font-family" data-i18n-title="layout.fontFamilyTitle" title="フォントを選択">
+                        <optgroup label="Google Fonts" id="font-group-google">
+                          <!-- JSで動的生成（GOOGLE_FONT_FAMILIES、フォント管理タブと共通） -->
+                        </optgroup>
+                      </select>
+                      <span id="load-system-fonts-btn" style="display:none; font-size:11px; cursor:pointer; color:#0066cc; text-decoration:underline; white-space:nowrap;" data-i18n="layout.reloadFonts">再読込</span>
+                    </div>
+
+                    <div class="checkbox-inline" style="margin-bottom:0; margin-left:8px;">
+                      <input type="checkbox" id="text-vertical" />
+                      <label for="text-vertical" style="margin-bottom:0;" data-i18n="layout.verticalLabel">縦</label>
+                    </div>
+                    <div class="font-size-group" style="margin-left:4px;">
+                      <label for="font-size">pt:</label>
+                      <input type="number" id="font-size" min="6" max="200" value="150" step="1" style="width:48px;" />
+                    </div>
+
+                    <div class="color-preset-group" style="display:flex; align-items:center; margin-left:8px;">
+                      <label data-i18n="layout.colorLabel">色:</label>
+                      <select id="color-preset" data-i18n-title="layout.textColorTitle" title="文字の色を選択">
+                        <option value="#000000" data-i18n="common.black">黒</option>
+                        <option value="#FFFFFF" data-i18n="common.white">白</option>
+                        <option value="#FF0000" data-i18n="common.red">赤</option>
+                        <option value="#0000FF" data-i18n="common.blue">青</option>
+                      </select>
+                    </div>
+
+                    <button type="button" id="text-style-modal-btn" class="btn small" style="margin-left:8px;" data-i18n="layout.styleBtn" data-i18n-title="layout.styleBtnTitle" title="線・袋文字・影などのスタイルを設定します（選択中テキストがあれば適用、なければコマに新規挿入）">スタイル</button>
+                    <button type="button" id="text-undo-btn" class="btn small" style="margin-left:8px;" data-i18n="common.undo">取消</button>
+                    <button type="button" id="text-save-btn" class="btn secondary small" data-i18n="common.save">保存</button>
+                    <button type="button" id="text-to-png-btn" class="btn small" style="margin-left:8px;" data-i18n="layout.textToPng" data-i18n-title="layout.textToPngTitle" title="選択中のテキストを透過PNGに変換してコマに挿入します">テキスト→PNG</button>
+                    <button type="button" id="script-dialogue-insert-btn" class="btn small" style="margin-left:8px;" data-i18n-title="layout.scriptInsertTitle" title="スクリプトタブのプロットで選択中のセル（シーン／人物／セリフ）を、選択中のコマにテキストとして挿入します">Insert</button>
+                    <span id="text-to-png-status" style="font-size:11px; color:var(--text-secondary); margin-left:4px;"></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 画像サブタブ (旧G'MIC + Processing + 反転) -->
+              <div id="subtab-gmic" class="subtab-content" style="display:none; flex: 1; padding: 0; margin: 0;">
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                  <!-- Processing -->
+                  <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:4px;">
+                      <input type="checkbox" id="proc-bg-remove" />
+                      <label for="proc-bg-remove" style="font-size:12px; white-space:nowrap;" data-i18n="layout.bgRemove">背景除去</label>
+                      <select id="proc-bg-model" style="font-size:12px; display:none;" data-i18n-title="layout.bgModelTitle" title="背景除去モデルを選択">
+                        <option value="imgly" data-i18n="layout.bgModelImgly">軽量 (@imgly)</option>
+                        <option value="birefnet">BiRefNet</option>
+                      </select>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:4px;">
+                      <label style="font-size:12px; white-space:nowrap;" data-i18n="layout.scaleLabel">倍率:</label>
+                      <button id="proc-scale-down" class="btn small" style="padding:1px 5px;">−</button>
+                      <span id="proc-scale-value" style="font-size:12px; min-width:32px; text-align:center;">2.0×</span>
+                      <button id="proc-scale-up" class="btn small" style="padding:1px 5px;">＋</button>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:4px;">
+                      <label for="proc-sharpen" style="font-size:12px; white-space:nowrap;" data-i18n="layout.sharpenLabel">シャープ:</label>
+                      <input type="range" id="proc-sharpen" min="0" max="100" value="30" style="width:70px;" />
+                      <span id="proc-sharpen-value" style="font-size:12px; min-width:28px;">30%</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:4px;">
+                      <input type="checkbox" id="proc-denoise" />
+                      <label for="proc-denoise" style="font-size:12px; white-space:nowrap;" data-i18n="layout.denoise">ノイズ除去</label>
+                    </div>
+                    <button id="proc-run-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.runBtn">実行</button>
+                    <span id="proc-status" style="font-size:11px; color:#888;"></span>
+                  </div>
+                  <!-- G'MIC操作ボタン + 反転ボタン -->
+                  <div style="display:flex; align-items:center; gap:6px; border-left:1px solid var(--border-color); padding-left:10px;">
+                    <button id="gmic-open-gui-btn" class="btn small secondary" data-i18n="layout.gmicOpenGui" data-i18n-title="layout.gmicOpenGuiTitle" title="選択中の画像をG'MIC-Qtで開いて編集します">G'MIC GUIで編集</button>
+                    <button id="gmic-insert-result-btn" class="btn small secondary" disabled data-i18n="layout.gmicInsertResult" data-i18n-title="layout.gmicInsertResultTitle" title="最後にG'MICで処理した結果を現在のコマに挿入します">結果を挿入</button>
+                    <button type="button" id="img-flip-h-btn" class="btn small" data-i18n-title="common.flipH" title="左右反転">↔</button>
+                    <button type="button" id="img-flip-v-btn" class="btn small" data-i18n-title="common.flipV" title="上下反転">↕</button>
+                  </div>
+                  <!-- PixiJS FX（パーティクル・フィルタ） -->
+                  <div style="display:flex; align-items:center; gap:6px; border-left:1px solid var(--border-color); padding-left:10px;">
+                    <button id="pixifx-open-btn" class="btn small secondary" data-i18n-title="layout.pixifxTitle" title="選択中の画像にPixiJSのパーティクル・フィルタ効果を適用します（原寸で選択画像を置き換え。「背景画像:非表示」で出力した場合はパーティクルのみをコマに挿入）">✨ PixiJS FX</button>
+                  </div>
+                  <!-- 進捗表示 -->
+                  <div id="gmic-progress-area" style="display:none; align-items:center; gap:6px; flex:1;">
+                    <span id="gmic-progress-text" style="font-size:11px; white-space:nowrap;" data-i18n="layout.processing">処理中...</span>
+                    <button id="gmic-abort-btn" class="btn small danger" data-i18n="layout.abortBtn" data-i18n-title="layout.abortTitle" title="ポーリングを中断してUIをリセットします">中断</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- マスクサブタブ -->
+              <div id="subtab-mask" class="subtab-content" style="display:none; flex:1; padding:0; margin:0;">
+                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                  <span style="font-size:12px; white-space:nowrap;"><span data-i18n="layout.maskTargetLabel">対象:</span> <span id="mask-target-label" style="color:var(--text-secondary);" data-i18n="layout.notSelected">未選択</span></span>
+                  <div style="display:flex; align-items:center; gap:3px; border-left:1px solid var(--border-color); padding-left:8px;">
+                    <select id="mask-new-type" style="font-size:12px;" data-i18n-title="layout.maskTypeTitle" title="追加するマスクレイヤーの種類">
+                      <option value="hide" data-i18n="layout.maskTypeHide">隠すマスク（塗った所を隠す）</option>
+                      <option value="show" data-i18n="layout.maskTypeShow">表示マスク（塗った所だけ表示）</option>
+                    </select>
+                    <button id="mask-add-layer-btn" class="btn small secondary" data-i18n="layout.maskAddLayer" data-i18n-title="layout.maskAddLayerTitle" title="選択中のコマ/オーバーレイにマスクレイヤーを追加して編集を開始します">＋レイヤー追加</button>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:3px;">
+                    <span style="font-size:12px; white-space:nowrap;" data-i18n="layout.editLabel">編集:</span>
+                    <div id="mask-edit-mode-group" class="seg-group">
+                      <button type="button" class="seg-btn" data-mask-edit="on">ON</button>
+                      <button type="button" class="seg-btn active" data-mask-edit="off">OFF</button>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:3px;">
+                    <span style="font-size:12px;" data-i18n="layout.brushLabel">ブラシ:</span>
+                    <div id="mask-brush-mode-group" class="seg-group">
+                      <button type="button" class="seg-btn active" data-mask-brush="paint" data-i18n="layout.brushPaint" data-i18n-title="layout.brushPaintTitle" title="マスクを塗ります">塗る</button>
+                      <button type="button" class="seg-btn" data-mask-brush="erase" data-i18n="layout.brushErase" data-i18n-title="layout.brushEraseTitle" title="塗ったマスクを消します">消す</button>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:3px;">
+                    <label for="mask-brush-size" style="font-size:12px; white-space:nowrap;" data-i18n="layout.sizeLabel">サイズ:</label>
+                    <input type="range" id="mask-brush-size" min="4" max="300" value="60" style="width:90px;" />
+                    <span id="mask-brush-size-val" style="font-size:11px; min-width:26px;">60</span>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:3px;">
+                    <label for="mask-brush-hardness" style="font-size:12px; white-space:nowrap;" data-i18n="layout.hardnessLabel">硬さ:</label>
+                    <input type="range" id="mask-brush-hardness" min="0" max="100" value="80" style="width:70px;" />
+                    <span id="mask-brush-hardness-val" style="font-size:11px; min-width:32px;">80%</span>
+                  </div>
+                  <label style="font-size:12px; display:flex; align-items:center; gap:3px; white-space:nowrap;">
+                    <input type="checkbox" id="mask-show-red" checked /><span data-i18n="layout.maskShowRed">非表示部を赤表示</span>
+                  </label>
+                  <label style="font-size:12px; display:flex; align-items:center; gap:3px; white-space:nowrap;" data-i18n-title="layout.maskEnabledTitle" title="OFFにするとマスク全体を保持したまま一時的に無効化します">
+                    <input type="checkbox" id="mask-enabled" checked /><span data-i18n="layout.maskEnabled">マスク適用</span>
+                  </label>
+                  <button id="mask-invert-btn" class="btn small" data-i18n="layout.maskInvert" data-i18n-title="layout.maskInvertTitle" title="編集中レイヤーの塗りを反転します">反転</button>
+                  <button id="mask-clear-btn" class="btn small" data-i18n="layout.maskClear" data-i18n-title="layout.maskClearTitle" title="編集中レイヤーの塗りを全消去します">クリア</button>
+                  <button id="mask-fill-btn" class="btn small" data-i18n="layout.maskFill" data-i18n-title="layout.maskFillTitle" title="編集中レイヤーを全面塗りにします">全面塗り</button>
+                  <button id="mask-delete-btn" class="btn small danger" data-i18n="layout.maskDeleteLayer" data-i18n-title="layout.maskDeleteLayerTitle" title="編集中のマスクレイヤーを削除します">レイヤー削除</button>
+                  <span id="mask-status" style="font-size:11px; color:var(--text-secondary);"></span>
+                </div>
+              </div>
+
+              <!-- 3Dポーズサブタブ -->
+              <div id="subtab-pose3d" class="subtab-content" style="display:none; flex:1; padding:0; margin:0;">
+                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                  <!-- モデル読込 -->
+                  <label class="btn small" style="cursor:pointer; white-space:nowrap;" data-i18n-title="layout.pose3dLoadModelTitle" title="VRM / GLB / GLTF ファイルを読み込みます">
+                    <span data-i18n="layout.pose3dLoadModel">モデル読込</span><input type="file" id="pose3d-vrm-input" accept=".vrm,.glb,.gltf" style="display:none;" />
+                  </label>
+                  <span id="pose3d-vrm-label" style="font-size:10px; color:var(--text-secondary); max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">default model</span>
+                  <!-- ポーズ読込・保存 -->
+                  <label class="btn small" style="cursor:pointer; white-space:nowrap;" data-i18n-title="layout.pose3dLoadPoseTitle" title=".json / .vroidpose ファイルを読み込みます">
+                    <span data-i18n="layout.pose3dLoadPose">ポーズ読込</span><input type="file" id="pose3d-pose-input" accept=".json,.vroidpose" style="display:none;" />
+                  </label>
+                  <button id="pose3d-save-pose-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.pose3dSavePose" data-i18n-title="layout.pose3dSavePoseTitle" title="現在のポーズを JSON として保存します">ポーズ保存</button>
+                  <!-- comfyui-vrm-pose-editor 連携: poses/へ保存・ポーズライブラリ -->
+                  <button id="pose3d-save-to-poses-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dSaveToPosesTitle" title="現在のポーズを comfyui-vrm-pose-editor の poses/ フォルダへ保存します">💾 poses/</button>
+                  <button id="pose3d-library-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.pose3dLibrary" data-i18n-title="layout.pose3dLibraryTitle" title="ポーズライブラリを開きます">📚 ライブラリ</button>
+                  <!-- CC / ミラー / リセット -->
+                  <button id="pose3d-cc-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dCcTitle" title="カラー補正 (sRGB + ACES Filmic) の ON/OFF">CC: OFF</button>
+                  <button id="pose3d-mirror-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.pose3dMirror" data-i18n-title="layout.pose3dMirrorTitle" title="ポーズを左右反転します">↔ ミラー</button>
+                  <button id="pose3d-reset-pose-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dResetPoseTitle" title="ポーズをリセット">RP</button>
+                  <button id="pose3d-reset-camera-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dResetCameraTitle" title="カメラをリセット">RC</button>
+                  <button id="pose3d-cam-mode-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dCamModeTitle" title="カメラ: 透視投影 (クリックで平行投影に切替)">OT</button>
+                  <button id="pose3d-light-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.pose3dLight" data-i18n-title="layout.pose3dLightTitle" title="ライトエディタを開きます">💡 ライト</button>
+                  <!-- Point Size -->
+                  <label style="font-size:11px; white-space:nowrap;" data-i18n="layout.pose3dPointSize">点サイズ:</label>
+                  <input type="range" id="pose3d-point-size" min="0.2" max="3.0" step="0.1" value="1.0" style="width:60px;" />
+                  <span id="pose3d-point-size-val" style="font-size:11px; min-width:24px;">1.0</span>
+                  <!-- 区切り -->
+                  <div style="border-left:1px solid var(--border-color); height:20px;"></div>
+                  <!-- 配置・確定・キャンセル -->
+                  <button id="pose3d-place-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.pose3dPlace" data-i18n-title="layout.pose3dPlaceTitle" title="選択中のコマに 3D ビューを配置します">コマに配置</button>
+                  <button id="pose3d-commit-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.pose3dCommit" data-i18n-title="layout.pose3dCommitTitle" title="現在のビューをキャプチャしてコマに確定します" disabled>コマに確定</button>
+                  <button id="pose3d-refresh-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.pose3dRefresh" data-i18n-title="layout.pose3dRefreshTitle" title="3Dビューが表示されない場合に再描画します">再描画</button>
+                  <button id="pose3d-cancel-btn" class="btn small danger" style="white-space:nowrap; display:none;" data-i18n="common.cancel" data-i18n-title="layout.pose3dCancelTitle" title="3D ビューをキャンセルします">キャンセル</button>
+                  <span id="pose3d-status" style="font-size:11px; color:var(--text-secondary);"></span>
+                </div>
+                <!-- シェイプキーパネル（モデルロード後に動的生成） -->
+                <div id="pose3d-morph-panel" style="margin-top:4px;"></div>
+              </div>
+
+            </div>
+
+            <p style="color: #888; font-size: 13px; margin: 4px 0 8px" data-i18n="layout.dndHint">
+              ※ 画像はプレビューエリアにドラッグ&ドロップでも挿入できます
+            </p>
+            <div id="layout-preview" class="page-preview-area">
+              <p class="empty-message" data-i18n="layout.emptyMessage">ページが選択されていません。ページタブで作品を作成し、左のアセットパネル「テンプレート」から挿入してください。</p>
+            </div>
+          </section>
+
+          <!-- Image Tab -->
+          <section id="image-tab" class="tab-content">
+            <div class="ie-editor">
+              <div class="ie-toolbar">
+                <button class="ie-tool-btn active" data-tool="select" title="Select (V)">▲</button>
+                <button class="ie-tool-btn"        data-tool="draw"   title="Draw (B)">✏</button>
+                <button class="ie-tool-btn"        data-tool="text"   title="Text (T)">T</button>
+                <button class="ie-tool-btn"        data-tool="shape"  title="Shape (S)">□</button>
+                <button class="ie-tool-btn"        data-tool="fill"   title="Fill (G)">🪣</button>
+                <button class="ie-tool-btn"        data-tool="mask"   title="Mask">🎭</button>
+                <button class="ie-tool-btn"        data-tool="blur"     title="Blur / Mosaic">≈</button>
+                <button class="ie-tool-btn"        data-tool="filter"   title="G'MIC Filter">★</button>
+                <button class="ie-tool-btn"        data-tool="bgremove" title="Background Remove">⬚</button>
+                <button class="ie-tool-btn"        data-tool="upscale"  title="Upscale">⤢</button>
+              </div>
+              <div class="ie-center">
+                <div class="ie-action-bar">
+                  <label class="it-btn it-btn-sm" style="cursor:pointer;">
+                    Upload
+                    <input type="file" id="ie-upload-input" accept="image/*" style="display:none;">
+                  </label>
+                  <button class="it-btn it-btn-sm" id="ie-new-btn">New</button>
+                  <button class="it-btn it-btn-sm" id="ie-close-btn" data-i18n-title="image.closeTitle" title="現在のドキュメントを閉じます（未保存の変更がある場合は確認します）">Close</button>
+                  <span style="flex:1;"></span>
+                  <button class="it-btn it-btn-sm" id="ie-undo-btn" title="Undo (Ctrl+Z)">↩</button>
+                  <button class="it-btn it-btn-sm" id="ie-redo-btn" title="Redo (Ctrl+Y)">↪</button>
+                  <button class="it-btn it-btn-sm" id="ie-pixifx-btn" data-i18n-title="image.pixifxTitle" title="PixiJS FXでパーティクル・フィルタ効果を適用">✨ PixiJS FX</button>
+                  <button class="it-btn it-btn-sm" id="ie-save-btn">Save PNG</button>
+                  <button class="it-btn it-btn-sm" id="ie-save-project-btn" data-i18n-title="image.saveProjectTitle" title="レイヤー編集状態をアセットパネルのImageフォルダに保存し、後で再編集できるようにします">Save Project</button>
+                  <button class="it-btn it-btn-sm" id="ie-save-gallery-btn" data-i18n-title="image.saveGalleryTitle" title="ComfyUIのoutput/ccフォルダに保存">Save to Gallery</button>
+                  <button class="it-btn it-btn-sm" id="ie-save-eagle-btn" title="Save to Eagle library">Save to Eagle</button>
+                  <button class="it-btn it-btn-sm" id="ie-upload-comfy-btn" title="Send to ComfyUI (/upload/image)">Send to ComfyUI</button>
+                  <button class="it-btn it-btn-sm" id="ie-send-i2i-btn" data-i18n="image.sendToI2i" data-i18n-title="image.sendToI2iTitle" title="編集結果をWorkflow StudioのI2I入力へ送信">I2Iへ送る</button>
+                  <button class="it-btn it-btn-sm it-btn-primary" id="ie-save-layout-btn" data-i18n="image.sendToLayout" data-i18n-title="image.sendToLayoutTitle" title="レイアウトタブから開いた画像なら編集結果を書き戻し、新規作成したドキュメントならレイアウトの選択中コマ/オーバーレイに新規画像として挿入します">レイアウトに送る</button>
+                </div>
+                <div class="ie-tool-options" id="ie-tool-options"></div>
+                <div class="ie-canvas-wrap" id="ie-canvas-wrap">
+                  <div class="ie-canvas-container" id="ie-canvas-container" style="width:512px;height:512px;">
+                    <canvas id="ie-canvas-bg"      width="512" height="512"></canvas>
+                    <canvas id="ie-canvas-draw"    width="512" height="512"></canvas>
+                    <canvas id="ie-canvas-overlay" width="512" height="512"></canvas>
+                  </div>
+                  <div class="ie-placeholder" id="ie-placeholder">
+                    <span class="ie-placeholder-icon">🖼</span>
+                    <span>Upload an image or drop it here</span>
+                    <span style="font-size:11px;opacity:0.6;">Drag &amp; drop · Upload · New</span>
+                  </div>
+                </div>
+                <div class="ie-zoom-bar">
+                  <button class="it-btn it-btn-sm" id="ie-zoom-fit">Fit</button>
+                  <button class="it-btn it-btn-sm" id="ie-zoom-100">100%</button>
+                  <span style="flex:1;"></span>
+                  <span id="ie-zoom-label">100%</span>
+                </div>
+              </div>
+              <div class="ie-props-pane" id="ie-props-pane" style="display:none;">
+                <div class="ie-props-header"><span id="ie-props-title">Properties</span></div>
+                <div class="ie-props-body" id="ie-props-body"></div>
+              </div>
+              <div class="ie-right-panel">
+                <div class="ie-layers-header">
+                  <span>Layers</span>
+                  <button class="it-btn it-btn-sm" id="ie-add-layer-btn" title="Add layer">+</button>
+                  <button class="it-btn it-btn-sm" id="ie-add-mask-btn"  title="Add mask layer" style="font-weight:700;">M</button>
+                  <button class="it-btn it-btn-sm" id="ie-del-layer-btn" title="Delete layer">−</button>
+                  <button class="it-btn it-btn-sm" id="ie-layer-up-btn"   title="Move up">↑</button>
+                  <button class="it-btn it-btn-sm" id="ie-layer-down-btn" title="Move down">↓</button>
+                  <button class="it-btn it-btn-sm" id="ie-flatten-btn" data-i18n="image.flatten" data-i18n-title="image.flattenTitle" title="全レイヤーを1枚に統合">統合</button>
+                </div>
+                <div class="ie-global-opacity-row">
+                  <label data-i18n="image.globalOpacity">全体不透明度</label>
+                  <input type="range" id="ie-global-opacity" min="0" max="100" value="100">
+                  <span id="ie-global-opacity-label">100%</span>
+                </div>
+                <div class="ie-layer-list" id="ie-layer-list"></div>
+                <div class="ie-adj-add-row">
+                  <select id="ie-adj-type-select" class="ie-opt-select">
+                    <option value="brightness" data-i18n="image.adjBrightness">明度</option>
+                    <option value="contrast" data-i18n="image.adjContrast">コントラスト</option>
+                    <option value="saturation" data-i18n="image.adjSaturation">彩度</option>
+                    <option value="hue" data-i18n="image.adjHue">色相</option>
+                    <option value="blur" data-i18n="image.adjBlur">ぼかし</option>
+                    <option value="sharpen" data-i18n="image.adjSharpen">シャープ</option>
+                    <option value="noise" data-i18n="image.adjNoise">ノイズ</option>
+                    <option value="sepia" data-i18n="image.adjSepia">セピア</option>
+                    <option value="grayscale" data-i18n="image.adjGrayscale">グレー化</option>
+                    <option value="invert" data-i18n="image.adjInvert">反転</option>
+                    <option value="temperature" data-i18n="image.adjTemperature">色温度</option>
+                    <option value="vignette" data-i18n="image.adjVignette">周辺減光</option>
+                  </select>
+                  <button class="it-btn it-btn-sm" id="ie-adj-add-btn" data-i18n="image.adjAddBtn" data-i18n-title="image.adjAddTitle" title="調整レイヤーを追加">+ 調整</button>
+                </div>
+                <div class="ie-opacity-row">
+                  <label>Opacity</label>
+                  <input type="range" id="ie-layer-opacity" min="0" max="100" value="100">
+                  <span id="ie-layer-opacity-label">100%</span>
+                </div>
+                <div class="ie-adj-add-row">
+                  <button class="it-btn it-btn-sm" id="ie-layer-duplicate-btn" style="flex:1;" data-i18n="image.duplicateLayer" data-i18n-title="image.duplicateLayerTitle" title="選択中のレイヤーを複製します">レイヤー複製</button>
+                </div>
+              </div>
+            </div>
+            <div id="ie-toast" class="ie-toast" style="display:none;"></div>
+          </section>
+
+          <!-- Font Manager Tab -->
+          <section id="fontmgr-tab" class="tab-content">
+            <div class="fontmgr-layout">
+
+              <!-- 左パネル: フォントリスト -->
+              <div class="fontmgr-left">
+                <!-- ソース切り替えタブ -->
+                <div class="fontmgr-source-tabs">
+                  <button class="fontmgr-source-btn active" data-fontmgr-source="system" data-i18n="layout.fontTabSystem">システム</button>
+                  <button class="fontmgr-source-btn" data-fontmgr-source="google">Google Fonts</button>
+                  <button class="fontmgr-source-btn" data-fontmgr-source="favorites" data-i18n="layout.fontTabCategory">カテゴリ</button>
+                </div>
+                <!-- カテゴリタブ（カテゴリソース選択時のみ表示） -->
+                <div id="fontmgr-fav-cat-tabs" class="fontmgr-fav-cat-tabs" style="display:none;"></div>
+                <!-- 検索 -->
+                <div class="fontmgr-search-row">
+                  <input type="text" id="fontmgr-search-name" class="fontmgr-search-input" data-i18n-placeholder="font.searchNamePlaceholder" placeholder="フォント名で検索..." />
+                  <input type="text" id="fontmgr-search-tag" class="fontmgr-search-input" data-i18n-placeholder="font.searchTagPlaceholder" placeholder="タグで検索..." />
+                  <button id="fontmgr-search-btn" class="btn small" data-i18n="font.searchBtn">検索</button>
+                </div>
+                <!-- フォントリスト本体 -->
+                <div id="fontmgr-font-list" class="fontmgr-font-list">
+                  <p class="empty-message" data-i18n="font.loadingFonts">フォントを読み込んでいます...</p>
+                </div>
+                <!-- システムフォント読込ボタン（システムタブ時のみ表示） -->
+                <div id="fontmgr-load-system-wrap" class="fontmgr-load-system-wrap">
+                  <button id="fontmgr-load-system-btn" class="btn small secondary" data-i18n="font.loadSystemFonts">システムフォントを読み込む</button>
+                  <span id="fontmgr-system-status" class="fontmgr-system-status"></span>
+                </div>
+              </div>
+
+              <!-- 中央パネル: プレビュー -->
+              <div class="fontmgr-center">
+                <!-- プレビューサブタブ -->
+                <div class="fontmgr-preview-tabs">
+                  <button class="fontmgr-preview-tab-btn active" data-fontmgr-preview="basic" data-i18n="font.previewBasic">基本</button>
+                  <button class="fontmgr-preview-tab-btn" data-fontmgr-preview="sentence" data-i18n="font.previewSentence">文章</button>
+                  <button class="fontmgr-preview-tab-btn" data-fontmgr-preview="custom" data-i18n="font.previewCustom">カスタム</button>
+                  <button class="fontmgr-preview-tab-btn" data-fontmgr-preview="favlist" data-i18n="font.previewFavlist">カテゴリ一覧</button>
+                  <button class="fontmgr-preview-tab-btn" data-fontmgr-preview="style" data-i18n="font.previewStyle">スタイル</button>
+                </div>
+
+                <!-- 基本プレビュー -->
+                <div id="fontmgr-preview-basic" class="fontmgr-preview-content active">
+                  <div class="fontmgr-basic-controls">
+                    <label><input type="checkbox" class="fontmgr-char-cb" data-char="english" checked> <span data-i18n="font.charEnglish">英語</span></label>
+                    <label><input type="checkbox" class="fontmgr-char-cb" data-char="hiragana"> <span data-i18n="font.charHiragana">ひらがな</span></label>
+                    <label><input type="checkbox" class="fontmgr-char-cb" data-char="katakana"> <span data-i18n="font.charKatakana">カナ</span></label>
+                    <label><input type="checkbox" class="fontmgr-char-cb" data-char="kanji"> <span data-i18n="font.charKanji">漢字</span></label>
+                    <label><input type="checkbox" class="fontmgr-char-cb" data-char="numbers"> <span data-i18n="font.charNumbers">数字</span></label>
+                    <label><input type="checkbox" class="fontmgr-char-cb" data-char="symbols"> <span data-i18n="font.charSymbols">記号</span></label>
+                    <div class="fontmgr-size-row">
+                      <label><span data-i18n="layout.sizeLabel">サイズ:</span> <input type="range" id="fontmgr-size-slider" min="8" max="120" value="32" /></label>
+                      <input type="number" id="fontmgr-size-num" min="8" max="120" value="32" style="width:50px;" />
+                    </div>
+                  </div>
+                  <div id="fontmgr-basic-preview-area" class="fontmgr-basic-preview-area"></div>
+                </div>
+
+                <!-- 文章プレビュー -->
+                <div id="fontmgr-preview-sentence" class="fontmgr-preview-content">
+                  <div class="fontmgr-sentence-controls">
+                    <label><input type="radio" name="fontmgr-sent-dir" value="both" checked> <span data-i18n="font.dirBoth">横・縦 同時</span></label>
+                    <label><input type="radio" name="fontmgr-sent-dir" value="h"> <span data-i18n="font.dirHOnly">横のみ</span></label>
+                    <label><input type="radio" name="fontmgr-sent-dir" value="v"> <span data-i18n="font.dirVOnly">縦のみ</span></label>
+                  </div>
+                  <div id="fontmgr-sentence-area" class="fontmgr-sentence-area">
+                    <div id="fontmgr-sent-h" class="fontmgr-sent-h"></div>
+                    <div id="fontmgr-sent-v" class="fontmgr-sent-v"></div>
+                  </div>
+                </div>
+
+                <!-- カスタムテキストプレビュー -->
+                <div id="fontmgr-preview-custom" class="fontmgr-preview-content">
+                  <div class="fontmgr-custom-controls">
+                    <label><input type="radio" name="fontmgr-custom-dir" value="h" checked> <span data-i18n="font.dirHorizontal">横書き</span></label>
+                    <label><input type="radio" name="fontmgr-custom-dir" value="v"> <span data-i18n="font.dirVertical">縦書き</span></label>
+                    <span class="fontmgr-ctrl-sep"></span>
+                    <label><span data-i18n="font.jpLabel">日本語:</span> <select id="fontmgr-jp-font" class="fontmgr-font-select"></select></label>
+                    <label><span data-i18n="font.enLabel">英語:</span> <select id="fontmgr-en-font" class="fontmgr-font-select"></select></label>
+                    <label><span data-i18n="layout.sizeLabel">サイズ:</span> <input type="number" id="fontmgr-custom-size" min="8" max="200" value="24" style="width:50px;" /></label>
+                    <label><span data-i18n="font.textColorLabel">文字色:</span> <input type="color" id="fontmgr-text-color" value="#e0e0e0" /></label>
+                    <label><span data-i18n="font.bgColorLabel">背景色:</span> <input type="color" id="fontmgr-bg-color" value="#1e1e1e" /></label>
+                  </div>
+                  <textarea id="fontmgr-custom-input" class="fontmgr-custom-input" data-i18n-placeholder="font.customInputPlaceholder" placeholder="プレビューするテキストを入力..."></textarea>
+                  <div id="fontmgr-custom-preview-wrap" class="fontmgr-custom-preview-wrap">
+                    <div id="fontmgr-custom-preview-h" class="fontmgr-custom-preview-h"></div>
+                    <div id="fontmgr-custom-preview-v" class="fontmgr-custom-preview-v" style="display:none;"></div>
+                  </div>
+                </div>
+
+                <!-- カテゴリ一覧プレビュー -->
+                <div id="fontmgr-preview-favlist" class="fontmgr-preview-content">
+                  <div class="fontmgr-favlist-controls">
+                    <label><span data-i18n="font.categoryLabel">カテゴリ:</span>
+                      <select id="fontmgr-favlist-cat-select" class="fontmgr-font-select"></select>
+                    </label>
+                    <span style="font-size:12px; color:var(--text-secondary); margin-left:8px;" data-i18n="font.favlistHint">※ 文字種は「基本」タブのチェックボックスと連動</span>
+                  </div>
+                  <div id="fontmgr-favlist-area" class="fontmgr-favlist-area"></div>
+                </div>
+
+                <!-- スタイル（塗り・線・袋文字・影）作成プレビュー -->
+                <div id="fontmgr-preview-style" class="fontmgr-preview-content">
+                  <div class="fontmgr-style-layout">
+                    <div class="fontmgr-style-controls">
+                      <div class="fontmgr-style-group">
+                        <label><span data-i18n="font.stylePreviewText">プレビュー文字:</span> <input type="text" id="style-preview-input" value="あ亜Aa1" style="width:100px;" /></label>
+                      </div>
+                      <div class="fontmgr-style-group">
+                        <label><span data-i18n="layout.sizeLabel">サイズ:</span> <input type="number" id="style-preview-size" min="16" max="200" value="150" style="width:60px;" /></label>
+                      </div>
+
+                      <div class="fontmgr-style-group">
+                        <label class="fontmgr-style-group-label" data-i18n="font.fillLabel">塗り</label>
+                        <input type="color" id="style-fill-color" value="#000000" />
+                        <label style="margin-left:8px;"><input type="checkbox" id="style-stroke-enable" /> <span data-i18n="font.strokeLabel">線</span></label>
+                        <input type="color" id="style-stroke-color" value="#ffffff" />
+                        <input type="number" id="style-stroke-width" min="0.5" max="50" step="0.5" value="4" style="width:50px;" />
+                      </div>
+
+                      <div class="fontmgr-style-group">
+                        <label><input type="checkbox" id="style-bold-enable" /> <span data-i18n="font.boldLabel">太字</span></label>
+                        <label style="margin-left:8px;"><input type="checkbox" id="style-italic-enable" /> <span data-i18n="font.italicLabel">斜体</span></label>
+                        <label style="margin-left:8px;"><input type="checkbox" id="style-underline-enable" /> <span data-i18n="font.underlineLabel">下線</span></label>
+                      </div>
+
+                      <div class="fontmgr-style-group">
+                        <label class="fontmgr-style-group-label" data-i18n="font.alignLabel">文字寄せ</label>
+                        <select id="style-align-select">
+                          <option value="left" data-i18n="font.alignLeft">左</option>
+                          <option value="center" data-i18n="font.alignCenter">中央</option>
+                          <option value="right" data-i18n="font.alignRight">右</option>
+                        </select>
+                      </div>
+
+                      <div class="fontmgr-style-group">
+                        <label><input type="checkbox" id="style-bukuro-enable" /> <span data-i18n="font.bukuroLabel">袋文字</span></label>
+                        <input type="color" id="style-bukuro-color" value="#000000" />
+                        <input type="number" id="style-bukuro-width" min="0.5" max="50" step="0.5" value="8" style="width:50px;" />
+                      </div>
+
+                      <div class="fontmgr-style-group">
+                        <label><input type="checkbox" id="style-shadow-enable" /> <span data-i18n="font.shadowLabel">影</span></label>
+                        <input type="color" id="style-shadow-color" value="#000000" />
+                        <label><span data-i18n="font.blurLabel">ぼかし</span><input type="number" id="style-shadow-blur" min="0" max="30" value="4" style="width:45px;" /></label>
+                      </div>
+                      <div class="fontmgr-style-group">
+                        <label class="fontmgr-style-group-label" data-i18n="font.shadowPosLabel">影位置</label>
+                        <label>X<input type="number" id="style-shadow-dx" value="4" style="width:45px;" /></label>
+                        <label>Y<input type="number" id="style-shadow-dy" value="4" style="width:45px;" /></label>
+                      </div>
+
+                      <hr class="fontmgr-divider" />
+
+                      <div class="fontmgr-style-group">
+                        <label class="fontmgr-style-group-label" data-i18n="font.registeredLabel">登録済み</label>
+                        <select id="style-select" style="flex:1; min-width:0;">
+                          <option value="" data-i18n="font.newOption">(新規)</option>
+                        </select>
+                        <button id="style-delete-btn" class="btn small danger" data-i18n="common.delete" data-i18n-title="font.styleDeleteTitle" title="選択中のスタイルを削除">削除</button>
+                      </div>
+
+                      <div class="fontmgr-tag-input-row">
+                        <input type="text" id="style-name-input" class="fontmgr-tag-input" data-i18n-placeholder="font.styleNamePlaceholder" placeholder="スタイル名を入力..." />
+                        <button id="style-save-btn" class="btn small" data-i18n="common.save">保存</button>
+                        <button id="style-new-btn" class="btn small secondary" data-i18n="font.newBtn">新規</button>
+                      </div>
+
+                      <hr class="fontmgr-divider" />
+
+                      <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="font.presetHeader">プリセット（フォント＋サイズ＋スタイル参照）</div>
+
+                      <div class="fontmgr-style-group">
+                        <label class="fontmgr-style-group-label" data-i18n="font.sizePtLabel">サイズ(pt)</label>
+                        <input type="number" id="preset-size-input" min="6" max="200" value="150" style="width:60px;" />
+                        <label style="margin-left:8px;"><input type="checkbox" id="preset-vertical-checkbox" /> <span data-i18n="font.dirVertical">縦書き</span></label>
+                      </div>
+
+                      <div class="fontmgr-style-group">
+                        <label class="fontmgr-style-group-label" data-i18n="font.styleLabel">スタイル</label>
+                        <select id="preset-style-select">
+                          <option value="" data-i18n="font.noStyleOption">(スタイルなし)</option>
+                        </select>
+                      </div>
+
+                      <div class="fontmgr-style-group">
+                        <label class="fontmgr-style-group-label" data-i18n="font.registeredLabel">登録済み</label>
+                        <select id="preset-select" style="flex:1; min-width:0;">
+                          <option value="" data-i18n="font.newOption">(新規)</option>
+                        </select>
+                        <button id="preset-delete-btn" class="btn small danger" data-i18n="common.delete" data-i18n-title="font.presetDeleteTitle" title="選択中のプリセットを削除">削除</button>
+                      </div>
+
+                      <div class="fontmgr-tag-input-row">
+                        <input type="text" id="preset-name-input" class="fontmgr-tag-input" data-i18n-placeholder="font.presetNamePlaceholder" placeholder="プリセット名を入力..." />
+                        <button id="preset-save-btn" class="btn small" data-i18n="common.save">保存</button>
+                        <button id="preset-new-btn" class="btn small secondary" data-i18n="font.newBtn">新規</button>
+                      </div>
+                    </div>
+
+                    <div class="fontmgr-style-preview-area">
+                      <div class="fontmgr-style-preview-toolbar">
+                        <button type="button" id="style-preview-bg-default" class="fontmgr-style-bg-btn active" data-bg="default" data-i18n="asset.bgDefault">デフォルト</button>
+                        <button type="button" id="style-preview-bg-white" class="fontmgr-style-bg-btn" data-bg="white" data-i18n="font.bgWhite">ホワイト</button>
+                      </div>
+                      <div id="style-preview-canvas" class="fontmgr-style-preview-canvas">
+                        <!-- 実適用（_fontMgrApplyStyleAttrsToTextEl）と同じSVGレンダリングでプレビューする -->
+                        <svg id="style-preview-svg" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:100%;" preserveAspectRatio="xMidYMid meet">
+                          <text id="style-preview-text" x="0" y="0"></text>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 右パネル: プロパティ・タグ・カテゴリ -->
+              <div class="fontmgr-right">
+                <div class="fontmgr-prop-section">
+                  <div id="fontmgr-family-name" class="fontmgr-family-name" data-i18n="font.noFontSelected">（フォント未選択）</div>
+                  <div id="fontmgr-file-path" class="fontmgr-file-path"></div>
+                </div>
+
+                <!-- レイアウトタブに適用 -->
+                <button id="fontmgr-apply-btn" class="btn secondary" style="width:100%; margin-bottom:12px;" disabled data-i18n="font.applyToText">
+                  選択テキストに適用
+                </button>
+
+                <!-- プロパティ表示: 選択中フォントのタグ -->
+                <div id="fontmgr-tag-chips" class="fontmgr-tag-chips"></div>
+
+                <hr class="fontmgr-divider" />
+
+                <!-- タグ追加 -->
+                <div class="fontmgr-section-header" data-i18n="font.tagAddHeader">タグ追加</div>
+                <div class="fontmgr-tag-input-row">
+                  <input type="text" id="fontmgr-tag-input" class="fontmgr-tag-input" data-i18n-placeholder="font.tagInputPlaceholder" placeholder="タグを入力..." />
+                  <button id="fontmgr-tag-add-btn" class="btn small" data-i18n="font.addBtn">追加</button>
+                </div>
+                <!-- 作成済みタグ一覧（クリックで選択中フォントに追加） -->
+                <div id="fontmgr-all-tags-chips" class="fontmgr-tag-chips"></div>
+
+                <hr class="fontmgr-divider" />
+
+                <!-- カテゴリ管理 -->
+                <div class="fontmgr-section-header" data-i18n="layout.fontTabCategory">カテゴリ</div>
+                <div class="fontmgr-fav-row">
+                  <select id="fontmgr-fav-cat-select" class="fontmgr-font-select" style="flex:1;"></select>
+                  <button id="fontmgr-fav-add-btn" class="btn small" data-i18n="font.addBtn">追加</button>
+                  <button id="fontmgr-fav-remove-btn" class="btn small secondary" data-i18n="font.removeBtn">解除</button>
+                </div>
+                <div class="fontmgr-cat-btns">
+                  <button id="fontmgr-cat-add-btn" class="btn small secondary" data-i18n="font.catAddBtn">+ カテゴリ</button>
+                  <button id="fontmgr-cat-del-btn" class="btn small secondary" data-i18n="font.catDelBtn">- カテゴリ</button>
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          <!-- Workflow Studio Gallery Tab (iframe埋め込み, ComfyUI-Workflow-Studio 導入が前提) -->
+          <section id="wfmgallery-tab" class="tab-content">
+            <div id="wfmgallery-fallback" class="wfm-gallery-embed-fallback" style="display:none;"></div>
+            <iframe id="wfmgallery-iframe" class="wfm-gallery-embed-iframe" style="display:none;" title="Workflow Studio Gallery"></iframe>
+          </section>
+
+          <!-- Page Tab (旧・出力タブ: テンプレート／ページ管理／出力) -->
+          <section id="output-tab" class="tab-content active">
+            <!-- サブタブナビ -->
+            <div class="output-subtab-nav">
+              <button class="output-subtab-btn active" data-output-subtab="work" data-i18n="page.subtabWork">作品管理</button>
+              <button class="output-subtab-btn" data-output-subtab="template" data-i18n="asset.tabTemplates">テンプレート</button>
+              <button class="output-subtab-btn" data-output-subtab="export" data-i18n="page.subtabExport">出力</button>
+            </div>
+
+            <!-- === サブタブ: 作品管理 === -->
+            <div id="output-subtab-work" class="output-subtab-content active">
+              <div class="actions" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <button id="work-create-btn" class="btn" data-i18n="page.workCreate" data-i18n-title="page.workCreateTitle" title="作品名とサイズを設定して新規作品を作成します">新規作成</button>
+                <button id="work-open-btn" class="btn secondary" disabled data-i18n="page.workOpen" data-i18n-title="page.workOpenTitle" title="一覧で選択した作品をレイアウトに展開します">開く</button>
+                <button id="work-export-btn" class="btn secondary" disabled data-i18n="page.subtabExport" data-i18n-title="page.workExportTitle" title="選択した作品/グループのページを出力サブタブで表示します">出力</button>
+                <span id="work-active-label" style="margin-left:auto; font-size:12px; color:var(--text-secondary);"></span>
+              </div>
+              <div style="display:flex; gap:0; flex:1; overflow:hidden; min-height:0;">
+                <!-- ペイン1: 作品一覧／グループ -->
+                <div id="work-list-pane" style="width:240px; flex-shrink:0; border-right:1px solid var(--border-color); overflow-y:auto; padding:8px;">
+                  <div style="display:flex; gap:4px; margin-bottom:8px;">
+                    <button id="work-tab-works" class="btn small" style="flex:1;" data-i18n="page.workTabWorks" data-i18n-title="page.workTabWorksTitle" title="作品（サイズ付きページグループ）の一覧">作品一覧</button>
+                    <button id="work-tab-groups" class="btn small secondary" style="flex:1;" data-i18n="page.workTabGroups" data-i18n-title="page.workTabGroupsTitle" title="通常グループの一覧（作品未採用ページのストック管理など）">グループ</button>
+                  </div>
+                  <div id="work-list-grid" class="pagemgr-grid" style="grid-template-columns:1fr; align-content:start;">
+                    <p class="empty-message" data-i18n="page.noWorks">作品がありません。「新規作成」で作成してください。</p>
+                  </div>
+                </div>
+
+                <!-- ペイン2: 選択作品のページ一覧 -->
+                <div id="pagemgr-grid-area" style="flex:1; overflow-y:auto; padding:12px;">
+                  <div id="pagemgr-toolbar" style="display:flex; align-items:center; gap:6px; margin-bottom:10px; flex-wrap:wrap;">
+                    <span id="pagemgr-work-label" style="font-size:12px; font-weight:bold; color:var(--text-secondary); margin-right:6px;" data-i18n="layout.notSelected">未選択</span>
+                    <button id="pagemgr-select-all-btn" class="btn small secondary" data-i18n="page.selectAll">全選択</button>
+                    <button id="pagemgr-deselect-btn" class="btn small secondary" data-i18n="page.deselect">選択解除</button>
+                    <button id="pagemgr-move-up-btn" class="btn small secondary" data-i18n-title="page.moveUpTitle" title="選択ページを前へ移動（作品/グループ選択中・単一選択時のみ）" disabled>↑</button>
+                    <button id="pagemgr-move-down-btn" class="btn small secondary" data-i18n-title="page.moveDownTitle" title="選択ページを後ろへ移動（作品/グループ選択中・単一選択時のみ）" disabled>↓</button>
+                    <span id="pagemgr-selected-count" style="font-size:12px; color:var(--text-secondary); min-width:60px;"></span>
+                    <div style="margin-left:auto; display:flex; gap:6px;">
+                      <button id="pagemgr-bulk-delete-btn" class="btn small danger" disabled data-i18n="page.bulkDelete">一括削除</button>
+                    </div>
+                  </div>
+                  <div id="pagemgr-grid" class="pagemgr-grid">
+                    <p class="empty-message" data-i18n="asset.noPages">ページがありません</p>
+                  </div>
+                </div>
+
+                <!-- ペイン3: プロパティ＋グループ管理＋ページ操作 -->
+                <div id="pagemgr-side-panel" style="width:220px; flex-shrink:0; border-left:1px solid var(--border-color); padding:12px; overflow-y:auto; font-size:13px; display:flex; flex-direction:column; gap:10px;">
+                  <!-- プロパティ -->
+                  <div>
+                    <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="page.propsHeader">プロパティ</div>
+                    <div id="pagemgr-prop-name" style="font-size:12px; color:var(--text-secondary); word-break:break-all;" data-i18n="layout.notSelected">未選択</div>
+                    <div id="pagemgr-prop-size" style="font-size:11px; color:var(--text-secondary); margin-top:2px;"></div>
+                    <div id="pagemgr-prop-group" style="font-size:12px; color:var(--text-secondary); margin-top:2px;"></div>
+                  </div>
+                  <hr style="border:none; border-top:1px solid var(--border-color); margin:0;">
+                  <!-- グループ管理 -->
+                  <div>
+                    <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="page.groupMgmtHeader">グループ管理</div>
+                    <div style="display:flex; gap:4px; margin-bottom:6px;">
+                      <input type="text" id="pagemgr-group-name-input" data-i18n-placeholder="page.groupNamePlaceholder" placeholder="グループ名" style="flex:1; min-width:0; padding:4px 6px; font-size:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);" />
+                      <button id="pagemgr-group-add-btn" class="btn small secondary" data-i18n="font.addBtn" data-i18n-title="page.groupAddTitle" title="グループを作成">追加</button>
+                    </div>
+                    <div style="display:flex; gap:4px; margin-bottom:6px;">
+                      <select id="pagemgr-group-select" style="flex:1; min-width:0; padding:4px 6px; font-size:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);">
+                        <option value="" data-i18n="page.groupSelectOption">グループを選択</option>
+                      </select>
+                      <button id="pagemgr-group-rename-btn" class="btn small secondary" data-i18n-title="page.groupRenameTitle" title="グループ名変更">✎</button>
+                      <button id="pagemgr-group-delete-btn" class="btn small danger" data-i18n-title="page.groupDeleteTitle" title="グループを削除">✕</button>
+                    </div>
+                  </div>
+                  <hr style="border:none; border-top:1px solid var(--border-color); margin:0;">
+                  <!-- 作品操作 -->
+                  <div>
+                    <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="page.workOpsHeader">作品操作</div>
+                    <button id="pagemgr-work-delete-btn" class="btn small danger" style="width:100%;" disabled data-i18n="page.workDelete" data-i18n-title="page.workDeleteTitle" title="作品一覧で選択中の作品を削除します（所属ページはゴミ箱へ移動します）">作品削除</button>
+                  </div>
+                  <hr style="border:none; border-top:1px solid var(--border-color); margin:0;">
+                  <!-- ページ操作 -->
+                  <div>
+                    <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="page.pageOpsHeader">ページ操作</div>
+                    <button id="pagemgr-rename-btn" class="btn small secondary" style="width:100%; margin-bottom:4px;" disabled data-i18n="page.rename">名前変更</button>
+                    <button id="pagemgr-seq-rename-btn" class="btn small secondary" style="width:100%; margin-bottom:4px;" disabled data-i18n="page.seqRename" data-i18n-title="page.seqRenameTitle" title="「出力」サブタブでの並び順に従って「ベース名_000」のように連番でリネームします">連番名前変更</button>
+                    <button id="pagemgr-duplicate-btn" class="btn small secondary" style="width:100%; margin-bottom:4px;" disabled data-i18n="page.duplicate" data-i18n-title="page.duplicateTitle" title="選択ページを複製します（同じ作品/グループ内の直後に追加）">ページ複製</button>
+                    <div style="display:flex; gap:4px; margin-bottom:4px;">
+                      <select id="pagemgr-move-group-select" style="flex:1; min-width:0; padding:4px 6px; font-size:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);" data-i18n-title="page.moveGroupSelectTitle" title="選択ページの移動先グループ">
+                        <option value="" data-i18n="page.moveGroupOption">移動先グループ</option>
+                      </select>
+                      <button id="pagemgr-move-group-btn" class="btn small secondary" data-i18n="page.moveBtn" data-i18n-title="page.moveBtnTitle" title="選択ページを指定グループへ移動" disabled>移動</button>
+                    </div>
+                    <button id="pagemgr-remove-group-btn" class="btn small secondary" style="width:100%; margin-bottom:4px;" disabled data-i18n="page.toStock" data-i18n-title="page.toStockTitle" title="選択ページをstockグループへ退避します">stockへ移動</button>
+                    <button id="pagemgr-delete-btn" class="btn small danger" style="width:100%;" disabled data-i18n="page.deleteTrash">削除（ゴミ箱）</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- === サブタブ: テンプレート === -->
+            <div id="output-subtab-template" class="output-subtab-content" style="display:none;">
+              <div class="actions">
+                <label for="svg-upload" class="btn" data-i18n="page.svgToTemplate">SVGからテンプレート作成</label>
+                <input type="file" id="svg-upload" accept=".svg" class="hidden" />
+                <button id="template-wizard-btn" class="btn" data-i18n="page.templateWizard">テンプレートを作成</button>
+                <button id="create-page-btn" class="btn secondary" data-i18n="page.createPage">ページ新規作成</button>
+                <button id="template-rename-btn" class="btn secondary" disabled data-i18n="page.rename">名前変更</button>
+                <button id="template-delete-btn" class="btn danger" disabled data-i18n="common.delete">削除</button>
+                <select id="template-group-filter" style="margin-left:8px; padding:4px 8px; font-size:13px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);">
+                  <option value="" data-i18n="layout.fontCatAll">すべて</option>
+                </select>
+              </div>
+              <div style="display:flex; gap:0; flex:1; overflow:hidden;">
+                <div id="template-list" class="template-grid" style="flex:1; overflow-y:auto;">
+                  <p class="empty-message" data-i18n="page.noTemplates">テンプレートがありません。SVGを読み込んで作成してください。</p>
+                </div>
+                <!-- テンプレートグループサイドパネル -->
+                <div id="tmpl-group-side-panel" style="width:200px; flex-shrink:0; border-left:1px solid var(--border-color); padding:12px; overflow-y:auto; font-size:13px; display:flex; flex-direction:column; gap:10px;">
+                  <!-- プロパティ -->
+                  <div>
+                    <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="page.propsHeader">プロパティ</div>
+                    <div id="tmpl-prop-name" style="font-size:12px; color:var(--text-secondary);" data-i18n="layout.notSelected">未選択</div>
+                    <div id="tmpl-prop-group" style="font-size:12px; color:var(--text-secondary); margin-top:2px;"></div>
+                  </div>
+                  <hr style="border:none; border-top:1px solid var(--border-color); margin:0;">
+                  <!-- グループ管理 -->
+                  <div>
+                    <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="page.groupMgmtHeader">グループ管理</div>
+                    <div style="display:flex; gap:4px; margin-bottom:6px;">
+                      <input type="text" id="tmpl-group-name-input" data-i18n-placeholder="page.groupNamePlaceholder" placeholder="グループ名" style="flex:1; min-width:0; padding:4px 6px; font-size:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);" />
+                      <button id="tmpl-group-add-btn" class="btn small secondary" data-i18n="font.addBtn" data-i18n-title="page.groupAddTitle" title="グループを作成">追加</button>
+                    </div>
+                    <div style="display:flex; gap:4px; margin-bottom:6px;">
+                      <select id="tmpl-group-select" style="flex:1; min-width:0; padding:4px 6px; font-size:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);">
+                        <option value="" data-i18n="page.groupSelectOption">グループを選択</option>
+                      </select>
+                      <button id="tmpl-group-rename-btn" class="btn small secondary" data-i18n-title="page.groupRenameTitle" title="グループ名変更">✎</button>
+                      <button id="tmpl-group-delete-btn" class="btn small danger" data-i18n-title="page.groupDeleteTitle" title="グループを削除">✕</button>
+                    </div>
+                  </div>
+                  <hr style="border:none; border-top:1px solid var(--border-color); margin:0;">
+                  <!-- テンプレート↔グループ操作 -->
+                  <div>
+                    <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="page.tmplOpsHeader">テンプレート操作</div>
+                    <button id="tmpl-assign-group-btn" class="btn small secondary" style="width:100%; margin-bottom:4px;" disabled data-i18n="page.tmplAssignGroup">グループに追加</button>
+                    <button id="tmpl-remove-group-btn" class="btn small danger" style="width:100%;" disabled data-i18n="page.tmplRemoveGroup">グループから削除</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- === サブタブ: 出力 === -->
+            <div id="output-subtab-export" class="output-subtab-content" style="display:none;">
+              <!-- 上部コントロール -->
+              <div class="export-controls">
+                <div class="control-group">
+                  <label for="export-format" data-i18n="page.formatLabel">形式:</label>
+                  <select id="export-format">
+                    <option value="jpeg">JPEG</option>
+                    <option value="png">PNG</option>
+                    <option value="webp">WebP</option>
+                    <option value="pdf">PDF</option>
+                    <option value="epub">EPUB</option>
+                  </select>
+                </div>
+                <div class="control-group">
+                  <label for="export-width" data-i18n="page.widthPxLabel">幅(px):</label>
+                  <input type="text" id="export-width" value="800" />
+                </div>
+                <div class="control-group">
+                  <label for="export-height" data-i18n="page.heightPxLabel">高さ(px):</label>
+                  <input type="text" id="export-height" value="600" />
+                </div>
+                <div class="control-group checkbox">
+                  <input type="checkbox" id="maintain-aspect" checked />
+                  <label for="maintain-aspect" data-i18n="page.maintainAspect">縦横比を維持</label>
+                </div>
+                <div class="control-group checkbox">
+                  <input type="checkbox" id="export-bg-only" />
+                  <label for="export-bg-only" data-i18n="page.bgOnly">背景のみ</label>
+                </div>
+                <div class="control-group checkbox">
+                  <input type="checkbox" id="export-balloon-only" />
+                  <label for="export-balloon-only" data-i18n="page.balloonOnly">フキダシのみ</label>
+                </div>
+                <div class="control-group export-page-range">
+                  <label data-i18n="page.exportPagesLabel">出力ページ:</label>
+                  <input type="number" id="export-page-start" min="1" value="1" data-i18n-title="page.exportStartTitle" title="開始ページ番号" />
+                  <span>〜</span>
+                  <input type="number" id="export-page-end" min="1" value="1" data-i18n-title="page.exportEndTitle" title="終了ページ番号" />
+                </div>
+                <div class="control-group">
+                  <label for="export-filename" data-i18n="page.filenameLabel">ファイル名:</label>
+                  <input type="text" id="export-filename" data-i18n-placeholder="page.filenamePlaceholder" placeholder="（空欄時はページ名）" style="width:160px;" />
+                </div>
+                <button id="export-btn" class="btn" data-i18n="common.save">保存</button>
+                <div class="control-group checkbox">
+                  <input type="checkbox" id="export-zip" />
+                  <label for="export-zip" data-i18n="page.zipSave" data-i18n-title="page.zipSaveTitle" title="全ページを1つのzipファイルにまとめて保存します（画像形式のみ）">zip保存</label>
+                </div>
+              </div>
+              <!-- メインエリア（プレビュー＋右サイドパネル） -->
+              <div class="output-layout">
+                <div id="export-preview" class="page-preview-area">
+                  <p class="empty-message" data-i18n="page.exportEmptyMessage">右のリストからページを選択してください。</p>
+                </div>
+                <!-- 右サイドパネル：ページ一覧 -->
+                <div class="output-side-panel">
+                  <div class="side-panel-header">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span data-i18n="page.pageListHeader">ページ一覧</span>
+                      <select id="output-page-sort-criterion" class="input-tiny" style="font-size:11px; padding:2px; height:24px;" data-i18n-title="page.sortCriterionTitle" title="ページ一覧のソート順を選択">
+                        <option value="name" data-i18n="page.sortByName">名前順</option>
+                        <option value="date_asc" data-i18n="page.sortByDateAsc">日付昇順</option>
+                        <option value="date_desc" data-i18n="page.sortByDateDesc">日付降順</option>
+                      </select>
+                    </div>
+                    <div style="display:flex;gap:4px;">
+                      <button id="output-page-sort-btn" class="btn small primary" data-i18n="page.sortBtn" data-i18n-title="page.sortBtnTitle" title="番号指定に基づいて昇順に並び替え">並替</button>
+                      <button id="output-page-list-refresh" class="btn small secondary" data-i18n-title="page.refreshTitle" title="一覧を更新">↺</button>
+                    </div>
+                  </div>
+                  <!-- 作品/グループフィルタ表示バー -->
+                  <div id="output-filter-bar" style="display:none; align-items:center; gap:6px; padding:4px 8px; font-size:11px; color:var(--text-secondary); border-bottom:1px solid var(--border-color);">
+                    <span id="output-filter-label" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+                    <button id="output-filter-clear-btn" class="btn small secondary" data-i18n="font.removeBtn" data-i18n-title="page.filterClearTitle" title="フィルタを解除して全ページを表示">解除</button>
+                  </div>
+                  <div class="output-import-bar">
+                    <label id="output-import-label" class="btn small secondary output-import-btn" data-i18n-title="page.importImagesTitle" title="画像ファイルをページとして取り込む">
+                      <span data-i18n="page.importImages">＋ 画像を取り込む</span>
+                      <input type="file" id="output-import-file" accept="image/*" multiple class="hidden" />
+                    </label>
+                  </div>
+                  <ul id="output-page-list" class="output-page-list">
+                    <li class="output-page-empty" data-i18n="asset.noPages">ページがありません</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <canvas id="render-canvas" class="hidden"></canvas>
+          </section>
+
+          <!-- Nanobanana Tab -->
+          <section id="nanobanana-tab" class="tab-content">
+            <div class="comfyui-header-row">
+              <span id="nanobanana-status-label" class="comfyui-status disconnected" data-i18n="nb.disconnected">Nanobanana: 未接続</span>
+              <div class="comfyui-url-group">
+                <span style="font-size:12px; color:var(--text-secondary);" data-i18n="nb.apiKeyHint">※ APIキーは .env で設定してください</span>
+                <button id="nanobanana-refresh-key-btn" class="btn small secondary" data-i18n="nb.refreshKey">APIキーを再読込</button>
+              </div>
+            </div>
+
+            <div class="comfyui-editor-layout">
+              <div class="comfyui-left-col">
+                <div class="comfyui-subtab-nav">
+                  <button class="comfyui-subtab-btn active" data-nanobanana-subtab="prompt" data-i18n="nb.subtabPrompt">生成設定</button>
+                  <button class="comfyui-subtab-btn" data-nanobanana-subtab="i2i" data-i18n="nb.subtabI2i">I2I 入力</button>
+                </div>
+
+                <div id="nanobanana-subtab-prompt" class="comfyui-subtab-content">
+                  <div class="comfyui-field-group">
+                    <div class="comfyui-field">
+                      <label class="comfyui-label">Positive Prompt:</label>
+                      <textarea id="nanobanana-prompt" rows="5" class="comfyui-textarea" placeholder="Positive Prompt..." style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                    </div>
+                    <div class="comfyui-field" style="margin-top:8px">
+                      <label class="comfyui-label">Negative Prompt:</label>
+                      <textarea id="nanobanana-negative" rows="3" class="comfyui-textarea" placeholder="Negative Prompt..." style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                    </div>
+                  </div>
+
+                  <div class="comfyui-field-group" style="margin-top:12px">
+                    <div class="comfyui-group-title" data-i18n="nb.basicSettings">基本設定</div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="nb.modelLabel">モデル:</label>
+                      <select id="nanobanana-model" class="comfyui-select">
+                        <option value="gemini-3.1-flash-lite-image">gemini-3.1-flash-lite-image</option>
+                        <option value="gemini-3.1-flash-image">gemini-3.1-flash-image</option>
+                        <option value="gemini-3-pro-image">gemini-3-pro-image</option>
+                      </select>
+                    </div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="nb.resolutionLabel">解像度:</label>
+                      <select id="nanobanana-resolution" class="comfyui-select">
+                        <option value="1024x1024">1024 x 1024 (1:1)</option>
+                        <option value="832x1216">832 x 1216 (2:3)</option>
+                        <option value="1216x832">1216 x 832 (3:2)</option>
+                        <option value="768x1344">768 x 1344 (9:16)</option>
+                        <option value="1344x768">1344 x 768 (16:9)</option>
+                      </select>
+                    </div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="nb.batchLabel">生成枚数:</label>
+                      <input type="number" id="nanobanana-batch-size" value="1" min="1" max="4" class="comfyui-input" />
+                    </div>
+                  </div>
+                </div>
+
+                <div id="nanobanana-subtab-i2i" class="comfyui-subtab-content" style="display:none">
+                  <div class="comfyui-field-group">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                      <div class="comfyui-group-title" style="margin-bottom:0;">Image-to-Image <span id="nb-i2i-count" style="font-size:11px; color:#888; font-weight:normal;">(0/12)</span></div>
+                      <div style="display:flex; gap:4px;">
+                        <label class="btn small secondary" style="cursor:pointer; margin:0;">
+                          <span data-i18n="nb.addImage">画像追加</span>
+                          <input type="file" id="nanobanana-i2i-file" accept="image/*" multiple class="hidden" />
+                        </label>
+                        <button id="nanobanana-i2i-clear-all-btn" class="btn small danger" data-i18n="nb.clearAll">全クリア</button>
+                      </div>
+                    </div>
+                    <!-- 4列×3行 12スロットグリッド -->
+                    <div id="nanobanana-i2i-grid" style="display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(3,1fr); gap:4px; height:590px; overflow:hidden;">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="comfyui-right-col">
+                <div class="comfyui-generate-panel">
+                  <button id="nanobanana-generate-btn" class="btn primary" style="width:100%" data-i18n="nb.generate">画像を生成</button>
+                  <div class="comfyui-progress-container">
+                    <div id="nanobanana-progress-text" style="font-size:12px; margin-top:4px; text-align:center; min-height:1.2em;"></div>
+                  </div>
+                  <div class="comfyui-seed-panel" style="margin-top:10px">
+                    <div class="comfyui-field-inline">
+                      <label data-i18n="layout.seedLabel">シード:</label>
+                      <input type="number" id="nanobanana-seed" value="-1" style="width:120px" />
+                    </div>
+                  </div>
+                  <div style="margin-top:10px">
+                    <label style="font-size:11px; color:var(--text-secondary);" data-i18n="nb.i2iStrength">I2I 強度 (Denoising):</label>
+                    <input type="range" id="nanobanana-i2i-strength" min="0" max="1" step="0.05" value="0.7" style="width:100%; margin-top:4px;" />
+                    <span id="nanobanana-i2i-strength-val" style="font-size:11px">0.7</span>
+                  </div>
+                </div>
+                <div class="comfyui-result-container" style="margin-top:12px">
+                  <img id="nanobanana-result-img" alt="生成結果プレビュー" data-i18n-alt="nb.resultPreviewAlt" style="max-width:100%; border-radius:4px;" />
+                </div>
+                <div id="nanobanana-result-thumbs" class="comfyui-result-thumbs" style="display:none; margin-top:8px;"></div>
+                <div class="control-row" style="margin-top:10px">
+                  <button id="nanobanana-insert-btn" class="btn secondary" style="width:100%" disabled data-i18n="asset.insertToPanel">コマに挿入</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Script Tab -->
+          <section id="project-tab" class="tab-content">
+
+            <!-- 作品管理（新規作成・読込・保存・削除。対象の選択はアセットパネル「S」タブで行う） -->
+            <div class="project-plot-section project-save-row">
+              <button id="script-work-load-btn" class="btn small secondary" data-i18n="script.load">読込</button>
+              <button id="script-work-delete-btn" class="btn small danger" data-i18n="common.delete">削除</button>
+              <button id="script-work-new-btn" class="btn small secondary" data-i18n="page.workCreate">新規作成</button>
+              <button id="script-work-save-btn" class="btn small primary" data-i18n="common.save">保存</button>
+            </div>
+
+            <!-- 作品名 -->
+            <div class="project-plot-section">
+              <div class="project-plot-section-header">
+                <span class="project-section-label" data-i18n="script.workNameLabel">作品名:</span>
+                <input type="text" id="script-work-name" class="script-work-name-input" data-i18n-placeholder="script.workNamePlaceholder" placeholder="作品名を入力..." />
+              </div>
+            </div>
+
+            <!-- あらすじ -->
+            <div class="project-plot-section">
+              <div class="project-plot-section-header">
+                <span class="project-section-label" data-i18n="script.synopsisLabel">あらすじ:</span>
+              </div>
+              <div class="project-plot-row">
+                <textarea id="script-synopsis" rows="4" class="project-textarea" data-i18n-placeholder="script.synopsisPlaceholder" placeholder="作品全体のあらすじ"></textarea>
+              </div>
+            </div>
+
+            <!-- サブタブナビ -->
+            <div class="comfyui-subtab-nav" style="margin-bottom: 10px;">
+              <button class="comfyui-subtab-btn active" data-project-subtab="plot" data-i18n="script.subtabPlot">プロット</button>
+              <button class="comfyui-subtab-btn" data-project-subtab="preview-h" data-i18n="script.subtabPreviewH">プレビュー 横</button>
+              <button class="comfyui-subtab-btn" data-project-subtab="preview-v" data-i18n="script.subtabPreviewV">プレビュー縦</button>
+              <button class="comfyui-subtab-btn" data-project-subtab="elements" data-i18n="script.subtabElements">要素</button>
+            </div>
+
+            <!-- プロット「要素」列の入力可能ドロップダウン候補（要素タブで登録した名前一覧） -->
+            <datalist id="script-elements-datalist"></datalist>
+
+            <!-- プロットサブタブ: ページ > コマワリ（シーン・コマ番・セリフ番・人物・セリフ） -->
+            <div id="project-subtab-plot" class="comfyui-subtab-content" style="display:block;">
+              <div class="script-page-toolbar">
+                <button id="script-page-prev" class="btn small secondary">◀</button>
+                <span id="script-page-indicator" class="project-section-label">ページ 1 / 1</span>
+                <button id="script-page-next" class="btn small secondary">▶</button>
+                <div class="project-panel-count-ctrl">
+                  <span class="script-panel-count-label" data-i18n="script.panelCountLabel">コマ数:</span>
+                  <input type="number" id="script-panel-count" class="project-panel-count-input" value="4" readonly />
+                  <button id="script-panel-up" class="btn small secondary project-count-btn">▲</button>
+                  <button id="script-panel-down" class="btn small secondary project-count-btn">▼</button>
+                </div>
+                <div class="project-panel-count-ctrl">
+                  <span class="script-panel-count-label" data-i18n="script.dialogueLabel">セリフ:</span>
+                  <button id="script-dialogue-add" class="btn small secondary project-count-btn">＋</button>
+                  <button id="script-dialogue-del" class="btn small secondary project-count-btn">−</button>
+                </div>
+                <button id="script-page-add-btn" class="btn small secondary" style="margin-left:auto;" data-i18n="script.addPage">＋ ページ追加</button>
+                <button id="script-page-delete-btn" class="btn small danger" data-i18n="layout.pageDeleteBtn">ページ削除</button>
+              </div>
+              <div id="script-pages-container">
+                <!-- JSで動的生成（表示中ページのコマワリテーブル） -->
+              </div>
+            </div>
+
+            <!-- プレビュー 横サブタブ: プロットを横書きテキストでページ横断表示（シーン／人物：セリフ） -->
+            <div id="project-subtab-preview-h" class="comfyui-subtab-content" style="display:none;">
+              <div id="script-preview-h-container" class="script-preview-h">
+                <!-- JSで動的生成 -->
+              </div>
+            </div>
+
+            <!-- プレビュー縦サブタブ: プロットを縦書きテキストでページ横断表示（右から左、シーン／人物：セリフ） -->
+            <div id="project-subtab-preview-v" class="comfyui-subtab-content" style="display:none;">
+              <div id="script-preview-v-container" class="script-preview-v">
+                <!-- JSで動的生成 -->
+              </div>
+            </div>
+
+            <!-- 要素サブタブ: 登場人物・固有名詞などの要素名と詳細設定を登録（プロット「要素」列のドロップダウン候補にもなる） -->
+            <div id="project-subtab-elements" class="comfyui-subtab-content" style="display:none;">
+              <div class="script-page-toolbar">
+                <button id="script-element-add-btn" class="btn small secondary" data-i18n="script.addElement">＋ 要素追加</button>
+              </div>
+              <table class="project-panel-table">
+                <thead>
+                  <tr>
+                    <th class="project-panel-th-element" data-i18n="script.subtabElements">要素</th>
+                    <th data-i18n="script.thDetail">詳細</th>
+                    <th class="project-panel-th-num"></th>
+                  </tr>
+                </thead>
+                <tbody id="script-elements-tbody">
+                  <!-- JSで動的生成 -->
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- Settings Tab -->
+          <section id="settings-tab" class="tab-content">
+
+            <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
+              <div class="control-row" style="align-items: center; gap: 8px;">
+                <label for="settings-ui-lang" data-i18n="settings.languageLabel" style="white-space:nowrap; min-width:160px;">言語</label>
+                <select id="settings-ui-lang" style="flex:1; min-width:120px;">
+                  <option value="ja">日本語</option>
+                  <option value="en">English</option>
+                  <option value="zh">中文</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
+              <h3 data-i18n="settings.eagleTitle">Eagle 設定</h3>
+              <div class="control-row" style="margin-bottom: 10px; align-items: center; gap: 8px;">
+                <label for="settings-eagle-url" data-i18n="settings.eagleUrlLabel" style="white-space:nowrap; min-width:160px;">Eagle API URL</label>
+                <input type="text" id="settings-eagle-url" placeholder="http://localhost:41595" style="flex:1; min-width:120px;" />
+                <button id="settings-eagle-test-btn" class="btn small secondary" data-i18n="settings.testConnection">接続確認</button>
+                <span id="settings-eagle-status" style="font-size:12px; color:#888;"></span>
+              </div>
+              <p data-i18n="settings.autoSaveDesc" style="margin: 0 0 8px; font-size:12px; color:#888;">生成画像を自動的にEagleへ保存する（Eagle起動が必要）</p>
+              <div class="control-row" style="align-items:center; gap:8px; margin-bottom:6px;">
+                <input type="checkbox" id="eagle-auto-save-comfyui" style="width:16px; height:16px; cursor:pointer;" />
+                <label for="eagle-auto-save-comfyui" data-i18n="settings.autoSaveComfyUI" style="cursor:pointer; user-select:none;">ComfyUI 生成画像を自動保存</label>
+              </div>
+              <div class="control-row" style="align-items:center; gap:8px; margin-bottom:6px;">
+                <input type="checkbox" id="eagle-auto-save-nanobanana" style="width:16px; height:16px; cursor:pointer;" />
+                <label for="eagle-auto-save-nanobanana" data-i18n="settings.autoSaveNanobanana" style="cursor:pointer; user-select:none;">Nanobanana 生成画像を自動保存</label>
+              </div>
+              <div class="control-row" style="align-items:center; gap:8px; margin-bottom:10px;">
+                <input type="checkbox" id="eagle-auto-save-gmic" style="width:16px; height:16px; cursor:pointer;" />
+                <label for="eagle-auto-save-gmic" data-i18n="settings.autoSaveGmic" style="cursor:pointer; user-select:none;">G'MIC 処理結果を自動保存</label>
+              </div>
+              <button id="settings-eagle-save-btn" class="btn small primary" data-i18n="common.save">保存</button>
+            </div>
+
+            <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
+              <h3 data-i18n="settings.gmicTitle">G'MIC 設定</h3>
+              <p data-i18n="settings.gmicPathDesc" style="margin: 0 0 8px; font-size:12px; color:#888;">G'MIC Qt の実行ファイル（gmic_qt.exe）のフルパスを指定してください</p>
+              <div class="control-row" style="margin-bottom: 10px; align-items: center; gap: 8px;">
+                <label for="settings-gmic-path" data-i18n="settings.gmicPathLabel" style="white-space:nowrap; min-width:160px;">G'MIC Qt 実行ファイル</label>
+                <input type="text" id="settings-gmic-path" placeholder="C:\gmic-qt\gmic_qt.exe" style="flex:1; min-width:120px;" />
+              </div>
+              <div class="control-row" style="align-items: center; gap: 8px;">
+                <button id="settings-gmic-save-btn" class="btn small primary" data-i18n="common.save">保存</button>
+                <span id="settings-gmic-status" style="font-size:12px; color:#888;"></span>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
+              <h3 data-i18n="settings.i2iTitle">I2I設定</h3>
+              <p data-i18n="settings.i2iDesc" style="margin: 0 0 8px; font-size:12px; color:#888;">「I2Iへ送る」実行時にWorkflow Studio側で自動的に読み込むデフォルトワークフローを指定します（ComfyUIのuser/default/workflowsフォルダ内のファイル名）</p>
+              <div class="control-row" style="align-items:center; gap:8px; margin-bottom:10px;">
+                <input type="checkbox" id="settings-i2i-default-wf-enabled" style="width:16px; height:16px; cursor:pointer;" />
+                <label for="settings-i2i-default-wf-enabled" data-i18n="settings.i2iDefaultWfEnabled" style="cursor:pointer; user-select:none;">デフォルトワークフローを使用する</label>
+              </div>
+              <div class="control-row" style="margin-bottom: 10px; align-items: center; gap: 8px;">
+                <label for="settings-i2i-default-wf-name" data-i18n="settings.i2iDefaultWfNameLabel" style="white-space:nowrap; min-width:160px;">ワークフローファイル名</label>
+                <input type="text" id="settings-i2i-default-wf-name" placeholder="cc_i2i_default.json" style="flex:1; min-width:120px;" />
+              </div>
+              <div class="control-row" style="align-items: center; gap: 8px;">
+                <button id="settings-i2i-save-btn" class="btn small primary" data-i18n="common.save">保存</button>
+                <span id="settings-i2i-status" style="font-size:12px; color:#888;"></span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Help Tab -->
+          <section id="help-tab" class="tab-content help-tab-root">
+            <div class="help-layout">
+              <!-- 左サイドパネル -->
+              <aside class="help-sidebar">
+                <div class="help-sidebar-header">
+                  <input type="text" id="help-search" class="help-search-input" data-i18n-placeholder="help.searchPlaceholder" placeholder="機能を検索..." autocomplete="off" />
+                </div>
+                <nav id="help-nav" class="help-nav">
+                  <!-- JSで動的生成 -->
+                </nav>
+              </aside>
+              <!-- メインコンテンツ -->
+              <div class="help-main" id="help-main">
+                <!-- JSで動的生成 -->
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <!-- サイドパネル: レイヤー管理 -->
+        <aside id="template-side-panel" class="template-side-panel hidden">
+          <!-- レイヤー管理セクション -->
+          <div class="side-panel-header layer-panel-header">
+            <span data-i18n="layer.header">レイヤー</span>
+            <div class="layer-order-btns">
+              <button id="layer-up-btn" class="layer-order-btn" data-i18n-title="layer.moveUpTitle" title="上へ移動">↑</button>
+              <button id="layer-down-btn" class="layer-order-btn" data-i18n-title="layer.moveDownTitle" title="下へ移動">↓</button>
+              <button id="layer-group-btn" class="layer-order-btn" data-i18n-title="layer.groupTitle" title="グループ化">G+</button>
+              <button id="layer-ungroup-btn" class="layer-order-btn" data-i18n-title="layer.ungroupTitle" title="グループ解除">G-</button>
+            </div>
+          </div>
+          <!-- 選択中オブジェクトの不透明度 -->
+          <div id="layer-opacity-row" style="display:none; align-items:center; gap:6px; padding:4px 8px; border-bottom:1px solid var(--border-color); background:var(--bg-secondary);">
+            <label style="font-size:11px; white-space:nowrap; color:var(--text-secondary);" data-i18n="layout.opacityLabel">不透明度:</label>
+            <input type="range" id="layer-opacity-slider" min="0" max="100" value="100" style="flex:1; min-width:0;" />
+            <span id="layer-opacity-value" style="font-size:11px; min-width:28px; text-align:right;">100%</span>
+          </div>
+          <div id="layer-list" class="layer-list">
+            <p class="empty-message" style="font-size:12px;" data-i18n="layer.noObjects">オブジェクトなし</p>
+          </div>
+          <!-- レイヤーパネルフッター：複製・移動ボタン -->
+          <div class="layer-panel-footer">
+            <select id="layer-duplicate-panel-select" class="layer-footer-select" data-i18n-title="layer.dupPanelSelectTitle" title="複製/移動先コマを選択">
+              <option value="" data-i18n="layer.samePanelOption">同コマへ</option>
+            </select>
+            <button id="layer-duplicate-btn" class="layer-footer-btn" data-i18n="layer.duplicateBtn" data-i18n-title="layer.duplicateTitle" title="選択オブジェクトを複製">複製</button>
+            <button id="layer-move-btn" class="layer-footer-btn" data-i18n="page.moveBtn" data-i18n-title="layer.moveTitle" title="選択オブジェクトを移動">移動</button>
+          </div>
+          <!-- プレビュー表示サイズ -->
+          <div class="layer-panel-footer">
+            <label for="layout-preview-size-slider" style="font-size:11px; white-space:nowrap; color:var(--text-secondary);" data-i18n="layer.previewSizeLabel">表示サイズ:</label>
+            <input type="range" id="layout-preview-size-slider" min="25" max="300" value="30" step="5" style="flex:1; min-width:0;" data-i18n-title="layer.previewSizeTitle" title="レイアウトプレビューの表示サイズ" />
+            <span id="layout-preview-size-value" style="font-size:11px; min-width:36px; text-align:right;">30%</span>
+          </div>
+        </aside>
+      </div>
+      <!-- /.main-with-sidebar -->
+    </div>
+
+    <!-- 作品新規作成ダイアログ -->
+    <div id="work-create-dialog" class="text-dialog-overlay" style="display:none;">
+      <div class="text-dialog">
+        <div class="text-dialog-header" data-i18n="dialog.workCreateHeader">作品を新規作成</div>
+        <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:20px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label for="work-dlg-name" style="width:72px; font-size:13px; flex-shrink:0;" data-i18n="script.workNameLabel">作品名:</label>
+            <input type="text" id="work-dlg-name" placeholder="name" style="flex:1; min-width:0; padding:6px 8px; font-size:13px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);" />
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label for="work-dlg-preset" style="width:72px; font-size:13px; flex-shrink:0;" data-i18n="layout.sizeLabel">サイズ:</label>
+            <select id="work-dlg-preset" style="flex:1; min-width:0; padding:6px 8px; font-size:13px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);"></select>
+            <button id="work-dlg-preset-delete" class="btn small danger" data-i18n-title="dialog.presetDeleteTitle" title="選択中のカスタムプリセットを削除" style="display:none;">✕</button>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <label style="width:72px; font-size:13px; flex-shrink:0;" data-i18n="dialog.widthHeightLabel">幅×高さ:</label>
+            <input type="number" id="work-dlg-width" min="1" style="width:90px; padding:6px 8px; font-size:13px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);" />
+            <span style="color:var(--text-secondary);">×</span>
+            <input type="number" id="work-dlg-height" min="1" style="width:90px; padding:6px 8px; font-size:13px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);" />
+            <button id="work-dlg-preset-save" class="btn small secondary" data-i18n="dialog.presetSaveBtn" data-i18n-title="dialog.presetSaveTitle" title="現在の幅・高さをカスタムプリセットとして保存します">プリセット保存</button>
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary);" data-i18n="dialog.workSizeHint">単位はSVG座標（A4 = 21000×29700）。幅・高さを直接編集するとカスタム扱いになります。</div>
+        </div>
+        <div class="text-dialog-buttons">
+          <button id="work-dlg-cancel" class="btn secondary" data-i18n="common.cancel">キャンセル</button>
+          <button id="work-dlg-create" class="btn" data-i18n="dialog.createBtn">作成</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Text Input Dialog -->
+    <div
+      id="text-input-dialog"
+      class="text-dialog-overlay"
+      style="display: none"
+    >
+      <div class="text-dialog">
+        <div class="text-dialog-header" data-i18n="dialog.textInputHeader">テキスト入力</div>
+        <textarea
+          id="text-input-field"
+          class="text-dialog-input"
+          rows="3"
+          data-i18n-placeholder="dialog.textInputPlaceholder"
+          placeholder="テキストを入力してください"
+        ></textarea>
+        <div class="text-dialog-buttons">
+          <button type="button" id="text-input-cancel" class="btn" data-i18n="common.cancel">
+            キャンセル
+          </button>
+          <button type="button" id="text-input-ok" class="btn secondary">
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Template Wizard Dialog -->
+    <div id="tmplwiz-overlay" class="text-dialog-overlay" style="display: none">
+      <div class="text-dialog tmplwiz-dialog">
+        <div class="text-dialog-header" data-i18n="page.templateWizard">テンプレートを作成</div>
+
+        <!-- 画面A: 設定 -->
+        <div id="tmplwiz-step-setup">
+          <div class="tmplwiz-field-row">
+            <label class="tmplwiz-label" data-i18n="wiz.orientationLabel">ページの向き</label>
+            <div class="tmplwiz-orientation-buttons">
+              <button type="button" id="tmplwiz-orientation-portrait" class="btn secondary active" data-i18n="wiz.portrait">縦長</button>
+              <button type="button" id="tmplwiz-orientation-landscape" class="btn secondary" data-i18n="wiz.landscape">横長</button>
+            </div>
+          </div>
+          <div class="tmplwiz-field-row">
+            <label class="tmplwiz-label" for="tmplwiz-width" data-i18n="wiz.widthLabel">幅</label>
+            <input type="number" id="tmplwiz-width" min="1" step="1" />
+            <label class="tmplwiz-label" for="tmplwiz-height" data-i18n="wiz.heightLabel">高さ</label>
+            <input type="number" id="tmplwiz-height" min="1" step="1" />
+          </div>
+          <div class="tmplwiz-field-row">
+            <label class="tmplwiz-label" for="tmplwiz-frame-width" data-i18n="wiz.frameWidthLabel">フレーム幅</label>
+            <input type="number" id="tmplwiz-frame-width" min="0" step="10" />
+          </div>
+        </div>
+
+        <!-- 画面B: 分割 -->
+        <div id="tmplwiz-step-cut" style="display: none">
+          <div class="tmplwiz-field-row">
+            <label class="tmplwiz-label" data-i18n="wiz.cutModeLabel">分割モード</label>
+            <div class="tmplwiz-orientation-buttons">
+              <button type="button" id="tmplwiz-mode-all-btn" class="btn secondary active" data-i18n="wiz.cutModeAll">全体分割</button>
+              <button type="button" id="tmplwiz-mode-single-btn" class="btn secondary" data-i18n="wiz.cutModeSingle">単一コマ分割</button>
+            </div>
+          </div>
+          <p class="tmplwiz-hint" id="tmplwiz-cut-hint" data-i18n="wiz.hintAll">キャンバス上をドラッグして線を引くと、線が交差するすべてのコマが分割されます。</p>
+          <div class="tmplwiz-field-row">
+            <label class="tmplwiz-label">
+              <input type="checkbox" id="tmplwiz-grid-toggle" /> <span data-i18n="wiz.guideGrid">ガイドグリッド</span>
+            </label>
+            <label class="tmplwiz-label" for="tmplwiz-grid-w" data-i18n="wiz.widthLabel">幅</label>
+            <input type="number" id="tmplwiz-grid-w" min="1" step="10" style="width:80px" />
+            <label class="tmplwiz-label" for="tmplwiz-grid-h" data-i18n="wiz.heightLabel">高さ</label>
+            <input type="number" id="tmplwiz-grid-h" min="1" step="10" style="width:80px" />
+            <label class="tmplwiz-label">
+              <input type="checkbox" id="tmplwiz-grid-snap-toggle" /> <span data-i18n="wiz.snap">スナップ</span>
+            </label>
+          </div>
+          <div class="tmplwiz-canvas-wrap">
+            <svg id="tmplwiz-canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+          </div>
+          <div class="tmplwiz-cut-tools">
+            <button type="button" id="tmplwiz-undo-btn" class="btn secondary" data-i18n="wiz.undoOne">1つ戻す</button>
+            <button type="button" id="tmplwiz-reset-btn" class="btn secondary" data-i18n="wiz.reset">最初からやり直す</button>
+          </div>
+        </div>
+
+        <div class="text-dialog-buttons">
+          <button type="button" id="tmplwiz-cancel-btn" class="btn" data-i18n="common.cancel">キャンセル</button>
+          <button type="button" id="tmplwiz-create-base-btn" class="btn secondary" data-i18n="wiz.createBase">ベースを作成</button>
+          <button type="button" id="tmplwiz-save-btn" class="btn secondary" style="display: none" data-i18n="wiz.saveAsTemplate">テンプレートとして保存</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- i18n基盤: t()/getLang()/setLang()等を他の全スクリプトより前にグローバル公開する -->
+    <script src="/ccc_static/js/i18n.js"></script>
+    <script src="/ccc_static/js/nanobanana.js"></script>
+    <script src="/ccc_static/js/pixifx.js"></script>
+    <script src="/ccc_static/js/text-style-modal.js"></script>
+    <script type="module" src="/ccc_static/js/pose3d.js"></script>
+    <script type="module" src="/ccc_static/js/image-tab.js"></script>
+    <!-- main.js 分割ファイル群（旧 main.js を責務ごとに34分割。非moduleでグローバルスコープ共有のため読み込み順が重要） -->
+    <script src="/ccc_static/js/main/00-db.js"></script>
+    <script src="/ccc_static/js/main/01-state.js"></script>
+    <script src="/ccc_static/js/main/02-assets.js"></script>
+    <script src="/ccc_static/js/main/03-layers-panel.js"></script>
+    <script src="/ccc_static/js/main/04a-mask-core.js"></script>
+    <script src="/ccc_static/js/main/04b-layer-panel-render.js"></script>
+    <script src="/ccc_static/js/main/05-groups-move.js"></script>
+    <script src="/ccc_static/js/main/06a-polygon-geometry.js"></script>
+    <script src="/ccc_static/js/main/06b-template-manager.js"></script>
+    <script src="/ccc_static/js/main/06c-template-wizard.js"></script>
+    <script src="/ccc_static/js/main/07-pages.js"></script>
+    <script src="/ccc_static/js/main/08-panels-images.js"></script>
+    <script src="/ccc_static/js/main/09a-balloon-init.js"></script>
+    <script src="/ccc_static/js/main/09b-balloon-shapes.js"></script>
+    <script src="/ccc_static/js/main/09c-balloon-handles.js"></script>
+    <script src="/ccc_static/js/main/09d-balloon-tools.js"></script>
+    <script src="/ccc_static/js/main/09e-text-tool.js"></script>
+    <script src="/ccc_static/js/main/10-output-pages.js"></script>
+    <script src="/ccc_static/js/main/11a-work-manager.js"></script>
+    <script src="/ccc_static/js/main/11b-page-manager-tab.js"></script>
+    <script src="/ccc_static/js/main/12-text-png-export.js"></script>
+    <script src="/ccc_static/js/main/13-export-pdf-epub.js"></script>
+    <script src="/ccc_static/js/main/14-integrations.js"></script>
+    <script src="/ccc_static/js/main/15-pixifx-bridge.js"></script>
+    <script src="/ccc_static/js/main/16-processing-edit-tabs.js"></script>
+    <script src="/ccc_static/js/main/17a-layer-draw-input.js"></script>
+    <script src="/ccc_static/js/main/17b-layer-draw-commit.js"></script>
+    <script src="/ccc_static/js/main/17c-layer-draw-handles.js"></script>
+    <script src="/ccc_static/js/main/18-svg-color-png.js"></script>
+    <script src="/ccc_static/js/main/19-font-manager.js"></script>
+    <script src="/ccc_static/js/main/20-font-presets.js"></script>
+    <script src="/ccc_static/js/main/21-script-tab.js"></script>
+    <script src="/ccc_static/js/main/22-help-tab.js"></script>
+    <script src="/ccc_static/js/main/23-pose3d-bridge.js"></script>
+  </body>
+</html>

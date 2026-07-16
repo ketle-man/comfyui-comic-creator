@@ -1,0 +1,22 @@
+# 秘密情報（APIキー等）— 絶対にコミットしない
+.env
+
+# ローカル設定（gmicQtPath 等の環境依存パスを含む）
+settings.json
+
+# 実行時生成物
+__pycache__/
+output/
+assets/assets.json
+
+# 同梱予定の素材アセット（別途配布のため対象外）
+assets/**/*.svg
+assets/**/*.png
+assets/**/*.jpg
+assets/**/*.jpeg
+assets/**/*.webp
+assets/**/*.rar
+assets/*.rar
+
+# 旧ファイル・バックアップ
+*.bak
