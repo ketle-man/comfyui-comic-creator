@@ -33,6 +33,10 @@
 
 **教訓（画像クロップ・透過検証）**: KaptureのDOM要素`bounds`とスクリーンショットの実ピクセル座標は必ずしも一致しない（原因未特定、DPRやレンダリングタイミングの可能性）。要素単位の正確なクロップが必要な場合は、フルスクリーンショットを撮ってPillow/numpyでエッジのピクセル値を直接スキャンし実測するのが確実。透過PNG/ICOの検証も同様に、目視やImageMagickの`-composite`合成では判断を誤ることがあるため（本セッションでも`-composite`の結果がおかしく見えるケースがあった）、Pillowで`getpixel()`によりアルファ値を直接読むのが最も確実。
 
+**GitHub公開（初回リリース）**: 上記の修正・準備が完了した後、ユーザー承認のもと`comfyui-comic-creater`を`git init`→初回コミット→`gh repo create ketle-man/comfyui-comic-creater --public --source=. --remote=origin --push`でGitHub公開（他の姉妹プロジェクトと同じpublic設定）。`.gitignore`により`.env`/`settings.json`/`__pycache__`等が正しく除外されていることを`git status`で確認してからコミットした。公開直後、3言語READMEの`<your-repo-url>`プレースホルダーを実URL（`https://github.com/ketle-man/comfyui-comic-creater`）に置き換え、Acknowledgements内の4つのコンパニオンノード名（comfyui-vrm-pose-editor/ComfyUI-Workflow-Studio/comfyUI-particle-pixijs/comfyui-mask-editor-one）も実在する公開リポジトリへのリンクに変更する追いコミットをpush。
+
+**How to apply（今後の公開作業）**: このプロジェクトのようにgitリポジトリ化されていない状態からGitHub公開する際は、`git init`直後に必ず`git status`で除外ファイル（APIキー・ローカルパス設定・実行時生成物）が意図通り除外されているか確認してからコミットすること。公開設定（public/private）は不可逆に近い意思決定のためユーザー確認必須。
+
 ---
 
 ## 2026-07-15（requirements.txt要否調査 + README/LICENSE/docs新設、3言語対応）
