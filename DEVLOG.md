@@ -37,6 +37,12 @@
 
 **How to apply（今後の公開作業）**: このプロジェクトのようにgitリポジトリ化されていない状態からGitHub公開する際は、`git init`直後に必ず`git status`で除外ファイル（APIキー・ローカルパス設定・実行時生成物）が意図通り除外されているか確認してからコミットすること。公開設定（public/private）は不可逆に近い意思決定のためユーザー確認必須。
 
+**GitHub Release作成**: リポジトリ公開直後は`git tag`/`gh release`をまだ作っておらず「Releases」タブが空の状態だった（`git push`しただけではGitHub Releaseは作成されない）ため、ユーザー指摘を受けて追加対応。`git tag -a v1.0.0 -m "..."` → `git push origin v1.0.0` → `gh release create v1.0.0 --title "..." --notes "..."`で作成（https://github.com/ketle-man/comfyui-comic-creater/releases/tag/v1.0.0 ）。リリースノートは機能一覧をREADMEから要約し、日本語本文＋英語summaryを併記。
+
+**ComfyUI Manager PR提出**: `comfyui-registry`スキルのステップ1に従い、`ltdrdata/ComfyUI-Manager`をフォーク済み（`ketle-man/ComfyUI-Manager`）→上流に同期→シャロークローンでブランチ作成→`custom-node-list.json`の既存ketle-manエントリ群（comfyui-mask-editor-one等）の直後にPythonの文字列置換で新規エントリを挿入（`json.dump`での全体再フォーマットは差分が巨大になるため避けた）→JSON妥当性を`json.load`で検証→PR作成。PR: https://github.com/Comfy-Org/ComfyUI-Manager/pull/3086 。**ユーザー方針でPR承認をしばらく待ってからComfyUI Registry（registry.comfy.org）公開のステップ2に進む**（`pyproject.toml`新設・GitHub Actions・`REGISTRY_ACCESS_TOKEN`のSecret登録が必要、詳細は`comfyui-registry`スキル参照）。
+
+**How to apply（Manager PR）**: `custom-node-list.json`のような巨大JSONに1エントリ追加する際は、既存の同一authorのエントリ群の直後に文字列置換で挿入すると差分が最小かつ可読性も良い。挿入後は必ず`json.load`で構文検証してからコミットすること。
+
 ---
 
 ## 2026-07-15（requirements.txt要否調査 + README/LICENSE/docs新設、3言語対応）
