@@ -3096,12 +3096,12 @@ class ImageTab {
     // アクティブレイヤーにPixiJSパーティクル/フィルタ効果を適用する（imgeditタブのPixiJS FX連携を移植）
     _openPixiFx() {
         if (typeof window.pixiFxOpen !== "function") {
-            this._toast("PixiJS FX module not loaded", "error");
+            this._toast(t("image.pixifxNotLoaded"), "error");
             return;
         }
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(t("image.noImageLoaded"), "error"); return; }
         const layer = this._layerMgr.activeLayer;
-        if (!layer) { this._toast("No active layer", "error"); return; }
+        if (!layer) { this._toast(t("image.noActiveLayer"), "error"); return; }
         this._syncActiveLayerFromCanvas();
         const dataUrl = layer.canvas.toDataURL("image/png");
 
@@ -3124,9 +3124,9 @@ class ImageTab {
                     active.ctx.drawImage(img, 0, 0);
                     this._updateCompositeView();
                     this._refreshLayerList();
-                    this._toast("PixiJS FX applied", "success");
+                    this._toast(t("image.pixifxApplied"), "success");
                 } catch (err) {
-                    this._toast("Failed to apply PixiJS FX: " + err.message, "error");
+                    this._toast(t("image.pixifxApplyError", err.message), "error");
                 }
             },
         });

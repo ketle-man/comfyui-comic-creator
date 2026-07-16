@@ -50,9 +50,7 @@
             filterLib = await import(`${EXT_BASE}/filter_library.js`);
         } catch (e) {
             console.error('[pixifx] module load failed:', e);
-            throw new Error(
-                'カスタムノード comfyUI-particle-pixijs の読み込みに失敗しました。\n' +
-                'ComfyUI にインストールされているか、最新版か確認してください。');
+            throw new Error(t('pixifx.moduleLoadFailed'));
         }
         await engine.loadPixiJS();
         await engine.loadPixiFilters();
@@ -111,7 +109,7 @@
     window.pixiFxOpen = async function ({ imageDataUrl, onApply }) {
         if (document.getElementById('filter-lib-modal')) return;
         if (!imageDataUrl || !imageDataUrl.startsWith('data:image/')) {
-            alert('対象画像がありません。');
+            alert(t('pixifx.noTargetImage'));
             return;
         }
 
@@ -129,7 +127,7 @@
         try {
             await new Promise((res, rej) => { srcImg.onload = res; srcImg.onerror = rej; srcImg.src = imageDataUrl; });
         } catch (_) {
-            alert('画像の読み込みに失敗しました。');
+            alert(t('pixifx.imageLoadFailed'));
             return;
         }
         const natW = srcImg.naturalWidth, natH = srcImg.naturalHeight;
@@ -199,7 +197,7 @@
             });
         } catch (e) {
             console.error('[pixifx] PIXI init failed:', e);
-            alert('WebGL の初期化に失敗しました。');
+            alert(t('pixifx.webglInitFailed'));
             return;
         }
 
@@ -387,12 +385,12 @@
         // ---- 1段目: タイプ / 数 / サイズ / 再生 / 散布 / ブレンド ----
         const row1 = mkRow();
 
-        row1.appendChild(ctlLabel('パーティクル:'));
+        row1.appendChild(ctlLabel(t('pixifx.particleLabel')));
         const typeSelect = document.createElement('select');
         typeSelect.style.cssText = 'background:#2a2a3a;color:#ccc;border:1px solid #555;border-radius:4px;font-size:12px;padding:3px;';
         for (const [val, label] of [
-            ['none', 'なし（フィルタのみ）'], ['smoke', '煙'], ['spark', '火花'],
-            ['ray', '光線'], ['star_warp', 'スターワープ'],
+            ['none', t('pixifx.typeNone')], ['smoke', t('pixifx.typeSmoke')], ['spark', t('pixifx.typeSpark')],
+            ['ray', t('pixifx.typeRay')], ['star_warp', t('pixifx.typeStarWarp')],
         ]) {
             const o = document.createElement('option');
             o.value = val; o.textContent = label;
@@ -407,7 +405,7 @@
         });
         row1.appendChild(typeSelect);
 
-        const countLabel = ctlLabel(`数: ${particleCount}`);
+        const countLabel = ctlLabel(t('pixifx.countLabel', particleCount));
         countLabel.style.minWidth = '64px';
         const countRange = document.createElement('input');
         countRange.id = 'pixifx-count-range';
@@ -416,14 +414,14 @@
         countRange.style.cssText = 'width:130px;';
         countRange.addEventListener('input', () => {
             particleCount = parseInt(countRange.value, 10);
-            countLabel.textContent = `数: ${particleCount}`;
+            countLabel.textContent = t('pixifx.countLabel', particleCount);
             rebuildParticles();
             if (!animating) renderOnce();
         });
         row1.appendChild(countLabel);
         row1.appendChild(countRange);
 
-        const sizeLabel = ctlLabel(`サイズ: ${currentSize.toFixed(1)}`);
+        const sizeLabel = ctlLabel(t('pixifx.sizeLabel', currentSize.toFixed(1)));
         sizeLabel.style.minWidth = '76px';
         const sizeRange = document.createElement('input');
         sizeRange.id = 'pixifx-size-range';
@@ -432,25 +430,25 @@
         sizeRange.style.cssText = 'width:130px;';
         sizeRange.addEventListener('input', () => {
             currentSize = parseFloat(sizeRange.value);
-            sizeLabel.textContent = `サイズ: ${currentSize.toFixed(1)}`;
+            sizeLabel.textContent = t('pixifx.sizeLabel', currentSize.toFixed(1));
             rebuildParticles();
             if (!animating) renderOnce();
         });
         row1.appendChild(sizeLabel);
         row1.appendChild(sizeRange);
 
-        const playBtn = makeToggle('⏸ 一時停止', '▶ 再生', false, '#7a5a2a', '#3a7a3a', (on) => {
+        const playBtn = makeToggle(t('pixifx.pauseLabel'), t('pixifx.playLabel'), false, '#7a5a2a', '#3a7a3a', (on) => {
             if (on) startAnim(); else { stopAnim(); for (const ps of particleSystems) ps.update(0); renderOnce(); }
-        }, 'パーティクルアニメーションの再生/一時停止');
-        const scatterBtn = makeToggle('✦ 全面散布: ON', '✦ 全面散布: OFF', scatterMode, '#8a4a8a', '#333344', (on) => {
+        }, t('pixifx.playToggleTitle'));
+        const scatterBtn = makeToggle(t('pixifx.scatterOn'), t('pixifx.scatterOff'), scatterMode, '#8a4a8a', '#333344', (on) => {
             scatterMode = on;
             rebuildParticles();
             if (!animating) renderOnce();
-        }, 'キャンバス全体にランダムにパーティクルを発生させます');
+        }, t('pixifx.scatterTitle'));
         row1.appendChild(playBtn);
         row1.appendChild(scatterBtn);
 
-        row1.appendChild(ctlLabel('ブレンド:'));
+        row1.appendChild(ctlLabel(t('pixifx.blendLabel')));
         const blendSelect = document.createElement('select');
         blendSelect.style.cssText = 'background:#2a2a3a;color:#ccc;border:1px solid #555;border-radius:4px;font-size:12px;padding:3px;';
         for (const [val, label] of [
@@ -473,7 +471,7 @@
         // ---- 2段目: カラーランプ / 発生点 ----
         const row2 = mkRow();
 
-        row2.appendChild(ctlLabel('カラーランプ:'));
+        row2.appendChild(ctlLabel(t('pixifx.colorRampLabel')));
         const rampWrap = el('div', 'display:flex;flex-direction:column;gap:2px;width:300px;flex-shrink:0;');
         const gradBar = el('div',
             'width:100%;height:16px;border:1px solid #555;border-radius:3px;cursor:pointer;');
@@ -484,19 +482,19 @@
 
         const stopColorInput = document.createElement('input');
         stopColorInput.type = 'color';
-        stopColorInput.title = '選択中ストップの色';
+        stopColorInput.title = t('pixifx.stopColorTitle');
         stopColorInput.style.cssText = 'width:30px;height:24px;border:none;background:none;padding:0;cursor:pointer;flex-shrink:0;';
-        const addStopBtn = makeBtn('＋', '#2a4a2a', 'ストップを追加');
-        const delStopBtn = makeBtn('−', '#4a2a2a', '選択中のストップを削除');
+        const addStopBtn = makeBtn('＋', '#2a4a2a', t('pixifx.addStopTitle'));
+        const delStopBtn = makeBtn('−', '#4a2a2a', t('pixifx.delStopTitle'));
         row2.appendChild(stopColorInput);
         row2.appendChild(addStopBtn);
         row2.appendChild(delStopBtn);
 
         const emSep = el('span', 'width:1px;height:20px;background:#2a2a4a;flex-shrink:0;');
         row2.appendChild(emSep);
-        row2.appendChild(ctlLabel('発生点（プレビューをクリックで追加・ドラッグで移動）:'));
-        const emDelBtn   = makeBtn('削除', '#4a2a2a', '選択中の発生点を削除（1個のみの場合は中央にリセット）');
-        const emResetBtn = makeBtn('リセット', '#2a3a4a', 'すべての発生点を削除し、発生点1を中央に配置');
+        row2.appendChild(ctlLabel(t('pixifx.emittersLabel')));
+        const emDelBtn   = makeBtn(t('common.delete'), '#4a2a2a', t('pixifx.emDelTitle'));
+        const emResetBtn = makeBtn(t('pixifx.resetLabel'), '#2a3a4a', t('pixifx.emResetTitle'));
         const emStatus   = el('span', 'font-size:11px;color:#888;', '');
         row2.appendChild(emDelBtn);
         row2.appendChild(emResetBtn);
@@ -576,7 +574,7 @@
         });
 
         function refreshEmitterStatus() {
-            emStatus.textContent = `${emitters.length}個（選択: ${selectedEmitterIdx + 1}）`;
+            emStatus.textContent = t('pixifx.emitterStatus', emitters.length, selectedEmitterIdx + 1);
         }
         emDelBtn.addEventListener('click', () => {
             if (emitters.length > 1) {
@@ -603,28 +601,28 @@
         // ---- 3段目: フィルタ適用トグル / 背景画像 / 出力サイズ ----
         const row3 = mkRow();
 
-        const filterToggleBtn = makeToggle('フィルタ: ON', 'フィルタ: OFF', filterEnabled, '#4a6a8a', '#333344', (on) => {
+        const filterToggleBtn = makeToggle(t('pixifx.filterOn'), t('pixifx.filterOff'), filterEnabled, '#4a6a8a', '#333344', (on) => {
             filterEnabled = on;
             applyFilter();
             if (!animating) renderOnce();
-        }, '選択中フィルタの適用ON/OFF');
-        const filterOnBgBtn = makeToggle('🖼 画像にも適用: ON', '🖼 画像にも適用: OFF', filterOnBg, '#4a4a8a', '#333344', (on) => {
+        }, t('pixifx.filterToggleTitle'));
+        const filterOnBgBtn = makeToggle(t('pixifx.applyToImageOn'), t('pixifx.applyToImageOff'), filterOnBg, '#4a4a8a', '#333344', (on) => {
             filterOnBg = on;
             applyFilter();
             if (!animating) renderOnce();
-        }, 'ONで背景画像にもフィルタを適用します（OFFはパーティクルのみ）');
-        const bgToggleBtn = makeToggle('背景画像: 表示', '背景画像: 非表示（透過出力）', bgVisible, '#4a6a3a', '#333344', (on) => {
+        }, t('pixifx.applyToImageTitle'));
+        const bgToggleBtn = makeToggle(t('pixifx.bgVisible'), t('pixifx.bgHidden'), bgVisible, '#4a6a3a', '#333344', (on) => {
             bgVisible = on;
             if (bgSprite) bgSprite.visible = on;
             applyFilter();
             if (!animating) renderOnce();
-        }, 'OFFにするとパーティクルのみを透過PNGとして出力できます（レイアウトでは挿入になります）');
+        }, t('pixifx.bgToggleTitle'));
         row3.appendChild(filterToggleBtn);
         row3.appendChild(filterOnBgBtn);
         row3.appendChild(bgToggleBtn);
 
         const sizeInfo = el('span', 'font-size:11px;color:#888;margin-left:auto;',
-            dscale < 1 ? `出力: ${W}×${H}px（元 ${natW}×${natH} を縮小）` : `出力: ${W}×${H}px`);
+            dscale < 1 ? t('pixifx.outputSizeScaled', W, H, natW, natH) : t('pixifx.outputSize', W, H));
         row3.appendChild(sizeInfo);
 
         // ============================================================
@@ -692,7 +690,7 @@
             ctx.beginPath(); ctx.arc(dir.x, dir.y, 6, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = 'rgba(255,220,50,0.85)';
             ctx.font = '10px sans-serif'; ctx.textBaseline = 'bottom';
-            ctx.fillText(`強さ: ${getStrength(em).toFixed(1)}`, dir.x + 9, dir.y);
+            ctx.fillText(t('pixifx.strengthLabel', getStrength(em).toFixed(1)), dir.x + 9, dir.y);
         }
 
         let dragMode = null;
@@ -830,7 +828,7 @@
             },
             topBar,
             previewElement: canvasWrap,
-            saveLabel: '✓ 適用して反映',
+            saveLabel: t('pixifx.applyAndSaveLabel'),
             onPreview: settings => {
                 filterSettings.type   = settings.type;
                 filterSettings.params = settings.params;
@@ -873,7 +871,7 @@
                 particleCharSet        = snap.charSet        ?? particleCharSet;
                 // topBar のサイズスライダーへ同期（詳細設定側の Size 変更を反映）
                 sizeRange.value = String(currentSize);
-                sizeLabel.textContent = `サイズ: ${currentSize.toFixed(1)}`;
+                sizeLabel.textContent = t('pixifx.sizeLabel', currentSize.toFixed(1));
                 rebuildParticles();
                 if (!animating) renderOnce();
             },
@@ -905,7 +903,7 @@
                     pendingDataUrl = pixiCanvas.toDataURL('image/png');
                 } catch (e) {
                     pendingDataUrl = null;
-                    alert('キャプチャに失敗しました: ' + e.message);
+                    alert(t('pixifx.captureFailed', e.message));
                 }
                 saveSettings(collectSettings());
             },
@@ -915,7 +913,7 @@
                     try { onApply?.(pendingDataUrl, { bgVisible, width: W, height: H }); }
                     catch (e) {
                         console.error('[pixifx] onApply failed:', e);
-                        alert('結果の反映に失敗しました: ' + e.message);
+                        alert(t('pixifx.applyResultFailed', e.message));
                     }
                 }
             },
