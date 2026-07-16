@@ -80,11 +80,10 @@ ComfyUI/
 
 ### ComfyUI Manager
 
-<!-- 发布后请将下方占位符替换为实际的 GitHub URL -->
-仓库发布后，可通过 ComfyUI Manager 的"Install via Git URL"输入以下地址安装：
+可通过 ComfyUI Manager 的"Install via Git URL"输入以下地址安装：
 
 ```
-<your-repo-url>
+https://github.com/ketle-man/comfyui-comic-creater
 ```
 
 ## 可选设置
@@ -188,8 +187,8 @@ MIT License — 详见 [LICENSE](LICENSE)。
 
 ## 致谢
 
-- **comfyui-vrm-pose-editor** — 提供3D姿势编辑功能的配套节点
-- **ComfyUI-Workflow-Studio** — 提供I2I联动和嵌入式图库功能的配套节点
-- **comfyUI-particle-pixijs** — 提供PixiJS FX（粒子・滤镜效果）功能的配套节点
-- **comfyui-mask-editor-one** — 实现Image标签Mask工具及图层机制时参考的节点
+- **[comfyui-vrm-pose-editor](https://github.com/ketle-man/comfyui-vrm-pose-editor)** — 提供3D姿势编辑功能的配套节点
+- **[ComfyUI-Workflow-Studio](https://github.com/ketle-man/ComfyUI-Workflow-Studio)** — 提供I2I联动和嵌入式图库功能的配套节点
+- **[comfyUI-particle-pixijs](https://github.com/ketle-man/comfyUI-particle-pixijs)** — 提供PixiJS FX（粒子・滤镜效果）功能的配套节点
+- **[comfyui-mask-editor-one](https://github.com/ketle-man/comfyui-mask-editor-one)** — 实现Image标签Mask工具及图层机制时参考的节点
 - [G'MIC](https://gmic.eu/) — 滤镜编辑功能（通过G'MIC Qt GUI外部可执行文件联动）

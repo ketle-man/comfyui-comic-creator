@@ -80,11 +80,10 @@ After restarting ComfyUI, a **CC** button appears in the top bar. Click it to op
 
 ### ComfyUI Manager
 
-<!-- Replace the placeholder below with the actual GitHub URL once published -->
-You will be able to install via ComfyUI Manager's "Install via Git URL" once this repository is published:
+You can install it via ComfyUI Manager's "Install via Git URL" using the following URL:
 
 ```
-<your-repo-url>
+https://github.com/ketle-man/comfyui-comic-creater
 ```
 
 ## Optional setup
@@ -188,8 +187,8 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## Acknowledgements
 
-- **comfyui-vrm-pose-editor** — Companion node providing the 3D pose editing feature
-- **ComfyUI-Workflow-Studio** — Companion node providing I2I integration and the embedded gallery
-- **comfyUI-particle-pixijs** — Companion node providing the PixiJS FX (particle/filter effects) feature
-- **comfyui-mask-editor-one** — Node referenced when implementing the Image tab's Mask tool and layer mechanism
+- **[comfyui-vrm-pose-editor](https://github.com/ketle-man/comfyui-vrm-pose-editor)** — Companion node providing the 3D pose editing feature
+- **[ComfyUI-Workflow-Studio](https://github.com/ketle-man/ComfyUI-Workflow-Studio)** — Companion node providing I2I integration and the embedded gallery
+- **[comfyUI-particle-pixijs](https://github.com/ketle-man/comfyUI-particle-pixijs)** — Companion node providing the PixiJS FX (particle/filter effects) feature
+- **[comfyui-mask-editor-one](https://github.com/ketle-man/comfyui-mask-editor-one)** — Node referenced when implementing the Image tab's Mask tool and layer mechanism
 - [G'MIC](https://gmic.eu/) — Filter editing (via the G'MIC Qt GUI, an external executable)
