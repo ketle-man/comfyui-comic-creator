@@ -202,7 +202,7 @@ function getBoundingBoxFromPoints(pointsStr) {
 // オーバーレイレイヤーに画像を挿入（クリップなし）
 // placement を渡すと、ページ幅40%の中央配置デフォルトの代わりに指定位置・サイズで挿入する
 // （例: SVG図形をPNG化した際、元の図形と同じ位置・表示サイズで複製挿入するため）
-async function insertImageToOverlay(base64Data, width, height, placement = null) {
+async function insertImageToOverlay(base64Data, width, height, placement = null, extraAttrs = {}) {
     if (!state.activePage) return;
 
     pushHistory();
@@ -279,6 +279,9 @@ async function insertImageToOverlay(base64Data, width, height, placement = null)
     imgEl.setAttribute('class', 'inserted-image');
     imgEl.setAttribute('id', 'img-' + Date.now());
     imgEl.setAttribute('data-panel-id', '__overlay__');
+    for (const [k, v] of Object.entries(extraAttrs)) {
+        imgEl.setAttribute(k, v);
+    }
     overlayG.appendChild(imgEl);
 
     const serializer = new XMLSerializer();
@@ -299,7 +302,7 @@ async function insertImageToOverlay(base64Data, width, height, placement = null)
 async function insertImage(base64Data, width, height, extraAttrs = {}, placement = null) {
     // オーバーレイ選択中の場合はオーバーレイに挿入
     if (state.selectedOverlay) {
-        await insertImageToOverlay(base64Data, width, height, placement);
+        await insertImageToOverlay(base64Data, width, height, placement, extraAttrs);
         return true;
     }
 

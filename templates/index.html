@@ -131,6 +131,7 @@
             <button class="subtab-btn tool-panel-btn" data-subtab="gmic" data-i18n="layout.toolImage">画像</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="mask" data-i18n="layout.toolMask">マスク</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="pose3d" data-i18n="layout.toolPose3d">3Dポーズ</button>
+            <button class="subtab-btn tool-panel-btn" data-subtab="manga" data-i18n="layout.toolManga">マンガ</button>
           </div>
         </aside>
 
@@ -499,6 +500,10 @@
                   <div style="display:flex; align-items:center; gap:6px; border-left:1px solid var(--border-color); padding-left:10px;">
                     <button id="pixifx-open-btn" class="btn small secondary" data-i18n="layout.pixifxLabel" data-i18n-title="layout.pixifxTitle" title="選択中の画像にPixiJSのパーティクル・フィルタ効果を適用します（原寸で選択画像を置き換え。「背景画像:非表示」で出力した場合はパーティクルのみをコマに挿入）">✨ PixiJS FX</button>
                   </div>
+                  <!-- マンガトーン（網点ハーフトーン変換） -->
+                  <div style="display:flex; align-items:center; gap:6px; border-left:1px solid var(--border-color); padding-left:10px;">
+                    <button id="manga-halftone-open-btn" class="btn small secondary" data-i18n="layout.mangaHalftoneBtn" data-i18n-title="layout.mangaHalftoneBtnTitle" title="選択中の画像をモノクロ／デュオトーンの網点（ハーフトーン）に変換します">🎨 ハーフトーン</button>
+                  </div>
                   <!-- 進捗表示 -->
                   <div id="gmic-progress-area" style="display:none; align-items:center; gap:6px; flex:1;">
                     <span id="gmic-progress-text" style="font-size:11px; white-space:nowrap;" data-i18n="layout.processing">処理中...</span>
@@ -594,6 +599,13 @@
                 </div>
                 <!-- シェイプキーパネル（モデルロード後に動的生成） -->
                 <div id="pose3d-morph-panel" style="margin-top:4px;"></div>
+              </div>
+
+              <!-- マンガサブタブ（マンガ関連ツールのメニュー。各ボタンはモーダルを開く。今後ここにツールを追加していく） -->
+              <div id="subtab-manga" class="subtab-content" style="display:none; flex:1; padding:0; margin:0;">
+                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                  <button id="manga-effects-open-btn" class="btn small secondary" data-i18n="layout.mangaEffectsMenuBtn" data-i18n-title="layout.mangaEffectsMenuBtnTitle" title="選択中のコマ／オーバーレイのサイズにジャストフィットする透過オブジェクトとしてヴィネット・スクリーントーンノイズ・集中線を生成します">✨ マンガ効果</button>
+                </div>
               </div>
 
             </div>
@@ -1707,6 +1719,7 @@
     <script src="/ccc_static/js/main/13-export-pdf-epub.js"></script>
     <script src="/ccc_static/js/main/14-integrations.js"></script>
     <script src="/ccc_static/js/main/15-pixifx-bridge.js"></script>
+    <script src="/ccc_static/js/main/15b-manga-tone.js"></script>
     <script src="/ccc_static/js/main/16-processing-edit-tabs.js"></script>
     <script src="/ccc_static/js/main/17a-layer-draw-input.js"></script>
     <script src="/ccc_static/js/main/17b-layer-draw-commit.js"></script>

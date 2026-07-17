@@ -84,6 +84,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         initWfmGalleryTab();
         initGmicTab();
         initPixiFxButtons();
+        initMangaHalftoneButton();
+        initMangaEffectsButton();
         initMaskTool();
         initProcessingTab();
         initEditTab();
