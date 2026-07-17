@@ -31,6 +31,8 @@
 
 **How to apply（アニメーションループの後片付け）**: `requestAnimationFrame`を使う機能を画面の一部（サブタブ等）に組み込む際は、「そのサブタブを離れる時」だけでなく「その機能を含む画面全体（メインタブ等）を離れる時」の両方で確実に停止処理が呼ばれることを確認すること。片方の経路にしか後片付けがないパターンは見落としやすい。
 
+**リリース**: ユーザー承認のもとコミット→`git push origin master`→マイナーバージョンとして`v1.1.0`タグを作成・push→`gh release create v1.1.0`でGitHub Release公開（https://github.com/ketle-man/comfyui-comic-creator/releases/tag/v1.1.0 、日本語本文＋英語summary併記）。新機能（作品を閉じるボタン）を含むためマイナー版（v1.0.1→v1.1.0）とした。
+
 ---
 
 ## 2026-07-16（PixiJS FXモーダルのi18n対応）
