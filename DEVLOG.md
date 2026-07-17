@@ -10,6 +10,14 @@
 
 **How to apply（機能追加時のREADME更新漏れ防止）**: 新機能をDEVLOGに記録するタイミングと、ユーザー向けドキュメント(README)へ反映するタイミングがずれることがある。ComfyUI Manager PR・Registry公開のような対外公開作業の直前は、直近の機能追加コミットがREADMEに反映済みかを必ず確認すること。
 
+**ComfyUI Registry公開**: `comfyui-registry`スキルのステップ2に従い、`pyproject.toml`(PublisherId="statsu"、既存公開済みノードの`comfyui-vrm-pose-editor`から流用して確認)・GitHub Actionsワークフロー(`Comfy-Org/publish-node-action`をコミットSHA固定・`permissions: contents: read`付きで新設)・サムネイル画像(`docs/1_top.png`を800×380にリサイズして`docs/thumb.png`として新設)を追加してpush。
+
+初回pushは`version = "1.2.0"`のままだったが、既存の`v1.2.0`タグがそれより前のコミット(`2316da5`)を指しており、タグ付きアーカイブとRegistry公開内容がズレる問題に気づいた。ユーザー確認の上、`v1.2.0`タグ以降の未リリースコミット(PDF/EPUBオフライン制限のヘルプ追記・今回のREADME/Registry公開準備)を含めて`v1.2.1`としてパッチバージョンを再公開し、公開に使われたコミットにちょうど一致する形で`v1.2.1`タグ・GitHub Releaseを作成した。公開URL: https://registry.comfy.org/publishers/statsu/nodes/comfyui-comic-creator
+
+**つまずいた点**: 初回のワークフロー実行が`Option '--token' requires an argument`で失敗した。原因はユーザー側の`REGISTRY_ACCESS_TOKEN` Secret設定の誤りで、修正後に`gh workflow run`で手動再実行し成功した（`comfyui-registry`スキルのトラブルシューティング表に載っている既知のパターンと一致）。
+
+**How to apply（バージョンバンプ前にタグ位置を確認）**: 既存タグがある状態で新規に`pyproject.toml`を追加してRegistry初公開する場合、その時点の`version`値と同名のGitタグが過去のコミットを指していないか（＝今回pushする内容を含んでいないか）を事前に確認すること。含んでいなければ、その`version`のままpushせず、パッチバージョンを上げてから公開し、公開に使ったコミットに対して新しいタグ・Releaseを作成する。
+
 ---
 
 ## 2026-07-17（ヘルプ「ページ — 出力」にPDF/EPUB出力のオフライン制限を明記）
