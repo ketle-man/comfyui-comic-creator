@@ -235,6 +235,14 @@ async function switchTab(tabId) {
         return;
     }
 
+    // レイアウトタブ以外へ移動する際、3Dポーズ表示中ならThree.jsのアニメーション
+    // ループ(requestAnimationFrame)を止める。サブタブ切替時のhidePose3DCanvas呼び出し
+    // (このファイル内、3Dポーズ以外のサブタブへの切替処理)はメインタブ切替をカバー
+    // していないため、ここで明示的に止めないと他タブ作業中もGPU描画が回り続ける。
+    if (tabId !== 'layout' && state.pose3d.activePanelId !== null) {
+        hidePose3DCanvas();
+    }
+
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
         if (btn.dataset.tab === tabId) btn.classList.add('active');
