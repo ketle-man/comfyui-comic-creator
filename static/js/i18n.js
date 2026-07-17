@@ -163,6 +163,8 @@ const LANGUAGES = {
         'layout.openImageTabBtn': '画像タブで編集',
         'layout.openImageTabTitle': '選択中の画像をImageタブで開く',
         'layout.objectCenterTitle': '選択中のオブジェクトを中央（コマ内ならコマ中心、オーバーレイならページ中心）へ移動',
+        'layout.closeWorkBtn': '作品を閉じる',
+        'layout.closeWorkTitle': '作品を閉じます（保存データは失われません。他タブでの作業を軽くしたいときに）',
 
         // -- レイアウトタブ: ドローサブタブ --
         'layout.editModeBox': 'ドロー',
@@ -1119,6 +1121,8 @@ const LANGUAGES = {
         'layout.openImageTabBtn': 'Edit in Image tab',
         'layout.openImageTabTitle': 'Open the selected image in the Image tab',
         'layout.objectCenterTitle': 'Move the selected object to the center (panel center inside a panel, page center for overlays)',
+        'layout.closeWorkBtn': 'Close Work',
+        'layout.closeWorkTitle': 'Close the current work (saved data is not lost — use this to lighten other tabs)',
 
         'layout.editModeBox': 'Draw',
         'layout.editModeSvgColor': 'SVG Colors',
@@ -2050,6 +2054,8 @@ const LANGUAGES = {
         'layout.openImageTabBtn': '在Image标签页编辑',
         'layout.openImageTabTitle': '在Image标签页中打开选中的图像',
         'layout.objectCenterTitle': '将选中对象移动到中心（分格内为分格中心，覆盖层为页面中心）',
+        'layout.closeWorkBtn': '关闭作品',
+        'layout.closeWorkTitle': '关闭当前作品（不会丢失已保存的数据，用于减轻其他标签页的负担）',
 
         'layout.editModeBox': '绘制',
         'layout.editModeSvgColor': 'SVG改色',

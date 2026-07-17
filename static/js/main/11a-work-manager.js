@@ -219,6 +219,7 @@ function _initWorkMgr() {
     document.getElementById('work-open-btn')?.addEventListener('click', () => {
         if (_workSelected) openWork(_workSelected);
     });
+    document.getElementById('close-work-btn')?.addEventListener('click', closeActiveWork);
     document.getElementById('work-tab-works')?.addEventListener('click', () => _workSetListTab('works'));
     document.getElementById('work-tab-groups')?.addEventListener('click', () => _workSetListTab('groups'));
 
@@ -262,6 +263,43 @@ function _workSetActive(work) {
     _workUpdateActiveLabel();
     // レイアウトタブのアセットパネル「ページ」タブは作業中の作品のページに絞っているため、作品切替時に合わせて更新する
     renderPageThumbGrid();
+}
+
+/**
+ * 作品を閉じる: レイアウトタブのプレビューSVG（画像埋め込み込みの巨大なDOM）と
+ * 関連する編集状態を破棄し、他タブでの作業時にメモリ・描画負荷を軽くする。
+ * 保存データ自体はDB上にそのまま残るため、次回「開く」で同じ状態から再開できる。
+ */
+async function closeActiveWork() {
+    if (!state.activeWork && !state.activePage) return;
+
+    // 開いたままのオーバーレイ編集状態を後片付けしてから閉じる
+    // （3DポーズのThree.jsループ停止、マスク編集用canvasの解除、ドロー描画オーバーレイの解除）
+    if (state.pose3d.activePanelId !== null) hidePose3DCanvas();
+    if (_maskState.editing) await _maskSetEditing(false);
+    if (_layerDrawState.active) {
+        _layerDrawState.active = false;
+        _layerDrawDetachOverlay();
+        _layerDrawUpdateToggle();
+    }
+    _clearObjectSelection();
+
+    state.activePage = null;
+    state.selectedPanelId = null;
+    state.selectedOverlay = false;
+    state.history = [];
+    _workSelected = null;
+    _workSetActive(null);
+
+    const preview = document.getElementById('layout-preview');
+    if (preview) preview.innerHTML = `<p class="empty-message">${t('page.msgNoActiveWork')}</p>`;
+
+    updatePanelSelectDropdown();
+    updateBalloonPanelSelect();
+    renderLayerPanel();
+    updateLayoutPageNav();
+    updateTemplateSidePanel(false);
+    await renderWorkList();
 }
 
 function _workUpdateActiveLabel() {

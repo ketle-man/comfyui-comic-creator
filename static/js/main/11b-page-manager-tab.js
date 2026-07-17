@@ -228,6 +228,9 @@ function _initPageMgrTab() {
         _pageMgrSidePanelUpdate();
         renderWorkList();
         renderPageMgrGrid();
+        // レイアウトタブで表示中のページが移動対象に含まれていた場合、
+        // 元のactiveWorkのページ一覧から外れて「- / N」のまま古い表示が残るため更新する
+        updateLayoutPageNav();
     });
 
     // ページ複製
@@ -249,6 +252,9 @@ function _initPageMgrTab() {
         _pageMgrSidePanelUpdate();
         renderWorkList();
         renderPageMgrGrid();
+        // レイアウトタブで表示中のページが移動対象に含まれていた場合、
+        // 元のactiveWorkのページ一覧から外れて「- / N」のまま古い表示が残るため更新する
+        updateLayoutPageNav();
     });
 
     // 一括削除（ゴミ箱表示中は完全削除）
