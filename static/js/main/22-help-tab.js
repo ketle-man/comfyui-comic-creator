@@ -97,6 +97,7 @@ const _HELP_DATA = [
             { heading: 'ページ一覧', body: '<ul><li>右サイドのページ一覧で各ページの並び順を番号入力欄で指定できます。</li><li>「並替」ボタンで番号指定に従って昇順に並び替えます。</li><li>「↺」ボタンでDB順（デフォルト）にリセットします。</li><li>「＋ 画像を取り込む」ボタンで外部画像をページとしてインポートできます。</li><li>🗑ボタンでページをゴミ箱に移動します。</li></ul>' },
             { heading: '作品/グループフィルタ', body: '<ul><li>作品管理サブタブで作品/グループを選択して「出力」ボタンを押すと、そのページだけが一覧表示されます。</li><li>フィルタ中はページ一覧上部にフィルタバー（作品: ○○ / グループ: ○○）が表示され、「解除」で全ページ表示に戻ります。</li><li>フィルタ中の表示順は作品内ページ順（作品管理の↑↓で並べた順）で、番号入力欄は非表示になります。</li><li>出力の対象ページ・順序もフィルタに従います。</li></ul>' },
             { heading: 'フォント埋め込み', body: 'PNG出力時はフォントを自動的にCanvasに描画してラスタライズします。SVG出力時はBase64のフォントデータを埋め込みます。' },
+            { heading: 'オフライン環境について', body: 'PDF/EPUB出力は、jsPDF/JSZipという外部ライブラリをCDN（インターネット）経由で読み込んで利用しています。そのため、インターネット接続のないオフライン環境ではPDF/EPUB出力は動作しません。JPEG/PNG/WebP出力は外部ライブラリの読み込みが不要なため、オフライン環境でも利用できます。' },
         ],
     },
     {
@@ -435,6 +436,7 @@ const _HELP_I18N = {
                 { heading: 'Page List', body: '<ul><li>In the page list on the right side, you can specify each page\'s order using the number input field.</li><li>The "Sort" button reorders pages in ascending order according to the specified numbers.</li><li>The "↺" button resets to database order (default).</li><li>The "+ Import Image" button lets you import an external image as a page.</li><li>The 🗑 button moves a page to the trash.</li></ul>' },
                 { heading: 'Work/Group Filter', body: '<ul><li>Selecting a work/group in the Work Management sub-tab and clicking "Export" shows only that work\'s pages in the list.</li><li>While filtered, a filter bar (Work: ○○ / Group: ○○) is shown above the page list; click "Clear" to return to showing all pages.</li><li>While filtered, the display order follows the page order within the work (as arranged with ↑↓ in Work Management), and the number input field is hidden.</li><li>The pages targeted and their order for export also follow the filter.</li></ul>' },
                 { heading: 'Font Embedding', body: 'When exporting to PNG, fonts are automatically rendered onto a canvas and rasterized. When exporting to SVG, Base64 font data is embedded.' },
+                { heading: 'About Offline Use', body: 'PDF/EPUB export uses external libraries (jsPDF/JSZip) loaded via CDN over the internet. As a result, PDF/EPUB export does not work in offline environments without an internet connection. JPEG/PNG/WebP export does not require loading any external library, so it works even offline.' },
             ],
         },
         'page-work': {
@@ -674,6 +676,7 @@ const _HELP_I18N = {
                 { heading: '页面列表', body: '<ul><li>在右侧的页面列表中，可通过编号输入框指定各页面的排列顺序。</li><li>"排序"按钮会按指定的编号升序排列。</li><li>"↺"按钮可重置为数据库顺序（默认）。</li><li>"＋ 导入图像"按钮可将外部图像导入为页面。</li><li>🗑按钮可将页面移至回收站。</li></ul>' },
                 { heading: '作品/分组筛选', body: '<ul><li>在作品管理子标签中选择作品/分组后点击"输出"按钮，列表中将只显示该作品的页面。</li><li>筛选期间页面列表上方会显示筛选栏（作品：○○ / 分组：○○），点击"解除"可恢复显示全部页面。</li><li>筛选期间的显示顺序为作品内页面顺序（按作品管理中的↑↓排列的顺序），编号输入框将被隐藏。</li><li>输出的目标页面及顺序也会遵循筛选条件。</li></ul>' },
                 { heading: '字体嵌入', body: '输出PNG时，会自动将字体绘制到Canvas上进行栅格化。输出SVG时，会嵌入Base64格式的字体数据。' },
+                { heading: '关于离线环境', body: 'PDF/EPUB输出功能是通过CDN（互联网）加载外部库（jsPDF/JSZip）来实现的。因此，在没有互联网连接的离线环境中，PDF/EPUB输出将无法使用。JPEG/PNG/WebP输出无需加载外部库，因此在离线环境中也可以使用。' },
             ],
         },
         'page-work': {
