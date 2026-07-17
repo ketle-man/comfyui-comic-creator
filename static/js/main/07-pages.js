@@ -792,7 +792,7 @@ async function savePanelSvg(panelId, panelLayerSvgEl) {
     const updatedRecord = { ...state.activePage, panels: updatedPanels };
 
     try {
-        await dbPut('pages', updatedRecord);
+        await dbPut('pages', updatedRecord, { deferThumb: true });
         state.activePage = updatedRecord;
         renderLayerPanel();
     } catch (e) {
@@ -816,9 +816,13 @@ async function saveTextSvg(overlaySvgEl) {
 function pushHistory() {
     if (!state.activePage) return;
 
+    // panels配列は常にイミュータブル更新（{...panel, ...}での差し替え）されており、
+    // 既存の要素をin-placeで書き換える箇所はないため、ディープクローンではなく
+    // 配列の浅いコピーで十分。base64画像込みの可能性があるpanelSvgContentを毎回
+    // JSON.stringify/parseで再生成するコストを避ける。
     state.history.push({
         svgContent: state.activePage.svgContent || '',
-        panels: JSON.parse(JSON.stringify(state.activePage.panels || [])),
+        panels: (state.activePage.panels || []).slice(),
         overlaySvgContent: state.activePage.overlaySvgContent || ''
     });
     if (state.history.length > 20) {

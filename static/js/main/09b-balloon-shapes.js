@@ -244,7 +244,7 @@ async function saveOverlaySvg(panelLayerSvgEl) {
 
     const updatedRecord = { ...state.activePage, overlaySvgContent: str };
     try {
-        await dbPut('pages', updatedRecord);
+        await dbPut('pages', updatedRecord, { deferThumb: true });
         state.activePage = updatedRecord;
         renderLayerPanel();
     } catch (e) {

@@ -62,7 +62,7 @@ function initLayerDraw() {
     document.getElementById('layer-draw-opacity').addEventListener('input', () => {
         document.getElementById('layer-draw-opacity-value').textContent =
             document.getElementById('layer-draw-opacity').value + '%';
-        _layerDrawApplyPropsToSelected();
+        _layerDrawApplyPropsToSelected(true);
     });
     // 塗りなしチェックボックス
     document.getElementById('layer-draw-fill-none').addEventListener('change', e => {
@@ -75,10 +75,10 @@ function initLayerDraw() {
         document.getElementById('layer-draw-stroke-width').disabled = e.target.checked;
         _layerDrawApplyPropsToSelected();
     });
-    // 塗り・線・線幅の変更時も適用
-    document.getElementById('layer-draw-fill').addEventListener('input', _layerDrawApplyPropsToSelected);
-    document.getElementById('layer-draw-stroke').addEventListener('input', _layerDrawApplyPropsToSelected);
-    document.getElementById('layer-draw-stroke-width').addEventListener('input', _layerDrawApplyPropsToSelected);
+    // 塗り・線・線幅の変更時も適用（ドラッグ中の連続inputでは保存をdebounce）
+    document.getElementById('layer-draw-fill').addEventListener('input', () => _layerDrawApplyPropsToSelected(true));
+    document.getElementById('layer-draw-stroke').addEventListener('input', () => _layerDrawApplyPropsToSelected(true));
+    document.getElementById('layer-draw-stroke-width').addEventListener('input', () => _layerDrawApplyPropsToSelected(true));
     // 初期状態: 線なし→無効（線幅デフォルト5はHTML側で設定済み）
     document.getElementById('layer-draw-stroke').disabled       = true;
     document.getElementById('layer-draw-stroke-width').disabled = true;
@@ -178,7 +178,12 @@ function _layerDrawUpdateToggle() {
 }
 
 // 図形編集モードON中、描画UIの現在値を選択中draw-shapeに適用して保存
-async function _layerDrawApplyPropsToSelected() {
+// deferSave=true の場合、DOM属性への反映は即時に行うが実際の保存(savePanelSvg等)は
+// 300ms debounceする。color/rangeのinputイベントはドラッグ中に高頻度発火し、
+// 都度フル保存(SVGクローン+シリアライズ+サムネイル再生成+レイヤーパネル再構築)が
+// 走ると操作が固まって見えるため、連続入力中は保存をまとめる。
+let _layerDrawSaveDebounceTimer = null;
+function _layerDrawApplyPropsToSelected(deferSave) {
     if (!_layerDrawState.editMode) return;
     const el = state.selectedDrawEl;
     if (!el) return;
@@ -196,6 +201,22 @@ async function _layerDrawApplyPropsToSelected() {
     const opacity = parseInt(document.getElementById('layer-draw-opacity').value, 10) / 100;
     if (opacity >= 1) el.removeAttribute('opacity');
     else              el.setAttribute('opacity', opacity.toFixed(3));
+
+    if (_layerDrawSaveDebounceTimer) {
+        clearTimeout(_layerDrawSaveDebounceTimer);
+        _layerDrawSaveDebounceTimer = null;
+    }
+    if (deferSave === true) {
+        _layerDrawSaveDebounceTimer = setTimeout(() => {
+            _layerDrawSaveDebounceTimer = null;
+            _layerDrawSaveSelected();
+        }, 300);
+        return;
+    }
+    _layerDrawSaveSelected();
+}
+
+async function _layerDrawSaveSelected() {
     const svgEl = getPanelLayerSvg();
     if (!svgEl) return;
     if (state.selectedOverlay) await saveOverlaySvg(svgEl);

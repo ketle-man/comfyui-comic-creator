@@ -88,18 +88,7 @@ function _rasterizeSvgThumb(svgText, srcWidth, srcHeight) {
     });
 }
 
-async function dbPut(storeName, data) {
-    // pages/trash 保存時にサムネイル(縮小ラスタ画像のdata URL)を事前計算してレコードに埋め込む。
-    // 作品一覧・ページ一覧の描画側は毎回 buildMergedSvg を再計算せずこのキャッシュを読むだけにするため。
-    // フルサイズのSVG（挿入画像込み）をそのままdata URL化すると、作品切替のたびに
-    // 大量の高解像度画像がブラウザにデコードされ、メモリ不足（Out of Memory）を引き起こすため、
-    // 必ず小さいラスタ画像に変換してから保存する。
-    if ((storeName === 'pages' || storeName === 'trash') && data && data.svgContent) {
-        try {
-            const merged = buildMergedSvg(data) || data.svgContent;
-            data.thumb = await _rasterizeSvgThumb(merged, data.width, data.height);
-        } catch (e) { /* サムネイル生成失敗は保存自体をブロックしない */ }
-    }
+function _dbPutRaw(storeName, data) {
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, 'readwrite');
         const store = tx.objectStore(storeName);
@@ -107,6 +96,46 @@ async function dbPut(storeName, data) {
         req.onsuccess = () => resolve();
         req.onerror = (e) => reject(e.target.error);
     });
+}
+
+// レイアウトタブでのコマ編集は1操作ごとにdbPutが走る（savePanelSvg/saveOverlaySvg経由）。
+// サムネイル再計算(buildMergedSvg + 画像デコード + canvas描画)を都度同期実行すると
+// 操作のたびに固まって見えるため、id単位でdebounceしてまとめて1回だけ実行する。
+const _THUMB_DEBOUNCE_MS = 600;
+const _thumbDebounceTimers = new Map();
+
+function _scheduleThumbUpdate(storeName, data) {
+    const key = storeName + ':' + data.name;
+    const existing = _thumbDebounceTimers.get(key);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(async () => {
+        _thumbDebounceTimers.delete(key);
+        try {
+            const merged = buildMergedSvg(data) || data.svgContent;
+            data.thumb = await _rasterizeSvgThumb(merged, data.width, data.height);
+            await _dbPutRaw(storeName, data);
+        } catch (e) { /* サムネイル生成失敗は無視（次回保存時に再試行される） */ }
+    }, _THUMB_DEBOUNCE_MS);
+    _thumbDebounceTimers.set(key, timer);
+}
+
+// opts.deferThumb=true の場合、サムネイル計算をdebounceして保存を即座に返す。
+// レイアウトタブ内の高頻度なコマ編集保存（savePanelSvg/saveOverlaySvg）から使う。
+// 未指定時は従来通り、保存前にサムネイルを同期計算して埋め込む
+// （作品一覧・ページ一覧側がdbPut直後のdata.thumbを読む箇所があるため）。
+async function dbPut(storeName, data, opts) {
+    const deferThumb = !!(opts && opts.deferThumb);
+    if ((storeName === 'pages' || storeName === 'trash') && data && data.svgContent) {
+        if (deferThumb) {
+            _scheduleThumbUpdate(storeName, data);
+        } else {
+            try {
+                const merged = buildMergedSvg(data) || data.svgContent;
+                data.thumb = await _rasterizeSvgThumb(merged, data.width, data.height);
+            } catch (e) { /* サムネイル生成失敗は保存自体をブロックしない */ }
+        }
+    }
+    return _dbPutRaw(storeName, data);
 }
 
 function dbGet(storeName, key) {
