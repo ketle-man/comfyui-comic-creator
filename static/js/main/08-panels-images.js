@@ -105,6 +105,9 @@ function highlightOverlay(svgEl, panelId) {
 
 // コマ/オーバーレイ選択時にオブジェクト選択をすべて解除する
 function _clearObjectSelection() {
+    // ドローツールのプロパティ変更（色/線幅/不透明度）がdebounce待ちのまま選択が
+    // 切り替わると保存されずに失われるため、選択情報を消す前に必ず即時保存させる
+    _layerDrawFlushPendingSave();
     const svgEl = getPanelLayerSvg();
     state.selectedImageEl  = null;
     state.selectedImageId  = null;

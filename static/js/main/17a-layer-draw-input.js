@@ -216,6 +216,18 @@ function _layerDrawApplyPropsToSelected(deferSave) {
     _layerDrawSaveSelected();
 }
 
+// debounce待ち中の保存があれば即座に実行する。選択解除・パネル/オーバーレイ切替・
+// ページ再描画（＝ライブDOMの丸ごと差し替え）の直前に呼ぶことで、300ms以内の
+// 切り替えでプロパティ変更（色・線幅・不透明度）が保存されずに消えるのを防ぐ。
+// Promiseを返すので、DBから再読み込みする処理（renderLayoutTab等）は
+// 必ずawaitしてから読み込むこと（そうしないと保存前の古いデータを読んでしまう）。
+function _layerDrawFlushPendingSave() {
+    if (!_layerDrawSaveDebounceTimer) return Promise.resolve();
+    clearTimeout(_layerDrawSaveDebounceTimer);
+    _layerDrawSaveDebounceTimer = null;
+    return _layerDrawSaveSelected();
+}
+
 async function _layerDrawSaveSelected() {
     const svgEl = getPanelLayerSvg();
     if (!svgEl) return;

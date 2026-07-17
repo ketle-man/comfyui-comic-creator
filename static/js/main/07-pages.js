@@ -452,6 +452,9 @@ async function createPageFromTemplate() {
 // ==============================
 
 async function renderLayoutTab() {
+    // ドローツールのプロパティ変更がdebounce待ちのまま呼ばれると、DBの保存が
+    // 完了する前に古いデータを読み込んでしまうため、必ず先にflushを待つ
+    await _layerDrawFlushPendingSave();
     updateLayoutPageNav();
     if (!state.activePage) return;
 
