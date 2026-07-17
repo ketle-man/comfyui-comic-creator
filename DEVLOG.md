@@ -2,6 +2,16 @@
 
 ---
 
+## 2026-07-17（ComfyUI Manager PR承認 → READMEにマンガツールを反映 → Registry公開へ）
+
+`ltdrdata/ComfyUI-Manager`(現 `Comfy-Org/ComfyUI-Manager`)への登録PR([#3086](https://github.com/Comfy-Org/ComfyUI-Manager/pull/3086)、詳細は本ファイル内「ComfyUI Manager PR提出」の項を参照)が承認された。ユーザー方針で待機していたComfyUI Registry(registry.comfy.org)公開のステップ2に進む前段として、README 3言語(README.md/README_en.md/README_zh.md)の「レイアウトタブ」機能一覧に、直近で実装した「マンガツール」(ハーフトーン変換/生成 + マンガ効果、コミット`2316da5`)の項目が未反映だったため追記した。
+
+**追記内容**: PixiJS FXの項目の直後に、ハーフトーンモーダル(画像を変換／パターンを作成の2モード)とマンガ効果モーダル(ヴィネット・スクリーントーンノイズ・集中線の透過オブジェクト生成)をまとめた1項目を追加。
+
+**How to apply（機能追加時のREADME更新漏れ防止）**: 新機能をDEVLOGに記録するタイミングと、ユーザー向けドキュメント(README)へ反映するタイミングがずれることがある。ComfyUI Manager PR・Registry公開のような対外公開作業の直前は、直近の機能追加コミットがREADMEに反映済みかを必ず確認すること。
+
+---
+
 ## 2026-07-17（ヘルプ「ページ — 出力」にPDF/EPUB出力のオフライン制限を明記）
 
 リリース前チェックとして「requirements.txt作成の要否」をユーザーと確認していた過程で、PDF/EPUB出力機能が何に依存しているかを改めて調査した。

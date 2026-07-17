@@ -1,0 +1,13 @@
+[project]
+name = "comfyui-comic-creator"
+description = "A manga page creation SPA for ComfyUI: templates, layered image editor, speech balloons, font manager, AI image generation (Nanobanana), script management, and halftone/manga-effect tools."
+version = "1.2.0"
+license = {file = "LICENSE"}
+
+[project.urls]
+Repository = "https://github.com/ketle-man/comfyui-comic-creator"
+
+[tool.comfy]
+PublisherId = "statsu"
+DisplayName = "ComfyUI Comic Creator"
+Icon = "https://raw.githubusercontent.com/ketle-man/comfyui-comic-creator/master/docs/thumb.png"

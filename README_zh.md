@@ -22,6 +22,7 @@
 - **分组功能与图层面板** — 对象分组、层叠顺序管理、显示切换、锁定，以及**通过 Delete / Backspace 键删除**
 - **I2I联动** — 将选中图像发送到 Workflow Studio 的 Generate UI，并可将生成结果送回（通过 [ComfyUI-Workflow-Studio](#可选依赖) 联动）
 - **PixiJS FX** — 在"图像"子标签中为选中图像应用粒子・滤镜效果（通过 [comfyUI-particle-pixijs](#可选依赖) 联动）
+- **漫画工具** — 「半调网点」（"转换图像"模式将选中图像转换为网点，"创建图案"模式仅生成分格/浮层尺寸的网点图案）与「漫画效果」（生成暗角、网点噪点、集中线并作为分格尺寸的透明对象插入）两个弹窗
 
 ### Image标签（基于图层的Canvas 2D编辑器）
 - **Select / Text / Draw / Shape / Fill / Mask / Blur / Filter / BG Remove / Upscale** 各工具

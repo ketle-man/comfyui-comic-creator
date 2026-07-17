@@ -22,6 +22,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Groups and layer panel** — Group objects, manage stacking order, toggle visibility, lock, and **delete with the Delete / Backspace key**
 - **I2I integration** — Send a selected image to Workflow Studio's Generate UI and bring the result back (via [ComfyUI-Workflow-Studio](#optional-dependencies))
 - **PixiJS FX** — Apply particle/filter effects to the selected image from the "Image" sub-tab (via [comfyUI-particle-pixijs](#optional-dependencies))
+- **Manga tool** — "Halftone" (an "Convert image" mode that halftones the selected image, plus a "Create pattern" mode that generates a halftone dot pattern sized to the panel/overlay) and "Manga effects" (generate and insert vignette, screentone noise, and speed lines as transparent objects sized to the panel)
 
 ### Image tab (layer-based Canvas 2D editor)
 - **Select / Text / Draw / Shape / Fill / Mask / Blur / Filter / BG Remove / Upscale** tools
