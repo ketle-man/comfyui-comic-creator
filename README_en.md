@@ -14,7 +14,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Export** — Export as JPEG/PNG/WebP/PDF/EPUB, including bulk export of multiple pages with sequential filenames
 
 ### Layout tab
-- **Image placement** — Drag and drop images into panels; resize and rotate with handles
+- **Image placement** — Drag and drop images into panels; resize (aspect ratio locked by default, hold Alt to resize freely) and rotate with handles
 - **Speech balloons** — Place oval, rounded-rectangle, thought, and burst-shaped balloons inside panels, with 8-point resize handles
 - **Text** — Vertical/horizontal writing, Google Fonts / system fonts, a style modal for fill, stroke, outline, and shadow
 - **Shape drawing (Draw)** — Draw rectangles, ellipses, lines, curves, polygons, chains, ropes, and My Curve directly onto an SVG layer
@@ -22,7 +22,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Groups and layer panel** — Group objects, manage stacking order, toggle visibility, lock, and **delete with the Delete / Backspace key**
 - **I2I integration** — Send a selected image to Workflow Studio's Generate UI and bring the result back (via [ComfyUI-Workflow-Studio](#optional-dependencies))
 - **PixiJS FX** — Apply particle/filter effects to the selected image from the "Image" sub-tab (via [comfyUI-particle-pixijs](#optional-dependencies))
-- **Manga tool** — "Halftone" (an "Convert image" mode that halftones the selected image, plus a "Create pattern" mode that generates a halftone dot pattern sized to the panel/overlay) and "Manga effects" (generate and insert vignette, screentone noise, and speed lines as transparent objects sized to the panel)
+- **Manga tool** — "Halftone" (an "Convert image" mode that halftones the selected image, plus a "Create pattern" mode that generates a halftone dot pattern sized to the panel/overlay) and "Manga effects" (generate and insert vignette, screentone noise, and speed lines — radial / uni flash / uni ring / linear — as transparent objects sized to the panel). Both modals let you switch the preview background between the selected image, a checkerboard, and white while adjusting
 
 ### Image tab (layer-based Canvas 2D editor)
 - **Select / Text / Draw / Shape / Fill / Mask / Blur / Filter / BG Remove / Upscale** tools

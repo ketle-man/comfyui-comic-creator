@@ -158,6 +158,18 @@ async function _mangaGetRegionBackdropImage(region) {
     try { return await _mangaLoadImage(href); } catch { return null; }
 }
 
+// 背景ガイド画像を縦横比を保ったままプレビュー全面に描く（カバー描画・中央トリミング）。
+// プレビューcanvasは対象領域（コマ/オーバーレイ）の縦横比のため、単純に全面へ
+// drawImageすると画像の縦横比が崩れる。
+function _mangaDrawBackdropCover(ctx, img, width, height) {
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    if (!iw || !ih) return;
+    const scale = Math.max(width / iw, height / ih);
+    const dw = iw * scale, dh = ih * scale;
+    ctx.drawImage(img, (width - dw) / 2, (height - dh) / 2, dw, dh);
+}
+
 async function _mangaCommitCanvasToSelectedImage(canvas) {
     const imgEl = state.selectedImageEl;
     if (!imgEl) return false;
@@ -334,14 +346,21 @@ function _mangaGenerateHalftonePatternCanvas(targetWidth, targetHeight, options)
 function _mangaDrawVignette(ctx, width, height, amount, color) {
     if (!amount) return;
     const rgb = _mangaHexToRgb(color);
+    const a = Math.min(1, amount);
     const cx = width / 2, cy = height / 2;
-    const outerR = Math.sqrt(cx * cx + cy * cy);
-    const grad = ctx.createRadialGradient(cx, cy, outerR * (1 - Math.min(1, amount)), cx, cy, outerR);
-    grad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
-    grad.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},${Math.min(1, amount)})`);
     ctx.save();
+    // 円形グラデーション（半径=対角）だと最大濃度に達するのは四隅だけで、四辺の中央では
+    // ほとんど暗くならない。キャンバスの縦横比に合わせた楕円に変形し、辺の中央でも
+    // 指定濃度に達するようにする。四隅は楕円の外側になるため常に最大濃度で塗られる。
+    ctx.translate(cx, cy);
+    const R = Math.max(cx, cy);
+    ctx.scale(cx / R, cy / R);
+    const grad = ctx.createRadialGradient(0, 0, R * (1 - a), 0, 0, R);
+    grad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
+    grad.addColorStop(0.55, `rgba(${rgb.r},${rgb.g},${rgb.b},${a * 0.55})`);
+    grad.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},${a})`);
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(-R, -R, R * 2, R * 2);
     ctx.restore();
 }
 
@@ -379,39 +398,130 @@ function _mangaDrawScreentoneTexture(ctx, width, height, opacity, grainSize) {
     ctx.putImageData(imgData, 0, 0);
 }
 
-function _mangaDrawRadialSpeedLines(ctx, width, height, density, intensity, color, centerXPercent, centerYPercent) {
+// 参考アプリ manga-halftone-processor の drawRadialSpeedLines を移植。
+// 中心側の先端は針状（幅0.2px相当で固定）、外枠側の太さは thicknessPx で制御する。
+// 線は常にキャンバス対角長まで伸ばすため外枠際で途切れず、太い終端もキャンバス外に出る。
+// density は参考アプリと同じ%指定（本数 = density × 5、最低15本）。
+// lengthPercent（範囲・長さ）が大きいほど中心の空白が小さくなり線が長くなる。
+function _mangaDrawRadialSpeedLines(ctx, width, height, density, color, centerXPercent, centerYPercent, lengthPercent, thicknessPx) {
     if (!density) return;
-    const count = Math.round(density);
+    const numLines = Math.max(15, Math.round(density * 5));
     const cx = width * ((centerXPercent ?? 50) / 100);
     const cy = height * ((centerYPercent ?? 50) / 100);
     const maxR = Math.sqrt(width * width + height * height);
+    const innerRadius = maxR * (1 - (lengthPercent ?? 65) / 100) * 0.5;
     const sizeScale = Math.max(width, height) / _MANGA_SIZE_REFERENCE_DIM;
+    const wInner = 0.2 * sizeScale;
+    const wOuter = (thicknessPx ?? 5) * sizeScale;
     ctx.save();
     ctx.fillStyle = color || '#000000';
-    ctx.globalAlpha = Math.min(1, intensity);
-    // 強度が高いほど中心の空白（集中線が始まる位置）が大きくなる。参考アプリのintensityは
-    // 不透明度だけでなく中心サイズにも影響していたため、ここでもベースサイズに連動させる。
-    const baseInnerR = maxR * (0.02 + Math.min(1, intensity) * 0.12);
-    for (let i = 0; i < count; i++) {
-        const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * (Math.PI * 2 / count) * 0.3;
-        const innerR = baseInnerR * (0.8 + Math.random() * 0.4);
-        const outerR = maxR * (0.5 + Math.random() * 0.5);
-        const hwInner = (0.5 + Math.random() * 1.5) * sizeScale;
-        const hwOuter = hwInner + (4 + Math.random() * 10) * sizeScale;
-        const nx = Math.cos(angle), ny = Math.sin(angle);
-        const px = -ny, py = nx;
+    for (let i = 0; i < numLines; i++) {
+        const angle = (i * 2 * Math.PI) / numLines + (Math.random() - 0.5) * (3.5 / numLines);
+        const startDist = innerRadius + (Math.random() - 0.5) * (innerRadius * 0.35);
+        const endDist = maxR;
+        const cos = Math.cos(angle), sin = Math.sin(angle);
+        const px = -sin, py = cos;
         ctx.beginPath();
-        ctx.moveTo(cx + nx * innerR + px * hwInner, cy + ny * innerR + py * hwInner);
-        ctx.lineTo(cx + nx * innerR - px * hwInner, cy + ny * innerR - py * hwInner);
-        ctx.lineTo(cx + nx * outerR - px * hwOuter, cy + ny * outerR - py * hwOuter);
-        ctx.lineTo(cx + nx * outerR + px * hwOuter, cy + ny * outerR + py * hwOuter);
+        ctx.moveTo(cx + cos * startDist + px * (wInner / 2), cy + sin * startDist + py * (wInner / 2));
+        ctx.lineTo(cx + cos * startDist - px * (wInner / 2), cy + sin * startDist - py * (wInner / 2));
+        ctx.lineTo(cx + cos * endDist - px * (wOuter / 2), cy + sin * endDist - py * (wOuter / 2));
+        ctx.lineTo(cx + cos * endDist + px * (wOuter / 2), cy + sin * endDist + py * (wOuter / 2));
         ctx.closePath();
         ctx.fill();
     }
     ctx.restore();
 }
 
-function _mangaDrawLinearSpeedLines(ctx, width, height, density, intensity, color, angleDeg) {
+// 参考アプリの drawUniFlash を移植。中心のコア円＋外向きの三角トゲで「ウニフラッシュ」を描く。
+// 参考アプリは白固定だが、ここでは色を選べるようにしている（白＝フラッシュ、黒＝ベタのウニ）。
+// lengthPercent（範囲・長さ）はコア円の大きさ（中心の空白サイズ）、thicknessPx はトゲ根元の太さ、
+// outerLengthPercent はトゲが外側へ届く最大距離を制御する。
+function _mangaDrawUniFlash(ctx, width, height, density, color, centerXPercent, centerYPercent, lengthPercent, thicknessPx, outerLengthPercent) {
+    if (!density) return;
+    const numLines = Math.max(40, Math.round(density * 5));
+    const cx = width * ((centerXPercent ?? 50) / 100);
+    const cy = height * ((centerYPercent ?? 50) / 100);
+    const maxR = Math.sqrt(width * width + height * height);
+    const innerRadius = maxR * (1 - (lengthPercent ?? 65) / 100) * 0.45;
+    const maxOuterRadius = innerRadius + (maxR - innerRadius) * ((outerLengthPercent ?? 85) / 100);
+    const sizeScale = Math.max(width, height) / _MANGA_SIZE_REFERENCE_DIM;
+    ctx.save();
+    ctx.fillStyle = color || '#ffffff';
+    if (innerRadius > 2) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, innerRadius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    const baseWidth = Math.max(0.5, (thicknessPx ?? 5) * 0.5) * sizeScale;
+    for (let i = 0; i < numLines; i++) {
+        const angle = (i * 2 * Math.PI) / numLines + (Math.random() - 0.5) * (3.5 / numLines);
+        // 短・中・長の3層構造のトゲで奥行きを出す
+        const typeRand = Math.random();
+        let lengthRand;
+        if (typeRand < 0.4) lengthRand = 0.15 + Math.random() * 0.3;
+        else if (typeRand < 0.8) lengthRand = 0.45 + Math.random() * 0.3;
+        else lengthRand = 0.75 + Math.random() * 0.25;
+        const outerRadius = innerRadius + (maxOuterRadius - innerRadius) * lengthRand;
+        // 長いトゲほど根元をやや太くする
+        const spikeThickness = baseWidth * (0.3 + lengthRand * 0.7) * (0.6 + Math.random() * 0.8);
+        const cos = Math.cos(angle), sin = Math.sin(angle);
+        const px = -sin, py = cos;
+        // アンチエイリアスの継ぎ目を防ぐためコア円の少し内側からトゲを生やす
+        const startRadius = Math.max(0, innerRadius - 4 * sizeScale);
+        ctx.beginPath();
+        ctx.moveTo(cx + cos * startRadius + px * (spikeThickness / 2), cy + sin * startRadius + py * (spikeThickness / 2));
+        ctx.lineTo(cx + cos * startRadius - px * (spikeThickness / 2), cy + sin * startRadius - py * (spikeThickness / 2));
+        ctx.lineTo(cx + cos * outerRadius, cy + sin * outerRadius);
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+// 参考アプリの drawUniRing を移植。基準円の内側・外側へ伸びる細いストローク群でリング状のウニを描く。
+// lengthPercent は基準円の大きさ、thicknessPx は線の太さ、outerLengthPercent は外向きの最大到達距離。
+function _mangaDrawUniRing(ctx, width, height, density, color, centerXPercent, centerYPercent, lengthPercent, thicknessPx, outerLengthPercent) {
+    if (!density) return;
+    const cx = width * ((centerXPercent ?? 50) / 100);
+    const cy = height * ((centerYPercent ?? 50) / 100);
+    const maxR = Math.sqrt(width * width + height * height);
+    const baseRadius = maxR * (1 - (lengthPercent ?? 65) / 100) * 0.42;
+    const numLines = Math.max(100, Math.round(density * 9.5));
+    const maxOuterReach = (maxR - baseRadius) * ((outerLengthPercent ?? 85) / 100);
+    const sizeScale = Math.max(width, height) / _MANGA_SIZE_REFERENCE_DIM;
+    ctx.save();
+    ctx.strokeStyle = color || '#000000';
+    ctx.lineCap = 'round';
+    for (let i = 0; i < numLines; i++) {
+        const angle = (i * 2 * Math.PI) / numLines + (Math.random() - 0.5) * (1.8 / numLines);
+        // 短・中・長の3層構造（内向き・外向きで別々のランダム長）
+        const typeRand = Math.random();
+        let lengthScaleOut, lengthScaleIn;
+        if (typeRand < 0.5) {
+            lengthScaleOut = 0.08 + Math.random() * 0.22;
+            lengthScaleIn = 0.08 + Math.random() * 0.25;
+        } else if (typeRand < 0.85) {
+            lengthScaleOut = 0.3 + Math.random() * 0.35;
+            lengthScaleIn = 0.2 + Math.random() * 0.35;
+        } else {
+            lengthScaleOut = 0.65 + Math.random() * 0.35;
+            lengthScaleIn = 0.4 + Math.random() * 0.4;
+        }
+        // 境界の重なりをぼかすためのわずかな径方向オフセット
+        const radialOffset = (Math.random() - 0.5) * (baseRadius * 0.04);
+        const rStart = Math.max(2, (baseRadius + radialOffset) - (baseRadius * 0.55) * lengthScaleIn);
+        const rEnd = (baseRadius + radialOffset) + maxOuterReach * lengthScaleOut;
+        const cos = Math.cos(angle), sin = Math.sin(angle);
+        ctx.lineWidth = Math.max(0.5, (thicknessPx ?? 5) * (0.35 + Math.random() * 0.65)) * sizeScale;
+        ctx.beginPath();
+        ctx.moveTo(cx + cos * rStart, cy + sin * rStart);
+        ctx.lineTo(cx + cos * rEnd, cy + sin * rEnd);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+function _mangaDrawLinearSpeedLines(ctx, width, height, density, color, angleDeg) {
     if (!density) return;
     const count = Math.round(density);
     const rad = ((angleDeg || 0) * Math.PI) / 180;
@@ -422,7 +532,6 @@ function _mangaDrawLinearSpeedLines(ctx, width, height, density, intensity, colo
     const sizeScale = Math.max(width, height) / _MANGA_SIZE_REFERENCE_DIM;
     ctx.save();
     ctx.strokeStyle = color || '#000000';
-    ctx.globalAlpha = Math.min(1, intensity);
     for (let i = 0; i < count; i++) {
         const offset = (Math.random() - 0.5) * diag;
         const len = diag * (0.3 + Math.random() * 0.7);
@@ -699,7 +808,7 @@ async function mangaHalftoneOpen() {
             ctx.drawImage(canvas, 0, 0);
         } else if (region) {
             if (options.transparentBackground) {
-                if (previewBgMode === 'image' && backdropImg) ctx.drawImage(backdropImg, 0, 0, w, h);
+                if (previewBgMode === 'image' && backdropImg) _mangaDrawBackdropCover(ctx, backdropImg, w, h);
                 else if (previewBgMode === 'white') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); }
                 else _mangaDrawCheckerboard(ctx, w, h);
                 const canvas = _mangaGenerateHalftonePatternCanvas(w, h, options);
@@ -832,9 +941,13 @@ function _mangaEffectsDrawToCanvas(ctx, width, height, options) {
     if (options.vignetteEnabled) _mangaDrawVignette(ctx, width, height, options.vignetteAmount, options.vignetteColor);
     if (options.screentoneEnabled) _mangaDrawScreentoneTexture(ctx, width, height, options.screentoneOpacity, options.screentoneGrainSize);
     if (options.speedLineType === 'radial') {
-        _mangaDrawRadialSpeedLines(ctx, width, height, options.speedLineDensity, options.speedLineIntensity, options.speedLineColor, options.speedLineCenterXPercent, options.speedLineCenterYPercent);
+        _mangaDrawRadialSpeedLines(ctx, width, height, options.speedLineDensity, options.speedLineColor, options.speedLineCenterXPercent, options.speedLineCenterYPercent, options.speedLineLengthPercent, options.speedLineThickness);
+    } else if (options.speedLineType === 'uni') {
+        _mangaDrawUniFlash(ctx, width, height, options.speedLineDensity, options.speedLineColor, options.speedLineCenterXPercent, options.speedLineCenterYPercent, options.speedLineLengthPercent, options.speedLineThickness, options.speedLineOuterLengthPercent);
+    } else if (options.speedLineType === 'uni_ring') {
+        _mangaDrawUniRing(ctx, width, height, options.speedLineDensity, options.speedLineColor, options.speedLineCenterXPercent, options.speedLineCenterYPercent, options.speedLineLengthPercent, options.speedLineThickness, options.speedLineOuterLengthPercent);
     } else if (options.speedLineType === 'linear') {
-        _mangaDrawLinearSpeedLines(ctx, width, height, options.speedLineDensity, options.speedLineIntensity, options.speedLineColor, options.speedLineAngle);
+        _mangaDrawLinearSpeedLines(ctx, width, height, options.speedLineDensity, options.speedLineColor, options.speedLineAngle);
     }
 }
 
@@ -848,6 +961,8 @@ async function mangaEffectsOpen() {
         alert(t('layout.msgSelectPanelForImage'));
         return;
     }
+    // プレビュー背景ガイド用の画像（スケール確認用、生成結果には含めない）。ハーフトーンと同じ探索順。
+    const backdropImg = await _mangaGetRegionBackdropImage(region);
 
     const overlay = document.createElement('div');
     overlay.className = 'tsm-overlay';
@@ -864,13 +979,7 @@ async function mangaEffectsOpen() {
             <span style="font-size:12px; white-space:nowrap;"><span>${t('layout.maskTargetLabel')}</span> <span id="me-target-label" style="color:var(--text-secondary);">${_mangaTargetRegionLabel(region)}</span></span>
 
             <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start;">
-                <div style="display:flex; align-items:center; gap:4px;">
-                    <label style="font-size:12px; white-space:nowrap;">${t('layout.mangaOpacity')}</label>
-                    <input type="range" id="me-opacity" min="0.05" max="1" step="0.05" value="1" style="width:70px;" />
-                    <span id="me-opacity-val" style="font-size:11px; min-width:32px;">100%</span>
-                </div>
-
-                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; border-left:1px solid var(--border-color); padding-left:10px;">
+                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
                     <label style="font-size:12px; display:flex; align-items:center; gap:3px; white-space:nowrap;">
                         <input type="checkbox" id="me-vignette-enable" /><span>${t('layout.mangaVignette')}</span>
                     </label>
@@ -894,14 +1003,22 @@ async function mangaEffectsOpen() {
                     <select id="me-speedline-type" style="font-size:12px;">
                         <option value="none">${t('layout.mangaSpeedLineNone')}</option>
                         <option value="radial">${t('layout.mangaSpeedLineRadial')}</option>
+                        <option value="uni">${t('layout.mangaSpeedLineUni')}</option>
+                        <option value="uni_ring">${t('layout.mangaSpeedLineUniRing')}</option>
                         <option value="linear">${t('layout.mangaSpeedLineLinear')}</option>
                     </select>
                     <label style="font-size:11px; white-space:nowrap;">${t('layout.mangaSpeedLineDensity')}</label>
-                    <input type="range" id="me-speedline-density" min="4" max="120" step="1" value="40" style="width:55px;" />
-                    <label style="font-size:11px; white-space:nowrap;">${t('layout.mangaSpeedLineIntensity')}</label>
-                    <input type="range" id="me-speedline-intensity" min="0.1" max="1" step="0.05" value="0.7" style="width:55px;" />
+                    <input type="range" id="me-speedline-density" min="1" max="100" step="1" value="40" style="width:55px;" />
                     <input type="color" id="me-speedline-color" value="#000000" />
-                    <span id="me-speedline-center-row" style="display:flex; align-items:center; gap:4px;">
+                    <span id="me-speedline-center-row" style="display:flex; flex-wrap:wrap; align-items:center; gap:4px;">
+                        <label style="font-size:11px; white-space:nowrap;">${t('layout.mangaSpeedLineLength')}</label>
+                        <input type="range" id="me-speedline-length" min="0" max="100" step="1" value="65" style="width:50px;" />
+                        <label style="font-size:11px; white-space:nowrap;">${t('layout.mangaSpeedLineThickness')}</label>
+                        <input type="range" id="me-speedline-thickness" min="0.5" max="60" step="0.5" value="5" style="width:50px;" />
+                        <span id="me-speedline-outerlen-row" style="display:none; align-items:center; gap:4px;">
+                            <label style="font-size:11px; white-space:nowrap;">${t('layout.mangaSpeedLineOuterLength')}</label>
+                            <input type="range" id="me-speedline-outerlen" min="0" max="100" step="1" value="85" style="width:50px;" />
+                        </span>
                         <label style="font-size:11px; white-space:nowrap;">${t('layout.mangaSpeedLineCenterX')}</label>
                         <input type="range" id="me-speedline-centerx" min="0" max="100" step="1" value="50" style="width:45px;" />
                         <label style="font-size:11px; white-space:nowrap;">${t('layout.mangaSpeedLineCenterY')}</label>
@@ -914,6 +1031,11 @@ async function mangaEffectsOpen() {
                 </div>
             </div>
 
+            <div class="seg-group" id="me-preview-bg-group" style="align-self:flex-start; flex-shrink:0;">
+                <button type="button" class="seg-btn" id="me-preview-bg-image-btn" style="display:none;">${t('layout.mangaPreviewBgImage')}</button>
+                <button type="button" class="seg-btn" id="me-preview-bg-default-btn">${t('layout.mangaPreviewBgDefault')}</button>
+                <button type="button" class="seg-btn" id="me-preview-bg-white-btn">${t('common.white')}</button>
+            </div>
             <div style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; background:#1a1a1a; border-radius:4px;">
                 <canvas id="me-preview-canvas" style="max-width:100%; max-height:100%;"></canvas>
             </div>
@@ -929,6 +1051,8 @@ async function mangaEffectsOpen() {
 
     const $ = id => dialog.querySelector('#' + id);
     const previewCanvas = $('me-preview-canvas');
+    // 'image'（選択画像/コマ内の既存画像を背景に）| 'default'（チェッカーボード）| 'white'（強制白）
+    let previewBgMode = backdropImg ? 'image' : 'default';
 
     let rafId = null;
     function scheduleRender() {
@@ -937,7 +1061,6 @@ async function mangaEffectsOpen() {
     }
     function readOptions() {
         return {
-            opacity: parseFloat($('me-opacity').value),
             vignetteEnabled: $('me-vignette-enable').checked,
             vignetteAmount: parseFloat($('me-vignette-amount').value),
             vignetteColor: $('me-vignette-color').value,
@@ -946,7 +1069,9 @@ async function mangaEffectsOpen() {
             screentoneGrainSize: parseFloat($('me-screentone-grain').value),
             speedLineType: $('me-speedline-type').value,
             speedLineDensity: parseFloat($('me-speedline-density').value),
-            speedLineIntensity: parseFloat($('me-speedline-intensity').value),
+            speedLineLengthPercent: parseFloat($('me-speedline-length').value),
+            speedLineThickness: parseFloat($('me-speedline-thickness').value),
+            speedLineOuterLengthPercent: parseFloat($('me-speedline-outerlen').value),
             speedLineColor: $('me-speedline-color').value,
             speedLineCenterXPercent: parseFloat($('me-speedline-centerx').value),
             speedLineCenterYPercent: parseFloat($('me-speedline-centery').value),
@@ -955,8 +1080,16 @@ async function mangaEffectsOpen() {
     }
     function updateSpeedLineParamVisibility() {
         const type = $('me-speedline-type').value;
-        $('me-speedline-center-row').style.display = type === 'radial' ? 'flex' : 'none';
+        const radialLike = type === 'radial' || type === 'uni' || type === 'uni_ring';
+        $('me-speedline-center-row').style.display = radialLike ? 'flex' : 'none';
+        $('me-speedline-outerlen-row').style.display = (type === 'uni' || type === 'uni_ring') ? 'flex' : 'none';
         $('me-speedline-angle-row').style.display = type === 'linear' ? 'flex' : 'none';
+    }
+    function updatePreviewBgButtons() {
+        $('me-preview-bg-image-btn').style.display = backdropImg ? '' : 'none';
+        $('me-preview-bg-image-btn').classList.toggle('active', previewBgMode === 'image');
+        $('me-preview-bg-default-btn').classList.toggle('active', previewBgMode === 'default');
+        $('me-preview-bg-white-btn').classList.toggle('active', previewBgMode === 'white');
     }
     function renderPreview() {
         const sz = _mangaCanvasSizeForRegion(region, _MANGA_PREVIEW_MAX_DIM, 150);
@@ -964,15 +1097,17 @@ async function mangaEffectsOpen() {
         previewCanvas.height = sz.height;
         const ctx = previewCanvas.getContext('2d');
         ctx.clearRect(0, 0, sz.width, sz.height);
-        _mangaDrawCheckerboard(ctx, sz.width, sz.height);
+        if (previewBgMode === 'image' && backdropImg) _mangaDrawBackdropCover(ctx, backdropImg, sz.width, sz.height);
+        else if (previewBgMode === 'white') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, sz.width, sz.height); }
+        else _mangaDrawCheckerboard(ctx, sz.width, sz.height);
         _mangaEffectsDrawToCanvas(ctx, sz.width, sz.height, readOptions());
     }
 
     const inputIds = [
-        'me-opacity',
         'me-vignette-enable', 'me-vignette-amount', 'me-vignette-color',
         'me-screentone-enable', 'me-screentone-opacity', 'me-screentone-grain',
-        'me-speedline-type', 'me-speedline-density', 'me-speedline-intensity', 'me-speedline-color',
+        'me-speedline-type', 'me-speedline-density', 'me-speedline-color',
+        'me-speedline-length', 'me-speedline-thickness', 'me-speedline-outerlen',
         'me-speedline-centerx', 'me-speedline-centery', 'me-speedline-angle',
     ];
     inputIds.forEach(id => {
@@ -981,10 +1116,24 @@ async function mangaEffectsOpen() {
         el.addEventListener(evt, () => {
             const valEl = $(id + '-val');
             if (valEl) valEl.textContent = el.value;
-            if (id === 'me-opacity') valEl && (valEl.textContent = Math.round(el.value * 100) + '%');
             if (id === 'me-speedline-type') updateSpeedLineParamVisibility();
             scheduleRender();
         });
+    });
+    $('me-preview-bg-image-btn').addEventListener('click', () => {
+        previewBgMode = 'image';
+        updatePreviewBgButtons();
+        scheduleRender();
+    });
+    $('me-preview-bg-default-btn').addEventListener('click', () => {
+        previewBgMode = 'default';
+        updatePreviewBgButtons();
+        scheduleRender();
+    });
+    $('me-preview-bg-white-btn').addEventListener('click', () => {
+        previewBgMode = 'white';
+        updatePreviewBgButtons();
+        scheduleRender();
     });
 
     function close() {
@@ -1004,9 +1153,8 @@ async function mangaEffectsOpen() {
             canvas.width = sz.width;
             canvas.height = sz.height;
             const ctx = canvas.getContext('2d');
-            const options = readOptions();
-            _mangaEffectsDrawToCanvas(ctx, sz.width, sz.height, options);
-            await _mangaInsertGeneratedToRegion(canvas, region, { opacity: options.opacity });
+            _mangaEffectsDrawToCanvas(ctx, sz.width, sz.height, readOptions());
+            await _mangaInsertGeneratedToRegion(canvas, region, {});
             close();
         } catch (e) {
             statusEl.textContent = '';
@@ -1016,5 +1164,6 @@ async function mangaEffectsOpen() {
     });
 
     updateSpeedLineParamVisibility();
+    updatePreviewBgButtons();
     renderPreview();
 }

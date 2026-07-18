@@ -789,23 +789,44 @@ function initImageManipulation(svgEl, balloonSvgEl) {
             const fixedRight = initX + initW;
             const fixedBottom = initY + initH;
 
-            if (imgResizeDir === 'se') {
-                nw = Math.max(MIN, initW + ldx); nh = Math.max(MIN, initH + ldy);
-            } else if (imgResizeDir === 'sw') {
-                nw = Math.max(MIN, initW - ldx); nx = fixedRight - nw; nh = Math.max(MIN, initH + ldy);
-            } else if (imgResizeDir === 'ne') {
-                nw = Math.max(MIN, initW + ldx); nh = Math.max(MIN, initH - ldy); ny = fixedBottom - nh;
-            } else if (imgResizeDir === 'nw') {
-                nw = Math.max(MIN, initW - ldx); nx = fixedRight - nw;
-                nh = Math.max(MIN, initH - ldy); ny = fixedBottom - nh;
-            } else if (imgResizeDir === 'e') {
-                nw = Math.max(MIN, initW + ldx);
-            } else if (imgResizeDir === 'w') {
-                nw = Math.max(MIN, initW - ldx); nx = fixedRight - nw;
-            } else if (imgResizeDir === 's') {
-                nh = Math.max(MIN, initH + ldy);
-            } else if (imgResizeDir === 'n') {
-                nh = Math.max(MIN, initH - ldy); ny = fixedBottom - nh;
+            if (e.altKey) {
+                // Alt押下中: 縦横比の固定を解除して自由変形する。
+                // preserveAspectRatio未指定のSVGデフォルト（meet）だと枠を歪めても画像の
+                // 中身は縦横比を保ったままになるため、'none'を設定して枠に合わせて伸縮させる。
+                selectedImage.setAttribute('preserveAspectRatio', 'none');
+                if (imgResizeDir === 'se') {
+                    nw = Math.max(MIN, initW + ldx); nh = Math.max(MIN, initH + ldy);
+                } else if (imgResizeDir === 'sw') {
+                    nw = Math.max(MIN, initW - ldx); nx = fixedRight - nw; nh = Math.max(MIN, initH + ldy);
+                } else if (imgResizeDir === 'ne') {
+                    nw = Math.max(MIN, initW + ldx); nh = Math.max(MIN, initH - ldy); ny = fixedBottom - nh;
+                } else if (imgResizeDir === 'nw') {
+                    nw = Math.max(MIN, initW - ldx); nx = fixedRight - nw;
+                    nh = Math.max(MIN, initH - ldy); ny = fixedBottom - nh;
+                } else if (imgResizeDir === 'e') {
+                    nw = Math.max(MIN, initW + ldx);
+                } else if (imgResizeDir === 'w') {
+                    nw = Math.max(MIN, initW - ldx); nx = fixedRight - nw;
+                } else if (imgResizeDir === 's') {
+                    nh = Math.max(MIN, initH + ldy);
+                } else if (imgResizeDir === 'n') {
+                    nh = Math.max(MIN, initH - ldy); ny = fixedBottom - nh;
+                }
+            } else {
+                // 通常ドラッグ: 枠の縦横比を固定してリサイズする。
+                // 角ハンドルは伸び率の大きい方の軸に追従、辺ハンドルはその軸の伸び率で
+                // 両軸を等倍スケールし、反対側の辺/角を固定点にする（辺ハンドルの
+                // 直交方向は中央固定）。
+                const dirW = imgResizeDir.includes('w') ? -1 : (imgResizeDir.includes('e') ? 1 : 0);
+                const dirH = imgResizeDir.includes('n') ? -1 : (imgResizeDir.includes('s') ? 1 : 0);
+                const sW = dirW ? (initW + dirW * ldx) / initW : -Infinity;
+                const sH = dirH ? (initH + dirH * ldy) / initH : -Infinity;
+                let s = Math.max(sW, sH);
+                s = Math.max(s, MIN / initW, MIN / initH);
+                nw = initW * s;
+                nh = initH * s;
+                nx = dirW < 0 ? fixedRight - nw : (dirW === 0 ? initX + (initW - nw) / 2 : initX);
+                ny = dirH < 0 ? fixedBottom - nh : (dirH === 0 ? initY + (initH - nh) / 2 : initY);
             }
 
             if (initAngle) {
