@@ -3,7 +3,7 @@
 // 元 11-works.js（分割前）の行 1-691 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: RESERVED_GROUP_NAMES,STOCK_GROUP,TRASH_GROUP,TRASH_GROUP_LABEL,WORK_SIZE_PRESETS,_adoptOrphanPagesToStock,_assetTmplSelected,_closeWorkCreateDialog,_getOrBuildPageThumb,_initWorkCreateDialog,_initWorkMgr,_openWorkCreateDialog,_renderGroupList,_scalePointsStr,_scaleSvgContentByWrap,_scaleSvgElementTree,_workCreate,_workDlgApplyPreset,_workDlgGetPreset,_workDlgRebuildPresetSelect,_workListTab,_workMeta,_workSelected,_workSetActive,_workSetListTab,_workSizePresets,_workTimestampStr,_workUpdateActiveLabel,_workUpdateOpenBtn,insertTemplatePageToWork,openWork,renderAssetTemplateGrid,renderWorkList
+// 主なトップレベル定義: RESERVED_GROUP_NAMES,STOCK_GROUP,TRASH_GROUP,TRASH_GROUP_LABEL,WORK_SIZE_PRESETS,_BACKUP_DB_STORES,_BACKUP_FORMAT,_BACKUP_LS_KEYS,_adoptOrphanPagesToStock,_assetTmplSelected,_closeWorkCreateDialog,_getOrBuildPageThumb,_initWorkCreateDialog,_initWorkMgr,_openWorkCreateDialog,_renderGroupList,_scalePointsStr,_scaleSvgContentByWrap,_scaleSvgElementTree,_workBackupExport,_workBackupImport,_workCreate,_workDlgApplyPreset,_workDlgGetPreset,_workDlgRebuildPresetSelect,_workListTab,_workMeta,_workSelected,_workSetActive,_workSetListTab,_workSizePresets,_workTimestampStr,_workUpdateActiveLabel,_workUpdateOpenBtn,insertTemplatePageToWork,openWork,renderAssetTemplateGrid,renderWorkList
 // ============================================================
 
 // ==============================
@@ -235,6 +235,14 @@ function _initWorkMgr() {
         await renderOutputPageList();
     });
     document.getElementById('asset-template-insert-btn')?.addEventListener('click', () => insertTemplatePageToWork());
+
+    // プロジェクト一括バックアップ（zip）と復元
+    document.getElementById('work-backup-btn')?.addEventListener('click', _workBackupExport);
+    document.getElementById('work-restore-file')?.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (file) await _workBackupImport(file);
+    });
 
     // 作品管理サブタブは初期表示のため、作品一覧・ページ一覧とも起動時に描画する
     renderWorkList();
@@ -496,6 +504,125 @@ function _workUpdateOpenBtn() {
     // 作品削除ボタン（プロパティペイン）は作品選択時のみ有効
     const workDelBtn = document.getElementById('pagemgr-work-delete-btn');
     if (workDelBtn) workDelBtn.disabled = !isWork;
+}
+
+// ------------------------------
+// プロジェクト一括バックアップ（zip）
+// ------------------------------
+
+/** バックアップ対象のIndexedDBストア */
+const _BACKUP_DB_STORES = ['pages', 'templates', 'trash', 'settings'];
+
+/**
+ * バックアップ対象のlocalStorageキー。
+ * ComfyUIと同一オリジン（同一ポート）でlocalStorageを共有しているため、
+ * 全キーのダンプではなく本アプリで使用しているキーのみを明示的に列挙する。
+ */
+const _BACKUP_LS_KEYS = [
+    // 作品・グループ・テンプレートグループ
+    'work_meta', 'work_size_presets', 'active_work', 'page_groups', 'template_groups',
+    // 表示・出力設定
+    'layout_preview_size', 'output_sort_criterion', 'ccc_ui_lang', 'ccc_export_meta', 'ccc_export_dpi',
+    // 連携設定
+    'eagle_settings', 'ccc_i2i_settings', 'cccPixiFxSettings',
+    // 脚本タブ
+    'cccScriptCurrent', 'cccScriptWorks',
+    // フォント管理
+    'fontmgr_tags', 'fontmgr_favorites', 'fontmgr_prefs', 'fontmgr_text_styles',
+    'fontmgr_style_preview_bg', 'fontmgr_text_presets', 'fontmgr_asset_thumb_bg',
+    // テンプレートウィザード
+    'tmplwiz_grid_settings',
+];
+
+/** バックアップzip内マニフェスト(backup.json)のフォーマット識別子 */
+const _BACKUP_FORMAT = 'comfyui-comic-creator-backup';
+
+/** 全IndexedDBストアと設定localStorageを1つのzipへ書き出す */
+async function _workBackupExport() {
+    if (typeof JSZip === 'undefined') { alert(t('page.msgJszipLoadFailed')); return; }
+    const btn = document.getElementById('work-backup-btn');
+    if (btn) btn.disabled = true;
+    try {
+        const zip = new JSZip();
+        const counts = {};
+        for (const store of _BACKUP_DB_STORES) {
+            const records = await dbGetAll(store);
+            counts[store] = records.length;
+            zip.file(`db/${store}.json`, JSON.stringify(records));
+        }
+
+        const ls = {};
+        _BACKUP_LS_KEYS.forEach(key => {
+            const value = localStorage.getItem(key);
+            if (value !== null) ls[key] = value;
+        });
+        zip.file('localStorage.json', JSON.stringify(ls, null, 2));
+
+        zip.file('backup.json', JSON.stringify({
+            format: _BACKUP_FORMAT,
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            counts,
+        }, null, 2));
+
+        const blob = await zip.generateAsync({
+            type: 'blob',
+            compression: 'DEFLATE',
+            compressionOptions: { level: 6 },
+        });
+        await _saveBlob(blob, `ccc_backup_${_workTimestampStr()}.zip`, 'application/zip', '.zip', t('page.backupFileDesc'));
+    } catch (e) {
+        console.error('[Backup] エクスポート失敗:', e);
+        alert(t('page.msgBackupFailed', e.message));
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+/**
+ * バックアップzipからデータを復元する。
+ * 同名キーのレコード・設定は上書き、zipに含まれない既存データはそのまま残す（マージ復元）。
+ * 復元後は全タブの状態を作り直すためページをリロードする。
+ */
+async function _workBackupImport(file) {
+    if (typeof JSZip === 'undefined') { alert(t('page.msgJszipLoadFailed')); return; }
+    try {
+        const zip = await JSZip.loadAsync(file);
+        const manifestFile = zip.file('backup.json');
+        if (!manifestFile) { alert(t('page.msgInvalidBackup')); return; }
+        const manifest = JSON.parse(await manifestFile.async('string'));
+        if (manifest.format !== _BACKUP_FORMAT) { alert(t('page.msgInvalidBackup')); return; }
+
+        const counts = manifest.counts || {};
+        if (!confirm(t('page.confirmRestore', counts.pages ?? 0, counts.templates ?? 0))) return;
+
+        for (const store of _BACKUP_DB_STORES) {
+            const entry = zip.file(`db/${store}.json`);
+            if (!entry) continue;
+            const records = JSON.parse(await entry.async('string'));
+            if (!Array.isArray(records)) continue;
+            const keyProp = store === 'settings' ? 'id' : 'name';
+            for (const record of records) {
+                if (record && record[keyProp] != null) await _dbPutRaw(store, record);
+            }
+        }
+
+        const lsFile = zip.file('localStorage.json');
+        if (lsFile) {
+            const ls = JSON.parse(await lsFile.async('string'));
+            Object.entries(ls).forEach(([key, value]) => {
+                if (_BACKUP_LS_KEYS.includes(key) && typeof value === 'string') {
+                    localStorage.setItem(key, value);
+                }
+            });
+        }
+
+        alert(t('page.msgRestoreDone'));
+        location.reload();
+    } catch (e) {
+        console.error('[Backup] 復元失敗:', e);
+        alert(t('page.msgRestoreFailed', e.message));
+    }
 }
 
 // ------------------------------

@@ -3,12 +3,18 @@
 // 元 main.js の行 9956-10548 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _activateOutputSubtab,_initOutputSubtabs,_outputActiveSubtab,_outputFilterGroup,_outputSelectedPage,_outputSortCriterion,_outputSubtabsInited,_pageOrder,_pageOrderInput,_showOutputPreview,_sortPageOrder,_updateExportPageRange,_updateOutputFilterBar,importImageAsPage,initOutputManager,onSwitchToOutputTab,renderOutputPageList
+// 主なトップレベル定義: _EXPORT_MAX_SIZE,_activateOutputSubtab,_applyExportDpi,_getExportBaseWorkSize,_getExportDpiValue,_getExportMetaValues,_initExportDpiControls,_initExportMetaControls,_initOutputSubtabs,_outputActiveSubtab,_outputFilterGroup,_outputSelectedPage,_outputSortCriterion,_outputSubtabsInited,_pageOrder,_pageOrderInput,_showOutputPreview,_sortPageOrder,_updateExportPageRange,_updateOutputFilterBar,importImageAsPage,initOutputManager,onSwitchToOutputTab,renderOutputPageList
 // ============================================================
 
 // ==============================
 // 出力管理
 // ==============================
+
+/**
+ * 出力px値の上限。300dpiのA4(3508px)やB4(5008px)を許容するため8000。
+ * これを超える指定は縦横比を維持して縮小される。
+ */
+const _EXPORT_MAX_SIZE = 8000;
 
 function initOutputManager() {
     const exportBtn = document.getElementById('export-btn');
@@ -29,7 +35,7 @@ function initOutputManager() {
     const aspectCheckbox = document.getElementById('maintain-aspect');
 
     if (widthInput && heightInput) {
-        const MAX_SIZE = 3000;
+        const MAX_SIZE = _EXPORT_MAX_SIZE;
 
         const handleInput = (targetInput, syncInput, isWidth) => {
             let valStr = targetInput.value.replace(/[０-９]/g, (s) => {
@@ -121,6 +127,138 @@ function initOutputManager() {
             importFile.value = '';
         });
     }
+
+    // 出力メタデータ入力（全形式共通）
+    _initExportMetaControls();
+
+    // 解像度(dpi)から出力px値を自動計算
+    _initExportDpiControls();
+}
+
+// ==============================
+// 解像度(dpi)指定による出力サイズ自動計算
+// ==============================
+
+const _EXPORT_DPI_LS_KEY = 'ccc_export_dpi';
+
+/** 解像度セレクトの現在値(dpi)を返す。「手動」選択時は null */
+function _getExportDpiValue() {
+    const sel = document.getElementById('export-dpi');
+    const dpi = parseInt(sel?.value, 10);
+    return Number.isFinite(dpi) && dpi > 0 ? dpi : null;
+}
+
+/**
+ * 出力サイズ計算の基準となる作品サイズ(mm)を解決する。
+ * 作品サイズはSVG座標単位（mm×100相当）で保持されているため100で割ってmmへ換算する。
+ * 優先順: ①選択中ページの所属作品 ②出力フィルタ中の作品 ③アクティブ作品
+ */
+function _getExportBaseWorkSize() {
+    const candidates = [];
+    if (_outputSelectedPage) candidates.push(_pageMgrGroups.groupOf(_outputSelectedPage));
+    if (_outputFilterGroup) candidates.push(_outputFilterGroup);
+    if (state.activeWork) candidates.push(state.activeWork.name);
+    for (const name of candidates) {
+        const meta = name ? _workMeta.get(name) : null;
+        if (meta && meta.width > 0 && meta.height > 0) {
+            return { name, widthMm: meta.width / 100, heightMm: meta.height / 100 };
+        }
+    }
+    return null;
+}
+
+/**
+ * 選択中の解像度から幅・高さ(px)を自動設定する。
+ * @param {boolean} silent - true時は基準作品なし・上限縮小のアラートを出さない（起動時・ページ選択時用）
+ */
+function _applyExportDpi(silent = false) {
+    const dpi = _getExportDpiValue();
+    if (!dpi) return;
+    const base = _getExportBaseWorkSize();
+    if (!base) {
+        if (!silent) {
+            alert(t('page.msgDpiNoWorkSize'));
+            const sel = document.getElementById('export-dpi');
+            if (sel) sel.value = '';
+            localStorage.setItem(_EXPORT_DPI_LS_KEY, '');
+        }
+        return;
+    }
+    let w = Math.round(base.widthMm * dpi / 25.4);
+    let h = Math.round(base.heightMm * dpi / 25.4);
+    if (w > _EXPORT_MAX_SIZE || h > _EXPORT_MAX_SIZE) {
+        const scale = Math.min(_EXPORT_MAX_SIZE / w, _EXPORT_MAX_SIZE / h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+        if (!silent) alert(t('page.msgDpiClamped', _EXPORT_MAX_SIZE, w, h));
+    }
+    state.aspectRatio = w / h;
+    const wInput = document.getElementById('export-width');
+    const hInput = document.getElementById('export-height');
+    if (wInput) wInput.value = w;
+    if (hInput) hInput.value = h;
+}
+
+/** 解像度セレクトの初期化: 前回値の復元・変更時の自動計算・手動編集時の解除 */
+function _initExportDpiControls() {
+    const sel = document.getElementById('export-dpi');
+    if (!sel) return;
+
+    const saved = localStorage.getItem(_EXPORT_DPI_LS_KEY);
+    if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved;
+
+    sel.addEventListener('change', () => {
+        localStorage.setItem(_EXPORT_DPI_LS_KEY, sel.value);
+        _applyExportDpi();
+    });
+
+    // 幅・高さを手動編集したら解像度選択を「手動」へ戻す
+    // （_applyExportDpiによるプログラム的代入ではinputイベントは発火しない）
+    ['export-width', 'export-height'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', () => {
+            if (sel.value !== '') {
+                sel.value = '';
+                localStorage.setItem(_EXPORT_DPI_LS_KEY, '');
+            }
+        });
+    });
+
+    // 前回の解像度指定を起動時に適用（作品が特定できない場合は静かにスキップ）
+    _applyExportDpi(true);
+}
+
+// ==============================
+// 出力メタデータ入力（出力サブタブ）
+// ==============================
+
+const _EXPORT_META_LS_KEY = 'ccc_export_meta';
+const _EXPORT_META_FIELDS = ['title', 'author', 'subject', 'keywords'];
+
+/** 出力メタデータ入力欄の現在値を取得する（各値はtrim済み。PDF/EPUB/画像の各出力処理から参照される） */
+function _getExportMetaValues() {
+    const values = {};
+    _EXPORT_META_FIELDS.forEach(field => {
+        const input = document.getElementById(`export-meta-${field}`);
+        values[field] = (input?.value || '').trim();
+    });
+    return values;
+}
+
+/** 出力メタデータ入力行の初期化: 前回値の復元と入力の永続化 */
+function _initExportMetaControls() {
+    let saved = {};
+    // 旧キー(ccc_pdf_meta: PDF専用だった頃の保存値)からも引き継ぐ
+    try { saved = JSON.parse(localStorage.getItem(_EXPORT_META_LS_KEY) || localStorage.getItem('ccc_pdf_meta') || '{}'); }
+    catch { /* 破損時は空で開始 */ }
+
+    _EXPORT_META_FIELDS.forEach(field => {
+        const input = document.getElementById(`export-meta-${field}`);
+        if (!input) return;
+        if (typeof saved[field] === 'string') input.value = saved[field];
+        input.addEventListener('input', () => {
+            localStorage.setItem(_EXPORT_META_LS_KEY, JSON.stringify(_getExportMetaValues()));
+        });
+    });
 }
 
 // ==============================
@@ -407,16 +545,21 @@ async function _showOutputPreview(page) {
     // アスペクト比をセット
     if (page.width && page.height) {
         state.aspectRatio = page.width / page.height;
-        const MAX_SIZE = 3000;
-        let w = page.width, h = page.height;
-        if (w > MAX_SIZE || h > MAX_SIZE) {
-            if (w > h) { w = MAX_SIZE; h = Math.round(w / state.aspectRatio); }
-            else       { h = MAX_SIZE; w = Math.round(h * state.aspectRatio); }
+        if (_getExportDpiValue()) {
+            // 解像度指定中は選択ページの所属作品サイズから再計算
+            _applyExportDpi(true);
+        } else {
+            const MAX_SIZE = _EXPORT_MAX_SIZE;
+            let w = page.width, h = page.height;
+            if (w > MAX_SIZE || h > MAX_SIZE) {
+                if (w > h) { w = MAX_SIZE; h = Math.round(w / state.aspectRatio); }
+                else       { h = MAX_SIZE; w = Math.round(h * state.aspectRatio); }
+            }
+            const wInput = document.getElementById('export-width');
+            const hInput = document.getElementById('export-height');
+            if (wInput) wInput.value = w;
+            if (hInput) hInput.value = h;
         }
-        const wInput = document.getElementById('export-width');
-        const hInput = document.getElementById('export-height');
-        if (wInput) wInput.value = w;
-        if (hInput) hInput.value = h;
     }
 
     // プレビュー画像を生成

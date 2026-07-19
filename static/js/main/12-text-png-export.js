@@ -399,9 +399,8 @@ async function handleExport() {
     const format = document.getElementById('export-format').value;
     let targetWidth = parseInt(document.getElementById('export-width').value, 10) || 800;
     let targetHeight = parseInt(document.getElementById('export-height').value, 10) || 600;
-    const MAX_SIZE = 3000;
-    if (targetWidth > MAX_SIZE) targetWidth = MAX_SIZE;
-    if (targetHeight > MAX_SIZE) targetHeight = MAX_SIZE;
+    if (targetWidth > _EXPORT_MAX_SIZE) targetWidth = _EXPORT_MAX_SIZE;
+    if (targetHeight > _EXPORT_MAX_SIZE) targetHeight = _EXPORT_MAX_SIZE;
 
     // ページ範囲を取得してターゲットページ配列を構築
     // 作品/グループフィルタ中はそのページ順、通常時は _pageOrder（未設定時は DB 逆順ソート）
@@ -510,9 +509,11 @@ async function handleExport() {
             const baseName = customName || page.name;
             const fileName = `${seqPrefix}${baseName}.${format}`;
 
-            const blob = await new Promise((resolve, reject) => {
+            let blob = await new Promise((resolve, reject) => {
                 canvas.toBlob(b => b ? resolve(b) : reject(new Error(t('page.errBlobGenFailed'))), mimeType, 0.95);
             });
+            // 出力サブタブのメタ情報入力を画像ファイルへ埋め込む（PNG=iTXt / JPEG=XMP / WebP=XMP）
+            blob = await _embedImageMetadata(blob, mimeType, targetWidth, targetHeight);
 
             if (zip) {
                 // zipに追加（保存はループ後にまとめて行う）

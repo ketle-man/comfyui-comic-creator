@@ -1005,6 +1005,11 @@
                 <button id="work-create-btn" class="btn" data-i18n="page.workCreate" data-i18n-title="page.workCreateTitle" title="作品名とサイズを設定して新規作品を作成します">新規作成</button>
                 <button id="work-open-btn" class="btn secondary" disabled data-i18n="page.workOpen" data-i18n-title="page.workOpenTitle" title="一覧で選択した作品をレイアウトに展開します">開く</button>
                 <button id="work-export-btn" class="btn secondary" disabled data-i18n="page.subtabExport" data-i18n-title="page.workExportTitle" title="選択した作品/グループのページを出力サブタブで表示します">出力</button>
+                <button id="work-backup-btn" class="btn secondary" data-i18n="page.backupBtn" data-i18n-title="page.backupBtnTitle" title="全作品・ページ・テンプレート・設定を1つのzipファイルへ一括保存します">バックアップ</button>
+                <label class="btn secondary" data-i18n-title="page.restoreBtnTitle" title="バックアップzipからデータを復元します（同名のデータは上書き、それ以外は保持）">
+                  <span data-i18n="page.restoreBtn">復元</span>
+                  <input type="file" id="work-restore-file" accept=".zip,application/zip" class="hidden" />
+                </label>
                 <span id="work-active-label" style="margin-left:auto; font-size:12px; color:var(--text-secondary);"></span>
               </div>
               <div style="display:flex; gap:0; flex:1; overflow:hidden; min-height:0;">
@@ -1155,6 +1160,19 @@
                   </select>
                 </div>
                 <div class="control-group">
+                  <label for="export-dpi" data-i18n="page.dpiLabel">解像度:</label>
+                  <select id="export-dpi" data-i18n-title="page.dpiTitle" title="作品サイズ（mm）と解像度から出力px値を自動計算します。「手動」で従来どおり直接入力できます。">
+                    <option value="" data-i18n="page.dpiManual">手動</option>
+                    <option value="72">72dpi</option>
+                    <option value="96">96dpi</option>
+                    <option value="150">150dpi</option>
+                    <option value="200">200dpi</option>
+                    <option value="300">300dpi</option>
+                    <option value="350">350dpi</option>
+                    <option value="600">600dpi</option>
+                  </select>
+                </div>
+                <div class="control-group">
                   <label for="export-width" data-i18n="page.widthPxLabel">幅(px):</label>
                   <input type="text" id="export-width" value="800" />
                 </div>
@@ -1188,6 +1206,14 @@
                 <div class="control-group checkbox">
                   <input type="checkbox" id="export-zip" />
                   <label for="export-zip" data-i18n="page.zipSave" data-i18n-title="page.zipSaveTitle" title="全ページを1つのzipファイルにまとめて保存します（画像形式のみ）">zip保存</label>
+                </div>
+                <!-- 出力メタデータ（全形式共通: PDF・EPUB・PNG・JPEG・WebP） -->
+                <div id="export-meta-controls" style="display:flex; flex-basis:100%; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <label style="font-size:12px; color:var(--text-secondary);" data-i18n="page.exportMetaLabel" data-i18n-title="page.exportMetaTitleAttr" title="出力ファイルのメタデータとして埋め込まれます（PDF・EPUB・PNG・JPEG・WebP）。空欄の項目は設定されません。">メタ情報:</label>
+                  <input type="text" id="export-meta-title" data-i18n-placeholder="page.exportMetaTitlePh" placeholder="タイトル" style="width:150px;" />
+                  <input type="text" id="export-meta-author" data-i18n-placeholder="page.exportMetaAuthorPh" placeholder="著者" style="width:110px;" />
+                  <input type="text" id="export-meta-subject" data-i18n-placeholder="page.exportMetaSubjectPh" placeholder="件名" style="width:110px;" />
+                  <input type="text" id="export-meta-keywords" data-i18n-placeholder="page.exportMetaKeywordsPh" placeholder="キーワード（カンマ区切り）" style="width:190px;" />
                 </div>
               </div>
               <!-- メインエリア（プレビュー＋右サイドパネル） -->
@@ -1717,6 +1743,7 @@
     <script src="/ccc_static/js/main/11b-page-manager-tab.js"></script>
     <script src="/ccc_static/js/main/12-text-png-export.js"></script>
     <script src="/ccc_static/js/main/13-export-pdf-epub.js"></script>
+    <script src="/ccc_static/js/main/13a-export-metadata.js"></script>
     <script src="/ccc_static/js/main/14-integrations.js"></script>
     <script src="/ccc_static/js/main/15-pixifx-bridge.js"></script>
     <script src="/ccc_static/js/main/15b-manga-tone.js"></script>
