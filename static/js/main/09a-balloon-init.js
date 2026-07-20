@@ -603,6 +603,33 @@ function initBalloonManager() {
             }
         });
     }
+
+    // ── カスタムSVG画像（アセット由来のフキダシSVG等）の配置後 fill/stroke 変更 ──
+    // フキダシ非選択時にSVG由来の inserted-image が選択されていれば、
+    // 塗り色/枠色ピッカーをそのSVGの色一括変更として適用する
+    const _svgImageColorTarget = () => {
+        if (state.selectedShapeId) return null; // フキダシ選択中は従来動作を優先
+        const el = state.selectedImageEl;
+        return (typeof _isSvgImageEl === 'function' && _isSvgImageEl(el)) ? el : null;
+    };
+    [['box-color', 'fill'], ['box-color-serif', 'fill'],
+     ['border-color', 'stroke'], ['border-color-serif', 'stroke']].forEach(([id, kind]) => {
+        const inp = document.getElementById(id);
+        if (!inp) return;
+        inp.addEventListener('input', (e) => {
+            const el = _svgImageColorTarget();
+            if (el) applySvgImageColors(el, { [kind]: e.target.value });
+        });
+        inp.addEventListener('change', async () => {
+            const el = _svgImageColorTarget();
+            if (!el) return;
+            const svgEl = el.closest('svg');
+            if (!svgEl) return;
+            const panelId = el.closest('g[data-overlay-layer]') ? '__overlay__'
+                : (el.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0');
+            await savePanelSvg(panelId, svgEl);
+        });
+    });
 }
 
 // h2タイプ専用パラメータパネルの表示切替

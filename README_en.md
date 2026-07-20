@@ -11,14 +11,14 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 ### Page / Work management
 - **Work (page group) management** — Pages are grouped into "works" that carry a width/height. Templates are automatically resized to the work's size when inserted
 - **Templates** — Create panel-layout templates either by importing an SVG or with the wizard (draw lines to split the page into panels)
-- **Export** — Export as JPEG/PNG/WebP/PDF/EPUB, including bulk export of multiple pages with sequential filenames
+- **Export** — Export as JPEG/PNG/WebP/PDF/EPUB, including bulk export of multiple pages with sequential filenames. The libraries (jsPDF/JSZip) are bundled, so every format also works offline
 - **Automatic output size via resolution** — The "Resolution" selector (72–600dpi) calculates the output pixel size from the work size (mm); manual input is still available. PDF conversion uses the selected dpi, preserving the physical page size (A4, etc.)
 - **Export metadata** — Embed title, author, subject, and keywords into every format (PDF = document properties / EPUB = Dublin Core / PNG = iTXt / JPEG & WebP = XMP)
 - **Bulk backup / restore** — Save all works, pages, templates, and settings into a single zip and restore anytime (merge mode: same names are overwritten)
 
 ### Layout tab
 - **Image placement** — Drag and drop images into panels; resize (aspect ratio locked by default, hold Alt to resize freely) and rotate with handles
-- **Speech balloons** — Place oval, rounded-rectangle, thought, and burst-shaped balloons inside panels, with 8-point resize handles
+- **Speech balloons** — Place oval, rounded-rectangle, thought, and burst-shaped balloons inside panels, with 8-point resize handles. Custom SVG balloons from assets can also have their fill/border colors changed after placement
 - **Text** — Vertical/horizontal writing, Google Fonts / system fonts, a style modal for fill, stroke, outline, and shadow
 - **Shape drawing (Draw)** — Draw rectangles, ellipses, lines, curves, polygons, chains, ropes, and My Curve directly onto an SVG layer
 - **3D pose** — Place a VRM/GLB/GLTF model inside a panel, pose it, and bake it into the image (via [comfyui-vrm-pose-editor](#optional-dependencies))
@@ -165,7 +165,8 @@ comfyui-comic-creator/
 │   │   ├── image-tab/           # Image-tab-specific tools (DrawTool/ShapeTool/FillTool/MaskTool, etc.)
 │   │   ├── i18n.js              # Multilingual dictionary (ja/en/zh) + t()
 │   │   ├── nanobanana.js        # Nanobanana (Gemini API) integration
-│   │   └── pixifx.js            # PixiJS FX integration
+│   │   ├── pixifx.js            # PixiJS FX integration
+│   │   └── vendor/              # Bundled libraries (jsPDF/JSZip, for offline use)
 │   └── css/
 ├── web/comfyui/
 │   └── ccc_menu.js             # Registers the launch button in the ComfyUI top bar

@@ -2,6 +2,43 @@
 
 ---
 
+## 2026-07-20（CDN 依存ライブラリのローカル同梱: jsPDF/JSZip をオフライン対応に）
+
+DEVLOG 2026-07-17 で「ヘルプにオフライン制限を明記」として先送りしていた、jsPDF/JSZip の CDN 依存を解消した（PLAN_backlog の次回作業）。これによりインターネット接続のないオフライン環境でも PDF/EPUB 出力・zip 保存・一括バックアップ／復元が動作する。
+
+**実装**:
+- cdnjs 配布物の `jspdf.umd.min.js`（jsPDF 2.5.1、MIT）と `jszip.min.js`（JSZip 3.10.1、MIT/GPLv3 デュアル）を `static/js/vendor/` に同梱。**cdnjs API（`https://api.cdnjs.com/libraries/<name>/<version>?fields=sri`）の SRI（SHA-512）ハッシュとローカルファイルのハッシュが一致することを検証**し、配布物そのまま（改変なし）であることを確認した。ライセンス表記は各 min.js 先頭のヘッダーコメントに含まれる。
+- `templates/index.html` の `<script>` 2本を cdnjs URL → `/ccc_static/js/vendor/...` に差し替え。静的配信は既存の `app.router.add_static("/ccc_static", STATIC_DIR)`（`py/ccc.py`）がサブフォルダごと配信するためサーバー側の変更は不要。
+- `static/js/vendor/README.md` にバージョン・ライセンス・取得元 URL・SRI 検証手順（更新時の手順として）を記録。`.gitignore` に vendor を除外する記述はなく、min.js はコミット対象。
+- **@imgly/background-removal（BG Remove 軽量モデル）は CDN 依存のまま残した**。バンドルJSに加えモデルデータ（数十MB）の同梱が必要でリポジトリが肥大化するため。ローカルの背景除去は BiRefNet 連携（comfyui-mask-editor-one）で既にカバーされており、対応可否は PLAN_backlog に「要判断」として整理。
+
+**検証**: リロード後にスクリプトがローカルパスから読み込まれ CDN 参照が消えていること、`window.jspdf.jsPDF` / `window.JSZip`（3.10.1）のロード、jsPDF での PDF 生成（正常な dataURI 出力）、JSZip での zip 生成→読み戻し（内容一致）、コンソールエラーなしを確認。
+
+ヘルプ「ページ — 出力 > オフライン環境について」（3言語）を「全出力形式がオフラインで利用可。Webフォント未キャッシュ時は代替フォント描画の可能性あり。BG Remove（軽量モデル）と Nanobanana は要ネット接続」に書き換え、README 3言語（出力の機能記述＋アーキテクチャのディレクトリ構成に vendor/ 追記）を更新した。
+
+**How to apply（CDNライブラリの同梱）**: min.js を `static/js/vendor/` に置いて `<script>` の src を差し替えるだけでよいが、取得物が改変されていないことを cdnjs API の SRI ハッシュ照合で必ず検証し、vendor/README.md に出所・ライセンス・更新手順を残すこと。動的 import 型（esm.sh の @imgly 等）はモデルデータ等の外部フェッチを伴う場合があり、src 差し替えだけでは完結しない点に注意。
+
+---
+
+## 2026-07-20（カスタムフキダシSVGの配置後 fill・stroke 変更）
+
+ヘルプ「付録: フキダシSVG仕様」に明記していた既知の制限「配置後にアプリ内でfill・strokeを変更する機能は現状未実装」を解消した（PLAN_backlog の次回作業 1）。
+
+**原因（なぜ変更できなかったか）**: アセット（`assets/speech/` 等）のSVGは `handleInsertAsset`（`02-assets.js`）経由で `<image href="data:image/svg+xml;base64,...">` として配置される。組み込みフキダシ（balloon-shape の `<g>`＋path）と違い中身がSVG要素としてDOMに存在しないため、既存の色変更UIが届かなかった。
+
+**実装**: `<image>` のまま、href内のSVGテキストを書き換えて差し替える方式（既存の画像操作・ハンドル・保存経路を全て流用できる）。
+- `static/js/main/08-panels-images.js`: `_isSvgImageEl()`（href が `data:image/svg` の inserted-image 判定）／`getSvgImageColors()`（代表色の取得）／`applySvgImageColors()`（色一括置換→base64再エンコード→href差し替え、`dataset.fillColor/strokeColor` へ記録）を追加。`renderImageHandles()` で選択時に塗り/枠ピッカー（レイアウト・セリフ両タブ）を現在色に同期。
+- `static/js/main/09a-balloon-init.js`: `initBalloonManager` 末尾で box-color / border-color 系4入力にフックを追加。`state.selectedShapeId` があればフキダシ優先（従来動作）、なければ選択中のSVG画像へ適用。input で即時反映、change で `savePanelSvg`（オーバーレイは `g[data-overlay-layer]` 判定で `__overlay__`）。
+- **色の適用ルール**（要決定だった方針）: 「明示指定のない要素にのみ適用」だと典型ファイル（各要素に fill/stroke 明示、またはCSSクラス指定）で何も変わらないため不採用。**実効値が `none` 以外の要素の fill / stroke を一括置換**とした。`none`（穴・透明）と `url()` 参照（グラデーション等）は維持。
+- **CSSクラス色指定への対応**: CorelDRAW出力（org_sp1.svg 等）は `<style>` の `.fil0/.str0` で色指定している。SVGを document に一時追加（position:fixed 画面外、同期で即削除）して `getComputedStyle` で実効 fill/stroke を解決し、CSSクラスより優先される inline style で上書きする。
+- 枠線太さ（stroke-width）の配置後変更は対象外（SVGごとにviewBox座標系が異なり、ページ単位の太さ指定と整合しないため）。ヘルプにその旨を明記。
+
+Kapture検証: org_sp1.svg をオーバーレイに挿入→選択でピッカーが実色（#fefefe/#000000）に同期→塗りピンク・枠青へ変更が即時反映→リロード後も保持、コンソールエラーなし。ヘルプ（フキダシSVG仕様の3言語）・README 3言語のフキダシ機能記述を更新した。
+
+**How to apply（`<image>` として配置されたSVGの編集）**: dataURLのSVGは「デコード→DOM操作→再エンコードしてhref差し替え」で、ラスター化せずに配置後編集ができる。CSSクラス・継承を含む実効スタイルの判定が必要な場合は、documentへの一時追加＋`getComputedStyle` で解決し、上書きは属性ではなく inline style で行う（属性はCSSクラスに負けるため）。同期処理内で追加→削除すれば描画への影響はない。
+
+---
+
 ## 2026-07-19（出力メタデータ全形式対応・プロジェクト一括バックアップ・解像度指定の出力サイズ自動計算）
 
 既存ライブラリ（jsPDF/JSZip）で追加可能な機能として調査済みだった「PDF出力のメタデータ設定」「JSZipによる一括バックアップ」の実装依頼を受け、レビューを経て「メタデータの全形式対応」「解像度指定による出力pxサイズ自動計算」まで拡張した。あわせてアプリ名表記を Eagle Comic Creator → **ComfyUI Comic Creator** に統一した（ComfyUIカスタムノード化に伴う改名。`eagle_settings` 等の機能キーは互換性のため据え置き）。

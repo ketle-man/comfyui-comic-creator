@@ -1711,8 +1711,9 @@
       </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- ローカル同梱ライブラリ（static/js/vendor/。オフラインでもPDF/EPUB出力・zip保存・バックアップが動作） -->
+    <script src="/ccc_static/js/vendor/jspdf.umd.min.js"></script>
+    <script src="/ccc_static/js/vendor/jszip.min.js"></script>
     <!-- i18n基盤: t()/getLang()/setLang()等を他の全スクリプトより前にグローバル公開する -->
     <script src="/ccc_static/js/i18n.js"></script>
     <script src="/ccc_static/js/nanobanana.js"></script>

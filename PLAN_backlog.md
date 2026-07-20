@@ -1,6 +1,6 @@
 # 作業計画バックログ
 
-更新日: 2026-07-19（v1.4.0 リリース後、BiRefNet 完了反映）
+更新日: 2026-07-20（CDN 依存ライブラリのローカル同梱 実装・検証済み反映）
 
 過去の計画書・調査・コード内 TODO を棚卸しし、未着手の作業を一元管理するためのファイル。
 着手時は該当項目の「実装メモ」を出発点にし、完了したら「完了済み」へ移動して DEVLOG.md に詳細を記録する。
@@ -9,32 +9,26 @@
 
 ## 次回作業予定（この順で着手）
 
-1. カスタムフキダシSVGの配置後 fill・stroke 変更（下記「未着手 1」）
-2. CDN 依存ライブラリのローカル同梱（下記「未着手 2」）
+1. @imgly/background-removal のローカル同梱可否の判断（下記「未着手 1」。急ぎではない）
 
 ---
 
 ## 未着手
 
-### 1. カスタムフキダシSVGの配置後 fill・stroke 変更 【次回作業・先】
+### 1. @imgly/background-removal のローカル同梱可否の判断 【要判断】
 
-- **出典**: ヘルプ「付録: フキダシSVG仕様」に「配置後にアプリ内でfill・strokeを変更する機能は現状未実装です。SVGファイル側で設定してください」と明記している既知の制限。
-- **実装メモ**: 組み込みフキダシは fill・stroke 変更に対応済みのため、カスタムSVG（`assets/speech/` 由来）のルート要素・子要素への色適用ルールを決めるのが本体。ヘルプの同項に記載した fill・stroke の規則（継承の仕組み）を踏まえ、「明示指定のない要素にのみ適用」等の方針を決めてから着手する。
-- **規模感**: 小〜中
-
-### 2. CDN 依存ライブラリのローカル同梱（オフライン対応） 【次回作業・後】
-
-- **出典**: DEVLOG 2026-07-17「ヘルプにPDF/EPUB出力のオフライン制限を明記」の How to apply（当時は「ドキュメント明記」で対応し、同梱への切替は未着手のまま）。
-- **現状の依存**（2026-07-19 時点の棚卸し）:
-  - `templates/index.html`: jsPDF 2.5.1 / JSZip 3.10.1（cdnjs）→ PDF・EPUB 出力、zip 保存、**一括バックアップ／復元**（v1.4.0 で依存箇所が増えた）
-  - `static/js/main/16-processing-edit-tabs.js` / `static/js/image-tab.js`: `@imgly/background-removal@1.5.7`（esm.sh、モデルデータは staticimgly.com）→ BG Remove（軽量モデル）
-- **実装メモ**: jsPDF/JSZip は min.js を `static/js/vendor/` に同梱して `<script>` の src を差し替えるだけで完結する（ライセンスは MIT/GPLv3 デュアル（JSZip）・MIT（jsPDF）で同梱可）。@imgly はモデルデータ（数十MB）の同梱が必要になるため、対応するか・ヘルプ明記のままにするかは別途判断。
-- **規模感**: 小（jsPDF/JSZip のみ）〜中（@imgly 含む）
+- **出典**: 「CDN 依存ライブラリのローカル同梱」（jsPDF/JSZip は 2026-07-20 同梱済み）の残件。
+- **現状**: `static/js/main/16-processing-edit-tabs.js` / `static/js/image-tab.js` が `@imgly/background-removal@1.5.7` を esm.sh から動的 import（モデルデータは staticimgly.com から取得）。BG Remove（軽量モデル）で使用。
+- **実装メモ**: 同梱するにはバンドル済みJSに加えてモデルデータ（数十MB）の同梱が必要でリポジトリが肥大化する。対応するか・ヘルプ明記のままにするかは別途判断（BiRefNet 連携（comfyui-mask-editor-one）でローカル背景除去は既にカバーされている点も考慮）。
+- **規模感**: 中
 
 ---
 
 ## 完了済み（記録）
 
+- **CDN 依存ライブラリのローカル同梱（jsPDF/JSZip）**（2026-07-20 完了・承認済み）: cdnjs 配布物の jsPDF 2.5.1 / JSZip 3.10.1 min.js を `static/js/vendor/` に同梱し（cdnjs API の SRI ハッシュ照合で無改変を検証）、`templates/index.html` の `<script>` src をローカルパスへ差し替え。オフラインでも PDF/EPUB 出力・zip 保存・一括バックアップが動作する。出所・ライセンス・更新手順は `static/js/vendor/README.md` に記録。@imgly は残件（上記「未着手 1」）。ヘルプ「オフライン環境について」3言語・README 3言語・DEVLOG（2026-07-20）更新済み。
+
+- **カスタムフキダシSVGの配置後 fill・stroke 変更**（2026-07-20 完了・承認済み）: アセット由来SVGは `<image href="data:image/svg+xml...">` として配置されるため、hrefのSVGテキストを書き換える方式で実現。適用ルールは「実効値が `none` 以外の要素の fill / stroke を一括置換（`none`＝穴・透明と `url()`＝グラデーション参照は維持）」。documentに一時追加して getComputedStyle で解決するため、CorelDRAW出力等のCSSクラス指定（`.fil0`/`.str0`）の色にも効く。実装: `static/js/main/08-panels-images.js`（`_isSvgImageEl` / `getSvgImageColors` / `applySvgImageColors` ＋ renderImageHandles でのピッカー同期）、`static/js/main/09a-balloon-init.js`（box-color / border-color 系4入力へのフック。フキダシ選択中は従来動作優先）。ヘルプ（フキダシSVG仕様の3言語）・README 3言語・DEVLOG（2026-07-20）更新済み。
 - **BiRefNet 背景除去**: comfyui-mask-editor-one カスタムノード連携で実装済み（2026-07-19 確認・完了扱い）。Image タブのマスクツールは同ノードのツール構成（SAM3 セグメンテーション・ABR ブラシ等）を利用しており、BiRefNet による背景除去もこの連携でカバーされる。`static/js/main/16-processing-edit-tabs.js:201-206` のスタブ（`_procRemoveBackgroundBiRefNet`）は旧計画の名残であり、独立実装は行わない（UI から参照されていないか確認のうえ、いずれ削除してよい）。
 - **多角形ペンツール共通化 → テンプレート作成優先実装**（`PLAN_polygon_pen_tool.md`）: 全フェーズ完了（テンプレート作成 2026-07-01 ライン分割方式 / レイアウトタブ多角形 2026-07-03 頂点クリック式）。計画書は経緯の記録として残置。
 - **既存ライブラリで追加可能な機能の調査**（2026-07 中旬のセッションで実施）: 候補だった「jsPDF による PDF メタデータ設定」「JSZip によるプロジェクト一括バックアップ」の2件は **v1.4.0（2026-07-19）で実装完了**。実装時にメタデータは全形式対応（EPUB/PNG/JPEG/WebP）へ、さらに解像度指定による出力サイズ自動計算まで拡張した。詳細は DEVLOG 2026-07-19 の項を参照。

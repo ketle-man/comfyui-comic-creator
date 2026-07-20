@@ -3,7 +3,7 @@
 // 元 main.js の行 5898-6844 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _clearObjectSelection,clearImageHandles,getBoundingBoxFromPoints,getStrokeWidthFromElement,handleInsertImageFromLocal,highlightOverlay,initDragAndDrop,initImageManipulation,initPanelsOnSvg,insertImage,insertImageFromUrl,insertImageToOverlay,renderImageHandles,selectPanel,updateImageHandlePositions,updatePanelSelectDropdown
+// 主なトップレベル定義: _clearObjectSelection,_isSvgImageEl,applySvgImageColors,clearImageHandles,getBoundingBoxFromPoints,getStrokeWidthFromElement,getSvgImageColors,handleInsertImageFromLocal,highlightOverlay,initDragAndDrop,initImageManipulation,initPanelsOnSvg,insertImage,insertImageFromUrl,insertImageToOverlay,renderImageHandles,selectPanel,updateImageHandlePositions,updatePanelSelectDropdown
 // ============================================================
 
 // ==============================
@@ -474,6 +474,89 @@ async function insertImageFromUrl(url) {
     }
 }
 
+// ---- カスタムSVG画像の配置後 fill/stroke 変更 ----
+// アセット（assets/speech 等）から挿入したSVGは <image href="data:image/svg+xml;base64,..."> として
+// 配置されるため、hrefのSVGテキストを書き換えることで配置後の色変更を実現する
+
+function _isSvgImageEl(el) {
+    return !!(el && el.classList && el.classList.contains('inserted-image') &&
+        (el.getAttribute('href') || '').startsWith('data:image/svg'));
+}
+
+function _svgTextToBase64DataUrl(text) {
+    const bytes = new TextEncoder().encode(text);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return 'data:image/svg+xml;base64,' + btoa(bin);
+}
+
+function _cssColorToHex(color) {
+    const m = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/.exec(color || '');
+    if (!m) return null;
+    return '#' + [m[1], m[2], m[3]].map(v => (+v).toString(16).padStart(2, '0')).join('');
+}
+
+const _SVG_IMAGE_SHAPE_SELECTOR = 'path, rect, circle, ellipse, polygon, polyline, line';
+
+// SVG画像のhrefをデコードし、documentに一時追加した状態で callback(svgNode) を呼ぶ。
+// CSSクラス指定（CorelDRAW出力の .fil0/.str0 等）の実効 fill/stroke を getComputedStyle で
+// 解決するにはdocumentへの接続が必要なため。同期的に追加→即削除するので描画には影響しない
+function _withResolvedSvgImage(imgEl, callback) {
+    const href = imgEl.getAttribute('href') || '';
+    if (!href.startsWith('data:image/svg')) return null;
+    let svgText;
+    try { svgText = _svgBase64ToText(href); } catch (_) { return null; }
+    const parsed = new DOMParser().parseFromString(svgText, 'image/svg+xml').querySelector('svg');
+    if (!parsed) return null;
+    const svgNode = document.importNode(parsed, true);
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-99999px;top:0;width:0;height:0;overflow:hidden;';
+    holder.appendChild(svgNode);
+    document.body.appendChild(holder);
+    try {
+        return callback(svgNode);
+    } finally {
+        holder.remove();
+    }
+}
+
+// SVG画像の代表色（最初に見つかった none 以外の実効 fill / stroke）を #rrggbb で返す
+function getSvgImageColors(imgEl) {
+    return _withResolvedSvgImage(imgEl, (svgNode) => {
+        let fill = null, stroke = null;
+        for (const el of svgNode.querySelectorAll(_SVG_IMAGE_SHAPE_SELECTOR)) {
+            const cs = getComputedStyle(el);
+            if (!fill && cs.fill && cs.fill !== 'none' && !cs.fill.startsWith('url')) fill = _cssColorToHex(cs.fill);
+            if (!stroke && cs.stroke && cs.stroke !== 'none' && !cs.stroke.startsWith('url')) stroke = _cssColorToHex(cs.stroke);
+            if (fill && stroke) break;
+        }
+        return { fill, stroke };
+    });
+}
+
+// SVG画像の fill / stroke を一括変更して href を差し替える。
+// 適用ルール: 実効値が none の要素（穴・透明部分）と url() 参照（グラデーション等）は維持し、
+// それ以外の図形要素の色を新色に置換する。inline style で上書きするためCSSクラス指定の色にも効く
+function applySvgImageColors(imgEl, { fill, stroke } = {}) {
+    const newHref = _withResolvedSvgImage(imgEl, (svgNode) => {
+        svgNode.querySelectorAll(_SVG_IMAGE_SHAPE_SELECTOR).forEach(el => {
+            const cs = getComputedStyle(el);
+            if (fill != null && cs.fill && cs.fill !== 'none' && !cs.fill.startsWith('url')) el.style.fill = fill;
+            if (stroke != null && cs.stroke && cs.stroke !== 'none' && !cs.stroke.startsWith('url')) el.style.stroke = stroke;
+        });
+        let str = new XMLSerializer().serializeToString(svgNode);
+        if (!str.includes('xmlns="http://www.w3.org/2000/svg"')) {
+            str = str.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+        return _svgTextToBase64DataUrl(str);
+    });
+    if (!newHref) return false;
+    imgEl.setAttribute('href', newHref);
+    if (fill != null) imgEl.dataset.fillColor = fill;
+    if (stroke != null) imgEl.dataset.strokeColor = stroke;
+    return true;
+}
+
 // ---- 画像ハンドルユーティリティ ----
 function clearImageHandles(svgEl) {
     const root = svgEl || document;
@@ -512,6 +595,25 @@ function _imageGetRotateHandlePos(x, y, w, h, angleDeg, offset) {
 function renderImageHandles(el, svgEl) {
     clearImageHandles(svgEl);
     el.classList.add('selected');
+
+    // SVG画像なら塗り/枠のカラーピッカーを現在色に同期（配置後の色変更UI用）
+    if (_isSvgImageEl(el)) {
+        let fill = el.dataset.fillColor || null;
+        let stroke = el.dataset.strokeColor || null;
+        if (!fill || !stroke) {
+            const c = getSvgImageColors(el) || {};
+            fill = fill || c.fill;
+            stroke = stroke || c.stroke;
+        }
+        if (fill) ['box-color', 'box-color-serif'].forEach(id => {
+            const inp = document.getElementById(id);
+            if (inp) inp.value = fill;
+        });
+        if (stroke) ['border-color', 'border-color-serif'].forEach(id => {
+            const inp = document.getElementById(id);
+            if (inp) inp.value = stroke;
+        });
+    }
 
     const x = parseFloat(el.getAttribute('x'));
     const y = parseFloat(el.getAttribute('y'));
