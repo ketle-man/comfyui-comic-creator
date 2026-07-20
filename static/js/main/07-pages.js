@@ -680,24 +680,35 @@ function buildMergedSvg(pageRecord) {
     return result;
 }
 
-// コンテンツ内の filter="url(#...)" が参照するフィルタ定義（テキストスタイルの袋文字・影等）を
-// sourceDefs から探して targetSvg の defs に取り込む（savePanelSvg / saveOverlaySvg の持ち回り用。
-// これが無いとタブ切り替え等での再構築時にフィルタ定義が失われ、袋文字・影が消える）
+// コンテンツ内の filter / fill / stroke の url(#...) が参照する定義（テキストスタイルの
+// 袋文字・影フィルタ、塗りのグラデーション・テクスチャパターン等）を sourceDefs から探して
+// targetSvg の defs に取り込む（savePanelSvg / saveOverlaySvg の持ち回り用。
+// これが無いとタブ切り替え等での再構築時に定義が失われ、袋文字・影・グラデ塗り等が消える）
 function _collectReferencedFilters(targetSvg, sourceDefs) {
     if (!targetSvg || !sourceDefs) return;
     const ns = 'http://www.w3.org/2000/svg';
     let defsEl = targetSvg.querySelector('defs');
-    targetSvg.querySelectorAll('[filter]').forEach(el => {
-        const m = /url\(["']?#([^"')]+)["']?\)/.exec(el.getAttribute('filter') || '');
-        if (!m) return;
-        if (defsEl && defsEl.querySelector(`[id="${m[1]}"]`)) return;
-        const filterDef = sourceDefs.querySelector(`filter[id="${m[1]}"]`);
-        if (!filterDef) return;
+    const importById = (id) => {
+        if (!id) return;
+        if (defsEl && defsEl.querySelector(`[id="${id}"]`)) return;
+        const def = sourceDefs.querySelector(
+            `filter[id="${id}"], linearGradient[id="${id}"], radialGradient[id="${id}"], pattern[id="${id}"]`
+        );
+        if (!def) return;
         if (!defsEl) {
             defsEl = document.createElementNS(ns, 'defs');
             targetSvg.insertBefore(defsEl, targetSvg.firstChild);
         }
-        defsEl.appendChild(document.importNode(filterDef, true));
+        defsEl.appendChild(document.importNode(def, true));
+    };
+    const urlId = (v) => {
+        const m = /url\(["']?#([^"')]+)["']?\)/.exec(v || '');
+        return m ? m[1] : null;
+    };
+    targetSvg.querySelectorAll('[filter], [fill], [stroke]').forEach(el => {
+        importById(urlId(el.getAttribute('filter')));
+        importById(urlId(el.getAttribute('fill')));
+        importById(urlId(el.getAttribute('stroke')));
     });
 }
 

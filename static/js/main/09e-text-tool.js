@@ -3,7 +3,7 @@
 // 元 09-balloons.js（分割前）の行 2355-3119 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _fontAssetBuildCard,_fontAssetBuildGroup,_fontMgrApplyStyleAttrsToTextEl,_fontMgrExtractStyleFromTextEl,_fontMgrRenderMiniPreview,_getSelectedPanelCenter,_setTextElVertical,applyPresetToSelectedText,applyStyleToSelectedText,applyTextInput,initTextTools,insertPresetPlaceholderText,insertScriptDialogueText,insertStylePlaceholderText,openTextInputDialog,renderAssetFontGrid,updateBalloonPanelSelect
+// 主なトップレベル定義: _fontAssetBuildCard,_fontAssetBuildGroup,_fontMgrApplyFillPaintToEl,_fontMgrApplyStyleAttrsToTextEl,_fontMgrExtractStyleFromTextEl,_fontMgrRenderMiniPreview,_getSelectedPanelCenter,_setTextElVertical,applyPresetToSelectedText,applyStyleToSelectedText,applyTextInput,initTextTools,insertPresetPlaceholderText,insertScriptDialogueText,insertStylePlaceholderText,openTextInputDialog,renderAssetFontGrid,updateBalloonPanelSelect
 // ============================================================
 
 // document登録リスナー参照（renderLayoutTab()経由の再初期化で積み上がらないよう保持）
@@ -443,6 +443,101 @@ async function insertScriptDialogueText() {
     await applyTextInput();
 }
 
+// 塗りペイント定義（グラデーション/テクスチャパターン）をdefsに生成してfill=url(#id)を設定する。
+// fillEnabled=false は fill="none"（塗りなし）、fillMode 未指定/solid は従来どおり単色。
+// 前回適用分の定義は dataset.styleFillId で管理して再適用時に除去する
+function _fontMgrApplyFillPaintToEl(el, svgEl, styleObj, k) {
+    const ns = 'http://www.w3.org/2000/svg';
+
+    // 前回のペイント定義を除去
+    const oldFillId = el.dataset.styleFillId;
+    if (oldFillId) {
+        svgEl.querySelector(`[id="${oldFillId}"]`)?.remove();
+        delete el.dataset.styleFillId;
+    }
+
+    if (styleObj && styleObj.fillEnabled === false) {
+        el.setAttribute('fill', 'none');
+        return;
+    }
+
+    const mode = styleObj?.fillMode || 'solid';
+    if (mode === 'gradient' && styleObj?.fillGradient?.stops?.length) {
+        const g = styleObj.fillGradient;
+        let defs = svgEl.querySelector('defs');
+        if (!defs) {
+            defs = document.createElementNS(ns, 'defs');
+            svgEl.insertBefore(defs, svgEl.firstChild);
+        }
+        const fillId = `text-fill-${Date.now()}-${Math.floor(Math.random() * 1e5)}`;
+        let grad;
+        if (g.shape === 'radial') {
+            grad = document.createElementNS(ns, 'radialGradient');
+            grad.setAttribute('cx', '0.5');
+            grad.setAttribute('cy', '0.5');
+            grad.setAttribute('r', '0.5');
+        } else {
+            grad = document.createElementNS(ns, 'linearGradient');
+            // angleDeg: 0=左→右、90=上→下。単位ボックス中心から方向ベクトルで両端を決める
+            const rad = ((g.angleDeg || 0) * Math.PI) / 180;
+            const dx = Math.cos(rad) / 2, dy = Math.sin(rad) / 2;
+            grad.setAttribute('x1', String(0.5 - dx));
+            grad.setAttribute('y1', String(0.5 - dy));
+            grad.setAttribute('x2', String(0.5 + dx));
+            grad.setAttribute('y2', String(0.5 + dy));
+        }
+        grad.setAttribute('id', fillId);
+        grad.setAttribute('gradientUnits', 'objectBoundingBox');
+        grad.setAttribute('data-ccc-style-fill', '1');
+        [...g.stops].sort((a, b) => a.pos - b.pos).forEach(s => {
+            const stop = document.createElementNS(ns, 'stop');
+            stop.setAttribute('offset', String(Math.max(0, Math.min(1, s.pos))));
+            stop.setAttribute('stop-color', s.color || '#000000');
+            grad.appendChild(stop);
+        });
+        defs.appendChild(grad);
+        el.setAttribute('fill', `url(#${fillId})`);
+        el.dataset.styleFillId = fillId;
+        return;
+    }
+    if (mode === 'texture' && styleObj?.fillTexture?.dataUrl) {
+        const tx = styleObj.fillTexture;
+        let defs = svgEl.querySelector('defs');
+        if (!defs) {
+            defs = document.createElementNS(ns, 'defs');
+            svgEl.insertBefore(defs, svgEl.firstChild);
+        }
+        const fillId = `text-fill-${Date.now()}-${Math.floor(Math.random() * 1e5)}`;
+        // タイルサイズ = 画像実寸 × (scale/100) × k（v2相対値: フォントサイズ100pxあたり）
+        const scale = (tx.scale || 100) / 100;
+        const tw = Math.max(1, (tx.w || 100) * scale * k);
+        const th = Math.max(1, (tx.h || 100) * scale * k);
+        const pattern = document.createElementNS(ns, 'pattern');
+        pattern.setAttribute('id', fillId);
+        pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+        pattern.setAttribute('width', String(tw));
+        pattern.setAttribute('height', String(th));
+        pattern.setAttribute('data-ccc-style-fill', '1');
+        // 抽出（_fontMgrExtractStyleFromTextEl）でのラウンドトリップ用に元データを持たせる
+        pattern.setAttribute('data-ccc-tex-w', String(tx.w || 100));
+        pattern.setAttribute('data-ccc-tex-h', String(tx.h || 100));
+        pattern.setAttribute('data-ccc-tex-scale', String(tx.scale || 100));
+        const img = document.createElementNS(ns, 'image');
+        img.setAttribute('href', tx.dataUrl);
+        img.setAttribute('x', '0');
+        img.setAttribute('y', '0');
+        img.setAttribute('width', String(tw));
+        img.setAttribute('height', String(th));
+        img.setAttribute('preserveAspectRatio', 'none');
+        pattern.appendChild(img);
+        defs.appendChild(pattern);
+        el.setAttribute('fill', `url(#${fillId})`);
+        el.dataset.styleFillId = fillId;
+        return;
+    }
+    el.setAttribute('fill', styleObj?.fill || '#000000');
+}
+
 // SVGテキスト要素へ塗り・線をネイティブ属性で、袋文字・影をSVGフィルタで適用する
 // （フィルタはfeMorphologyで既存の塗り+線の形状を膨張させてから合成するため、要素は1つのまま扱える）
 // スタイル値（線幅・袋文字幅・影）は「フォントサイズ100pxあたりのpx」の相対値(v2)。
@@ -451,7 +546,7 @@ async function insertScriptDialogueText() {
 function _fontMgrApplyStyleAttrsToTextEl(textEl, svgEl, styleObj) {
     const _fs = parseFloat(textEl.getAttribute('font-size'));
     const k = (isNaN(_fs) || _fs <= 0 ? 100 : _fs) / 100;
-    textEl.setAttribute('fill', styleObj?.fill || '#000000');
+    _fontMgrApplyFillPaintToEl(textEl, svgEl, styleObj, k);
 
     if (styleObj?.strokeEnabled) {
         textEl.setAttribute('stroke', styleObj.strokeColor);
@@ -553,8 +648,53 @@ function _fontMgrExtractStyleFromTextEl(textEl, svgEl) {
     const _fs = parseFloat(textEl.getAttribute('font-size'));
     const k = (isNaN(_fs) || _fs <= 0 ? 100 : _fs) / 100;
     const rel = (v) => Math.round((v / k) * 10) / 10;
+
+    // 塗り: none / url(#グラデ・パターン) / 単色 を判別して復元する
+    const fillAttr = textEl.getAttribute('fill') || '#000000';
+    let fillEnabled = true, fillMode = 'solid', fillSolid = '#000000';
+    let fillGradient = null, fillTexture = null;
+    if (fillAttr === 'none') {
+        fillEnabled = false;
+    } else {
+        const um = /url\(["']?#([^"')]+)["']?\)/.exec(fillAttr);
+        const def = um && svgEl ? svgEl.querySelector(`[id="${um[1]}"]`) : null;
+        if (def && (def.tagName === 'linearGradient' || def.tagName === 'radialGradient')) {
+            fillMode = 'gradient';
+            const stops = [...def.querySelectorAll('stop')].map(s => ({
+                pos: parseFloat(s.getAttribute('offset')) || 0,
+                color: s.getAttribute('stop-color') || '#000000',
+            }));
+            let shape = 'linear', angleDeg = 0;
+            if (def.tagName === 'radialGradient') {
+                shape = 'radial';
+            } else {
+                const x1 = parseFloat(def.getAttribute('x1') ?? 0), y1 = parseFloat(def.getAttribute('y1') ?? 0);
+                const x2 = parseFloat(def.getAttribute('x2') ?? 1), y2 = parseFloat(def.getAttribute('y2') ?? 0);
+                angleDeg = Math.round(Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI);
+                if (angleDeg < 0) angleDeg += 360;
+            }
+            fillGradient = { shape, angleDeg, stops: stops.length ? stops : [{ pos: 0, color: '#ffffff' }, { pos: 1, color: '#888888' }] };
+            fillSolid = stops[0]?.color || '#000000';
+        } else if (def && def.tagName === 'pattern') {
+            fillMode = 'texture';
+            const img = def.querySelector('image');
+            fillTexture = {
+                dataUrl: img?.getAttribute('href') || img?.getAttribute('xlink:href') || '',
+                w: parseFloat(def.getAttribute('data-ccc-tex-w')) || 100,
+                h: parseFloat(def.getAttribute('data-ccc-tex-h')) || 100,
+                scale: parseFloat(def.getAttribute('data-ccc-tex-scale')) || 100,
+            };
+        } else if (!um) {
+            fillSolid = fillAttr;
+        }
+    }
+
     const style = {
-        fill: textEl.getAttribute('fill') || '#000000',
+        fill: fillSolid,
+        fillEnabled,
+        fillMode,
+        fillGradient,
+        fillTexture,
         strokeEnabled: !!textEl.getAttribute('stroke'),
         strokeColor: textEl.getAttribute('stroke') || '#ffffff',
         strokeWidth: rel(parseFloat(textEl.getAttribute('stroke-width'))) || 4,

@@ -2,6 +2,43 @@
 
 ---
 
+## 2026-07-20（フォントタブのスタイル編集にも塗りのグラデーション・テクスチャ・塗りなしを追加）
+
+フェーズ1（テキスト塗り拡張）では、フォントタブのスタイル編集フォームは単色のみ対応のままで、拡張塗り（グラデーション/テクスチャ/塗りなし）はレイアウト/Imageタブの「スタイル」ボタンから開くモーダルでのみ編集可能にし、フォントタブ側は保存時に値を持ち回るだけ（`_fontMgrEditingFillExt`）としていた。追加依頼を受け、フォントタブのフォームにも同じ編集UIを実装した。
+
+**実装**:
+- `templates/index.html`: `#style-fill-color` 周りに `text-style-modal.js` と同じ塗りUI（塗りチェックボックス＋モードセレクト＋グラデーションパネル（線形/円形・角度・カラーランプ・ストップ追加/削除）＋テクスチャパネル（画像選択・スケール%））を追加。id は `style-` プレフィックス（モーダル側は `tsm-` プレフィックス）で名前空間を分離。
+- `static/js/main/19-font-manager.js`: `_fontMgrEditingFillExt`（保存値の素通し）を削除し、モジュールスコープの `_fontMgrFillState`（enabled/mode/gradient/selectedStopIdx/texture）と、`_fontMgrHex2Rgb`/`_fontMgrRgb2Hex`/`_fontMgrRampColorAt`/`_fontMgrDrawGradRamp`/`_fontMgrSyncFillUI`/`_fontMgrLoadFillState` を新設（`text-style-modal.js` の同名ロジックの移植・同一設計）。`_fontMgrGetStyleFromUI`/`_fontMgrApplyStyleToUI`/`_fontMgrResetStyleUI`/`_fontMgrUpdateStylePreview` を実状態ベースに書き換え、`_fontMgrInitStyleTab` に塗り関連イベント（モード切替・ランプのドラッグ/追加/削除・テクスチャファイル選択（最大512px縮小）・スケール入力）を追加。
+- レイアウト/Imageタブ・フォントタブのどちらで編集・保存しても同じ `fontmgr_text_styles`（v2形式）を読み書きするため、一覧・見た目は双方向で一致する。
+
+**検証**（Kapture）: フォントタブでモード切替（単色→グラデーション→テクスチャ→塗りなし）ごとにパネル表示・SVGプレビューが追従することを確認。ランプのストップ色変更（白→赤）がプレビューに反映され、名前を付けて保存→「新規」でリセット→保存済み一覧から再選択で、モード・ランプ・プレビューが完全に復元されることを確認。テスト用スタイルは削除済み。コンソールエラーなし。
+
+**How to apply**: モーダルとタブ埋め込みフォームのように同じ編集UIを2箇所に持つ場合、id プレフィックスを分離（`tsm-` / `style-`）して同一ページ内での衝突を避けつつ、ロジック（状態管理・ランプ描画・ドラッグ処理）は関数名を変えて丸ごと複製するのが早い（モジュール化して共有する設計にすると、それぞれが参照する `document.getElementById` のスコープや呼び出しタイミングの違いを吸収する層が余計に必要になるため、複製の方が変更コストに見合う）。
+
+---
+
+## 2026-07-20（テキスト塗りのグラデーション・テクスチャ・塗りなし対応 — フェーズ1）
+
+「レイアウトのテキストツールの塗りにグラデーション・テクスチャを使いたい。塗りなしも線同様チェックボックスで切り替えたい。スタイルモーダルで設定し、Imageタブのテキストでも同様にしたい」との依頼（PLAN_backlog「塗りのグラデーション・テクスチャ・塗りなし対応」フェーズ1）。フェーズ2（レイアウトのドロー図形・Imageタブのシェイプへの展開）は次回作業。
+
+**スタイルオブジェクト拡張**（後方互換: 未定義=従来動作）:
+- `fillEnabled`（false=塗りなし）/ `fillMode`（solid/gradient/texture）/ `fillGradient`（shape: linear|radial・angleDeg・stops[{pos,color}]）/ `fillTexture`（dataUrl・w・h・scale%）。既存の `fill`（単色）は維持。
+- v2 の「フォントサイズ100pxあたりの相対値」思想を踏襲し、テクスチャのタイルサイズは 画像実寸×(scale/100)×(fontSize/100)。SVG（レイアウト）と Canvas（Imageタブ）で見た目が一致する。
+
+**実装**:
+- `static/js/text-style-modal.js`: 「塗り」チェックボックス＋モードセレクト＋グラデーションパネル（線形/円形・角度・カラーランプ。ランプはImageタブFillツールの `_drawFillGradientRamp` を移植し、ストップのドラッグ移動・クリック選択・追加/削除・色変更に対応）＋テクスチャパネル（画像ファイル選択→**最大512pxへ縮小してdataUrl保持**（localStorage容量対策）＋スケール%）。ランプのストップ等はDOM入力で表現できないためモーダル内 `fillState` として保持し、`getStyleFromUI`/`applyStyleToUI`/`applyInitialStyle`/`resetStyleUI` に組み込んだ。
+- `static/js/main/09e-text-tool.js`: `_fontMgrApplyFillPaintToEl()` を新設し `_fontMgrApplyStyleAttrsToTextEl` から使用。defs に linearGradient（objectBoundingBox、角度→x1/y1/x2/y2変換）/ radialGradient / pattern（userSpaceOnUse、`data-ccc-tex-w/h/scale` でラウンドトリップ用の元データを持たせる）を生成して `fill=url(#id)`。前回適用分は `dataset.styleFillId` で管理し再適用時に除去（styleFilterId と同じライフサイクル）。`_fontMgrExtractStyleFromTextEl` は none / url(#...) を判別してグラデ・テクスチャ・塗りなしを復元する。
+- `static/js/main/07-pages.js`: `_collectReferencedFilters` を filter に加え **fill / stroke の url(#...) 参照**（linearGradient/radialGradient/pattern）も取り込むよう一般化。コマ/オーバーレイ保存・オブジェクトのコマ間移動/複製・テキスト→PNG変換のすべてで定義が持ち回られる（12-text-png-export.js は defs 全体をクローンする方式のため対応不要だった）。
+- `static/js/image-tab.js`: `_rerenderTextLayer` の塗りパスを `_textFillStyle()`（createLinearGradient=バウンディングボックスの角度方向投影幅／createRadialGradient=中心から対角半径／createPattern=repeat＋DOMMatrix.scale）に差し替え。fillEnabled=false は fillText パスをスキップ（線・袋文字のみ描画）。テクスチャ画像は `_getTextureImage()`（dataUrl→Imageキャッシュ）で管理し、未ロード時は単色フォールバック→ロード完了で自動再描画（フォントロードと同じパターン）。`_fontStyleAttrsFromStyle`/`getSelectedTextStyleInfo` に新フィールドを追加。
+- `static/js/main/19-font-manager.js`: フォントタブのスタイル編集UIは単色のまま。`_fontMgrEditingFillExt()` で編集中スタイルの拡張塗りフィールドを保存時・プレビュー時に持ち回り、**フォントタブで再保存しても拡張塗りが欠落しない**ようにした。CSSミニプレビューはグラデ=先頭ストップ色で近似・塗りなし=透明。
+- i18n: 塗りモード・グラデーション・テクスチャ関連の3言語キーを追加。
+
+**検証**（Kapture）: モーダルで赤→青・角度90°のグラデーション設定→プレビュー・挿入・保存SVG・リロード後の保持を確認。塗りなし+線で `fill="none"`＋旧定義のクリーンアップを確認。テクスチャ（市松模様32px）で pattern 生成・タイルサイズのフォントサイズ比例（フォント529×scale100% → タイル169.28）・抽出ラウンドトリップを確認。Imageタブでグラデ/塗りなし+線/テクスチャの3種を挿入し描画を視覚確認。コンソールエラーなし。
+
+**How to apply（SVGとCanvasの塗り表現を揃える）**: SVGの `objectBoundingBox` グラデーションに合わせるには、Canvas側は「テキストボックスの角度方向への投影幅」（|cosθ|×W+|sinθ|×H）でグラデーション区間を取ると一致する。テクスチャは両側とも「サイズ相対のタイル寸法」を共通式にすることでズレを防ぐ。SVG側のペイント定義はフィルタ定義と同様に dataset でIDを持たせて適用時に前回分を除去し、保存側は url() 参照の走査（fill/stroke/filter）で defs を持ち回るのが定石。
+
+---
+
 ## 2026-07-20（CDN 依存ライブラリのローカル同梱: jsPDF/JSZip をオフライン対応に）
 
 DEVLOG 2026-07-17 で「ヘルプにオフライン制限を明記」として先送りしていた、jsPDF/JSZip の CDN 依存を解消した（PLAN_backlog の次回作業）。これによりインターネット接続のないオフライン環境でも PDF/EPUB 出力・zip 保存・一括バックアップ／復元が動作する。

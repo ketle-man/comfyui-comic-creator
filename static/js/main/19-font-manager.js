@@ -3,7 +3,7 @@
 // 元 main.js の行 15503-16240 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: FONTMGR_FAV_CAT,FONTMGR_RESERVED_CAT_NAMES,_FONTMGR_LS_FAVS,_FONTMGR_LS_PREFS,_FONTMGR_LS_PRESETS,_FONTMGR_LS_STYLES,_FONTMGR_LS_STYLE_BG,_FONTMGR_LS_TAGS,_FONTMGR_PREVIEW_TEXTS,_FONTMGR_SENT_H,_FONTMGR_SENT_V,_esc,_fontMgrCatLabel,_fontMgrCatNames,_fontMgr,_fontMgrApplySentDir,_fontMgrApplyStyleToUI,_fontMgrBuildMixedHtml,_fontMgrCurrentList,_fontMgrEditingStyleId,_fontMgrEnsureFontLoaded,_fontMgrGetStyleFromUI,_fontMgrGoogleList,_fontMgrGroupOpen,_fontMgrInitStyleTab,_fontMgrIsCjk,_fontMgrLoad,_fontMgrLoadStyles,_fontMgrRenderAllTagsChips,_fontMgrRenderFavList,_fontMgrRenderList,_fontMgrRenderRightPanel,_fontMgrRenderStyleSelect,_fontMgrRenderTagChips,_fontMgrRenderTextStylePreview,_fontMgrResetStyleUI,_fontMgrSaveFavs,_fontMgrSavePrefs,_fontMgrSaveStyles,_fontMgrSaveTags,_fontMgrSelectFont,_fontMgrStyleList,_fontMgrToggleGroup,_fontMgrUpdateCustomPreview,_fontMgrUpdatePreview,_fontMgrUpdateStylePreview
+// 主なトップレベル定義: FONTMGR_FAV_CAT,FONTMGR_RESERVED_CAT_NAMES,_FONTMGR_LS_FAVS,_FONTMGR_LS_PREFS,_FONTMGR_LS_PRESETS,_FONTMGR_LS_STYLES,_FONTMGR_LS_STYLE_BG,_FONTMGR_LS_TAGS,_FONTMGR_PREVIEW_TEXTS,_FONTMGR_SENT_H,_FONTMGR_SENT_V,_esc,_fontMgrCatLabel,_fontMgrCatNames,_fontMgr,_fontMgrApplySentDir,_fontMgrApplyStyleToUI,_fontMgrBuildMixedHtml,_fontMgrCurrentList,_fontMgrDrawGradRamp,_fontMgrEditingStyleId,_fontMgrEnsureFontLoaded,_fontMgrGetStyleFromUI,_fontMgrGoogleList,_fontMgrGroupOpen,_fontMgrInitStyleTab,_fontMgrIsCjk,_fontMgrLoad,_fontMgrLoadFillState,_fontMgrLoadStyles,_fontMgrRampColorAt,_fontMgrRenderAllTagsChips,_fontMgrRenderFavList,_fontMgrRenderList,_fontMgrRenderRightPanel,_fontMgrRenderStyleSelect,_fontMgrRenderTagChips,_fontMgrRenderTextStylePreview,_fontMgrResetStyleUI,_fontMgrSaveFavs,_fontMgrSavePrefs,_fontMgrSaveStyles,_fontMgrSaveTags,_fontMgrSelectFont,_fontMgrStyleList,_fontMgrSyncFillUI,_fontMgrToggleGroup,_fontMgrUpdateCustomPreview,_fontMgrUpdatePreview,_fontMgrUpdateStylePreview
 // ============================================================
 
 // ============================================================
@@ -480,7 +480,9 @@ function _fontMgrRenderTextStylePreview(back, front, p) {
         back.style.display = 'none';
     }
 
-    front.style.color = p.fill;
+    // CSSミニプレビューはグラデ・テクスチャを表現できないため代表色（先頭ストップ）で近似し、塗りなしは透明にする
+    front.style.color = (p.fillEnabled === false) ? 'transparent'
+        : (p.fillMode === 'gradient' ? (p.fillGradient?.stops?.[0]?.color || p.fill) : p.fill);
     front.style.webkitTextStroke = p.strokeEnabled ? `${(p.strokeWidth || 0) * k}px ${p.strokeColor}` : '0px transparent';
     const shadowCss = p.shadowEnabled
         ? `${(p.shadowDx || 0) * k}px ${(p.shadowDy || 0) * k}px ${(p.shadowBlur || 0) * k}px ${p.shadowColor}`
@@ -514,10 +516,135 @@ function _fontMgrRenderStylePreviewSvg(styleObj) {
     svgEl.setAttribute('viewBox', `${bb.x - pad} ${bb.y - pad} ${bb.width + pad * 2} ${bb.height + pad * 2}`);
 }
 
+// ── 塗り（塗りなし/単色/グラデーション/テクスチャ）状態 ──
+// カラーランプのストップ等はDOM入力だけでは表現できないため、モジュールスコープの状態として保持する
+// （text-style-modal.js の fillState と同じ設計。フォントタブとモーダルは別々のDOM/状態を持つ）
+let _fontMgrFillState = {
+    enabled: true,
+    mode: 'solid',
+    gradient: { shape: 'linear', angleDeg: 0, stops: [{ pos: 0, color: '#ffffff' }, { pos: 1, color: '#888888' }] },
+    selectedStopIdx: 0,
+    texture: null, // { dataUrl, w, h, scale }
+};
+
+function _fontMgrHex2Rgb(hex) {
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '#000000');
+    return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 0, g: 0, b: 0 };
+}
+function _fontMgrRgb2Hex({ r, g, b }) {
+    const h = v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0');
+    return `#${h(r)}${h(g)}${h(b)}`;
+}
+// カラーランプ上の位置tの補間色（image-tab FillTool.evalGradient / text-style-modal.js と同じ挙動）
+function _fontMgrRampColorAt(stops, tPos) {
+    const sorted = [...stops].sort((a, b) => a.pos - b.pos);
+    if (!sorted.length) return '#000000';
+    if (tPos <= sorted[0].pos) return sorted[0].color;
+    const last = sorted[sorted.length - 1];
+    if (tPos >= last.pos) return last.color;
+    for (let i = 0; i < sorted.length - 1; i++) {
+        const a = sorted[i], b = sorted[i + 1];
+        if (tPos >= a.pos && tPos <= b.pos) {
+            const lt = (b.pos - a.pos) > 0 ? (tPos - a.pos) / (b.pos - a.pos) : 0;
+            const ca = _fontMgrHex2Rgb(a.color), cb = _fontMgrHex2Rgb(b.color);
+            return _fontMgrRgb2Hex({ r: ca.r + (cb.r - ca.r) * lt, g: ca.g + (cb.g - ca.g) * lt, b: ca.b + (cb.b - ca.b) * lt });
+        }
+    }
+    return last.color;
+}
+
+// カラーランプの描画（text-style-modal.js の drawGradRamp と同じ）
+function _fontMgrDrawGradRamp() {
+    const canvas = document.getElementById('style-grad-ramp');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    const barH = h - 10;
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+    [..._fontMgrFillState.gradient.stops].sort((a, b) => a.pos - b.pos).forEach(s => grad.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, barH);
+    ctx.strokeStyle = '#666';
+    ctx.strokeRect(0.5, 0.5, w - 1, barH - 1);
+    _fontMgrFillState.gradient.stops.forEach((s, i) => {
+        const x = Math.max(5, Math.min(w - 5, s.pos * w));
+        ctx.beginPath();
+        ctx.moveTo(x, h);
+        ctx.lineTo(x - 5, barH);
+        ctx.lineTo(x + 5, barH);
+        ctx.closePath();
+        ctx.fillStyle = i === _fontMgrFillState.selectedStopIdx ? '#0077ff' : '#999';
+        ctx.fill();
+    });
+}
+
+// モード・チェックに応じたコントロールの表示切替
+function _fontMgrSyncFillUI() {
+    const enableEl = document.getElementById('style-fill-enable');
+    const modeEl = document.getElementById('style-fill-mode');
+    if (!enableEl || !modeEl) return;
+    enableEl.checked = _fontMgrFillState.enabled;
+    modeEl.value = _fontMgrFillState.mode;
+    modeEl.disabled = !_fontMgrFillState.enabled;
+    document.getElementById('style-fill-color').style.display = (_fontMgrFillState.enabled && _fontMgrFillState.mode === 'solid') ? '' : 'none';
+    document.getElementById('style-fill-gradient-panel').style.display = (_fontMgrFillState.enabled && _fontMgrFillState.mode === 'gradient') ? 'flex' : 'none';
+    document.getElementById('style-fill-texture-panel').style.display = (_fontMgrFillState.enabled && _fontMgrFillState.mode === 'texture') ? 'flex' : 'none';
+    const thumb = document.getElementById('style-tex-thumb');
+    if (_fontMgrFillState.texture?.dataUrl) {
+        thumb.src = _fontMgrFillState.texture.dataUrl;
+        thumb.style.display = '';
+    } else {
+        thumb.style.display = 'none';
+    }
+    if (_fontMgrFillState.enabled && _fontMgrFillState.mode === 'gradient') {
+        document.getElementById('style-grad-shape').value = _fontMgrFillState.gradient.shape;
+        document.getElementById('style-grad-angle').value = _fontMgrFillState.gradient.angleDeg;
+        const sel = _fontMgrFillState.gradient.stops[_fontMgrFillState.selectedStopIdx];
+        if (sel) document.getElementById('style-grad-stop-color').value = sel.color;
+        _fontMgrDrawGradRamp();
+    }
+}
+
+// style オブジェクトの塗り関連フィールドを _fontMgrFillState へ読み込む
+function _fontMgrLoadFillState(style) {
+    _fontMgrFillState.enabled = style?.fillEnabled !== false;
+    _fontMgrFillState.mode = style?.fillMode || 'solid';
+    if (style?.fillGradient?.stops?.length) {
+        _fontMgrFillState.gradient = {
+            shape: style.fillGradient.shape === 'radial' ? 'radial' : 'linear',
+            angleDeg: style.fillGradient.angleDeg || 0,
+            stops: style.fillGradient.stops.map(s => ({ pos: s.pos, color: s.color })),
+        };
+    } else {
+        _fontMgrFillState.gradient = { shape: 'linear', angleDeg: 0, stops: [{ pos: 0, color: '#ffffff' }, { pos: 1, color: '#888888' }] };
+    }
+    _fontMgrFillState.selectedStopIdx = 0;
+    _fontMgrFillState.texture = style?.fillTexture?.dataUrl ? { ...style.fillTexture } : null;
+    const scaleEl = document.getElementById('style-tex-scale');
+    if (scaleEl) scaleEl.value = style?.fillTexture?.scale || 100;
+    _fontMgrSyncFillUI();
+}
+
 // UI入力値からスタイル更新
 function _fontMgrUpdateStylePreview() {
     _fontMgrRenderStylePreviewSvg({
         fill: document.getElementById('style-fill-color')?.value || '#000000',
+        fillEnabled: _fontMgrFillState.enabled,
+        fillMode: _fontMgrFillState.mode,
+        fillGradient: _fontMgrFillState.mode === 'gradient' ? {
+            shape: document.getElementById('style-grad-shape')?.value === 'radial' ? 'radial' : 'linear',
+            angleDeg: parseFloat(document.getElementById('style-grad-angle')?.value) || 0,
+            stops: _fontMgrFillState.gradient.stops.map(s => ({ pos: s.pos, color: s.color })),
+        } : (_fontMgrFillState.gradient ? {
+            shape: _fontMgrFillState.gradient.shape,
+            angleDeg: _fontMgrFillState.gradient.angleDeg,
+            stops: _fontMgrFillState.gradient.stops.map(s => ({ pos: s.pos, color: s.color })),
+        } : null),
+        fillTexture: _fontMgrFillState.texture ? {
+            ..._fontMgrFillState.texture,
+            scale: parseFloat(document.getElementById('style-tex-scale')?.value) || 100,
+        } : null,
         strokeEnabled: !!document.getElementById('style-stroke-enable')?.checked,
         strokeColor: document.getElementById('style-stroke-color')?.value || '#ffffff',
         strokeWidth: parseFloat(document.getElementById('style-stroke-width')?.value) || 0,
@@ -542,6 +669,21 @@ function _fontMgrGetStyleFromUI(name) {
         name,
         v: 2, // v2: 数値はフォントサイズ100pxあたりのpx（相対値）
         fill: document.getElementById('style-fill-color')?.value || '#000000',
+        fillEnabled: _fontMgrFillState.enabled,
+        fillMode: _fontMgrFillState.mode,
+        fillGradient: _fontMgrFillState.mode === 'gradient' ? {
+            shape: document.getElementById('style-grad-shape')?.value === 'radial' ? 'radial' : 'linear',
+            angleDeg: parseFloat(document.getElementById('style-grad-angle')?.value) || 0,
+            stops: _fontMgrFillState.gradient.stops.map(s => ({ pos: s.pos, color: s.color })),
+        } : (_fontMgrFillState.gradient ? {
+            shape: _fontMgrFillState.gradient.shape,
+            angleDeg: _fontMgrFillState.gradient.angleDeg,
+            stops: _fontMgrFillState.gradient.stops.map(s => ({ pos: s.pos, color: s.color })),
+        } : null),
+        fillTexture: _fontMgrFillState.texture ? {
+            ..._fontMgrFillState.texture,
+            scale: parseFloat(document.getElementById('style-tex-scale')?.value) || 100,
+        } : null,
         strokeEnabled: !!document.getElementById('style-stroke-enable')?.checked,
         strokeColor: document.getElementById('style-stroke-color')?.value || '#ffffff',
         strokeWidth: parseFloat(document.getElementById('style-stroke-width')?.value) || 0,
@@ -562,6 +704,7 @@ function _fontMgrGetStyleFromUI(name) {
 
 function _fontMgrApplyStyleToUI(style) {
     document.getElementById('style-fill-color').value = style.fill;
+    _fontMgrLoadFillState(style);
     document.getElementById('style-stroke-enable').checked = style.strokeEnabled;
     document.getElementById('style-stroke-color').value = style.strokeColor;
     document.getElementById('style-stroke-width').value = style.strokeWidth;
@@ -587,6 +730,7 @@ function _fontMgrResetStyleUI() {
     _fontMgrEditingStyleId = null;
     document.getElementById('style-name-input').value = '';
     document.getElementById('style-fill-color').value = '#000000';
+    _fontMgrLoadFillState(null);
     document.getElementById('style-stroke-enable').checked = false;
     document.getElementById('style-stroke-color').value = '#ffffff';
     document.getElementById('style-stroke-width').value = 4;
@@ -630,6 +774,104 @@ function _fontMgrInitStyleTab() {
         const evt = (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input';
         el.addEventListener(evt, _fontMgrUpdateStylePreview);
     });
+
+    // ── 塗り（塗りなし/モード/グラデーション/テクスチャ）イベント ──
+    document.getElementById('style-fill-enable')?.addEventListener('change', e => {
+        _fontMgrFillState.enabled = e.target.checked;
+        _fontMgrSyncFillUI();
+        _fontMgrUpdateStylePreview();
+    });
+    document.getElementById('style-fill-mode')?.addEventListener('change', e => {
+        _fontMgrFillState.mode = e.target.value;
+        _fontMgrSyncFillUI();
+        _fontMgrUpdateStylePreview();
+    });
+    document.getElementById('style-grad-shape')?.addEventListener('change', e => {
+        _fontMgrFillState.gradient.shape = e.target.value;
+        _fontMgrUpdateStylePreview();
+    });
+    document.getElementById('style-grad-angle')?.addEventListener('input', () => _fontMgrUpdateStylePreview());
+    document.getElementById('style-grad-stop-color')?.addEventListener('input', e => {
+        const s = _fontMgrFillState.gradient.stops[_fontMgrFillState.selectedStopIdx];
+        if (s) { s.color = e.target.value; _fontMgrDrawGradRamp(); _fontMgrUpdateStylePreview(); }
+    });
+    document.getElementById('style-grad-stop-add')?.addEventListener('click', () => {
+        // 最も広い隙間の中央に追加（image-tab FillTool.addStop / text-style-modal.js と同じ挙動）
+        const sorted = [..._fontMgrFillState.gradient.stops].sort((a, b) => a.pos - b.pos);
+        let gapStart = 0, gapSize = 0;
+        for (let i = 0; i < sorted.length - 1; i++) {
+            const gap = sorted[i + 1].pos - sorted[i].pos;
+            if (gap > gapSize) { gapSize = gap; gapStart = sorted[i].pos; }
+        }
+        const pos = sorted.length < 2 ? 0.5 : gapStart + gapSize / 2;
+        _fontMgrFillState.gradient.stops.push({ pos, color: _fontMgrRampColorAt(_fontMgrFillState.gradient.stops, pos) });
+        _fontMgrFillState.selectedStopIdx = _fontMgrFillState.gradient.stops.length - 1;
+        _fontMgrSyncFillUI();
+        _fontMgrUpdateStylePreview();
+    });
+    document.getElementById('style-grad-stop-remove')?.addEventListener('click', () => {
+        if (_fontMgrFillState.gradient.stops.length <= 1) return;
+        _fontMgrFillState.gradient.stops.splice(_fontMgrFillState.selectedStopIdx, 1);
+        _fontMgrFillState.selectedStopIdx = Math.max(0, Math.min(_fontMgrFillState.selectedStopIdx, _fontMgrFillState.gradient.stops.length - 1));
+        _fontMgrSyncFillUI();
+        _fontMgrUpdateStylePreview();
+    });
+    // ランプ: ストップの選択・ドラッグ移動
+    document.getElementById('style-grad-ramp')?.addEventListener('mousedown', e => {
+        const canvas = document.getElementById('style-grad-ramp');
+        const rect = canvas.getBoundingClientRect();
+        const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+        let best = -1, bestDist = 9;
+        _fontMgrFillState.gradient.stops.forEach((s, i) => {
+            const d = Math.abs(s.pos * canvas.width - mx);
+            if (d < bestDist) { bestDist = d; best = i; }
+        });
+        if (best < 0) return;
+        _fontMgrFillState.selectedStopIdx = best;
+        document.getElementById('style-grad-stop-color').value = _fontMgrFillState.gradient.stops[best].color;
+        _fontMgrDrawGradRamp();
+        const onMove = ev => {
+            const r = canvas.getBoundingClientRect();
+            const x = (ev.clientX - r.left) * (canvas.width / r.width);
+            _fontMgrFillState.gradient.stops[_fontMgrFillState.selectedStopIdx].pos = Math.max(0, Math.min(1, x / canvas.width));
+            _fontMgrDrawGradRamp();
+            _fontMgrUpdateStylePreview();
+        };
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+    // テクスチャ画像選択（localStorage容量対策として最大512pxへ縮小して保持）
+    document.getElementById('style-tex-select-btn')?.addEventListener('click', () => document.getElementById('style-tex-file')?.click());
+    document.getElementById('style-tex-file')?.addEventListener('change', e => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                const MAX = 512;
+                const sc = Math.min(1, MAX / Math.max(img.width, img.height));
+                const w = Math.max(1, Math.round(img.width * sc));
+                const h = Math.max(1, Math.round(img.height * sc));
+                const cv = document.createElement('canvas');
+                cv.width = w;
+                cv.height = h;
+                cv.getContext('2d').drawImage(img, 0, 0, w, h);
+                _fontMgrFillState.texture = { dataUrl: cv.toDataURL('image/png'), w, h, scale: parseFloat(document.getElementById('style-tex-scale')?.value) || 100 };
+                _fontMgrSyncFillUI();
+                _fontMgrUpdateStylePreview();
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    });
+    document.getElementById('style-tex-scale')?.addEventListener('input', () => _fontMgrUpdateStylePreview());
+    _fontMgrSyncFillUI();
 
     document.getElementById('style-save-btn')?.addEventListener('click', () => {
         const name = document.getElementById('style-name-input')?.value.trim();

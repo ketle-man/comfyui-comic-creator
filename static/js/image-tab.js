@@ -3820,13 +3820,75 @@ class ImageTab {
             drawPass("strokeText");
         }
 
-        // 塗り
-        setShadow(!shadowDone);
-        ctx.fillStyle = p.color;
-        drawPass("fillText");
+        // 塗り（fillEnabled=false は塗りなし。線・袋文字のみ描画される）
+        if (p.fillEnabled !== false) {
+            setShadow(!shadowDone);
+            ctx.fillStyle = this._textFillStyle(ctx, p, layer);
+            drawPass("fillText");
+        }
         ctx.restore();
 
         this._ensureLayerFontLoaded(layer);
+    }
+
+    /**
+     * テキストレイヤーの塗りfillStyleを生成する（単色/グラデーション/テクスチャ）。
+     * 座標系はctx.scale適用後のネイティブテキスト空間（0..nativeW/H）。
+     * テクスチャ画像が未ロードの場合は単色でフォールバックし、ロード完了後に再描画する
+     */
+    _textFillStyle(ctx, p, layer) {
+        if (p.fillMode === "gradient" && p.fillGradient?.stops?.length) {
+            const g = p.fillGradient;
+            const W = p.nativeW, H = p.nativeH;
+            const cx = W / 2, cy = H / 2;
+            let grad;
+            if (g.shape === "radial") {
+                grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(1, Math.hypot(W, H) / 2));
+            } else {
+                // 角度方向へのバウンディングボックス投影幅でグラデーション区間を決める
+                const rad = ((g.angleDeg || 0) * Math.PI) / 180;
+                const dx = Math.cos(rad), dy = Math.sin(rad);
+                const half = (Math.abs(dx) * W + Math.abs(dy) * H) / 2;
+                grad = ctx.createLinearGradient(cx - dx * half, cy - dy * half, cx + dx * half, cy + dy * half);
+            }
+            [...g.stops].sort((a, b) => a.pos - b.pos).forEach(s => {
+                grad.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color || "#000000");
+            });
+            return grad;
+        }
+        if (p.fillMode === "texture" && p.fillTexture?.dataUrl) {
+            const img = this._getTextureImage(p.fillTexture.dataUrl, layer);
+            if (img) {
+                const pattern = ctx.createPattern(img, "repeat");
+                // タイルサイズ = 画像実寸 × (scale/100) × (fontSize/100)（SVG側と同じv2相対値基準）
+                const s = ((p.fillTexture.scale || 100) / 100) * ((p.fontSize || 100) / 100);
+                if (pattern && typeof pattern.setTransform === "function" && typeof DOMMatrix !== "undefined") {
+                    pattern.setTransform(new DOMMatrix().scale(s, s));
+                }
+                if (pattern) return pattern;
+            }
+            return p.color || "#000000";
+        }
+        return p.color || "#000000";
+    }
+
+    /** テクスチャ画像のキャッシュ取得。未ロードならロード開始し、完了時に対象レイヤーを再描画する */
+    _getTextureImage(dataUrl, layer) {
+        if (!this._texImageCache) this._texImageCache = new Map();
+        const entry = this._texImageCache.get(dataUrl);
+        if (entry) return entry.loaded ? entry.img : null;
+        const img = new Image();
+        const newEntry = { img, loaded: false };
+        this._texImageCache.set(dataUrl, newEntry);
+        img.onload = () => {
+            newEntry.loaded = true;
+            if (layer && layer.textProps) {
+                this._rerenderTextLayer(layer);
+                this._updateCompositeView();
+            }
+        };
+        img.src = dataUrl;
+        return null;
     }
 
     /** Google Fontsが未ダウンロードでフォールバック描画になっている場合、ロード完了を待って再描画する */
@@ -3854,6 +3916,10 @@ class ImageTab {
     _fontStyleAttrsFromStyle(style) {
         return {
             color: style?.fill || "#000000",
+            fillEnabled: style?.fillEnabled !== false,
+            fillMode: style?.fillMode || "solid",
+            fillGradient: style?.fillGradient || null,
+            fillTexture: style?.fillTexture || null,
             bold: !!style?.boldEnabled, italic: !!style?.italicEnabled, underline: !!style?.underlineEnabled, align: style?.align || "left",
             strokeEnabled: !!style?.strokeEnabled, strokeColor: style?.strokeColor || "#ffffff", strokeWidth: style?.strokeWidth || 0,
             bukuroEnabled: !!style?.bukuroEnabled, bukuroColor: style?.bukuroColor || "#000000", bukuroWidth: style?.bukuroWidth || 0,
@@ -3889,6 +3955,10 @@ class ImageTab {
                 fontSize: p.fontSize,
                 style: {
                     fill: p.color,
+                    fillEnabled: p.fillEnabled !== false,
+                    fillMode: p.fillMode || "solid",
+                    fillGradient: p.fillGradient || null,
+                    fillTexture: p.fillTexture || null,
                     boldEnabled: !!p.bold, italicEnabled: !!p.italic, underlineEnabled: !!p.underline, align: p.align || "left",
                     strokeEnabled: !!p.strokeEnabled, strokeColor: p.strokeColor, strokeWidth: p.strokeWidth,
                     bukuroEnabled: !!p.bukuroEnabled, bukuroColor: p.bukuroColor, bukuroWidth: p.bukuroWidth,

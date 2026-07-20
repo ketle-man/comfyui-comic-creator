@@ -19,7 +19,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 ### Layout tab
 - **Image placement** — Drag and drop images into panels; resize (aspect ratio locked by default, hold Alt to resize freely) and rotate with handles
 - **Speech balloons** — Place oval, rounded-rectangle, thought, and burst-shaped balloons inside panels, with 8-point resize handles. Custom SVG balloons from assets can also have their fill/border colors changed after placement
-- **Text** — Vertical/horizontal writing, Google Fonts / system fonts, a style modal for fill, stroke, outline, and shadow
+- **Text** — Vertical/horizontal writing, Google Fonts / system fonts, a style modal for fill, stroke, outline, and shadow. Fills support gradients, textures, and no-fill in addition to solid colors (shared between the Layout and Image tabs)
 - **Shape drawing (Draw)** — Draw rectangles, ellipses, lines, curves, polygons, chains, ropes, and My Curve directly onto an SVG layer
 - **3D pose** — Place a VRM/GLB/GLTF model inside a panel, pose it, and bake it into the image (via [comfyui-vrm-pose-editor](#optional-dependencies))
 - **Groups and layer panel** — Group objects, manage stacking order, toggle visibility, lock, and **delete with the Delete / Backspace key**

@@ -837,11 +837,35 @@
                       </div>
 
                       <div class="fontmgr-style-group">
-                        <label class="fontmgr-style-group-label" data-i18n="font.fillLabel">塗り</label>
+                        <label><input type="checkbox" id="style-fill-enable" checked /> <span data-i18n="font.fillLabel">塗り</span></label>
+                        <select id="style-fill-mode">
+                          <option value="solid" data-i18n="font.fillModeSolid">単色</option>
+                          <option value="gradient" data-i18n="font.fillModeGradient">グラデーション</option>
+                          <option value="texture" data-i18n="font.fillModeTexture">テクスチャ</option>
+                        </select>
                         <input type="color" id="style-fill-color" value="#000000" />
                         <label style="margin-left:8px;"><input type="checkbox" id="style-stroke-enable" /> <span data-i18n="font.strokeLabel">線</span></label>
                         <input type="color" id="style-stroke-color" value="#ffffff" />
                         <input type="number" id="style-stroke-width" min="0.5" max="50" step="0.5" value="4" style="width:50px;" />
+                      </div>
+
+                      <div class="fontmgr-style-group" id="style-fill-gradient-panel" style="display:none; flex-wrap:wrap; gap:6px;">
+                        <select id="style-grad-shape">
+                          <option value="linear" data-i18n="font.gradShapeLinear">線形</option>
+                          <option value="radial" data-i18n="font.gradShapeRadial">円形</option>
+                        </select>
+                        <label><span data-i18n="font.gradAngle">角度</span><input type="number" id="style-grad-angle" value="0" step="15" style="width:55px;" />°</label>
+                        <canvas id="style-grad-ramp" width="150" height="26" style="display:block;width:150px;height:26px;border:1px solid #666;border-radius:3px;cursor:pointer;"></canvas>
+                        <input type="color" id="style-grad-stop-color" value="#ffffff" style="width:28px;height:24px;padding:0;" />
+                        <button type="button" id="style-grad-stop-add" class="btn small" data-i18n-title="font.gradStopAdd" title="ストップを追加">＋</button>
+                        <button type="button" id="style-grad-stop-remove" class="btn small" data-i18n-title="font.gradStopRemove" title="選択中のストップを削除">－</button>
+                      </div>
+
+                      <div class="fontmgr-style-group" id="style-fill-texture-panel" style="display:none;">
+                        <button type="button" id="style-tex-select-btn" class="btn small" data-i18n="font.texSelectImage">画像を選択</button>
+                        <img id="style-tex-thumb" alt="" style="width:26px;height:26px;object-fit:cover;border:1px solid #666;border-radius:3px;display:none;" />
+                        <label><span data-i18n="font.texScale">スケール</span><input type="number" id="style-tex-scale" min="1" max="1000" value="100" style="width:55px;" />%</label>
+                        <input type="file" id="style-tex-file" accept="image/*" style="display:none;" />
                       </div>
 
                       <div class="fontmgr-style-group">
