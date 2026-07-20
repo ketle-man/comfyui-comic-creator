@@ -1,0 +1,3 @@
+# 同梱ライブラリ（static/js/vendor/）はcdnjs配布物そのままのバイト列を保持する。
+# 改行変換（LF→CRLF）が入るとSRIハッシュ照合（vendor/README.md参照）が一致しなくなるため。
+static/js/vendor/*.min.js -text
