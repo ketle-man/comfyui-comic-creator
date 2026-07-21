@@ -351,9 +351,12 @@
                       <option value="rect" data-i18n="layout.balloonRect">角丸矩形</option>
                       <option value="thought" data-i18n="layout.balloonThought">思考 (泡)</option>
                       <option value="bomb" data-i18n="layout.balloonBomb">バクダン</option>
+                      <option value="cloudpuffy" data-i18n="layout.balloonCloudPuffy">雲 (もこもこ)</option>
+                      <option value="cloudwavy" data-i18n="layout.balloonCloudWavy">雲 (なみなみ)</option>
                     </select>
                     <button type="button" id="h2-insert-btn" class="btn small" data-i18n="layout.insertBtn" data-i18n-title="layout.balloonInsertTitle" title="選択した種類のフキダシを挿入">挿入</button>
                     <button type="button" id="h2-to-image-btn" class="btn small secondary" data-i18n="layer.toImage" data-i18n-title="layer.toImageTitle" title="選択中のフキダシをPNG画像に変換して複製挿入します" disabled>画像に変換</button>
+                    <button type="button" id="bubble-text-modal-btn" class="btn small secondary" data-i18n="bubbleText.openBtn" data-i18n-title="bubbleText.openBtnTitle" title="テキストを内包したフキダシをモーダルで作成します">フキダシ+テキスト作成</button>
 
                   </div>
 
@@ -422,6 +425,26 @@
                       <label style="font-size:11px;" data-i18n="layout.radiusLabel">角丸:</label>
                       <input type="range" id="h2-rect-radius" min="0" max="500" value="80" style="width:70px;" />
                       <span id="h2-rect-radius-val" style="font-size:11px; min-width:24px;">80</span>
+                    </div>
+
+                    <!-- 雲(もこもこ/なみなみ) 専用パラメータ -->
+                    <div id="h2-cloud-params" style="display:none; flex-wrap:wrap; gap:6px; align-items:center;">
+                      <span style="font-size:11px; color:#0c5460; font-weight:bold;" data-i18n="layout.cloudLabel">雲</span>
+                      <label style="font-size:11px;" data-i18n="layout.seedLabel">シード:</label>
+                      <input type="range" id="h2-cloud-seed" min="1" max="100" value="1" style="width:55px;" />
+                      <span id="h2-cloud-seed-val" style="font-size:11px; min-width:20px;">1</span>
+
+                      <label style="font-size:11px;" data-i18n="layout.countLabel">個数:</label>
+                      <input type="range" id="h2-cloud-count" min="6" max="60" value="18" style="width:55px;" />
+                      <span id="h2-cloud-count-val" style="font-size:11px; min-width:20px;">18</span>
+
+                      <label style="font-size:11px;" data-i18n="layout.amplitudeLabel">凹凸:</label>
+                      <input type="range" id="h2-cloud-amplitude" min="0" max="100" value="55" style="width:55px;" />
+                      <span id="h2-cloud-amplitude-val" style="font-size:11px; min-width:20px;">55</span>
+
+                      <label style="font-size:11px;" data-i18n="layout.varianceLabel">バラツキ:</label>
+                      <input type="range" id="h2-cloud-variation" min="0" max="100" value="0" style="width:55px;" />
+                      <span id="h2-cloud-variation-val" style="font-size:11px; min-width:20px;">0</span>
                     </div>
 
                   </div>
@@ -1792,6 +1815,7 @@
     <script src="/ccc_static/js/main/09c-balloon-handles.js"></script>
     <script src="/ccc_static/js/main/09d-balloon-tools.js"></script>
     <script src="/ccc_static/js/main/09e-text-tool.js"></script>
+    <script src="/ccc_static/js/main/09f-bubble-text.js"></script>
     <script src="/ccc_static/js/main/10-output-pages.js"></script>
     <script src="/ccc_static/js/main/11a-work-manager.js"></script>
     <script src="/ccc_static/js/main/11b-page-manager-tab.js"></script>

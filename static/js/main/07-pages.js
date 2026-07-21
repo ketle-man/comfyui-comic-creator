@@ -518,6 +518,7 @@ async function renderLayoutTab() {
             initImageManipulation(svgEl, svgEl);
             initBalloonTools(svgEl, svgEl);
             initTextTools(svgEl, svgEl);
+            initBubbleTextTools(svgEl);
             initGroupManipulation(svgEl);
             initDrawShapeManipulation(svgEl);
         }

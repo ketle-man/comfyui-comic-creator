@@ -49,7 +49,8 @@ function renderLayerPanel() {
         const individualLocked = shape.dataset.locked === 'true';
         const isLocked = individualLocked || panelLocked;
         const isActive = shape.id === state.selectedShapeId;
-        const typeLabel = shape.dataset.shapeType === 'rect' ? '▭' : '○';
+        const shapeTypeIcons = { rect: '▭', 'textbox-rect': '▭', 'textbox-rounded': '▢', 'textbox-oval': '○', cloudpuffy: '☁', cloudwavy: '☁' };
+        const typeLabel = shapeTypeIcons[shape.dataset.shapeType] || '○';
         if (!shape.dataset.name) {
             shape.dataset.name = t('layer.balloonName', objIdx + 1);
         }

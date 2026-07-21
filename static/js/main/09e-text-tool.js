@@ -57,9 +57,10 @@ function initTextTools(textSvgEl, _imageSvgEl) {
             return;
         }
 
-        // テキスト要素のドラッグ移動
+        // テキスト要素のドラッグ移動（フキダシ+内包テキスト(09f-bubble-text.js)の子テキストは
+        // balloon-shape側の単一オブジェクトとして扱うため、単独テキストとしての選択・移動対象から除外する）
         const textEl = e.target.closest('text');
-        if (textEl && textEl.closest('svg') === textSvgEl) {
+        if (textEl && textEl.closest('svg') === textSvgEl && !textEl.closest('.balloon-shape')) {
             if (textEl.closest('[data-group-id]')) return; // グループ内はグループ操作に委ねる
             if (_isObjectLocked(textEl)) return; // ロック中は操作不可
             e.preventDefault();
@@ -107,10 +108,10 @@ function initTextTools(textSvgEl, _imageSvgEl) {
         openTextInputDialog(pt.x, pt.y);
     });
 
-    // ダブルクリックで既存テキストを再編集
+    // ダブルクリックで既存テキストを再編集（フキダシ+内包テキストの子テキストは09f-bubble-text.js側で処理する）
     textSvgEl.addEventListener('dblclick', (e) => {
         const textEl = e.target.closest('text');
-        if (!textEl || textEl.closest('svg') !== textSvgEl) return;
+        if (!textEl || textEl.closest('svg') !== textSvgEl || textEl.closest('.balloon-shape')) return;
         if (_isObjectLocked(textEl)) return; // ロック中は編集モーダルを開かない
         e.preventDefault();
         e.stopPropagation();

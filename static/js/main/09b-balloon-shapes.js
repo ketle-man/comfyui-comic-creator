@@ -11,13 +11,16 @@ function _showH2TypeParams(type) {
     const bombP    = document.getElementById('h2-bomb-params');
     const thoughtP = document.getElementById('h2-thought-params');
     const rectP    = document.getElementById('h2-rect-params');
+    const cloudP   = document.getElementById('h2-cloud-params');
     const widthG   = document.getElementById('h2-tail-width-group');
     if (!panel) return;
-    const isH2 = (type === 'bomb' || type === 'thought' || type === 'normal' || type === 'rect');
+    const isCloud = (type === 'cloudpuffy' || type === 'cloudwavy');
+    const isH2 = (type === 'bomb' || type === 'thought' || type === 'normal' || type === 'rect' || isCloud);
     panel.style.display = isH2 ? 'flex' : 'none';
     if (bombP)   bombP.style.display   = (type === 'bomb')    ? 'flex' : 'none';
     if (thoughtP) thoughtP.style.display = (type === 'thought') ? 'flex' : 'none';
     if (rectP)   rectP.style.display   = (type === 'rect')    ? 'flex' : 'none';
+    if (cloudP)  cloudP.style.display  = isCloud ? 'flex' : 'none';
     // thought タイプは幅スライダーが無意味なので非表示
     if (widthG) widthG.style.display = (type === 'thought') ? 'none' : 'contents';
 }
@@ -533,6 +536,165 @@ function generateThoughtPath(params) {
 }
 
 
+// 雲(なみなみ)の輪郭上の1点を、本体パス生成(generateCloudWavyPath)と全く同じ式で計算する。
+// 尻尾の付け根をこの関数で求めることで、近似の楕円ではなく実際に描画される輪郭線上に
+// 正確に乗せられる（本体と尻尾が分離して見える隙間を防ぐ）。戻り値はcx,cy基準のローカル座標
+function _cloudWavyPointAt(rx, ry, shapeCount, shapeAmplitude, shapeVariation, seed, theta) {
+    const rng = _h2_mulberry32(seed || 1);
+    const bumps  = Math.max(6, Math.min(60, Math.round(shapeCount || 18)));
+    const amp01  = Math.max(0, Math.min(1, (shapeAmplitude ?? 55) / 100));
+    const irr    = Math.max(0, Math.min(1, (shapeVariation ?? 0) / 100));
+    const bumps2 = Math.max(3, Math.round(bumps * 0.6));
+    const phase  = 0.7;
+    const amp    = 0.22 * amp01;
+
+    let wgt = 1.0;
+    if (irr > 0) {
+        const weights = [];
+        for (let i = 0; i < bumps; i++) weights.push(1.0 + irr * 0.35 * (rng() * 2 - 1));
+        const u = (theta / (Math.PI * 2)) * bumps;
+        const norm = ((u % bumps) + bumps) % bumps;
+        const i0 = Math.floor(norm) % bumps;
+        const frac = norm - Math.floor(norm);
+        const i1 = (i0 + 1) % bumps;
+        wgt = weights[i0] * (1 - frac) + weights[i1] * frac;
+    }
+
+    const base = 0.65 * Math.sin(bumps * theta) + 0.35 * Math.sin(bumps2 * theta + phase);
+    let rmod = 1 + amp * wgt * base;
+    rmod = Math.max(0.35, rmod);
+
+    // バンプによるはみ出しを吸収するため楕円半径を86%に縮小（参照ノードと同じ比率）
+    const erx = rx * 0.86, ery = ry * 0.86;
+    const x = erx * rmod * Math.cos(theta);
+    const y = ery * rmod * Math.sin(theta);
+    return { x, y, r: Math.hypot(x, y) };
+}
+
+// hukidasi2 互換: 雲(なみなみ) パス生成。参考ノード comfyUI-TextOverlayAndBubbles の
+// _cloud_mask_wavy を移植。楕円を2つの正弦波(θ*bumps と θ*bumps2+phase)で半径変調し、
+// 輪郭全体が滑らかに波打つ雲アウトラインにする。
+// params: { cx, cy, rx, ry, shapeCount, shapeAmplitude(0-100), shapeVariation(0-100), seed }
+function generateCloudWavyPath(params) {
+    const { cx, cy, rx, ry, shapeCount, shapeAmplitude, shapeVariation, seed } = params;
+    const n = 180;
+    let bodyPath = '';
+    for (let i = 0; i < n; i++) {
+        const theta = (i / n) * Math.PI * 2;
+        const p = _cloudWavyPointAt(rx, ry, shapeCount, shapeAmplitude, shapeVariation, seed, theta);
+        const x = cx + p.x, y = cy + p.y;
+        bodyPath += (i === 0 ? `M ${x},${y}` : ` L ${x},${y}`);
+    }
+    bodyPath += ' Z';
+    return { bodyPath };
+}
+
+// 雲(もこもこ)の輪郭上の1点を、本体パス生成(generateCloudPuffyPath)と全く同じ式で計算する。
+// _cloudWavyPointAt と同じ理由で、尻尾の付け根を実際の輪郭線上に正確に乗せるために使う。
+// 戻り値はcx,cy基準のローカル座標
+function _cloudPuffyPointAt(rx, ry, shapeCount, shapeAmplitude, shapeVariation, seed, theta) {
+    const rng = _h2_mulberry32(seed || 1);
+    const bumps = Math.max(6, Math.min(60, Math.round(shapeCount || 18)));
+    const amp01 = Math.max(0, Math.min(1, (shapeAmplitude ?? 55) / 100));
+    const irr   = Math.max(0, Math.min(1, (shapeVariation ?? 0) / 100));
+
+    const rBase = Math.max(2, Math.min(rx, ry) * 0.35 * amp01);
+    const rList = [];
+    for (let i = 0; i < bumps; i++) rList.push(rBase * (1 + irr * 0.35 * (rng() * 2 - 1)));
+    const rMax = rList.reduce((m, r) => Math.max(m, r), 0);
+    const offBase = rMax * 0.38;
+
+    // バンプ分の余白を差し引いた内側の楕円（もこもこの土台）。極端な値でも潰れないよう下限を設ける
+    let a = rx - (rMax + offBase) - rx * 0.02;
+    let b = ry - (rMax + offBase) - ry * 0.02;
+    if (a < rx * 0.25 || b < ry * 0.25) { a = rx * 0.25; b = ry * 0.25; }
+
+    // 楕円周を等弧長でbumps分割し、各分割点の外向き法線方向にバンプ中心をオフセット配置する
+    const dense = 360;
+    const pts = [];
+    const cum = [0];
+    let prevX = a, prevY = 0;
+    for (let i = 0; i <= dense; i++) {
+        const th = (i / dense) * Math.PI * 2;
+        const x = a * Math.cos(th), y = b * Math.sin(th);
+        pts.push({ x, y });
+        if (i > 0) cum.push(cum[cum.length - 1] + Math.hypot(x - prevX, y - prevY));
+        prevX = x; prevY = y;
+    }
+    const total = cum[cum.length - 1];
+
+    const bumpCenters = [];
+    let j = 0;
+    for (let k = 0; k < bumps; k++) {
+        const target = (k * total) / bumps;
+        while (j < cum.length - 2 && cum[j + 1] < target) j++;
+        const d0 = cum[j], d1 = cum[j + 1];
+        const frac = d1 === d0 ? 0 : (target - d0) / (d1 - d0);
+        const p0 = pts[j], p1 = pts[j + 1];
+        const x = p0.x + (p1.x - p0.x) * frac;
+        const y = p0.y + (p1.y - p0.y) * frac;
+        let nx = x / (a * a), ny = y / (b * b);
+        const nlen = Math.hypot(nx, ny) || 1;
+        nx /= nlen; ny /= nlen;
+        const off = offBase * (1 + irr * 0.2 * (rng() * 2 - 1));
+        bumpCenters.push({ x: x + nx * off, y: y + ny * off, r: rList[k] });
+    }
+
+    // 中心(0,0基準)からの光線が各図形と交わる遠い方の交点距離の最大値を輪郭半径とする
+    const dx = Math.cos(theta), dy = Math.sin(theta);
+    let r = (a * b) / Math.sqrt((b * dx) * (b * dx) + (a * dy) * (a * dy));
+    for (const bc of bumpCenters) {
+        const ox = -bc.x, oy = -bc.y;
+        const b1 = ox * dx + oy * dy;
+        const c1 = ox * ox + oy * oy - bc.r * bc.r;
+        const disc = b1 * b1 - c1;
+        if (disc < 0) continue;
+        const t = -b1 + Math.sqrt(disc);
+        if (t > r) r = t;
+    }
+    return { x: r * dx, y: r * dy, r };
+}
+
+// 境界点計算の共通ヘルパー。cloudpuffy/cloudwavyは実際の輪郭関数(_cloudXxxPointAt)に委譲し、
+// それ以外は従来通り _h2_getBoundaryPoint に委譲する。尻尾の付け根・尻尾ハンドル・カーブハンドルの
+// いずれもこの関数を経由することで、フキダシ本体の見た目の輪郭と常に一致する
+function _h2BoundaryPointFor(el, angleRad) {
+    const type = el.dataset.shapeType;
+    const rx = parseFloat(el.dataset.rx), ry = parseFloat(el.dataset.ry);
+    if (type === 'cloudpuffy' || type === 'cloudwavy') {
+        const pointAt = type === 'cloudpuffy' ? _cloudPuffyPointAt : _cloudWavyPointAt;
+        return pointAt(
+            rx, ry,
+            parseFloat(el.dataset.shapeCount || 18),
+            parseFloat(el.dataset.shapeAmplitude ?? 55),
+            parseFloat(el.dataset.shapeVariation ?? 0),
+            parseInt(el.dataset.seed || 1),
+            angleRad
+        );
+    }
+    const bpType = type === 'rect' ? 'rect' : 'normal';
+    const bpR = type === 'rect' ? Math.min(parseFloat(el.dataset.rectRadius || 80), rx, ry) : undefined;
+    return _h2_getBoundaryPoint(bpType, rx, ry, angleRad, bpR);
+}
+
+// hukidasi2 互換: 雲(もこもこ) パス生成。参考ノードの _cloud_mask_scalloped を移植。
+// 内側の楕円 + その周囲に等弧長で配置した円(バンプ)群の和集合を、中心からの光線と
+// (楕円 or 各バンプ円)の遠い方の交点距離の最大値として輪郭を近似する
+// （SVGにはブーリアン和がないため、放射状サンプリングで輪郭を再構成する）。
+function generateCloudPuffyPath(params) {
+    const { cx, cy, rx, ry, shapeCount, shapeAmplitude, shapeVariation, seed } = params;
+    const n = 240;
+    let bodyPath = '';
+    for (let i = 0; i < n; i++) {
+        const theta = (i / n) * Math.PI * 2;
+        const p = _cloudPuffyPointAt(rx, ry, shapeCount, shapeAmplitude, shapeVariation, seed, theta);
+        const x = cx + p.x, y = cy + p.y;
+        bodyPath += (i === 0 ? `M ${x},${y}` : ` L ${x},${y}`);
+    }
+    bodyPath += ' Z';
+    return { bodyPath };
+}
+
 function updateShapePath(el) {
     _updateH2ShapePath(el);
 }
@@ -541,6 +703,14 @@ function updateShapePath(el) {
 // el: balloon-shape クラスを持つ <g> 要素
 function _updateH2ShapePath(el) {
     const type = el.dataset.shapeType;
+
+    // シンプル版フキダシ+内包テキスト（09f-bubble-text.js）は尻尾のない別構造のため、
+    // 専用の更新関数に委譲してここでは何もしない
+    if (typeof _isBubbleTextType === 'function' && _isBubbleTextType(type)) {
+        _bubbleTextUpdateShape(el);
+        return;
+    }
+
     const cx = parseFloat(el.dataset.cx);
     const cy = parseFloat(el.dataset.cy);
     const rx = parseFloat(el.dataset.rx);
@@ -606,6 +776,51 @@ function _updateH2ShapePath(el) {
         const b1 = { x: cx + Math.max(0, bp1.r - overlap) * Math.cos(b1Rad), y: cy + Math.max(0, bp1.r - overlap) * Math.sin(b1Rad) };
         const b2 = { x: cx + Math.max(0, bp2.r - overlap) * Math.cos(b2Rad), y: cy + Math.max(0, bp2.r - overlap) * Math.sin(b2Rad) };
         // 制御点 = b1b2中点 + 法線オフセット（tailCurve=0なら直線）
+        if (tailCurve === 0) {
+            tailPath = `M ${b1.x},${b1.y} L ${tipX},${tipY} L ${b2.x},${b2.y} Z`;
+        } else {
+            const bMidX = (b1.x + b2.x) / 2, bMidY = (b1.y + b2.y) / 2;
+            const curveOX = Math.cos(normalRad) * tailCurve;
+            const curveOY = Math.sin(normalRad) * tailCurve;
+            const cx1 = bMidX + curveOX, cy1 = bMidY + curveOY;
+            tailPath = `M ${b1.x},${b1.y} Q ${cx1},${cy1} ${tipX},${tipY} Q ${cx1},${cy1} ${b2.x},${b2.y} Z`;
+        }
+    } else if (type === 'cloudpuffy' || type === 'cloudwavy') {
+        // 雲フキダシ: 本体は専用の輪郭生成関数、尻尾はnormalタイプと同じ滑らかな三角形。
+        // 尻尾の付け根は本体パス生成と同じ関数(_cloudWavyPointAt/_cloudPuffyPointAt)で
+        // 実際の輪郭線上の点を直接求める（近似の楕円ではなく実輪郭に正確に合わせることで、
+        // 本体と尻尾が分離して見える隙間を防ぐ）
+        const tailAngleRad = tailAngleDeg * Math.PI / 180;
+        const normalRad    = tailAngleRad + Math.PI / 2;
+        const halfAngleRad = (tailWidth / 2) * Math.PI / 180;
+        const b1Rad = tailAngleRad - halfAngleRad;
+        const b2Rad = tailAngleRad + halfAngleRad;
+        const overlap = Math.max(2, borderWidth + 2);
+
+        const bpTip = _h2BoundaryPointFor(el, tailAngleRad);
+        const tipX  = cx + bpTip.x + tailLength * Math.cos(tailAngleRad);
+        const tipY  = cy + bpTip.y + tailLength * Math.sin(tailAngleRad);
+
+        // 尻尾の付け根を本体の内側に食い込ませる（自身の中心方向に沿って縮める。
+        // 実輪郭上の点は真の極角とパラメトリック角がずれることがあるため、
+        // b1Rad方向へ再投影せず、その点自身の方向ベクトルをそのまま縮小する）
+        const bp1 = _h2BoundaryPointFor(el, b1Rad);
+        const bp2 = _h2BoundaryPointFor(el, b2Rad);
+        const scale1 = bp1.r > 0 ? Math.max(0, bp1.r - overlap) / bp1.r : 0;
+        const scale2 = bp2.r > 0 ? Math.max(0, bp2.r - overlap) / bp2.r : 0;
+        const b1 = { x: cx + bp1.x * scale1, y: cy + bp1.y * scale1 };
+        const b2 = { x: cx + bp2.x * scale2, y: cy + bp2.y * scale2 };
+
+        const cloudParams = {
+            cx, cy, rx, ry,
+            shapeCount:     parseFloat(el.dataset.shapeCount || 18),
+            shapeAmplitude: parseFloat(el.dataset.shapeAmplitude ?? 55),
+            shapeVariation: parseFloat(el.dataset.shapeVariation ?? 0),
+            seed:           parseInt(el.dataset.seed || 1),
+        };
+        const cloudResult = type === 'cloudpuffy' ? generateCloudPuffyPath(cloudParams) : generateCloudWavyPath(cloudParams);
+        bodyPath = cloudResult.bodyPath;
+
         if (tailCurve === 0) {
             tailPath = `M ${b1.x},${b1.y} L ${tipX},${tipY} L ${b2.x},${b2.y} Z`;
         } else {

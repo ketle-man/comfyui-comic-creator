@@ -57,7 +57,14 @@ async function convertShapeToImage(el, svgEl) {
         outSvg.setAttribute('viewBox', `${minX.toFixed(2)} ${minY.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}`);
         outSvg.appendChild(clone);
 
-        const svgText = new XMLSerializer().serializeToString(outSvg);
+        // data:URL画像として単独ラスタライズする際、ページ本体のGoogle Fonts <link>は
+        // このimg要素の描画コンテキストには適用されない（フキダシ+内包テキスト等が
+        // 既定フォントにフォールバックしてしまう）ため、12-text-png-export.jsと同じ
+        // 手法でフォントをSVGに直接@font-face埋め込みしてからラスタライズする
+        let svgText = new XMLSerializer().serializeToString(outSvg);
+        if (typeof embedFontsInSvg === 'function') {
+            svgText = await embedFontsInSvg(svgText);
+        }
         const dataUrl = _svgTextToDataUrl(svgText);
 
         const img = new Image();
@@ -156,7 +163,7 @@ function flipSelectedShape(axis) {
     pushHistory();
 
     const type = el.dataset.shapeType;
-    const isH2 = (type === 'bomb' || type === 'thought' || type === 'normal');
+    const isH2 = (type === 'bomb' || type === 'thought' || type === 'normal' || type === 'cloudpuffy' || type === 'cloudwavy');
 
     if (isH2) {
         // h2タイプは tailAngleDeg を反転
@@ -260,6 +267,11 @@ async function insertSmartBalloonTemplate(type) {
         shape.dataset.thoughtBubbleOffset = 100;
     } else if (type === 'rect') {
         shape.dataset.rectRadius = 80;
+    } else if (type === 'cloudpuffy' || type === 'cloudwavy') {
+        shape.dataset.seed           = Math.floor(Math.random() * 100) + 1;
+        shape.dataset.shapeCount     = 18;
+        shape.dataset.shapeAmplitude = 55;
+        shape.dataset.shapeVariation = 0;
     }
     shape.style.pointerEvents = 'auto';
 
@@ -366,6 +378,15 @@ function _syncH2UI(el) {
         if (sliderR) sliderR.max = maxR;
         setVal('h2-rect-radius',    el.dataset.rectRadius || 80);
         setText('h2-rect-radius-val', Math.round(parseFloat(el.dataset.rectRadius || 80)));
+    } else if (type === 'cloudpuffy' || type === 'cloudwavy') {
+        setVal('h2-cloud-seed',       el.dataset.seed           || 1);
+        setVal('h2-cloud-count',      el.dataset.shapeCount     || 18);
+        setVal('h2-cloud-amplitude',  el.dataset.shapeAmplitude ?? 55);
+        setVal('h2-cloud-variation',  el.dataset.shapeVariation ?? 0);
+        setText('h2-cloud-seed-val',       el.dataset.seed           || 1);
+        setText('h2-cloud-count-val',      el.dataset.shapeCount     || 18);
+        setText('h2-cloud-amplitude-val',  el.dataset.shapeAmplitude ?? 55);
+        setText('h2-cloud-variation-val',  el.dataset.shapeVariation ?? 0);
     }
     // 色はrenderHandlesの共通部分で同期済み
 }
@@ -382,9 +403,6 @@ function _h2CalcCurveHandlePos(el) {
     const borderWidth  = parseFloat(el.dataset.borderWidth  || 3);
     const tailAngleRad = tailAngleDeg * Math.PI / 180;
     const normalRad    = tailAngleRad + Math.PI / 2;
-    const type = el.dataset.shapeType;
-    const bpType = type === 'rect' ? 'rect' : 'normal';
-    const bpR = type === 'rect' ? Math.min(parseFloat(el.dataset.rectRadius || 80), rx, ry) : undefined;
     const halfAngleRad = (tailWidth / 2) * Math.PI / 180;
     const b1Rad = tailAngleRad - halfAngleRad;
     const b2Rad = tailAngleRad + halfAngleRad;
@@ -392,12 +410,14 @@ function _h2CalcCurveHandlePos(el) {
     // 縁取りを描画しているため、この食い込みが枠線の太さ(borderWidth)より浅いと、
     // 尻尾が細いほど接合部の縁取りが噛み合わず隙間（細い線）が見えてしまう
     const overlap = Math.max(2, borderWidth + 2);
-    const bp1 = _h2_getBoundaryPoint(bpType, rx, ry, b1Rad, bpR);
-    const bp2 = _h2_getBoundaryPoint(bpType, rx, ry, b2Rad, bpR);
-    const b1x = cx + Math.max(0, bp1.r - overlap) * Math.cos(b1Rad);
-    const b1y = cy + Math.max(0, bp1.r - overlap) * Math.sin(b1Rad);
-    const b2x = cx + Math.max(0, bp2.r - overlap) * Math.cos(b2Rad);
-    const b2y = cy + Math.max(0, bp2.r - overlap) * Math.sin(b2Rad);
+    const bp1 = _h2BoundaryPointFor(el, b1Rad);
+    const bp2 = _h2BoundaryPointFor(el, b2Rad);
+    const scale1 = bp1.r > 0 ? Math.max(0, bp1.r - overlap) / bp1.r : 0;
+    const scale2 = bp2.r > 0 ? Math.max(0, bp2.r - overlap) / bp2.r : 0;
+    const b1x = cx + bp1.x * scale1;
+    const b1y = cy + bp1.y * scale1;
+    const b2x = cx + bp2.x * scale2;
+    const b2y = cy + bp2.y * scale2;
     const bMidXLocal = (b1x + b2x) / 2, bMidYLocal = (b1y + b2y) / 2;
     const hxLocal = bMidXLocal + Math.cos(normalRad) * tailCurve;
     const hyLocal = bMidYLocal + Math.sin(normalRad) * tailCurve;
@@ -422,9 +442,7 @@ function _updateH2HandlePositions(el) {
     const tailLength   = parseFloat(el.dataset.tailLength   || 60);
     const tailAngleRad = tailAngleDeg * Math.PI / 180;
     const type = el.dataset.shapeType;
-    const bpType = type === 'rect' ? 'rect' : 'normal';
-    const bpR = type === 'rect' ? Math.min(parseFloat(el.dataset.rectRadius || 80), rx, ry) : undefined;
-    const bp = _h2_getBoundaryPoint(bpType, rx, ry, tailAngleRad, bpR);
+    const bp = _h2BoundaryPointFor(el, tailAngleRad);
     const tailDxLocal = bp.x + tailLength * Math.cos(tailAngleRad);
     const tailDyLocal = bp.y + tailLength * Math.sin(tailAngleRad);
     const angle = parseFloat(el.dataset.angle || 0);
@@ -488,7 +506,9 @@ function renderHandles(el) {
     if (toImageBtn) toImageBtn.disabled = false;
 
     const type = el.dataset.shapeType;
-    const isH2 = (type === 'bomb' || type === 'thought' || type === 'normal' || type === 'rect');
+    const isH2 = (type === 'bomb' || type === 'thought' || type === 'normal' || type === 'rect' || type === 'cloudpuffy' || type === 'cloudwavy');
+    // シンプル版フキダシ+内包テキスト（09f-bubble-text.js）は尻尾を持たないため専用ハンドルを出さない
+    const isBubbleText = typeof _isBubbleTextType === 'function' && _isBubbleTextType(type);
 
     // 選択シェイプの色・太さを UI に同期
     let strokeVal, fillVal, strokeWVal;
@@ -536,9 +556,7 @@ function renderHandles(el) {
     const tailAngleDeg = parseFloat(el.dataset.tailAngleDeg || 45);
     const tailLength   = parseFloat(el.dataset.tailLength   || 60);
     const tailAngleRad = tailAngleDeg * Math.PI / 180;
-    const bpType = type === 'rect' ? 'rect' : 'normal';
-    const bpR = type === 'rect' ? Math.min(parseFloat(el.dataset.rectRadius || 80), rx, ry) : undefined;
-    const bp = _h2_getBoundaryPoint(bpType, rx, ry, tailAngleRad, bpR);
+    const bp = _h2BoundaryPointFor(el, tailAngleRad);
     const balloonAngle0 = parseFloat(el.dataset.angle || 0);
     const balloonRad0 = balloonAngle0 * Math.PI / 180;
     const tailDxLocal = bp.x + tailLength * Math.cos(tailAngleRad);
@@ -570,8 +588,8 @@ function renderHandles(el) {
         createHandle(svg, hType, hx, hy, `resize-handle resize-${hType}`);
     });
 
-    // しっぽハンドル
-    createHandle(svg, 'tail', tx, ty, 'tail-handle');
+    // しっぽハンドル（シンプル版フキダシ+内包テキストには尻尾が無いため出さない）
+    if (!isBubbleText) createHandle(svg, 'tail', tx, ty, 'tail-handle');
 
     if (isH2) {
         // h2タイプ: normal/rect はカーブON時のみカーブハンドルを表示

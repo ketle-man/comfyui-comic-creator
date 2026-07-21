@@ -467,6 +467,19 @@ function initBalloonManager() {
         });
     }
 
+    // ── フキダシ+テキスト作成/編集モーダル起動ボタン ──
+    // 選択中のフキダシがフキダシ+内包テキストなら編集モード、それ以外は新規作成として開く
+    // （ダブルクリックでの再編集＝09f-bubble-text.jsのinitBubbleTextToolsと並ぶ入口）
+    const bubbleTextModalBtn = document.getElementById('bubble-text-modal-btn');
+    if (bubbleTextModalBtn) {
+        bubbleTextModalBtn.addEventListener('click', () => {
+            if (typeof window.openBubbleTextModal !== 'function') return;
+            const selectedEl = state.selectedShapeId ? document.getElementById(state.selectedShapeId) : null;
+            const isBubbleTextSelected = selectedEl && typeof _isBubbleTextType === 'function' && _isBubbleTextType(selectedEl.dataset.shapeType);
+            window.openBubbleTextModal(isBubbleTextSelected ? selectedEl : undefined);
+        });
+    }
+
     // ── 選択中フキダシをPNG画像に変換するボタン ──
     const h2ToImageBtn = document.getElementById('h2-to-image-btn');
     if (h2ToImageBtn) {
@@ -485,7 +498,7 @@ function initBalloonManager() {
         const el = state.selectedShapeId ? document.getElementById(state.selectedShapeId) : null;
         if (!el) return;
         const type = el.dataset.shapeType;
-        if (type !== 'bomb' && type !== 'thought' && type !== 'normal' && type !== 'rect') return;
+        if (type !== 'bomb' && type !== 'thought' && type !== 'normal' && type !== 'rect' && type !== 'cloudpuffy' && type !== 'cloudwavy') return;
         el.dataset[dataKey] = value;
         const textEl = document.getElementById(textId);
         if (textEl) textEl.textContent = Math.round(value) + (suffix || '');
@@ -512,6 +525,10 @@ function initBalloonManager() {
         ['h2-thought-count',  'thoughtBubbleCount','h2-thought-count-val',  '' ],
         ['h2-thought-offset', 'thoughtBubbleOffset','h2-thought-offset-val', '' ],
         ['h2-rect-radius',    'rectRadius',       'h2-rect-radius-val',      '' ],
+        ['h2-cloud-seed',       'seed',           'h2-cloud-seed-val',       '' ],
+        ['h2-cloud-count',      'shapeCount',     'h2-cloud-count-val',      '' ],
+        ['h2-cloud-amplitude',  'shapeAmplitude', 'h2-cloud-amplitude-val',  '' ],
+        ['h2-cloud-variation',  'shapeVariation', 'h2-cloud-variation-val',  '' ],
     ];
     h2Params.forEach(([inputId, dataKey, textId, suffix]) => {
         const inp = document.getElementById(inputId);
@@ -544,7 +561,7 @@ function initBalloonManager() {
             const el = state.selectedShapeId ? document.getElementById(state.selectedShapeId) : null;
             if (!el) return;
             const cur = el.dataset.shapeType;
-            if (cur !== 'bomb' && cur !== 'thought' && cur !== 'normal' && cur !== 'rect') return;
+            if (cur !== 'bomb' && cur !== 'thought' && cur !== 'normal' && cur !== 'rect' && cur !== 'cloudpuffy' && cur !== 'cloudwavy') return;
             const newType = e.target.value;
             if (newType === 'oval' || newType === 'bubble' || newType === 'spiky') return; // 旧来タイプへの変換は不可
             el.dataset.shapeType = newType;
@@ -558,6 +575,11 @@ function initBalloonManager() {
                 el.dataset.thoughtBubbleSize = 800;
             } else if (newType === 'rect' && !el.dataset.rectRadius) {
                 el.dataset.rectRadius = 80;
+            } else if ((newType === 'cloudpuffy' || newType === 'cloudwavy') && !el.dataset.shapeCount) {
+                if (!el.dataset.seed) el.dataset.seed = Math.floor(Math.random() * 100) + 1;
+                el.dataset.shapeCount = 18;
+                el.dataset.shapeAmplitude = 55;
+                el.dataset.shapeVariation = 0;
             }
             _updateH2ShapePath(el);
             _updateH2HandlePositions(el);
@@ -574,7 +596,7 @@ function initBalloonManager() {
     const borderWidthEl = document.getElementById('border-width');
     // 既存のhandlerでは el.setAttribute('fill',...) するが h2はg要素なので上書き
     // renderHandlesで色同期済み。ここでは h2 データ属性への反映を追加
-    const _isH2Type = (t) => t === 'bomb' || t === 'thought' || t === 'normal' || t === 'rect';
+    const _isH2Type = (t) => t === 'bomb' || t === 'thought' || t === 'normal' || t === 'rect' || t === 'cloudpuffy' || t === 'cloudwavy';
     if (boxColorEl) {
         boxColorEl.addEventListener('input', (e) => {
             const el = state.selectedShapeId ? document.getElementById(state.selectedShapeId) : null;

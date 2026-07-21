@@ -2612,6 +2612,42 @@ input[type="number"] {
   flex-shrink: 0;
 }
 
+/* フキダシ+テキスト作成/編集モーダル（09f-bubble-text.js） */
+.btm-dialog {
+  width: 480px;
+  height: auto;
+  max-height: 80vh;
+}
+.btm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+.btm-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.btm-shape-btns {
+  display: flex;
+  gap: 6px;
+}
+.btm-shape-btns .btn.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+#btm-text-input {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
 /* 検索結果タブ */
 .fontmgr-search-result-tab {
   display: flex;
