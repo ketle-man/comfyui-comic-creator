@@ -1,3 +1,5 @@
+import { FillTool } from "./FillTool.js";
+
 /**
  * ShapeTool — rect / ellipse / line / freeline drawing tool for Image Edit tab.
  * Preview is drawn on the overlay canvas; committed shapes become new draw layers.
@@ -9,6 +11,11 @@ export class ShapeTool {
         this.rounded     = false;
         this.fillColor   = "#ff0000";
         this.fillNone    = false;
+        // 塗り拡張（グラデーション/テクスチャ）。rect / ellipse のみ対応
+        this.fillMode     = "solid"; // "solid" | "gradient" | "texture"
+        this.fillGradient = { shape: "linear", angleDeg: 0, stops: [{ pos: 0, color: "#ffffff" }, { pos: 1, color: "#888888" }] };
+        this.selectedFillStopIdx = 0;
+        this.fillTexture  = null;    // { img, scale } — img は選択時にロード済みの Image
         this.strokeColor = "#000000";
         this.strokeNone  = true;
         this.strokeWidth = 5;
@@ -69,6 +76,27 @@ export class ShapeTool {
     setOriginalImage(img, name) {
         this.originalImg     = img;
         this.originalImgName = name ?? null;
+    }
+
+    // ── 塗りグラデーション ストップ編集（FillTool.evalGradient を再利用） ──
+    addFillStop() {
+        const sorted = [...this.fillGradient.stops].sort((a, b) => a.pos - b.pos);
+        let gapStart = 0, gapSize = 0;
+        for (let i = 0; i < sorted.length - 1; i++) {
+            const gap = sorted[i + 1].pos - sorted[i].pos;
+            if (gap > gapSize) { gapSize = gap; gapStart = sorted[i].pos; }
+        }
+        const pos = sorted.length < 2 ? 0.5 : gapStart + gapSize / 2;
+        const c = FillTool.evalGradient(this.fillGradient.stops, pos);
+        const hex = "#" + [c.r, c.g, c.b].map(v => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, "0")).join("");
+        this.fillGradient.stops.push({ pos, color: hex });
+        this.selectedFillStopIdx = this.fillGradient.stops.length - 1;
+    }
+
+    removeFillStop() {
+        if (this.fillGradient.stops.length <= 1) return;
+        this.fillGradient.stops.splice(this.selectedFillStopIdx, 1);
+        this.selectedFillStopIdx = Math.max(0, Math.min(this.selectedFillStopIdx, this.fillGradient.stops.length - 1));
     }
 
     onMouseUp() {
@@ -165,6 +193,9 @@ export class ShapeTool {
             c:           { ...c },
             points:      isPath ? this._points.map(p => ({ ...p })) : [],
             fillColor:   this.fillNone   ? null : this.fillColor,
+            fillMode:     this.fillMode,
+            fillGradient: this.fillMode === "gradient" ? { shape: this.fillGradient.shape, angleDeg: this.fillGradient.angleDeg, stops: this.fillGradient.stops.map(s => ({ ...s })) } : null,
+            fillTexture:  (this.fillMode === "texture" && this.fillTexture?.img) ? { img: this.fillTexture.img, scale: this.fillTexture.scale } : null,
             // line / freeline / chain / rope always use stroke; ignore strokeNone
             strokeColor: (isStrokeMandatory || !this.strokeNone) ? this.strokeColor : null,
             strokeWidth: (isStrokeMandatory || !this.strokeNone) ? this.strokeWidth : 0,
@@ -257,7 +288,7 @@ export class ShapeTool {
             const w  = Math.abs(c.x - s.x),  h  = Math.abs(c.y - s.y);
             ctx.beginPath();
             ctx.ellipse(x1 + w / 2, y1 + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
-            if (fillColor)                       { ctx.fillStyle   = fillColor;   ctx.fill();   }
+            if (fillColor)                       { ctx.fillStyle   = ShapeTool._fillStyleFor(ctx, sh, x1, y1, w, h); ctx.fill();   }
             if (strokeColor && strokeWidth > 0)  { ctx.strokeStyle = strokeColor; ctx.lineWidth = strokeWidth; ctx.stroke(); }
         } else if (kind === "line") {
             if (strokeColor && strokeWidth > 0) {
@@ -281,10 +312,45 @@ export class ShapeTool {
                 ctx.beginPath();
                 ctx.rect(x1, y1, w, h);
             }
-            if (fillColor)                       { ctx.fillStyle   = fillColor;   ctx.fill();   }
+            if (fillColor)                       { ctx.fillStyle   = ShapeTool._fillStyleFor(ctx, sh, x1, y1, w, h); ctx.fill();   }
             if (strokeColor && strokeWidth > 0)  { ctx.strokeStyle = strokeColor; ctx.lineWidth = strokeWidth; ctx.stroke(); }
         }
         ctx.restore();
+    }
+
+    /**
+     * 図形塗りのfillStyleを生成する（単色/グラデーション/テクスチャ）。
+     * image-tab.js の _textFillStyle と同型だが、基準サイズはテキストのfontSizeではなく
+     * 図形自身のバウンディングボックス(x1,y1,w,h)。テクスチャ画像は選択時にロード済みのImageを
+     * そのまま使う（シェイプは確定時に一度だけラスタへ焼き込むため非同期キャッシュは不要）
+     */
+    static _fillStyleFor(ctx, sh, x1, y1, w, h) {
+        const { fillMode, fillGradient, fillTexture, fillColor } = sh;
+        if (fillMode === "gradient" && fillGradient?.stops?.length) {
+            const cx = x1 + w / 2, cy = y1 + h / 2;
+            let grad;
+            if (fillGradient.shape === "radial") {
+                grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(1, Math.hypot(w, h) / 2));
+            } else {
+                const rad = ((fillGradient.angleDeg || 0) * Math.PI) / 180;
+                const dx = Math.cos(rad), dy = Math.sin(rad);
+                const half = (Math.abs(dx) * w + Math.abs(dy) * h) / 2;
+                grad = ctx.createLinearGradient(cx - dx * half, cy - dy * half, cx + dx * half, cy + dy * half);
+            }
+            [...fillGradient.stops].sort((a, b) => a.pos - b.pos).forEach(st => {
+                grad.addColorStop(Math.max(0, Math.min(1, st.pos)), st.color || "#000000");
+            });
+            return grad;
+        }
+        if (fillMode === "texture" && fillTexture?.img) {
+            const pattern = ctx.createPattern(fillTexture.img, "repeat");
+            const s = (fillTexture.scale || 100) / 100;
+            if (pattern && typeof pattern.setTransform === "function" && typeof DOMMatrix !== "undefined") {
+                pattern.setTransform(new DOMMatrix().scale(s, s));
+            }
+            if (pattern) return pattern;
+        }
+        return fillColor || "#000000";
     }
 
     // 鎖の一コマを描画（中心x,y / 角度 / スケール / toggle / 色）

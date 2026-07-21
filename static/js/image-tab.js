@@ -923,8 +923,30 @@ class ImageTab {
                 <div class="ie-opt-group" id="ie-shape-fill-wrap" style="display:${isLineKind?"none":""};">
                     <label>Fill</label>
                     <input type="checkbox" id="ie-shape-fill-none" ${t.fillNone?"checked":""}> <span style="font-size:11px;color:var(--it-text-secondary);">None</span>
-                    <input type="color" id="ie-shape-fill" value="${t.fillColor}" ${t.fillNone?"disabled":""}
-                        style="width:28px;height:24px;padding:0;border:1px solid var(--it-border);cursor:pointer;border-radius:3px;margin-left:2px;">
+                    <select id="ie-shape-fill-mode" class="ie-opt-select" ${t.fillNone?"disabled":""}>
+                        <option value="solid"    ${t.fillMode==="solid"    ?"selected":""}>${window.t("font.fillModeSolid")}</option>
+                        <option value="gradient" ${t.fillMode==="gradient" ?"selected":""}>${window.t("font.fillModeGradient")}</option>
+                        <option value="texture"  ${t.fillMode==="texture"  ?"selected":""}>${window.t("font.fillModeTexture")}</option>
+                    </select>
+                    <input type="color" id="ie-shape-fill" value="${t.fillColor}" ${(t.fillNone||t.fillMode!=="solid")?"disabled":""}
+                        style="width:28px;height:24px;padding:0;border:1px solid var(--it-border);cursor:pointer;border-radius:3px;margin-left:2px;display:${(!t.fillNone&&t.fillMode==="solid")?"":"none"};">
+                </div>
+                <div class="ie-opt-group" id="ie-shape-fill-gradient-panel" style="display:${(!t.fillNone&&!isLineKind&&t.fillMode==="gradient")?"":"none"};flex-wrap:wrap;">
+                    <select id="ie-shape-grad-shape" class="ie-opt-select">
+                        <option value="linear" ${t.fillGradient.shape==="linear"?"selected":""}>${window.t("font.gradShapeLinear")}</option>
+                        <option value="radial" ${t.fillGradient.shape==="radial"?"selected":""}>${window.t("font.gradShapeRadial")}</option>
+                    </select>
+                    <label style="font-size:11px;">${window.t("font.gradAngle")}<input type="number" id="ie-shape-grad-angle" value="${t.fillGradient.angleDeg}" step="15" style="width:44px;" class="ie-opt-input"></label>
+                    <canvas id="ie-shape-grad-ramp" width="120" height="24" style="display:block;width:120px;height:24px;border:1px solid var(--it-border);border-radius:3px;cursor:pointer;"></canvas>
+                    <input type="color" id="ie-shape-grad-stop-color" value="#ffffff" style="width:26px;height:22px;padding:0;">
+                    <button type="button" id="ie-shape-grad-stop-add" class="it-btn it-btn-sm" title="${window.t("font.gradStopAdd")}">＋</button>
+                    <button type="button" id="ie-shape-grad-stop-remove" class="it-btn it-btn-sm" title="${window.t("font.gradStopRemove")}">－</button>
+                </div>
+                <div class="ie-opt-group" id="ie-shape-fill-texture-panel" style="display:${(!t.fillNone&&!isLineKind&&t.fillMode==="texture")?"":"none"};">
+                    <button type="button" id="ie-shape-tex-select-btn" class="it-btn it-btn-sm">${window.t("font.texSelectImage")}</button>
+                    <img id="ie-shape-tex-thumb" alt="" style="width:24px;height:24px;object-fit:cover;border:1px solid var(--it-border);border-radius:3px;display:${t.fillTexture?.img?"":"none"};" ${t.fillTexture?.img?`src="${t.fillTexture.img.src}"`:""}>
+                    <input type="file" id="ie-shape-tex-file" accept="image/*" style="display:none;">
+                    <label style="font-size:11px;">${window.t("font.texScale")}<input type="number" id="ie-shape-tex-scale" min="1" max="1000" value="${t.fillTexture?.scale ?? 100}" style="width:50px;" class="ie-opt-input">%</label>
                 </div>
                 <div class="ie-opt-group" id="ie-shape-stroke-wrap" style="display:${showStrokeUI?"":"none"};">
                     <label>Stroke</label>
@@ -974,11 +996,59 @@ class ImageTab {
             });
             document.getElementById("ie-shape-fill-none")?.addEventListener("change", e => {
                 t.fillNone = e.target.checked;
-                document.getElementById("ie-shape-fill").disabled = e.target.checked;
+                this._renderToolOptions("shape");
+            });
+            document.getElementById("ie-shape-fill-mode")?.addEventListener("change", e => {
+                t.fillMode = e.target.value;
+                this._renderToolOptions("shape");
             });
             document.getElementById("ie-shape-fill")?.addEventListener("input", e => {
                 t.fillColor = e.target.value;
             });
+            if (!t.fillNone && !isLineKind && t.fillMode === "gradient") {
+                document.getElementById("ie-shape-grad-shape")?.addEventListener("change", e => {
+                    t.fillGradient.shape = e.target.value;
+                });
+                document.getElementById("ie-shape-grad-angle")?.addEventListener("input", e => {
+                    t.fillGradient.angleDeg = parseFloat(e.target.value) || 0;
+                });
+                document.getElementById("ie-shape-grad-stop-color")?.addEventListener("input", e => {
+                    const s = t.fillGradient.stops[t.selectedFillStopIdx];
+                    if (s) { s.color = e.target.value; this._drawShapeGradRamp(); }
+                });
+                document.getElementById("ie-shape-grad-stop-add")?.addEventListener("click", () => {
+                    t.addFillStop();
+                    this._renderToolOptions("shape");
+                });
+                document.getElementById("ie-shape-grad-stop-remove")?.addEventListener("click", () => {
+                    t.removeFillStop();
+                    this._renderToolOptions("shape");
+                });
+                this._setupShapeGradRamp();
+            }
+            if (!t.fillNone && !isLineKind && t.fillMode === "texture") {
+                document.getElementById("ie-shape-tex-select-btn")?.addEventListener("click", () => {
+                    document.getElementById("ie-shape-tex-file")?.click();
+                });
+                document.getElementById("ie-shape-tex-file")?.addEventListener("change", e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const img = new Image();
+                        img.onload = () => {
+                            t.fillTexture = { img, scale: t.fillTexture?.scale ?? 100 };
+                            this._renderToolOptions("shape");
+                        };
+                        img.src = reader.result;
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = "";
+                });
+                document.getElementById("ie-shape-tex-scale")?.addEventListener("input", e => {
+                    if (t.fillTexture) t.fillTexture.scale = parseFloat(e.target.value) || 100;
+                });
+            }
             document.getElementById("ie-shape-stroke-none")?.addEventListener("change", e => {
                 t.strokeNone = e.target.checked;
                 document.getElementById("ie-shape-stroke").disabled       = e.target.checked;
@@ -1214,6 +1284,14 @@ class ImageTab {
                         <option value="birefnet" ${birefnetDisabled}>${birefnetLabel}</option>
                     </select>
                 </div>
+                <div class="ie-opt-group" id="ie-bgremove-quality-wrap">
+                    <label>Quality</label>
+                    <select id="ie-bgremove-quality" class="ie-opt-select" title="Higher quality means a larger first-time download (small=42MB / medium=84MB / large=168MB)">
+                        <option value="small">Low / light (42MB)</option>
+                        <option value="medium" selected>Standard (84MB)</option>
+                        <option value="large">High (168MB)</option>
+                    </select>
+                </div>
                 <div class="ie-opt-group">
                     <label style="font-size:11px;cursor:pointer;">
                         <input type="checkbox" id="ie-bgremove-new-layer" checked> New Layer
@@ -1224,6 +1302,11 @@ class ImageTab {
                 </div>
                 <span id="ie-bgremove-status" style="font-size:11px;color:var(--it-text-secondary);margin-left:4px;"></span>
             `;
+            const bgModelSel   = document.getElementById("ie-bgremove-model");
+            const bgQualityWrap = document.getElementById("ie-bgremove-quality-wrap");
+            const syncBgQualityVis = () => { bgQualityWrap.style.display = bgModelSel.value === "imgly" ? "" : "none"; };
+            bgModelSel?.addEventListener("change", syncBgQualityVis);
+            syncBgQualityVis();
             document.getElementById("ie-bgremove-btn")?.addEventListener("click", () => this._applyBgRemove());
 
         } else if (toolId === "filter") {
@@ -1925,6 +2008,75 @@ class ImageTab {
                 const x = (ev.clientX - r.left) * (canvas.width / r.width);
                 t.gradientStops[t.selectedStopIdx].pos = Math.max(0, Math.min(1, x / canvas.width));
                 this._drawFillGradientRamp();
+            };
+            const onUp = () => {
+                document.removeEventListener("mousemove", onMove);
+                document.removeEventListener("mouseup", onUp);
+            };
+            document.addEventListener("mousemove", onMove);
+            document.addEventListener("mouseup", onUp);
+        });
+    }
+
+    /** シェイプツール（rect/ellipse）の塗りグラデーションランプ描画。_drawFillGradientRampと同型 */
+    _drawShapeGradRamp() {
+        const canvas = document.getElementById("ie-shape-grad-ramp");
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const w = canvas.width, h = canvas.height;
+        const t = this._shapeTool;
+        ctx.clearRect(0, 0, w, h);
+
+        const barH = h - 8;
+        const grad = ctx.createLinearGradient(0, 0, w, 0);
+        [...t.fillGradient.stops].sort((a, b) => a.pos - b.pos).forEach(s => grad.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, barH);
+        ctx.strokeStyle = "#666";
+        ctx.strokeRect(0.5, 0.5, w - 1, barH - 1);
+
+        t.fillGradient.stops.forEach((s, i) => {
+            const x = Math.max(5, Math.min(w - 5, s.pos * w));
+            ctx.beginPath();
+            ctx.moveTo(x, h);
+            ctx.lineTo(x - 5, barH);
+            ctx.lineTo(x + 5, barH);
+            ctx.closePath();
+            ctx.fillStyle = i === t.selectedFillStopIdx ? "#0077ff" : "#999";
+            ctx.fill();
+        });
+    }
+
+    _setupShapeGradRamp() {
+        const canvas = document.getElementById("ie-shape-grad-ramp");
+        if (!canvas) return;
+        this._drawShapeGradRamp();
+
+        const t = this._shapeTool;
+        const hitTestStop = mx => {
+            let best = -1, bestDist = 9;
+            t.fillGradient.stops.forEach((s, i) => {
+                const d = Math.abs(s.pos * canvas.width - mx);
+                if (d < bestDist) { bestDist = d; best = i; }
+            });
+            return best;
+        };
+
+        canvas.addEventListener("mousedown", e => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const idx = hitTestStop(mx);
+            if (idx < 0) return;
+            t.selectedFillStopIdx = idx;
+            this._drawShapeGradRamp();
+            const colorInput = document.getElementById("ie-shape-grad-stop-color");
+            if (colorInput) colorInput.value = t.fillGradient.stops[idx].color;
+
+            const onMove = ev => {
+                const r = canvas.getBoundingClientRect();
+                const x = (ev.clientX - r.left) * (canvas.width / r.width);
+                t.fillGradient.stops[t.selectedFillStopIdx].pos = Math.max(0, Math.min(1, x / canvas.width));
+                this._drawShapeGradRamp();
             };
             const onUp = () => {
                 document.removeEventListener("mousemove", onMove);
@@ -4164,7 +4316,8 @@ class ImageTab {
 
     // ── 背景除去 ─────────────────────────────────
 
-    async _bgRemoveImgly(dataUrl, onStatus) {
+    // quality: "small"（軽量・低品質、isnet_quint8）/ "medium"（標準、isnet_fp16、既定）/ "large"（高品質、isnet）
+    async _bgRemoveImgly(dataUrl, onStatus, quality = "medium") {
         if (!window._ccImageTabImglyRemoveBg) {
             onStatus("Loading model...");
             const mod = await import("https://esm.sh/@imgly/background-removal@1.5.7?bundle&target=es2022");
@@ -4175,6 +4328,7 @@ class ImageTab {
         const blob = await res.blob();
         const resultBlob = await window._ccImageTabImglyRemoveBg(blob, {
             publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.5.7/dist/",
+            model: quality,
         });
         return await new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -4253,6 +4407,7 @@ class ImageTab {
         if (!layer)  { this._toast("No active layer", "error"); return; }
 
         const model    = document.getElementById("ie-bgremove-model")?.value ?? "imgly";
+        const quality  = document.getElementById("ie-bgremove-quality")?.value ?? "medium";
         const asNew    = document.getElementById("ie-bgremove-new-layer")?.checked ?? true;
         const statusEl = document.getElementById("ie-bgremove-status");
         const btn      = document.getElementById("ie-bgremove-btn");
@@ -4266,7 +4421,7 @@ class ImageTab {
 
             let resultDataUrl;
             if (model === "imgly") {
-                resultDataUrl = await this._bgRemoveImgly(dataUrl, setStatus);
+                resultDataUrl = await this._bgRemoveImgly(dataUrl, setStatus, quality);
             } else {
                 resultDataUrl = await this._bgRemoveBiRefNet(dataUrl, setStatus);
             }

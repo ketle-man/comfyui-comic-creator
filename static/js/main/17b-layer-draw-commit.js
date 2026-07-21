@@ -46,9 +46,7 @@ async function _layerDrawCommitInner() {
     const targetG = getOrCreateClipGroup(svgEl);
 
     const ns      = 'http://www.w3.org/2000/svg';
-    const fillNone    = document.getElementById('layer-draw-fill-none').checked;
     const strokeNone  = document.getElementById('layer-draw-stroke-none').checked;
-    const fillColor   = fillNone   ? 'none' : document.getElementById('layer-draw-fill').value;
     const strokeColor = strokeNone ? 'none' : document.getElementById('layer-draw-stroke').value;
     const strokeW     = strokeNone ? 0      : (parseFloat(document.getElementById('layer-draw-stroke-width').value) || 0);
     const opacity     = parseInt(document.getElementById('layer-draw-opacity').value, 10) / 100;
@@ -159,7 +157,7 @@ async function _layerDrawCommitInner() {
     }
 
     if (shape !== 'chain' && shape !== 'rope') {
-        el.setAttribute('fill',   fillColor);
+        _fontMgrApplyFillPaintToEl(el, svgEl, _layerDrawGetFillStyleObj(), 1);
         if (strokeColor !== 'none' && strokeW > 0) {
             el.setAttribute('stroke',       strokeColor);
             el.setAttribute('stroke-width', strokeW.toString());

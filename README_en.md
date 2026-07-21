@@ -20,7 +20,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Image placement** — Drag and drop images into panels; resize (aspect ratio locked by default, hold Alt to resize freely) and rotate with handles
 - **Speech balloons** — Place oval, rounded-rectangle, thought, and burst-shaped balloons inside panels, with 8-point resize handles. Custom SVG balloons from assets can also have their fill/border colors changed after placement
 - **Text** — Vertical/horizontal writing, Google Fonts / system fonts, a style modal for fill, stroke, outline, and shadow. Fills support gradients, textures, and no-fill in addition to solid colors (shared between the Layout and Image tabs)
-- **Shape drawing (Draw)** — Draw rectangles, ellipses, lines, curves, polygons, chains, ropes, and My Curve directly onto an SVG layer
+- **Shape drawing (Draw)** — Draw rectangles, ellipses, lines, curves, polygons, chains, ropes, and My Curve directly onto an SVG layer. Fills (rectangles, ellipses, polygons, etc.) support gradients, textures, and no-fill in addition to solid colors
 - **3D pose** — Place a VRM/GLB/GLTF model inside a panel, pose it, and bake it into the image (via [comfyui-vrm-pose-editor](#optional-dependencies))
 - **Groups and layer panel** — Group objects, manage stacking order, toggle visibility, lock, and **delete with the Delete / Backspace key**
 - **I2I integration** — Send a selected image to Workflow Studio's Generate UI and bring the result back (via [ComfyUI-Workflow-Studio](#optional-dependencies))
@@ -30,7 +30,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 ### Image tab (layer-based Canvas 2D editor)
 - **Select / Text / Draw / Shape / Fill / Mask / Blur / Filter / BG Remove / Upscale** tools
 - **Eyedropper for the Draw tool** — Pick a color directly from the canvas via the button next to the color picker
-- **Same Layer mode for the Shape tool** — Keep adding shapes to the same layer instead of creating a new one for every shape
+- **Same Layer mode for the Shape tool** — Keep adding shapes to the same layer instead of creating a new one for every shape. Rectangle/ellipse fills support gradients and textures in addition to solid colors
 - **Fill tool** — Solid color fill, or linear/radial gradient fill with a color ramp and direction pad
 - **Mask tool** — Paint/Color/Alpha/Text/Vector/Shape sub-tools, also supporting SAM3 segmentation and ABR brushes (tool set implemented with reference to [comfyui-mask-editor-one](#acknowledgements))
 - **PixiJS FX** — Apply particle/filter effects to the active layer from a toolbar button (via [comfyUI-particle-pixijs](#optional-dependencies))

@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-comic-creator"
 description = "A manga page creation SPA for ComfyUI: templates, layered image editor, speech balloons, font manager, AI image generation (Nanobanana), script management, and halftone/manga-effect tools."
-version = "1.6.0"
+version = "1.7.0"
 license = {file = "LICENSE"}
 
 [project.urls]

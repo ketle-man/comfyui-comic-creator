@@ -3,7 +3,7 @@
 // 元 17-layer-draw.js（分割前）の行 1015-1574 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _drawShapeApplyRotation,_drawShapeGetBounds,_drawShapeSetBounds,_drawShapeSyncProps,_drawUpdateTransformForPathG,_initEditTabTrigger,_layerDrawSelectShape,_polygonBakeRotation,_polygonDisplayPoints,_polygonGetPoints,_polygonPointsBounds,_polygonSetPoints,_renderPolygonVertexHandles,clearDrawShapeHandles,initDrawShapeManipulation,renderDrawShapeHandles,updateDrawShapeHandles
+// 主なトップレベル定義: _drawShapeApplyRotation,_drawShapeExtractFillState,_drawShapeGetBounds,_drawShapeSetBounds,_drawShapeSyncProps,_drawUpdateTransformForPathG,_initEditTabTrigger,_layerDrawSelectShape,_polygonBakeRotation,_polygonDisplayPoints,_polygonGetPoints,_polygonPointsBounds,_polygonSetPoints,_renderPolygonVertexHandles,clearDrawShapeHandles,initDrawShapeManipulation,renderDrawShapeHandles,updateDrawShapeHandles
 // ============================================================
 
 // ─────────────────────────────────────────────
@@ -39,25 +39,72 @@ function _layerDrawSelectShape(el, svgEl) {
     renderLayerPanel();
 }
 
+// 選択中のdraw-shape要素のfill属性（単色/none/url(#グラデ・パターン)）を解析し、
+// _layerDrawFillState / UIへ復元できる形（_fontMgrExtractStyleFromTextEl の塗り抽出部と同じロジック）で返す。
+// テキスト用の抽出関数を流用しない（font-weight等テキスト専用属性を読みに行くため）ミニマム版
+function _drawShapeExtractFillState(el, svgEl) {
+    const fillAttr = el.getAttribute('fill') || 'none';
+    let fillEnabled = true, fillMode = 'solid', fillSolid = '#000000';
+    let fillGradient = null, fillTexture = null;
+    if (fillAttr === 'none') {
+        fillEnabled = false;
+    } else {
+        const um = /url\(["']?#([^"')]+)["']?\)/.exec(fillAttr);
+        const def = um && svgEl ? svgEl.querySelector(`[id="${um[1]}"]`) : null;
+        if (def && (def.tagName === 'linearGradient' || def.tagName === 'radialGradient')) {
+            fillMode = 'gradient';
+            const stops = [...def.querySelectorAll('stop')].map(s => ({
+                pos: parseFloat(s.getAttribute('offset')) || 0,
+                color: s.getAttribute('stop-color') || '#000000',
+            }));
+            let shape = 'linear', angleDeg = 0;
+            if (def.tagName === 'radialGradient') {
+                shape = 'radial';
+            } else {
+                const x1 = parseFloat(def.getAttribute('x1') ?? 0), y1 = parseFloat(def.getAttribute('y1') ?? 0);
+                const x2 = parseFloat(def.getAttribute('x2') ?? 1), y2 = parseFloat(def.getAttribute('y2') ?? 0);
+                angleDeg = Math.round(Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI);
+                if (angleDeg < 0) angleDeg += 360;
+            }
+            fillGradient = { shape, angleDeg, stops: stops.length ? stops : [{ pos: 0, color: '#ffffff' }, { pos: 1, color: '#888888' }] };
+            fillSolid = stops[0]?.color || '#000000';
+        } else if (def && def.tagName === 'pattern') {
+            fillMode = 'texture';
+            const img = def.querySelector('image');
+            fillTexture = {
+                dataUrl: img?.getAttribute('href') || img?.getAttribute('xlink:href') || '',
+                w: parseFloat(def.getAttribute('data-ccc-tex-w')) || 100,
+                h: parseFloat(def.getAttribute('data-ccc-tex-h')) || 100,
+                scale: parseFloat(def.getAttribute('data-ccc-tex-scale')) || 100,
+            };
+        } else if (!um) {
+            fillSolid = fillAttr;
+        }
+    }
+    return { fillEnabled, fillMode, fill: fillSolid, fillGradient, fillTexture };
+}
+
 // draw-shape の現在プロパティを描画UIに同期（図形編集モードON時に選択図形から同期）
 function _drawShapeSyncProps(el) {
     if (!el) return;
     if (!_layerDrawState.editMode) return;
 
-    const fill    = el.getAttribute('fill')   || 'none';
+    const svgEl = el.ownerSVGElement;
+    const fillState = _drawShapeExtractFillState(el, svgEl);
     const stroke  = el.getAttribute('stroke') || 'none';
     const sw      = parseFloat(el.getAttribute('stroke-width') || 0);
     const opacity = Math.round((parseFloat(el.getAttribute('opacity') || 1)) * 100);
 
-    const fillNone   = fill   === 'none';
     const strokeNone = stroke === 'none';
 
     const drawFill   = document.getElementById('layer-draw-fill');
     const drawStroke = document.getElementById('layer-draw-stroke');
 
-    document.getElementById('layer-draw-fill-none').checked = fillNone;
-    drawFill.disabled = fillNone;
-    drawFill.value    = fillNone   ? '#000000' : _svgColorToHex6(fill);
+    document.getElementById('layer-draw-fill-none').checked = !fillState.fillEnabled;
+    drawFill.disabled = !fillState.fillEnabled;
+    drawFill.value    = fillState.fillEnabled ? _svgColorToHex6(fillState.fill) : '#000000';
+    document.getElementById('layer-draw-fill-mode').disabled = !fillState.fillEnabled;
+    _layerDrawLoadFillStateFromShape(fillState);
 
     document.getElementById('layer-draw-stroke-none').checked   = strokeNone;
     drawStroke.disabled = strokeNone;

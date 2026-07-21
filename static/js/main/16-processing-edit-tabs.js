@@ -33,11 +33,16 @@ function initProcessingTab() {
     sharpen.addEventListener('input', () => {
         sharpenV.textContent = sharpen.value + '%';
     });
-    const bgRemoveChk   = document.getElementById('proc-bg-remove');
-    const bgModelSelect = document.getElementById('proc-bg-model');
-    bgRemoveChk.addEventListener('change', () => {
-        bgModelSelect.style.display = bgRemoveChk.checked ? 'inline-block' : 'none';
-    });
+    const bgRemoveChk     = document.getElementById('proc-bg-remove');
+    const bgModelSelect   = document.getElementById('proc-bg-model');
+    const bgQualitySelect = document.getElementById('proc-bg-quality');
+    const syncBgUI = () => {
+        const on = bgRemoveChk.checked;
+        bgModelSelect.style.display   = on ? 'inline-block' : 'none';
+        bgQualitySelect.style.display = (on && bgModelSelect.value === 'imgly') ? 'inline-block' : 'none';
+    };
+    bgRemoveChk.addEventListener('change', syncBgUI);
+    bgModelSelect.addEventListener('change', syncBgUI);
     runBtn.addEventListener('click', _procRun);
 }
 
@@ -45,6 +50,7 @@ async function _procRun() {
     const statusEl  = document.getElementById('proc-status');
     const bgRemove  = document.getElementById('proc-bg-remove').checked;
     const bgModel   = document.getElementById('proc-bg-model').value;
+    const bgQuality = document.getElementById('proc-bg-quality').value;
     const denoise   = document.getElementById('proc-denoise').checked;
     const sharpenPc = parseInt(document.getElementById('proc-sharpen').value, 10) / 100;
 
@@ -83,7 +89,7 @@ async function _procRun() {
         // 背景除去
         if (bgRemove) {
             statusEl.textContent = t('layout.procBgRemoving', bgModel === 'birefnet' ? 'BiRefNet' : t('layout.procLightModel'));
-            dataUrl = await _procRemoveBackground(dataUrl, bgModel);
+            dataUrl = await _procRemoveBackground(dataUrl, bgModel, bgQuality);
         }
 
         // アップスケール
@@ -172,14 +178,15 @@ function _procRemoveBackgroundSvg(dataUrl) {
     }
 }
 
-async function _procRemoveBackground(dataUrl, model = 'imgly') {
+async function _procRemoveBackground(dataUrl, model = 'imgly', quality = 'medium') {
     if (model === 'birefnet') {
         return await _procRemoveBackgroundBiRefNet(dataUrl);
     }
-    return await _procRemoveBackgroundImgly(dataUrl);
+    return await _procRemoveBackgroundImgly(dataUrl, quality);
 }
 
-async function _procRemoveBackgroundImgly(dataUrl) {
+// quality: 'small'（軽量・低品質、isnet_quint8）/ 'medium'（標準、isnet_fp16、既定）/ 'large'（高品質、isnet）
+async function _procRemoveBackgroundImgly(dataUrl, quality = 'medium') {
     if (!window._imglyRemoveBackground) {
         const mod = await import('https://esm.sh/@imgly/background-removal@1.5.7?bundle&target=es2022');
         window._imglyRemoveBackground = mod.removeBackground;
@@ -188,7 +195,8 @@ async function _procRemoveBackgroundImgly(dataUrl) {
     const res = await fetch(dataUrl);
     const blob = await res.blob();
     const resultBlob = await fn(blob, {
-        publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.5.7/dist/'
+        publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.5.7/dist/',
+        model: quality,
     });
     return await new Promise((resolve, reject) => {
         const reader = new FileReader();

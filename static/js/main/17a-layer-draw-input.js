@@ -3,7 +3,7 @@
 // 元 17-layer-draw.js（分割前）の行 1-715 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _POLY_CLOSE_THRESHOLD,_drawChainPreview,_drawRopePreview,_layerDrawApplyPropsToSelected,_layerDrawAttachOverlay,_layerDrawClientToSvg,_layerDrawDetachOverlay,_layerDrawKeyDown,_layerDrawMouseDown,_layerDrawMouseMove,_layerDrawMouseUp,_layerDrawMouseUpGlobal,_layerDrawPolyClick,_layerDrawPolyCommit,_layerDrawPolyCommitInner,_layerDrawPolyIsNearStart,_layerDrawPolyPreview,_layerDrawPolyReset,_layerDrawResizeCanvas,_layerDrawState,_layerDrawSvgToCanvas,_layerDrawUpdateStatusForShape,_layerDrawUpdateToggle,_loadDefaultOriginalImg,initLayerDraw
+// 主なトップレベル定義: _POLY_CLOSE_THRESHOLD,_drawChainPreview,_drawRopePreview,_layerDrawApplyPropsToSelected,_layerDrawAttachOverlay,_layerDrawClientToSvg,_layerDrawDetachOverlay,_layerDrawFillRampColorAt,_layerDrawFillState,_layerDrawFillSyncUI,_layerDrawDrawGradRamp,_layerDrawGetFillStyleObj,_layerDrawLoadFillStateFromShape,_layerDrawKeyDown,_layerDrawMouseDown,_layerDrawMouseMove,_layerDrawMouseUp,_layerDrawMouseUpGlobal,_layerDrawPolyClick,_layerDrawPolyCommit,_layerDrawPolyCommitInner,_layerDrawPolyIsNearStart,_layerDrawPolyPreview,_layerDrawPolyReset,_layerDrawResizeCanvas,_layerDrawState,_layerDrawSvgToCanvas,_layerDrawUpdateStatusForShape,_layerDrawUpdateToggle,_loadDefaultOriginalImg,initLayerDraw
 // ============================================================
 
 // ─────────────────────────────────────────────
@@ -25,6 +25,132 @@ const _layerDrawState = {
     polyPoints:   [],      // 多角形ペン: 確定済み頂点（SVG座標）
     polyHoverPt:  null,    // 多角形ペン: カーソル位置（SVG座標）
 };
+
+// ──────────────────────
+// 塗り拡張（グラデーション/テクスチャ）状態
+// フォントタブのスタイル塗りUI（19-font-manager.js / text-style-modal.js）の簡易版を
+// ドロー図形向けに複製したもの。SVGへの実適用は09e-text-tool.jsの
+// _fontMgrApplyFillPaintToEl(el, svgEl, styleObj, k) をそのまま再利用する（第1引数は任意の要素でよい設計）。
+// ドロー図形にはフォントサイズ相当の基準がないため k=1 固定（テクスチャのスケール%がそのままSVG単位のタイルサイズ）
+// ──────────────────────
+const _layerDrawFillState = {
+    mode: 'solid', // "solid" | "gradient" | "texture"
+    gradient: { shape: 'linear', angleDeg: 0, stops: [{ pos: 0, color: '#ffffff' }, { pos: 1, color: '#888888' }] },
+    selectedStopIdx: 0,
+    texture: null, // { dataUrl, w, h, scale }
+};
+
+function _layerDrawFillRampColorAt(stops, tPos) {
+    const sorted = [...stops].sort((a, b) => a.pos - b.pos);
+    if (!sorted.length) return '#000000';
+    if (tPos <= sorted[0].pos) return sorted[0].color;
+    const last = sorted[sorted.length - 1];
+    if (tPos >= last.pos) return last.color;
+    const h2rgb = hex => {
+        const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '#000000');
+        return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 0, g: 0, b: 0 };
+    };
+    const rgb2h = ({ r, g, b }) => {
+        const h = v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0');
+        return `#${h(r)}${h(g)}${h(b)}`;
+    };
+    for (let i = 0; i < sorted.length - 1; i++) {
+        const a = sorted[i], b = sorted[i + 1];
+        if (tPos >= a.pos && tPos <= b.pos) {
+            const lt = (b.pos - a.pos) > 0 ? (tPos - a.pos) / (b.pos - a.pos) : 0;
+            const ca = h2rgb(a.color), cb = h2rgb(b.color);
+            return rgb2h({ r: ca.r + (cb.r - ca.r) * lt, g: ca.g + (cb.g - ca.g) * lt, b: ca.b + (cb.b - ca.b) * lt });
+        }
+    }
+    return last.color;
+}
+
+function _layerDrawDrawGradRamp() {
+    const canvas = document.getElementById('layer-draw-grad-ramp');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    const barH = h - 10;
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+    [..._layerDrawFillState.gradient.stops].sort((a, b) => a.pos - b.pos).forEach(s => grad.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, barH);
+    ctx.strokeStyle = '#666';
+    ctx.strokeRect(0.5, 0.5, w - 1, barH - 1);
+    _layerDrawFillState.gradient.stops.forEach((s, i) => {
+        const x = Math.max(5, Math.min(w - 5, s.pos * w));
+        ctx.beginPath();
+        ctx.moveTo(x, h);
+        ctx.lineTo(x - 5, barH);
+        ctx.lineTo(x + 5, barH);
+        ctx.closePath();
+        ctx.fillStyle = i === _layerDrawFillState.selectedStopIdx ? '#0077ff' : '#999';
+        ctx.fill();
+    });
+}
+
+// 塗りなしチェック・モードに応じてモード選択/グラデ/テクスチャパネルの表示を切り替える
+function _layerDrawFillSyncUI() {
+    const fillNone = document.getElementById('layer-draw-fill-none').checked;
+    const modeSel = document.getElementById('layer-draw-fill-mode');
+    modeSel.value = _layerDrawFillState.mode;
+    modeSel.disabled = fillNone;
+    document.getElementById('layer-draw-fill').style.display = (!fillNone && _layerDrawFillState.mode === 'solid') ? '' : 'none';
+    document.getElementById('layer-draw-fill-gradient-panel').style.display = (!fillNone && _layerDrawFillState.mode === 'gradient') ? 'flex' : 'none';
+    document.getElementById('layer-draw-fill-texture-panel').style.display = (!fillNone && _layerDrawFillState.mode === 'texture') ? 'flex' : 'none';
+    const thumb = document.getElementById('layer-draw-tex-thumb');
+    if (_layerDrawFillState.texture?.dataUrl) {
+        thumb.src = _layerDrawFillState.texture.dataUrl;
+        thumb.style.display = '';
+    } else {
+        thumb.style.display = 'none';
+    }
+    if (!fillNone && _layerDrawFillState.mode === 'gradient') {
+        document.getElementById('layer-draw-grad-shape').value = _layerDrawFillState.gradient.shape;
+        document.getElementById('layer-draw-grad-angle').value = _layerDrawFillState.gradient.angleDeg;
+        const sel = _layerDrawFillState.gradient.stops[_layerDrawFillState.selectedStopIdx];
+        if (sel) document.getElementById('layer-draw-grad-stop-color').value = sel.color;
+        _layerDrawDrawGradRamp();
+    }
+}
+
+// 現在のUI状態から _fontMgrApplyFillPaintToEl 用のstyleObjを組み立てる
+function _layerDrawGetFillStyleObj() {
+    const fillNone = document.getElementById('layer-draw-fill-none').checked;
+    return {
+        fill: document.getElementById('layer-draw-fill').value,
+        fillEnabled: !fillNone,
+        fillMode: _layerDrawFillState.mode,
+        fillGradient: _layerDrawFillState.mode === 'gradient' ? {
+            shape: _layerDrawFillState.gradient.shape,
+            angleDeg: _layerDrawFillState.gradient.angleDeg,
+            stops: _layerDrawFillState.gradient.stops.map(s => ({ pos: s.pos, color: s.color })),
+        } : null,
+        fillTexture: (_layerDrawFillState.mode === 'texture' && _layerDrawFillState.texture) ? {
+            ..._layerDrawFillState.texture,
+            scale: parseFloat(document.getElementById('layer-draw-tex-scale').value) || 100,
+        } : null,
+    };
+}
+
+// 選択図形から抽出した塗り状態（_drawShapeExtractFillState の戻り値）をUI状態へ反映する
+function _layerDrawLoadFillStateFromShape(fillState) {
+    _layerDrawFillState.mode = fillState?.fillMode || 'solid';
+    if (fillState?.fillGradient?.stops?.length) {
+        _layerDrawFillState.gradient = {
+            shape: fillState.fillGradient.shape === 'radial' ? 'radial' : 'linear',
+            angleDeg: fillState.fillGradient.angleDeg || 0,
+            stops: fillState.fillGradient.stops.map(s => ({ pos: s.pos, color: s.color })),
+        };
+    } else {
+        _layerDrawFillState.gradient = { shape: 'linear', angleDeg: 0, stops: [{ pos: 0, color: '#ffffff' }, { pos: 1, color: '#888888' }] };
+    }
+    _layerDrawFillState.selectedStopIdx = 0;
+    _layerDrawFillState.texture = fillState?.fillTexture?.dataUrl ? { ...fillState.fillTexture } : null;
+    if (fillState?.fillTexture?.scale) document.getElementById('layer-draw-tex-scale').value = fillState.fillTexture.scale;
+    _layerDrawFillSyncUI();
+}
 
 // ──────────────────────
 // 初期化
@@ -67,8 +193,101 @@ function initLayerDraw() {
     // 塗りなしチェックボックス
     document.getElementById('layer-draw-fill-none').addEventListener('change', e => {
         document.getElementById('layer-draw-fill').disabled = e.target.checked;
+        _layerDrawFillSyncUI();
         _layerDrawApplyPropsToSelected();
     });
+    // 塗りモード（単色/グラデーション/テクスチャ）
+    document.getElementById('layer-draw-fill-mode').addEventListener('change', e => {
+        _layerDrawFillState.mode = e.target.value;
+        _layerDrawFillSyncUI();
+        _layerDrawApplyPropsToSelected();
+    });
+    // グラデーション設定
+    document.getElementById('layer-draw-grad-shape').addEventListener('change', e => {
+        _layerDrawFillState.gradient.shape = e.target.value === 'radial' ? 'radial' : 'linear';
+        _layerDrawApplyPropsToSelected(true);
+    });
+    document.getElementById('layer-draw-grad-angle').addEventListener('input', e => {
+        _layerDrawFillState.gradient.angleDeg = parseFloat(e.target.value) || 0;
+        _layerDrawApplyPropsToSelected(true);
+    });
+    document.getElementById('layer-draw-grad-stop-color').addEventListener('input', e => {
+        const s = _layerDrawFillState.gradient.stops[_layerDrawFillState.selectedStopIdx];
+        if (s) { s.color = e.target.value; _layerDrawDrawGradRamp(); _layerDrawApplyPropsToSelected(true); }
+    });
+    document.getElementById('layer-draw-grad-stop-add').addEventListener('click', () => {
+        const sorted = [..._layerDrawFillState.gradient.stops].sort((a, b) => a.pos - b.pos);
+        let gapStart = 0, gapSize = 0;
+        for (let i = 0; i < sorted.length - 1; i++) {
+            const gap = sorted[i + 1].pos - sorted[i].pos;
+            if (gap > gapSize) { gapSize = gap; gapStart = sorted[i].pos; }
+        }
+        const pos = sorted.length < 2 ? 0.5 : gapStart + gapSize / 2;
+        _layerDrawFillState.gradient.stops.push({ pos, color: _layerDrawFillRampColorAt(_layerDrawFillState.gradient.stops, pos) });
+        _layerDrawFillState.selectedStopIdx = _layerDrawFillState.gradient.stops.length - 1;
+        _layerDrawFillSyncUI();
+        _layerDrawApplyPropsToSelected();
+    });
+    document.getElementById('layer-draw-grad-stop-remove').addEventListener('click', () => {
+        if (_layerDrawFillState.gradient.stops.length <= 1) return;
+        _layerDrawFillState.gradient.stops.splice(_layerDrawFillState.selectedStopIdx, 1);
+        _layerDrawFillState.selectedStopIdx = Math.max(0, Math.min(_layerDrawFillState.selectedStopIdx, _layerDrawFillState.gradient.stops.length - 1));
+        _layerDrawFillSyncUI();
+        _layerDrawApplyPropsToSelected();
+    });
+    document.getElementById('layer-draw-grad-ramp').addEventListener('mousedown', e => {
+        const canvas = document.getElementById('layer-draw-grad-ramp');
+        const rect = canvas.getBoundingClientRect();
+        const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+        let best = -1, bestDist = 9;
+        _layerDrawFillState.gradient.stops.forEach((s, i) => {
+            const d = Math.abs(s.pos * canvas.width - mx);
+            if (d < bestDist) { bestDist = d; best = i; }
+        });
+        if (best < 0) return;
+        _layerDrawFillState.selectedStopIdx = best;
+        document.getElementById('layer-draw-grad-stop-color').value = _layerDrawFillState.gradient.stops[best].color;
+        _layerDrawDrawGradRamp();
+        const onMove = ev => {
+            const r = canvas.getBoundingClientRect();
+            const x = (ev.clientX - r.left) * (canvas.width / r.width);
+            _layerDrawFillState.gradient.stops[_layerDrawFillState.selectedStopIdx].pos = Math.max(0, Math.min(1, x / canvas.width));
+            _layerDrawDrawGradRamp();
+            _layerDrawApplyPropsToSelected(true);
+        };
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+    // テクスチャ設定（localStorage非依存だが、巨大画像でSVG保存が肥大化しないよう最大512pxへ縮小）
+    document.getElementById('layer-draw-tex-select-btn').addEventListener('click', () => document.getElementById('layer-draw-tex-file').click());
+    document.getElementById('layer-draw-tex-file').addEventListener('change', e => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                const MAX = 512;
+                const sc = Math.min(1, MAX / Math.max(img.width, img.height));
+                const w = Math.max(1, Math.round(img.width * sc));
+                const h = Math.max(1, Math.round(img.height * sc));
+                const cv = document.createElement('canvas');
+                cv.width = w; cv.height = h;
+                cv.getContext('2d').drawImage(img, 0, 0, w, h);
+                _layerDrawFillState.texture = { dataUrl: cv.toDataURL('image/png'), w, h, scale: parseFloat(document.getElementById('layer-draw-tex-scale').value) || 100 };
+                _layerDrawFillSyncUI();
+                _layerDrawApplyPropsToSelected();
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    });
+    document.getElementById('layer-draw-tex-scale').addEventListener('input', () => _layerDrawApplyPropsToSelected(true));
     // 線なしチェックボックス
     document.getElementById('layer-draw-stroke-none').addEventListener('change', e => {
         document.getElementById('layer-draw-stroke').disabled       = e.target.checked;
@@ -82,6 +301,7 @@ function initLayerDraw() {
     // 初期状態: 線なし→無効（線幅デフォルト5はHTML側で設定済み）
     document.getElementById('layer-draw-stroke').disabled       = true;
     document.getElementById('layer-draw-stroke-width').disabled = true;
+    _layerDrawFillSyncUI();
 
     // 形状選択変更時の初期値自動設定
     document.getElementById('layer-draw-shape').addEventListener('change', e => {
@@ -98,6 +318,7 @@ function initLayerDraw() {
             // 塗り: なし
             document.getElementById('layer-draw-fill-none').checked = true;
             document.getElementById('layer-draw-fill').disabled = true;
+            _layerDrawFillSyncUI();
             // 線: あり
             document.getElementById('layer-draw-stroke-none').checked = false;
             document.getElementById('layer-draw-stroke').disabled = false;
@@ -187,9 +408,8 @@ function _layerDrawApplyPropsToSelected(deferSave) {
     if (!_layerDrawState.editMode) return;
     const el = state.selectedDrawEl;
     if (!el) return;
-    const fillNone   = document.getElementById('layer-draw-fill-none').checked;
     const strokeNone = document.getElementById('layer-draw-stroke-none').checked;
-    el.setAttribute('fill', fillNone ? 'none' : document.getElementById('layer-draw-fill').value);
+    _fontMgrApplyFillPaintToEl(el, el.ownerSVGElement || getPanelLayerSvg(), _layerDrawGetFillStyleObj(), 1);
     const sw = parseFloat(document.getElementById('layer-draw-stroke-width').value) || 0;
     if (strokeNone || sw === 0) {
         el.setAttribute('stroke', 'none');
@@ -718,16 +938,14 @@ async function _layerDrawPolyCommitInner() {
     const targetG = getOrCreateClipGroup(svgEl);
 
     const ns          = 'http://www.w3.org/2000/svg';
-    const fillNone    = document.getElementById('layer-draw-fill-none').checked;
     const strokeNone  = document.getElementById('layer-draw-stroke-none').checked;
-    const fillColor   = fillNone   ? 'none' : document.getElementById('layer-draw-fill').value;
     const strokeColor = strokeNone ? 'none' : document.getElementById('layer-draw-stroke').value;
     const strokeW     = strokeNone ? 0      : (parseFloat(document.getElementById('layer-draw-stroke-width').value) || 0);
     const opacity     = parseInt(document.getElementById('layer-draw-opacity').value, 10) / 100;
 
     const el = document.createElementNS(ns, 'polygon');
     el.setAttribute('points', pts.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '));
-    el.setAttribute('fill', fillColor);
+    _fontMgrApplyFillPaintToEl(el, svgEl, _layerDrawGetFillStyleObj(), 1);
     if (strokeColor !== 'none' && strokeW > 0) {
         el.setAttribute('stroke',       strokeColor);
         el.setAttribute('stroke-width', strokeW.toString());

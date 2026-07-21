@@ -2,6 +2,43 @@
 
 ---
 
+## 2026-07-21（@imgly/background-removal のローカル同梱を見送り、モデル品質セレクトを追加）
+
+PLAN_backlog「@imgly/background-removal のローカル同梱可否の判断」に着手。当初「同梱で」との依頼だったが、実際に必要なファイルを調査したところ想定以上に大きく、方針を変更した。
+
+**調査結果**: npm本体（JSコード）は解凍後約2MBで問題ないが、実行時にCDN（staticimgly.com）から取得しているWASMランタイム＋ONNXモデルは合計で最大約326MB（CPU用WASM 10.7MB + WebGPU用WASM 20.7MB＋small/medium/largeの3モデル計294MB）。現在CDN版が使っているデフォルト設定（device=cpu, model=medium=isnet_fp16）を維持するだけでも約95MB。本リポジトリはGitHub公開リポジトリ（`.git`が現状約9MB）で、GitHubの単一ファイル上限は100MB（largeモデル168MBは超過しGit LFSが別途必要）。一度gitに取り込むと履歴からの除去も手間がかかるため、ユーザーに実測値を提示のうえ再確認し、**同梱は見送りCDN依存を維持**、代わりに**背景除去のモデル品質をアプリ上で選べるようにする**方針に決定した。
+
+**実装**: `removeBackground()` の `model` オプション（"small"=isnet_quint8・42MB / "medium"=isnet_fp16・84MB・既定 / "large"=isnet・168MB）をUIから選べるようにした。
+- レイアウトタブ（`templates/index.html` + `static/js/main/16-processing-edit-tabs.js`）: 「画像」サブタブの背景除去モデル選択（軽量/BiRefNet）の右に品質セレクトを追加し、`_procRemoveBackground`/`_procRemoveBackgroundImgly` に `quality` 引数を通した。モデル選択が「軽量」以外（BiRefNet）のときは非表示。i18n 3言語対応（`layout.bgQuality*` キー追加）。
+- Imageタブ（`static/js/image-tab.js`）: BG Removeツールのオプションバーにも同じ品質セレクトを追加し、`_bgRemoveImgly`/`_applyBgRemove` に `quality` 引数を通した。既存のBG Removeパネルの慣例（英語のみ、i18n未対応）に合わせて英語表記のまま実装。モデル選択がBiRefNetのときは非表示（`change` イベントで切替）。
+- どちらもデフォルトは既定値の "medium" のため、既存ユーザーの挙動・見た目は変わらない（後方互換）。
+
+**検証**（Kapture）: 両タブでQuality/品質セレクトが正しいラベル・デフォルト値（標準品質/Standard 84MB）で描画されることを確認。Imageタブでモデル選択をBiRefNetへ切り替えると品質セレクトが正しく非表示になることを確認。実際のモデルダウンロード・背景除去処理自体はCDN依存のまま変更していないため未実施（フェーズ1以前から動作実績あり）。
+
+**How to apply**: 「CDNライブラリのローカル同梱」のような判断は、依頼時点の粗い見積り（「数十MB」）だけで進めず、実際にファイルを取得してサイズを確認してから最終判断を仰ぐのが安全。特に公開gitリポジトリでは、大きいバイナリの取り込みは後戻りしにくい（履歴除去が面倒、GitHubのファイルサイズ上限に抵触しうる）ため、確認なしに進めない。
+
+---
+
+## 2026-07-21（ドロー/シェイプの塗りにグラデーション・テクスチャ・塗りなしを追加 — 塗り拡張フェーズ2）
+
+フェーズ1（テキスト塗り拡張）・フォントタブ対応に続き、レイアウトタブのドロー図形（矩形・楕円・直線・曲線・多角形・鎖・ロープ・My曲線）とImageタブのシェイプツール（矩形・楕円）にも同じ塗り設定（グラデーション・テクスチャ・塗りなし）を追加した（PLAN_backlog「塗りのグラデーション・テクスチャ・塗りなし対応」フェーズ2）。
+
+**設計判断（スケール基準）**: テキストの塗りはフォントサイズ100pxあたりの相対値だったが、ドロー図形にはフォントサイズに相当する基準がない。図形サイズ比例か固定かの選択肢のうち、**k=1固定**（テクスチャのスケール%がそのままSVG単位／canvas pxのタイルサイズになる、図形サイズに応じた追加スケーリングはしない）を採用した。理由: ドロー/シェイプの塗りは（フォントタブのスタイルのような）名前付き保存・再利用の対象ではなくオブジェクトごとの都度設定であり、単純な絶対値の方が予測しやすいため。
+
+**実装**:
+- `static/js/main/17a-layer-draw-input.js`: `_layerDrawFillState`（mode/gradient/selectedStopIdx/texture）と、`_layerDrawFillRampColorAt`/`_layerDrawDrawGradRamp`/`_layerDrawFillSyncUI`/`_layerDrawGetFillStyleObj`/`_layerDrawLoadFillStateFromShape` を新設（`text-style-modal.js` の同名ロジックのミニマム移植）。`initLayerDraw()` にモード切替・ランプのドラッグ/追加/削除・テクスチャファイル選択（最大512px縮小）のイベントを追加し、`_layerDrawApplyPropsToSelected()` の塗り適用を `_fontMgrApplyFillPaintToEl(el, svgEl, styleObj, 1)`（09e-text-tool.js、フェーズ1で作った関数をそのまま流用。第1引数は任意の要素でよい設計だったため追加実装不要）に差し替えた。
+- `static/js/main/17b-layer-draw-commit.js`（矩形/楕円/直線/曲線等の確定）・`static/js/main/17a-layer-draw-input.js`（多角形ペンの確定）: 図形生成時の `el.setAttribute('fill', fillColor)` を同じく `_fontMgrApplyFillPaintToEl` 呼び出しに置き換え。
+- `static/js/main/17c-layer-draw-handles.js`: `_drawShapeExtractFillState(el, svgEl)` を新設（`_fontMgrExtractStyleFromTextEl` の塗り抽出部分と同じロジックのミニマム版。テキスト専用のfont-weight等を読まない）。`_drawShapeSyncProps()` から呼び出し、選択中図形の塗りモード・グラデーション・テクスチャをUIへ復元する。
+- `templates/index.html`: レイアウトタブの描画ツールバーに塗りモードセレクト・グラデーションパネル（線形/円形・角度・カラーランプ・ストップ追加/削除）・テクスチャパネル（画像選択・スケール%）を追加。ラベルは `font.*` の既存i18nキー（fillModeSolid/fillModeGradient/fillModeTexture/gradShape*/texSelectImage/texScale）を再利用し新規キー追加なし。
+- `static/js/image-tab/ShapeTool.js`: `fillMode`/`fillGradient`/`fillTexture`（`{img, scale}`。img は選択時に既にロード済みのImage要素で、Imageタブのシェイプは確定時に一度だけラスタへ焼き込むため既存の `_getTextureImage` のような非同期キャッシュは不要 — My曲線の `originalImg` と同じパターン）フィールドと `addFillStop`/`removeFillStop`（既存 `FillTool.evalGradient` を再利用）を追加。`drawShape()` の rect/ellipse 塗り部分を新設の静的メソッド `_fillStyleFor(ctx, sh, x1, y1, w, h)`（image-tab.js の `_textFillStyle` と同型。基準サイズは図形自身のバウンディングボックス）に置き換え。
+- `static/js/image-tab.js`: シェイプツールのオプションパネル（`_renderToolOptions("shape")`）に塗りモードセレクト・グラデーションパネル（`_drawShapeGradRamp`/`_setupShapeGradRamp`を新設、FillツールのランプUIと同型）・テクスチャパネルを追加。矩形・楕円選択時のみ表示（線・鎖・ロープ・My Curveは塗り自体を持たないため対象外）。
+
+**検証**（Kapture）: レイアウトタブで多角形をグラデーション塗り（白→グレー、線形0°）で実際に描画し、`linearGradient`（objectBoundingBox、x1/y1/x2/y2が角度と一致）と`fill="url(#...)"`がDOMに正しく生成されることを確認。単色・塗りなしへの切り替えで旧defsが正しくクリーンアップされることも確認。選択中図形からの塗りモード再抽出（グラデーション→UIに復元）も動作確認済み。テスト図形はUndoで削除済み。ImageタブはUI（モード切替によるグラデーション/テクスチャパネルの表示切替）の動作を確認したが、矩形/楕円の実際のドラッグ描画はKaptureのクリック操作がmousedown+mouseupを同一座標で発行するため検証できず、コードレビュー（SVG側で検証済みの同型ロジックの流用、および既存の `_textFillStyle`/`FillTool.evalGradient` との構造的一致）に留めた。
+
+**How to apply**: 同じ機能を複数の場所（テキスト/ドロー/シェイプ、SVG/Canvas）に展開する際は、汎用化した適用関数（`_fontMgrApplyFillPaintToEl` のように第1引数を「任意の要素」にしておく）は素直に使い回し、UI（モード選択・ランプ描画・ドラッグ操作）は対象ごとに小さく複製する方が、状態管理のスコープや呼び出しタイミングの違いを吸収する共通レイヤーを作るより変更コストが低い（フォントタブ対応時の教訓と同じ）。スケール基準がない対象（今回のドロー図形）には、既存の相対値方式を無理に当てはめず絶対値（k=1）を選ぶ判断も、複雑さを増やさないという同じ方針に沿う。
+
+---
+
 ## 2026-07-20（フォントタブのスタイル編集にも塗りのグラデーション・テクスチャ・塗りなしを追加）
 
 フェーズ1（テキスト塗り拡張）では、フォントタブのスタイル編集フォームは単色のみ対応のままで、拡張塗り（グラデーション/テクスチャ/塗りなし）はレイアウト/Imageタブの「スタイル」ボタンから開くモーダルでのみ編集可能にし、フォントタブ側は保存時に値を持ち回るだけ（`_fontMgrEditingFillExt`）としていた。追加依頼を受け、フォントタブのフォームにも同じ編集UIを実装した。

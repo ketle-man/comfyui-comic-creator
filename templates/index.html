@@ -229,11 +229,35 @@
                       <!-- 塗り -->
                       <div style="display:flex; align-items:center; gap:3px;">
                         <label style="font-size:12px;" data-i18n="layout.fillLabel">塗り:</label>
+                        <select id="layer-draw-fill-mode" class="ie-opt-select" style="font-size:12px;">
+                          <option value="solid" data-i18n="font.fillModeSolid">単色</option>
+                          <option value="gradient" data-i18n="font.fillModeGradient">グラデーション</option>
+                          <option value="texture" data-i18n="font.fillModeTexture">テクスチャ</option>
+                        </select>
                         <input type="color" id="layer-draw-fill" value="#000000" data-i18n-title="layout.fillColorTitle" title="塗り色" />
                         <label style="font-size:12px; display:flex; align-items:center; gap:2px;">
                           <input type="checkbox" id="layer-draw-fill-none" />
                           <span data-i18n="layout.none">なし</span>
                         </label>
+                      </div>
+                      <!-- 塗り: グラデーション -->
+                      <div id="layer-draw-fill-gradient-panel" style="display:none; align-items:center; gap:3px; flex-wrap:wrap;">
+                        <select id="layer-draw-grad-shape" class="ie-opt-select" style="font-size:12px;">
+                          <option value="linear" data-i18n="font.gradShapeLinear">線形</option>
+                          <option value="radial" data-i18n="font.gradShapeRadial">円形</option>
+                        </select>
+                        <label style="font-size:12px;"><span data-i18n="font.gradAngle">角度</span><input type="number" id="layer-draw-grad-angle" value="0" step="15" style="width:50px;" />°</label>
+                        <canvas id="layer-draw-grad-ramp" width="130" height="26" style="display:block;width:130px;height:26px;border:1px solid var(--border-color);border-radius:3px;cursor:pointer;"></canvas>
+                        <input type="color" id="layer-draw-grad-stop-color" value="#ffffff" style="width:26px;height:24px;padding:0;" />
+                        <button type="button" id="layer-draw-grad-stop-add" class="btn small" data-i18n-title="font.gradStopAdd" title="ストップを追加">＋</button>
+                        <button type="button" id="layer-draw-grad-stop-remove" class="btn small" data-i18n-title="font.gradStopRemove" title="選択中のストップを削除">－</button>
+                      </div>
+                      <!-- 塗り: テクスチャ -->
+                      <div id="layer-draw-fill-texture-panel" style="display:none; align-items:center; gap:3px;">
+                        <button type="button" id="layer-draw-tex-select-btn" class="btn small" data-i18n="font.texSelectImage">画像を選択</button>
+                        <img id="layer-draw-tex-thumb" alt="" style="width:24px;height:24px;object-fit:cover;border:1px solid var(--border-color);border-radius:3px;display:none;" />
+                        <input type="file" id="layer-draw-tex-file" accept="image/*" style="display:none;" />
+                        <label style="font-size:12px;"><span data-i18n="font.texScale">スケール</span><input type="number" id="layer-draw-tex-scale" min="1" max="1000" value="100" style="width:50px;" />%</label>
                       </div>
                       <!-- 線 -->
                       <div style="display:flex; align-items:center; gap:3px;">
@@ -469,6 +493,11 @@
                       <select id="proc-bg-model" style="font-size:12px; display:none;" data-i18n-title="layout.bgModelTitle" title="背景除去モデルを選択">
                         <option value="imgly" data-i18n="layout.bgModelImgly">軽量 (@imgly)</option>
                         <option value="birefnet">BiRefNet</option>
+                      </select>
+                      <select id="proc-bg-quality" style="font-size:12px; display:none;" data-i18n-title="layout.bgQualityTitle" title="背景除去（軽量）のモデル品質を選択（品質が高いほど初回ダウンロードサイズが大きくなります）">
+                        <option value="small" data-i18n="layout.bgQualitySmall">低品質・軽量 (42MB)</option>
+                        <option value="medium" selected data-i18n="layout.bgQualityMedium">標準品質 (84MB)</option>
+                        <option value="large" data-i18n="layout.bgQualityLarge">高品質 (168MB)</option>
                       </select>
                     </div>
                     <div style="display:flex; align-items:center; gap:4px;">
