@@ -314,6 +314,32 @@ async function duplicateSelectedObject(targetPanelId) {
         return;
     }
 
+    // ── 下書きレイヤーへの複製（画像のみ対応） ──
+    if (targetPanelId === '__draft__') {
+        if (!srcEl.classList.contains('inserted-image')) {
+            alert(t('layer.draftImagesOnly'));
+            return;
+        }
+        // 下書きも下書きページ全面（basePanelPoints）にクリップされるためオーバーレイと同じ中心を使う
+        const basePts = state.activePage.basePanelPoints || '';
+        const destCenter = _polygonCenter(basePts) || { x: srcCx, y: srcCy };
+        const destParentG = panelSvg.querySelector('g[data-draft-layer]') || getOrCreateDraftGroup(panelSvg);
+        const clone = _cloneWithNewIds(srcEl);
+        clone.setAttribute('data-panel-id', '__draft__');
+        _applyCenterTranslate(clone, srcCx, srcCy, destCenter.x, destCenter.y);
+        destParentG.appendChild(clone);
+        await saveDraftSvg(panelSvg);
+        state.selectedPanelId = null;
+        state.selectedOverlay = false;
+        state.selectedDraft = true;
+        updatePanelSelectDropdown();
+        updateBalloonPanelSelect();
+        _syncDraftInteractivity(panelSvg);
+        _selectClone(clone, panelSvg);
+        renderLayerPanel();
+        return;
+    }
+
     // 複製先コマのpanelSvgContentを直接パースして要素を追加
     const destPanel = state.activePage.panels.find(p => p.id === targetPanelId);
     if (!destPanel) {
@@ -549,10 +575,12 @@ async function moveSelectedObject(targetPanelId) {
         return;
     }
 
-    // 移動元の親コマgからコマIDを取得
+    // 移動元の親コマgからコマIDを取得（画像はdata-panel-id属性があれば最優先で使う。下書きレイヤー内の画像対応）
     const srcParentG = srcEl.parentNode;
-    const srcPanelId = srcParentG.getAttribute('data-clip-panel') ||
-                       (srcParentG.hasAttribute('data-overlay-layer') ? '__overlay__' : state.selectedPanelId || 'panel-0');
+    const srcPanelId = srcEl.getAttribute?.('data-panel-id') ||
+                       srcParentG.getAttribute('data-clip-panel') ||
+                       (srcParentG.hasAttribute('data-overlay-layer') ? '__overlay__' :
+                       (srcParentG.hasAttribute('data-draft-layer') ? '__draft__' : (state.selectedPanelId || 'panel-0')));
 
     // 同コマへの移動は意味がないので通知
     const isSamePanel = !targetPanelId || targetPanelId === srcPanelId;
@@ -614,6 +642,58 @@ async function moveSelectedObject(targetPanelId) {
             highlightOverlay(newPanelSvgOv, null);
             const liveClone = clonedElId ? newPanelSvgOv.querySelector(`#${CSS.escape(clonedElId)}`) : null;
             if (liveClone) _selectClone(liveClone, newPanelSvgOv);
+        }
+        renderLayerPanel();
+        return;
+    }
+
+    // ── 下書きレイヤーへの移動（画像のみ対応） ──
+    if (targetPanelId === '__draft__') {
+        if (!srcEl.classList.contains('inserted-image')) {
+            alert(t('layer.draftImagesOnly'));
+            return;
+        }
+        const basePts = state.activePage.basePanelPoints || '';
+        const destCenter = _polygonCenter(basePts) || { x: srcCx, y: srcCy };
+        const destParentG = panelSvg.querySelector('g[data-draft-layer]') || getOrCreateDraftGroup(panelSvg);
+        const clone = _cloneWithNewIds(srcEl);
+        clone.setAttribute('data-panel-id', '__draft__');
+        _applyCenterTranslate(clone, srcCx, srcCy, destCenter.x, destCenter.y);
+        destParentG.appendChild(clone);
+        const clonedElId = clone.id || null;
+
+        // 移動元を削除してコマ保存
+        state.checkedLayerEls.delete(srcEl);
+        srcEl.remove();
+        if (srcPanelId === '__draft__') {
+            await saveDraftSvg(panelSvg);
+        } else {
+            await savePanelSvg(srcPanelId, panelSvg);
+        }
+        await saveDraftSvg(panelSvg);
+
+        // 選択状態リセット → 再描画
+        state.selectedGroupId = null;
+        state.selectedShapeId = null;
+        state.selectedImageEl = null;
+        state.selectedImageId = null;
+        state.selectedTextEl  = null;
+        state.selectedDrawId  = null;
+        state.selectedDrawEl  = null;
+        await renderLayoutTab();
+
+        // 再描画後、移動先（下書き）をアクティブにして移動したオブジェクトを選択状態にする
+        state.selectedPanelId = null;
+        state.selectedOverlay = false;
+        state.selectedDraft = true;
+        const newPanelSvgDraft = getPanelLayerSvg();
+        if (newPanelSvgDraft) {
+            updatePanelSelectDropdown();
+            updateBalloonPanelSelect();
+            highlightOverlay(newPanelSvgDraft, null);
+            _syncDraftInteractivity(newPanelSvgDraft);
+            const liveClone = clonedElId ? newPanelSvgDraft.querySelector(`#${CSS.escape(clonedElId)}`) : null;
+            if (liveClone) _selectClone(liveClone, newPanelSvgDraft);
         }
         renderLayerPanel();
         return;

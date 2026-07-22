@@ -93,6 +93,27 @@ function initPanelsOnSvg(svgEl) {
         // さらに panel-border を再 appendChild して最前面を確保
         svgEl.querySelectorAll('.panel-border').forEach(b => svgEl.appendChild(b));
     }
+
+    // 下書きg要素（data-draft-layer）はオーバーレイのさらに前面に移動する（ページ最前面）。
+    // pointer-events は _syncDraftInteractivity() が編集モード状態に応じて別途制御する
+    const draftG = svgEl.querySelector('g[data-draft-layer]');
+    if (draftG) {
+        svgEl.appendChild(draftG);
+        svgEl.querySelectorAll('.panel-border').forEach(b => svgEl.appendChild(b));
+    }
+}
+
+// 下書きレイヤーの pointer-events を編集モード（state.selectedDraft）に応じて切り替える。
+// 編集モードでない間はレイヤー内の画像すべてでクリックを透過させ、下のオーバーレイ/コマ/オブジェクトを
+// 選択・操作可能にする（出力にも含まれないため、常時操作不可がデフォルト）
+function _syncDraftInteractivity(svgEl) {
+    if (!svgEl) return;
+    const draftG = svgEl.querySelector('g[data-draft-layer]');
+    if (!draftG) return;
+    const editing = !!state.selectedDraft;
+    draftG.querySelectorAll('.inserted-image').forEach(el => {
+        el.style.pointerEvents = editing ? 'auto' : 'none';
+    });
 }
 
 function highlightOverlay(svgEl, panelId) {
@@ -133,9 +154,15 @@ function selectPanel(panelId) {
         selectOverlay();
         return;
     }
+    // 下書きレイヤー選択（編集モードに入る）
+    if (panelId === '__draft__') {
+        selectDraft();
+        return;
+    }
     _clearObjectSelection();
     state.selectedPanelId = panelId;
     state.selectedOverlay = false;
+    state.selectedDraft = false;
     updatePanelSelectDropdown();
 
     const previewContainer = document.getElementById('layout-preview');
@@ -145,8 +172,25 @@ function selectPanel(panelId) {
     if (svgEl) {
         highlightOverlay(svgEl, panelId);
         renderLayerPanel();
+        _syncDraftInteractivity(svgEl); // 下書き編集モードを抜けるのでクリック無視状態に戻す
     } else {
         renderLayoutTab();
+    }
+}
+
+// 下書きレイヤーを選択（編集モードON）。編集モード中のみ下書き内の画像をクリック・操作できる
+function selectDraft() {
+    _clearObjectSelection();
+    state.selectedPanelId = null;
+    state.selectedOverlay = false;
+    state.selectedDraft = true;
+    updatePanelSelectDropdown();
+    updateBalloonPanelSelect();
+    renderLayerPanel();
+    const svgEl = document.querySelector('#layout-preview svg, #text-preview svg');
+    if (svgEl) {
+        highlightOverlay(svgEl, null);
+        _syncDraftInteractivity(svgEl);
     }
 }
 
@@ -173,6 +217,15 @@ function updatePanelSelectDropdown() {
             overlayOpt.textContent = t('common.overlayFull');
             if (state.selectedOverlay) overlayOpt.selected = true;
             select.appendChild(overlayOpt);
+
+            // 下書きオプション（画像タブ用の panel-select のみ。テキスト/フキダシは下書き非対応のため対象外）
+            if (select.id === 'panel-select') {
+                const draftOpt = document.createElement('option');
+                draftOpt.value = '__draft__';
+                draftOpt.textContent = t('common.draftFull');
+                if (state.selectedDraft) draftOpt.selected = true;
+                select.appendChild(draftOpt);
+            }
         }
     });
 }
@@ -297,9 +350,189 @@ async function insertImageToOverlay(base64Data, width, height, placement = null,
     await renderLayoutTab();
 }
 
+// 下書きレイヤーの g[data-draft-layer] を取得または作成する（getOrCreateOverlayGroup相当。複製/移動先としての利用も含む）
+function getOrCreateDraftGroup(svgEl) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const draftClipId = 'draft-page-clip';
+    const basePts = state.activePage && state.activePage.basePanelPoints;
+
+    if (basePts) {
+        let defs = svgEl.querySelector('defs');
+        if (!defs) {
+            defs = document.createElementNS(ns, 'defs');
+            svgEl.insertBefore(defs, svgEl.firstChild);
+        }
+        if (!defs.querySelector(`[id="${draftClipId}"]`)) {
+            const clipPath = document.createElementNS(ns, 'clipPath');
+            clipPath.setAttribute('id', draftClipId);
+            clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
+            const poly = document.createElementNS(ns, 'polygon');
+            poly.setAttribute('points', basePts);
+            clipPath.appendChild(poly);
+            defs.appendChild(clipPath);
+        }
+    }
+
+    let g = svgEl.querySelector('g[data-draft-layer]');
+    if (!g) {
+        g = document.createElementNS(ns, 'g');
+        g.setAttribute('data-draft-layer', 'true');
+        if (basePts) g.setAttribute('clip-path', `url(#${draftClipId})`);
+        svgEl.appendChild(g);
+    }
+    return g;
+}
+
+// 下書きレイヤーSVGを保存（saveOverlaySvg相当。draftSvgContentとして独立保存し、出力(buildMergedSvg)には含めない）
+async function saveDraftSvg(panelLayerSvgEl) {
+    if (!state.activePage || !panelLayerSvgEl) return;
+
+    const clone = panelLayerSvgEl.cloneNode(true);
+    clone.querySelectorAll('.image-handle, .image-bbox, .image-rotate-line').forEach(el => el.remove());
+    clone.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const draftDoc = document.implementation.createDocument(ns, 'svg', null);
+    const draftSvg = draftDoc.documentElement;
+    draftSvg.setAttribute('xmlns', ns);
+    const vb = panelLayerSvgEl.getAttribute('viewBox') || '0 0 21000 29700';
+    draftSvg.setAttribute('viewBox', vb);
+
+    const basePts = state.activePage.basePanelPoints;
+    const draftClipId = 'draft-page-clip';
+    if (basePts) {
+        const defs = draftDoc.createElementNS(ns, 'defs');
+        const clipPath = draftDoc.createElementNS(ns, 'clipPath');
+        clipPath.setAttribute('id', draftClipId);
+        clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
+        const poly = draftDoc.createElementNS(ns, 'polygon');
+        poly.setAttribute('points', basePts);
+        clipPath.appendChild(poly);
+        defs.appendChild(clipPath);
+        draftSvg.appendChild(defs);
+    }
+
+    const draftG = clone.querySelector('g[data-draft-layer]');
+    if (draftG && draftG.children.length > 0) {
+        const importedG = document.importNode(draftG, true);
+        if (basePts) importedG.setAttribute('clip-path', `url(#${draftClipId})`);
+        draftSvg.appendChild(importedG);
+    }
+
+    const serializer = new XMLSerializer();
+    let str = serializer.serializeToString(draftSvg);
+    if (!str.includes('xmlns="http://www.w3.org/2000/svg"')) {
+        str = str.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+
+    const updatedRecord = { ...state.activePage, draftSvgContent: str };
+    try {
+        await dbPut('pages', updatedRecord, { deferThumb: true });
+        state.activePage = updatedRecord;
+        renderLayerPanel();
+    } catch (e) {
+        console.error('Draft layer save error:', e);
+    }
+}
+
+// 下書きレイヤーに画像を挿入（クリップなし・出力対象外）。insertImageToOverlayと同じ構造
+async function insertImageToDraft(base64Data, width, height, placement = null, extraAttrs = {}) {
+    if (!state.activePage) return;
+
+    pushHistory();
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const parser = new DOMParser();
+
+    const imgSvg = parser.parseFromString(state.activePage.svgContent, 'image/svg+xml').querySelector('svg');
+    const vb = imgSvg ? imgSvg.getAttribute('viewBox') : '0 0 21000 29700';
+    const [, , pageW, pageH] = vb.split(' ').map(Number);
+
+    let insertW, insertH, insertX, insertY;
+    if (placement) {
+        ({ x: insertX, y: insertY, width: insertW, height: insertH } = placement);
+    } else {
+        insertW = pageW * 0.4;
+        insertH = insertW * (height / width);
+        insertX = (pageW - insertW) / 2;
+        insertY = (pageH - insertH) / 2;
+    }
+
+    const existingStr = state.activePage.draftSvgContent || '';
+    let draftDoc, draftSvg;
+    if (existingStr) {
+        draftDoc = parser.parseFromString(existingStr, 'image/svg+xml');
+        draftSvg = draftDoc.querySelector('svg');
+    }
+    if (!draftSvg) {
+        draftDoc = document.implementation.createDocument(ns, 'svg', null);
+        draftSvg = draftDoc.documentElement;
+        draftSvg.setAttribute('xmlns', ns);
+        draftSvg.setAttribute('viewBox', vb);
+    }
+
+    const basePts = state.activePage.basePanelPoints;
+    const draftClipId = 'draft-page-clip';
+    if (basePts) {
+        let defs = draftDoc.querySelector('defs');
+        if (!defs) {
+            defs = draftDoc.createElementNS(ns, 'defs');
+            draftSvg.insertBefore(defs, draftSvg.firstChild);
+        }
+        if (!defs.querySelector(`[id="${draftClipId}"]`)) {
+            const clipPath = draftDoc.createElementNS(ns, 'clipPath');
+            clipPath.setAttribute('id', draftClipId);
+            clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
+            const poly = draftDoc.createElementNS(ns, 'polygon');
+            poly.setAttribute('points', basePts);
+            clipPath.appendChild(poly);
+            defs.appendChild(clipPath);
+        }
+    }
+
+    let draftG = draftDoc.querySelector('g[data-draft-layer]');
+    if (!draftG) {
+        draftG = draftDoc.createElementNS(ns, 'g');
+        draftG.setAttribute('data-draft-layer', 'true');
+        if (basePts) draftG.setAttribute('clip-path', `url(#${draftClipId})`);
+        draftSvg.appendChild(draftG);
+    }
+
+    const imgEl = draftDoc.createElementNS(ns, 'image');
+    imgEl.setAttribute('href', base64Data);
+    imgEl.setAttribute('x', insertX);
+    imgEl.setAttribute('y', insertY);
+    imgEl.setAttribute('width', insertW);
+    imgEl.setAttribute('height', insertH);
+    imgEl.setAttribute('class', 'inserted-image');
+    imgEl.setAttribute('id', 'img-' + Date.now());
+    imgEl.setAttribute('data-panel-id', '__draft__');
+    for (const [k, v] of Object.entries(extraAttrs)) {
+        imgEl.setAttribute(k, v);
+    }
+    draftG.appendChild(imgEl);
+
+    const serializer = new XMLSerializer();
+    let str = serializer.serializeToString(draftSvg);
+    if (!str.includes('xmlns="http://www.w3.org/2000/svg"')) {
+        str = str.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+
+    const updatedRecord = { ...state.activePage, draftSvgContent: str };
+    await dbPut('pages', updatedRecord);
+    state.activePage = updatedRecord;
+
+    await renderLayoutTab();
+}
+
 // placement: { x, y, width, height } を渡すと、コマ幅いっぱいに拡大するデフォルトの代わりに
 // 指定位置・サイズで挿入する（例: SVG図形をPNG化した際、元の図形と同じ位置・表示サイズで複製挿入するため）
 async function insertImage(base64Data, width, height, extraAttrs = {}, placement = null) {
+    // 下書きレイヤー編集モード中の場合は下書きに挿入
+    if (state.selectedDraft) {
+        await insertImageToDraft(base64Data, width, height, placement, extraAttrs);
+        return true;
+    }
     // オーバーレイ選択中の場合はオーバーレイに挿入
     if (state.selectedOverlay) {
         await insertImageToOverlay(base64Data, width, height, placement, extraAttrs);
@@ -973,7 +1206,8 @@ function initImageManipulation(svgEl, balloonSvgEl) {
             imgRotating = false;
             imgResizeDir = null;
             if (selectedImage) {
-                const panelId = selectedImage.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
+                const panelId = selectedImage.getAttribute('data-panel-id') ||
+                    selectedImage.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
                 await savePanelSvg(panelId, svgEl);
             }
         }

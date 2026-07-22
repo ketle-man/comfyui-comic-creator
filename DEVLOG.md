@@ -2,6 +2,43 @@
 
 ---
 
+## 2026-07-22（PDF/EPUB/zip出力のユーザー操作エラーを修正、画像出力の解像度メタデータを追加）
+
+下書きレイヤー機能の確認後、「出力を試したところPDF/EPUB/zip保存でエラーになる」との報告（`Failed to execute 'showSaveFilePicker' on 'Window': Must be handling a user gesture to show a file picker.`）を受けて調査・修正した。原因は、`showSaveFilePicker()`はクリック等のユーザー操作から間を置かず呼ばないと失敗する仕様のところ、PDF/EPUB/zip出力は保存ダイアログを開く前に「全ページの描画・フォント埋め込み・PDF/ZIP生成」という重い非同期処理を挟んでいたため、処理に時間がかかる（ページ数が多い等）とユーザー操作の有効期限が切れていたこと。PNG単ページ出力は処理が短く済むため、たまたま失敗しにくかった。
+
+続けて、出力したPNG/JPEGのファイルプロパティでdpiがWindows既定値の96、WebPだけ72と表示され食い違うとの指摘を受け調査したところ、このアプリはPNG/JPEG/WebPのいずれにも解像度メタデータを一切埋め込んでおらず、Windowsのプロパティ画面がコーデックごとに異なる既定値を表示していただけと判明。実際に選択したdpiをファイルへ埋め込む実装を追加した（最終的にはWindowsのプロパティ画面自体がこの情報を反映しない仕様と分かったが、Photoshopでは正しく72dpiと確認できたためファイル側の実装は正しいと判断）。
+
+**実装**:
+- `static/js/main/13-export-pdf-epub.js`: `showSaveFilePicker()`をクリック直後（重い処理の前）に呼んでハンドルだけ確保する`_pickSaveTarget(fileName, mimeType, ext, description)`を新設。`_saveBlob()`は確保済みハンドルを受け取れるよう拡張。`exportToPdf`/`exportToEpub`は関数の冒頭で先にハンドルを確保し、ページ生成後にそのハンドルへ書き込む順序に変更。
+- `static/js/main/12-text-png-export.js`: `handleExport()`のzip保存も同じパターンで、ページ描画ループの開始前に`_pickSaveTarget`でzipファイルのハンドルを確保するよう修正。
+- `static/js/main/13a-export-metadata.js`: 画像出力メタデータ埋め込みに解像度(dpi)埋め込みを追加。PNGは`pHYs`チャンク（メートルあたり画素数に変換）、JPEGは既存JFIF APP0セグメント内のdensityフィールドを上書き（セグメント長は不変のため新規挿入不要）、WebPはXResolution/YResolution/ResolutionUnitの3タグのみを持つ最小TIFF blobを`EXIF`チャンクとして新設しVP8Xヘッダにフラグを設定。`_embedImageMetadata()`は、タイトル等のテキストメタが空でも解像度は常に埋め込むよう変更（「手動」選択時はPDF出力と同じ既定値96dpiを使用）。
+
+**検証**: PDF/EPUB出力のエラーはユーザー確認により解消を確認。画像出力（PNG/JPEG/WebP）でも一度エラー報告があったが、コンソールエラー・JSダイアログとも発生しておらず、ネイティブ保存ダイアログが裏に隠れていただけとユーザーの再確認で判明（コードの問題ではなかった）。解像度メタデータのバイナリ構造は、Node.js上でフェイクのPNG/JPEG/WebPバイト列を生成し、埋め込み関数を実行→生成されたpHYs/JFIF density/EXIFタグの値を逆算してdpiが正しく往復すること、テキストメタ情報との併用時もチャンク順序が壊れないことをテストスクリプトで検証済み（ブラウザでの実クリックはネイティブファイル選択ダイアログが絡むため自動操作不可）。Windowsのプロパティ画面には反映されない（Windows側の仕様）が、Photoshopでは正しい値が確認できている。
+
+**How to apply**: `showSaveFilePicker()`/`showDirectoryPicker()`など「ユーザー操作の有効期限（transient activation）」が必要なAPIは、ボタンのクリックハンドラ内であっても、呼び出す前に重い非同期処理（複数ページのレンダリング等）を挟むと失敗しうる。対策は「先にピッカーを呼んでハンドルだけ確保→重い処理→確保済みハンドルへ書き込み」の順序に組み替えること（`showDirectoryPicker`は元々この順序だったため、`showSaveFilePicker`側もそれに合わせた）。またPNG/JPEG/WebP等の画像フォーマットの「解像度(dpi)」表示は、ファイル自体にメタデータが無ければビューア・OS側の既定値が使われ、フォーマットごとに既定値が異なりうる（Windows Explorerのプロパティ画面はさらにOS側で反映されない場合がある）。dpiを意図通り一致させたい場合は、ピクセル寸法の計算とは別に、各フォーマット固有のメタデータフィールド（pHYs/JFIF density/EXIF等）への明示的な書き込みが必要。
+
+---
+
+## 2026-07-22（下書きレイヤー機能を追加 — レイアウト＋Imageタブ連携）
+
+「レイアウトのレイヤーに下書きレイヤーを追加したい。オーバーレイのように全コマの上に表示されるが、クリックしても無視されその下のレイヤーが操作可能・出力にも含まれない」との依頼を受けて実装した。編集方法は「編集モード切替方式」（選択中のみ操作可能）、対応コンテンツは「画像のみ」で合意したうえで着手。続けて「下書きのラフスケッチをImageタブで作成できるようにしたい。Newボタン右隣に下書きボタンを追加、作品サイズ（72dpi換算）でキャンバス作成」という関連依頼も同じ流れで実装した。
+
+**実装**:
+- `static/js/main/01-state.js`: `state.selectedDraft`を追加。ESモジュールの`image-tab.js`からclassic script側の`state.activeWork`を安全に参照するため`window._ccGetActiveWork`ブリッジを追加。
+- `static/js/main/08-panels-images.js`: オーバーレイ実装（`insertImageToOverlay`/`getOrCreateOverlayGroup`等）を踏襲し、`insertImageToDraft`/`getOrCreateDraftGroup`/`selectDraft`/`saveDraftSvg`を新設。`_syncDraftInteractivity(svgEl)`で編集モードに応じて下書き内画像のpointer-eventsをauto/noneに切替（非選択時は常にクリックが透過）。`initPanelsOnSvg`で下書きg要素をオーバーレイのさらに前面に配置。
+- `static/js/main/07-pages.js`: `buildMergedSvg(pageRecord, opts)`に`opts.includeDraft`を追加し、プレビュー描画（`renderLayoutTab`）でのみtrueを渡す。PDF/EPUB/PNG連番等の出力側は変更なしのため下書きは自動的に出力対象外になる。`savePanelSvg`に`__draft__`のディスパッチを追加。
+- `static/js/main/03-layers-panel.js` / `05-groups-move.js` / `06a-polygon-geometry.js`: 保存先パネルID解決ロジック（`syncPanelSelectionToObject`・複製/移動・レイヤー並べ替え）に下書き対応を追加。下書き内画像は`data-panel-id="__draft__"`を持つため、既存の「画像は`data-panel-id`属性を最優先で使う」という規約（オーバーレイ実装で既に使われていたパターン）にそのまま乗せられた。
+- `static/js/main/04b-layer-panel-render.js`: レイヤーパネル最下段にオーバーレイと対になる「📝 下書き（全面）」行を追加（画像のみ表示、マスクボタンは非表示）。
+- `static/js/main/03-layers-panel.js`: 複製/移動先ドロップダウンに「下書きへ」を追加。下書きは画像専用のため、画像以外を複製/移動しようとした場合はエラーメッセージ（`layer.draftImagesOnly`）を表示。
+- Imageタブ: `templates/index.html`に「下書き」ボタン（New/Close間）を追加。`static/js/image-tab.js`の`_newCanvas()`から共通ロジックを`_createNewCanvasWithSize(w, h, baseName)`として切り出し、`_newDraftFromActiveWork()`を新設（work.width/height＝1/100mm単位を`/100/25.4*72`でpxへ変換、サイズ入力ダイアログなし）。「レイアウトに送る」（`_saveToLayout`）は、送信元が`baseName==="draft"`のキャンバスの場合、現在の選択に関わらず自動的に下書きレイヤーへ`selectPanel('__draft__')`で切り替え、作品サイズそのままでページ全面挿入する（既定の「40%センター配置」だとサイズ対応が崩れるため）。
+- `static/js/i18n.js`: `common.draftFull`/`image.draftBtn`/`image.draftBtnTitle`/`layer.draftOptionTo`/`layer.draftImagesOnly`等をja/en/zh 3言語に追加。
+
+**検証**（Kapture）: レイヤーパネルの「下書き」行選択・パネル選択ドロップダウン経由での編集モード切替、他コマ/オーバーレイ選択時にクリックが正しく透過する（pointer-events）こと、コマ内画像の「下書きへ複製」で下書きレイヤーに正しく配置され即座にドラッグ可能になることを実機で確認。Imageタブの「下書き」ボタンでは、作品サイズ（29700×21000 = A4横）から72dpi換算した842×595pxのキャンバスがダイアログなしで正しく作成されることを確認。ファイル選択ダイアログが絡む画像アップロード・保存操作は自動操作できないため未検証。
+
+**How to apply**: オーバーレイのような「ページ全面レイヤー」を新設する際は、既存実装（データモデル・DOM属性・保存関数・pointer-events制御・レイヤーパネル行）を1対1でミラーリングするのが最も低リスク。差分（下書きは編集モード時のみ操作可・出力除外・画像のみ対応）は、ミラーリングした実装に対するピンポイントな上書き（`_syncDraftInteractivity`のpointer-events切替、`buildMergedSvg`のopts分岐、対応オブジェクト種別のガード）として追加すると影響範囲を最小化できる。既存コードが「`data-panel-id`属性を保存先解決の最優先に使う」という規約を既に持っていた（オーバーレイ実装で先例あり）ため、新レイヤーもそれに乗せるだけで済み、保存先解決ロジックを新規設計せずに済んだ。
+
+---
+
 ## 2026-07-22（フキダシ内包テキストの統合・縦書き対応・尻尾幅デフォルト変更）
 
 前日（07-21）に追加した「フキダシ+テキスト作成」モーダルは、四角/角丸四角/楕円の3形状限定の新規シンプル形状（textbox-*）専用で、既存の尻尾付きフキダシ全形状（通常/角丸矩形/思考/バクダン/雲もこもこ/雲なみなみ、以下h2タイプ）とは別の独立した仕組みだった。「フキダシ+テキスト作成と既存のフキダシを統合したい。テキストは縦書きにも対応させたい」との依頼を受け、既存フキダシ全形状にテキスト内包機能を統合した。ユーザー方針: 「フキダシ形状の作成・微調整（既存のh2挿入ボタン＋ハンドル操作）」と「テキストの詳細設定（モーダル）」の導線は2つのまま維持する。

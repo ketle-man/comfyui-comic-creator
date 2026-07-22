@@ -480,6 +480,18 @@ async function handleExport() {
             }
         }
 
+        // zip保存時は、クリック直後（このあとの複数ページ描画等の重い非同期処理より前）に
+        // 保存先ダイアログを開いてハンドルを確保しておく。ページ生成が終わってから
+        // showSaveFilePicker を呼ぶとユーザー操作の有効期限が切れて失敗することがあるため
+        let zipName = null;
+        let zipSaveTarget = null;
+        if (zip) {
+            const zipCustomName = document.getElementById('export-filename')?.value.trim() || '';
+            zipName = `${zipCustomName || _outputFilterGroup || 'pages'}.zip`;
+            zipSaveTarget = await _pickSaveTarget(zipName, 'application/zip', '.zip', t('page.exportZipFileDesc'));
+            if (zipSaveTarget === null) return; // キャンセル
+        }
+
         for (let i = 0; i < targetPages.length; i++) {
             const page = targetPages[i];
             const pageRecord = await dbGet('pages', page.name);
@@ -552,23 +564,12 @@ async function handleExport() {
         }
 
         if (zip) {
-            // zipを生成して保存
+            // zipを生成して保存（保存先ハンドルはループ開始前に確保済み）
             const zipBlob = await zip.generateAsync({ type: 'blob' });
-            const customName = document.getElementById('export-filename')?.value.trim() || '';
-            const zipName = `${customName || _outputFilterGroup || 'pages'}.zip`;
-            if (window.showSaveFilePicker) {
-                try {
-                    const fileHandle = await window.showSaveFilePicker({
-                        suggestedName: zipName,
-                        types: [{ description: t('page.exportZipFileDesc'), accept: { 'application/zip': ['.zip'] } }]
-                    });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(zipBlob);
-                    await writable.close();
-                } catch (err) {
-                    if (err.name === 'AbortError') return;
-                    throw err;
-                }
+            if (zipSaveTarget.handle) {
+                const writable = await zipSaveTarget.handle.createWritable();
+                await writable.write(zipBlob);
+                await writable.close();
             } else {
                 const dlUrl = URL.createObjectURL(zipBlob);
                 const a = document.createElement('a');

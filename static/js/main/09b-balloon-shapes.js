@@ -260,11 +260,15 @@ function selectOverlay() {
     _clearObjectSelection();
     state.selectedPanelId = null;
     state.selectedOverlay = true;
+    state.selectedDraft = false;
     updatePanelSelectDropdown();
     updateBalloonPanelSelect();
     renderLayerPanel();
     const svgEl = document.querySelector('#layout-preview svg, #text-preview svg');
-    if (svgEl) highlightOverlay(svgEl, null);
+    if (svgEl) {
+        highlightOverlay(svgEl, null);
+        _syncDraftInteractivity(svgEl);
+    }
 }
 
 function getOrCreateClipGroup(overlaySvgEl) {

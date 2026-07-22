@@ -106,8 +106,38 @@ function _pngBuildItxtChunk(keyword, text) {
     return chunk;
 }
 
-/** PNGバイト列のIHDR直後にiTXtメタデータチャンクを挿入する */
-function _pngEmbedMeta(bytes, meta) {
+/**
+ * 解像度(dpi)からPNGの pHYs チャンク（画素密度）を生成する。
+ * pHYsは「メートルあたりの画素数」を整数で持つため、dpi(インチあたり画素数)を
+ * 1インチ=0.0254mから換算する。unit specifier=1（メートル単位）
+ */
+function _pngBuildPhysChunk(dpi) {
+    const pxPerMeter = Math.round(dpi / 0.0254);
+    const data = new Uint8Array(9);
+    const view = new DataView(data.buffer);
+    view.setUint32(0, pxPerMeter);
+    view.setUint32(4, pxPerMeter);
+    data[8] = 1; // unit specifier: 1 = meter
+
+    const typeAndData = new Uint8Array(4 + data.length);
+    typeAndData.set([0x70, 0x48, 0x59, 0x73], 0); // 'pHYs'
+    typeAndData.set(data, 4);
+    const crc = _pngCrc32(typeAndData);
+
+    const chunk = new Uint8Array(8 + data.length + 4);
+    const cview = new DataView(chunk.buffer);
+    cview.setUint32(0, data.length);
+    chunk.set(typeAndData, 4);
+    cview.setUint32(8 + data.length, crc);
+    return chunk;
+}
+
+/**
+ * PNGバイト列のIHDR直後に pHYs（解像度）・iTXt（メタデータ）チャンクを挿入する。
+ * @param {object|null} meta - タイトル等のテキストメタ情報。無ければiTXtは追加しない
+ * @param {number|null} dpi - 解像度(dpi)。無ければpHYsは追加しない
+ */
+function _pngEmbedMeta(bytes, meta, dpi) {
     const PNG_SIG = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
     if (bytes.length < 33 || !PNG_SIG.every((b, i) => bytes[i] === b)) return null;
 
@@ -115,16 +145,20 @@ function _pngEmbedMeta(bytes, meta) {
     const firstChunkLen = view.getUint32(8);
     const insertPos = 8 + 8 + firstChunkLen + 4; // 署名 + IHDRチャンク全体の直後
 
-    const entries = [];
-    if (meta.title) entries.push(['Title', meta.title]);
-    if (meta.author) entries.push(['Author', meta.author]);
-    if (meta.subject) entries.push(['Description', meta.subject]);
-    if (meta.keywords) entries.push(['Keywords', meta.keywords]);
-    entries.push(['Software', _APP_CREATOR_NAME]);
+    const chunks = [];
+    if (dpi) chunks.push(_pngBuildPhysChunk(dpi));
+    if (meta) {
+        const entries = [];
+        if (meta.title) entries.push(['Title', meta.title]);
+        if (meta.author) entries.push(['Author', meta.author]);
+        if (meta.subject) entries.push(['Description', meta.subject]);
+        if (meta.keywords) entries.push(['Keywords', meta.keywords]);
+        entries.push(['Software', _APP_CREATOR_NAME]);
+        entries.forEach(([keyword, text]) => chunks.push(_pngBuildItxtChunk(keyword, text)));
+    }
+    if (chunks.length === 0) return null;
 
-    const chunks = entries.map(([keyword, text]) => _pngBuildItxtChunk(keyword, text));
     const totalChunkLen = chunks.reduce((sum, c) => sum + c.length, 0);
-
     const out = new Uint8Array(bytes.length + totalChunkLen);
     out.set(bytes.subarray(0, insertPos), 0);
     let pos = insertPos;
@@ -137,17 +171,47 @@ function _pngEmbedMeta(bytes, meta) {
 }
 
 // ------------------------------
-// JPEG: APP1セグメント（XMP）
+// JPEG: JFIF density（解像度）+ APP1セグメント（XMP）
 // ------------------------------
 
-/** JPEGバイト列の先頭APPnセグメント群の直後にXMP APP1セグメントを挿入する */
-function _jpegEmbedMeta(bytes, meta) {
+/**
+ * JPEGバイト列先頭のJFIF APP0セグメント内の density フィールドを dpi 値で上書きする（bytesを直接書き換える）。
+ * canvas.toBlob('image/jpeg') は常に標準のJFIF APP0（density未設定=0,1x1）を出力するため、
+ * 新規セグメント挿入ではなく既存フィールドの上書きで済む（セグメント長・オフセットは変化しない）。
+ * @returns {boolean} 書き換えに成功したか
+ */
+function _jpegPatchJfifDensity(bytes, dpi) {
+    // SOI(FFD8) + APP0(FFE0) + len(2) + "JFIF\0"(5) + version(2) + units(1) + Xdensity(2) + Ydensity(2)...
+    if (bytes.length < 20 || bytes[0] !== 0xFF || bytes[1] !== 0xD8) return false;
+    if (bytes[2] !== 0xFF || bytes[3] !== 0xE0) return false;
+    const jfifId = String.fromCharCode(bytes[6], bytes[7], bytes[8], bytes[9]);
+    if (jfifId !== 'JFIF' || bytes[10] !== 0x00) return false;
+    const segLen = (bytes[4] << 8) | bytes[5];
+    if (segLen < 14) return false; // density フィールドまで届かない
+
+    bytes[13] = 1; // units: 1 = dots per inch
+    bytes[14] = (dpi >> 8) & 0xFF; bytes[15] = dpi & 0xFF; // Xdensity
+    bytes[16] = (dpi >> 8) & 0xFF; bytes[17] = dpi & 0xFF; // Ydensity
+    return true;
+}
+
+/**
+ * JPEGバイト列に解像度(JFIF density書き換え)とXMPメタデータ(APP1セグメント挿入)を埋め込む。
+ * @param {object|null} meta - タイトル等のテキストメタ情報。無ければAPP1は追加しない
+ * @param {number|null} dpi - 解像度(dpi)。無ければdensityは書き換えない
+ */
+function _jpegEmbedMeta(bytes, meta, dpi) {
     if (bytes.length < 4 || bytes[0] !== 0xFF || bytes[1] !== 0xD8) return null;
+
+    const out0 = bytes.slice(); // 元のBlob由来配列は書き換えない
+    const densityChanged = dpi ? _jpegPatchJfifDensity(out0, dpi) : false;
+
+    if (!meta) return densityChanged ? out0 : null;
 
     // SOI直後から既存のAPPnセグメント(FFE0-FFEF)を読み飛ばし、挿入位置を決める
     let pos = 2;
-    while (pos + 4 <= bytes.length && bytes[pos] === 0xFF && bytes[pos + 1] >= 0xE0 && bytes[pos + 1] <= 0xEF) {
-        pos += 2 + ((bytes[pos + 2] << 8) | bytes[pos + 3]);
+    while (pos + 4 <= out0.length && out0[pos] === 0xFF && out0[pos + 1] >= 0xE0 && out0[pos + 1] <= 0xEF) {
+        pos += 2 + ((out0[pos + 2] << 8) | out0[pos + 3]);
     }
 
     const encoder = new TextEncoder();
@@ -155,7 +219,7 @@ function _jpegEmbedMeta(bytes, meta) {
     const xmpBytes = encoder.encode(_buildXmpPacket(meta));
     const payloadLen = nsBytes.length + 1 + xmpBytes.length;
     const segLen = payloadLen + 2;
-    if (segLen > 0xFFFF) return null; // APP1のサイズ上限超過（実運用では起こらない想定）
+    if (segLen > 0xFFFF) return densityChanged ? out0 : null; // APP1のサイズ上限超過（実運用では起こらない想定）
 
     const segment = new Uint8Array(2 + segLen);
     segment[0] = 0xFF;
@@ -166,10 +230,10 @@ function _jpegEmbedMeta(bytes, meta) {
     // NULターミネータは初期値0のまま
     segment.set(xmpBytes, 4 + nsBytes.length + 1);
 
-    const out = new Uint8Array(bytes.length + segment.length);
-    out.set(bytes.subarray(0, pos), 0);
+    const out = new Uint8Array(out0.length + segment.length);
+    out.set(out0.subarray(0, pos), 0);
     out.set(segment, pos);
-    out.set(bytes.subarray(pos), pos + segment.length);
+    out.set(out0.subarray(pos), pos + segment.length);
     return out;
 }
 
@@ -188,32 +252,91 @@ function _webpBuildChunk(fourcc, data) {
 }
 
 /**
- * WebPバイト列にXMPチャンクを追加する。
- * canvas出力の単純な(VP8/VP8Lのみの)WebPにはVP8Xヘッダが無いため、
- * XMPフラグ付きVP8Xチャンクを先頭に新設してコンテナを再構築する。
+ * 解像度(dpi)からWebPの EXIF チャンク用ミニマムTIFF blobを生成する
+ * （XResolution/YResolution/ResolutionUnitの3タグのみを持つIFD0、リトルエンディアン）。
+ * WebPのEXIFチャンクはJPEGのAPP1と異なり "Exif\0\0" プレフィックス無しでTIFF本体から始まる。
  */
-function _webpEmbedMeta(bytes, meta, width, height) {
+function _webpBuildExifTiff(dpi) {
+    const buf = new Uint8Array(66);
+    const view = new DataView(buf.buffer);
+    // TIFFヘッダ（リトルエンディアン、IFD0はオフセット8から）
+    buf[0] = 0x49; buf[1] = 0x49; // 'II'
+    view.setUint16(2, 42, true);
+    view.setUint32(4, 8, true);
+
+    // IFD0: エントリ3つ
+    view.setUint16(8, 3, true);
+    // XResolution (tag 0x011A, RATIONAL, count 1, 値はoffset 50)
+    view.setUint16(10, 0x011A, true);
+    view.setUint16(12, 5, true);
+    view.setUint32(14, 1, true);
+    view.setUint32(18, 50, true);
+    // YResolution (tag 0x011B, RATIONAL, count 1, 値はoffset 58)
+    view.setUint16(22, 0x011B, true);
+    view.setUint16(24, 5, true);
+    view.setUint32(26, 1, true);
+    view.setUint32(30, 58, true);
+    // ResolutionUnit (tag 0x0128, SHORT, count 1, 値=2=インチ)
+    view.setUint16(34, 0x0128, true);
+    view.setUint16(36, 3, true);
+    view.setUint32(38, 1, true);
+    view.setUint16(42, 2, true);
+    // 次のIFDオフセット = 0（終端）
+    view.setUint32(46, 0, true);
+
+    // RATIONAL値本体（分子dpi・分母1）
+    view.setUint32(50, dpi, true);
+    view.setUint32(54, 1, true);
+    view.setUint32(58, dpi, true);
+    view.setUint32(62, 1, true);
+
+    return buf;
+}
+
+const _WEBP_XMP_FLAG  = 0x04;
+const _WEBP_EXIF_FLAG = 0x08;
+const _WEBP_ALPHA_FLAG = 0x10;
+
+/**
+ * WebPバイト列に解像度(EXIFチャンク)とXMPメタデータチャンクを追加する。
+ * canvas出力の単純な(VP8/VP8Lのみの)WebPにはVP8Xヘッダが無いため、
+ * 対応フラグ付きVP8Xチャンクを先頭に新設してコンテナを再構築する。
+ * @param {object|null} meta - タイトル等のテキストメタ情報。無ければXMPは追加しない
+ * @param {number|null} dpi - 解像度(dpi)。無ければEXIFは追加しない
+ */
+function _webpEmbedMeta(bytes, meta, dpi, width, height) {
     const fourcc = (pos) => String.fromCharCode(bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]);
     if (bytes.length < 20 || fourcc(0) !== 'RIFF' || fourcc(8) !== 'WEBP') return null;
 
-    const xmpBytes = new TextEncoder().encode(_buildXmpPacket(meta));
-    const xmpChunk = _webpBuildChunk('XMP ', xmpBytes);
-    const XMP_FLAG = 0x04;
-    const ALPHA_FLAG = 0x10;
-    let out;
+    const extraChunks = [];
+    let flags = 0;
+    if (dpi) {
+        extraChunks.push(_webpBuildChunk('EXIF', _webpBuildExifTiff(dpi)));
+        flags |= _WEBP_EXIF_FLAG;
+    }
+    if (meta) {
+        const xmpBytes = new TextEncoder().encode(_buildXmpPacket(meta));
+        extraChunks.push(_webpBuildChunk('XMP ', xmpBytes));
+        flags |= _WEBP_XMP_FLAG;
+    }
+    if (extraChunks.length === 0) return null;
+    const extraLen = extraChunks.reduce((sum, c) => sum + c.length, 0);
+    const appendChunks = (target, pos) => {
+        for (const c of extraChunks) { target.set(c, pos); pos += c.length; }
+    };
 
+    let out;
     if (fourcc(12) === 'VP8X') {
-        // 既存のVP8XにXMPフラグを立てて末尾にXMPチャンクを追加
-        out = new Uint8Array(bytes.length + xmpChunk.length);
+        // 既存のVP8Xにフラグを立てて末尾にEXIF/XMPチャンクを追加
+        out = new Uint8Array(bytes.length + extraLen);
         out.set(bytes, 0);
-        out[20] |= XMP_FLAG;
-        out.set(xmpChunk, bytes.length);
+        out[20] |= flags;
+        appendChunks(out, bytes.length);
     } else {
         // VP8Xヘッダを新設（可逆VP8Lのアルファビットを検出してフラグへ反映）
-        let flags = XMP_FLAG;
         if (fourcc(12) === 'VP8L' && bytes.length >= 25 && bytes[20] === 0x2F) {
             const bits = bytes[21] | (bytes[22] << 8) | (bytes[23] << 16) | (bytes[24] << 24);
-            if ((bits >>> 28) & 1) flags |= ALPHA_FLAG;
+            if ((bits >>> 28) & 1) flags |= _WEBP_ALPHA_FLAG;
         }
         const vp8xData = new Uint8Array(10);
         vp8xData[0] = flags;
@@ -224,11 +347,11 @@ function _webpEmbedMeta(bytes, meta, width, height) {
         const vp8xChunk = _webpBuildChunk('VP8X', vp8xData);
 
         const body = bytes.subarray(12); // 既存チャンク列（VP8/VP8L...）
-        out = new Uint8Array(12 + vp8xChunk.length + body.length + xmpChunk.length);
+        out = new Uint8Array(12 + vp8xChunk.length + body.length + extraLen);
         out.set(bytes.subarray(0, 12), 0);
         out.set(vp8xChunk, 12);
         out.set(body, 12 + vp8xChunk.length);
-        out.set(xmpChunk, 12 + vp8xChunk.length + body.length);
+        appendChunks(out, 12 + vp8xChunk.length + body.length);
     }
 
     new DataView(out.buffer).setUint32(4, out.length - 8, true); // RIFF全体サイズを更新
@@ -240,8 +363,10 @@ function _webpEmbedMeta(bytes, meta, width, height) {
 // ------------------------------
 
 /**
- * 画像Blobへ出力メタ情報を埋め込んで新しいBlobを返す。
- * メタ情報が全て空欄の場合や埋め込みに失敗した場合は元のBlobをそのまま返す。
+ * 画像Blobへ出力メタ情報・解像度(dpi)を埋め込んで新しいBlobを返す。
+ * テキストメタ情報が全て空欄でも解像度は常に埋め込む（PNG/JPEG/WebPで表示dpiが食い違わないようにするため）。
+ * 「手動」選択時はPDF出力の物理サイズ換算と同じ既定値96をそのまま使う。
+ * 埋め込みに失敗した場合は元のBlobをそのまま返す。
  * @param {Blob} blob - canvas.toBlob() が生成した画像
  * @param {string} mimeType - image/png | image/jpeg | image/webp
  * @param {number} width  - 画像幅(px)（WebPのVP8Xヘッダ生成に使用）
@@ -250,13 +375,16 @@ function _webpEmbedMeta(bytes, meta, width, height) {
 async function _embedImageMetadata(blob, mimeType, width, height) {
     try {
         const meta = _getExportMetaValues();
-        if (!meta.title && !meta.author && !meta.subject && !meta.keywords) return blob;
+        const hasTextMeta = !!(meta.title || meta.author || meta.subject || meta.keywords);
+        const dpi = _getExportDpiValue() || 96;
+        if (!hasTextMeta && !dpi) return blob;
 
         const bytes = new Uint8Array(await blob.arrayBuffer());
+        const metaArg = hasTextMeta ? meta : null;
         let out = null;
-        if (mimeType === 'image/png') out = _pngEmbedMeta(bytes, meta);
-        else if (mimeType === 'image/jpeg') out = _jpegEmbedMeta(bytes, meta);
-        else if (mimeType === 'image/webp') out = _webpEmbedMeta(bytes, meta, width, height);
+        if (mimeType === 'image/png') out = _pngEmbedMeta(bytes, metaArg, dpi);
+        else if (mimeType === 'image/jpeg') out = _jpegEmbedMeta(bytes, metaArg, dpi);
+        else if (mimeType === 'image/webp') out = _webpEmbedMeta(bytes, metaArg, dpi, width, height);
         if (!out) return blob;
         return new Blob([out], { type: mimeType });
     } catch (e) {

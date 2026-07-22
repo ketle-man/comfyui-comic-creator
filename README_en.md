@@ -13,7 +13,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Templates** — Create panel-layout templates either by importing an SVG or with the wizard (draw lines to split the page into panels)
 - **Export** — Export as JPEG/PNG/WebP/PDF/EPUB, including bulk export of multiple pages with sequential filenames. The libraries (jsPDF/JSZip) are bundled, so every format also works offline
 - **Automatic output size via resolution** — The "Resolution" selector (72–600dpi) calculates the output pixel size from the work size (mm); manual input is still available. PDF conversion uses the selected dpi, preserving the physical page size (A4, etc.)
-- **Export metadata** — Embed title, author, subject, and keywords into every format (PDF = document properties / EPUB = Dublin Core / PNG = iTXt / JPEG & WebP = XMP)
+- **Export metadata** — Embed title, author, subject, and keywords into every format (PDF = document properties / EPUB = Dublin Core / PNG = iTXt / JPEG & WebP = XMP). Resolution (dpi) is also always embedded (PNG = pHYs / JPEG = JFIF density / WebP = EXIF), so all three formats report the same dpi
 - **Bulk backup / restore** — Save all works, pages, templates, and settings into a single zip and restore anytime (merge mode: same names are overwritten)
 
 ### Layout tab
@@ -23,12 +23,14 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Shape drawing (Draw)** — Draw rectangles, ellipses, lines, curves, polygons, chains, ropes, and My Curve directly onto an SVG layer. Fills (rectangles, ellipses, polygons, etc.) support gradients, textures, and no-fill in addition to solid colors
 - **3D pose** — Place a VRM/GLB/GLTF model inside a panel, pose it, and bake it into the image (via [comfyui-vrm-pose-editor](#optional-dependencies))
 - **Groups and layer panel** — Group objects, manage stacking order, toggle visibility, lock, and **delete with the Delete / Backspace key**
+- **Draft layer** — A draft-only layer that sits in front of the overlay and covers the whole page (images only). Clicks only reach it while it's selected (edit mode); otherwise clicks pass straight through to the overlay/panels/objects below. Never included in output (JPEG/PNG/WebP/PDF/EPUB). The Image tab's "Draft" button creates a canvas at the same aspect ratio as the active work at 72dpi, and "Send to Layout" automatically inserts it into this layer at full page size
 - **I2I integration** — Send a selected image to Workflow Studio's Generate UI and bring the result back (via [ComfyUI-Workflow-Studio](#optional-dependencies))
 - **PixiJS FX** — Apply particle/filter effects to the selected image from the "Image" sub-tab (via [comfyUI-particle-pixijs](#optional-dependencies))
 - **Manga tool** — "Halftone" (an "Convert image" mode that halftones the selected image, plus a "Create pattern" mode that generates a halftone dot pattern sized to the panel/overlay) and "Manga effects" (generate and insert vignette, screentone noise, and speed lines — radial / uni flash / uni ring / linear — as transparent objects sized to the panel). Both modals let you switch the preview background between the selected image, a checkerboard, and white while adjusting
 
 ### Image tab (layer-based Canvas 2D editor)
 - **Select / Text / Draw / Shape / Fill / Mask / Blur / Filter / BG Remove / Upscale** tools
+- **Draft canvas creation** — The "Draft" button (next to New) creates a new canvas with no size dialog, sized at the same aspect ratio as the active work at 72dpi (for rough sketches). "Send to Layout" inserts it into the Layout tab's draft layer at full page size
 - **Eyedropper for the Draw tool** — Pick a color directly from the canvas via the button next to the color picker
 - **Same Layer mode for the Shape tool** — Keep adding shapes to the same layer instead of creating a new one for every shape. Rectangle/ellipse fills support gradients and textures in addition to solid colors
 - **Fill tool** — Solid color fill, or linear/radial gradient fill with a color ramp and direction pad

@@ -762,7 +762,8 @@ async function layerMove(direction) {
 
         pushHistory();
         swapInSiblings(img, direction, allObjMatcher);
-        const panelId = img.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
+        const panelId = img.getAttribute('data-panel-id') ||
+                        img.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
                         (img.closest('g[data-overlay-layer]') ? '__overlay__' : state.selectedPanelId || 'panel-0');
         await savePanelSvg(panelId, panelSvg);
         renderLayerPanel();

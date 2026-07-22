@@ -47,6 +47,7 @@ const state = {
         activeColor: '#0077ff'  // 選択中コマの枠線色（固定）
     },
     selectedOverlay: false,     // オーバーレイレイヤーが選択中かどうか
+    selectedDraft: false,       // 下書きレイヤーが編集モード（選択中）かどうか。falseの間はプレビュー上でクリックを一切受け付けない
     selectedGroupId: null,      // 選択中グループID
     checkedLayerEls: new Set(), // レイヤーパネルのチェック中SVG要素
     pose3d: {
@@ -61,6 +62,10 @@ const state = {
         resizeObserver: null,   // SVGリサイズ監視
     }
 };
+
+// image-tab.js は type="module" で読み込まれ、classic scriptの `const state` を直接参照する
+// 前例が無いため、window経由のブリッジ関数として作業中の作品（{ name, width, height }, 単位は1/100mm）を公開する
+window._ccGetActiveWork = () => state.activeWork;
 
 // ==============================
 // 初期化

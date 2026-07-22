@@ -138,6 +138,8 @@ function renderLayerPanel() {
             img.dataset.name = isVector ? `SVG ${objIdx + 1}` : t('layer.imageName', objIdx + 1);
         }
         const name = img.dataset.name;
+        // 下書きレイヤー内の画像はマスク機能非対応（下書きは画像の配置・移動のみをサポート）
+        const isDraftImg = !!img.closest('g[data-draft-layer]');
 
         const item = document.createElement('div');
         item.className = 'layer-item layer-item-shape' + (isActive ? ' active' : '') + (isHidden ? ' hidden-obj' : '') + (isLocked ? ' locked-obj' : '');
@@ -146,14 +148,14 @@ function renderLayerPanel() {
             <span class="layer-item-icon">${icon}</span>
             <span class="layer-item-name">${_escHtml(name)}</span>
             <div class="layer-item-btns">
-                <button class="layer-item-btn addmask-btn" title="${t('layer.addMaskTitle')}">🎭</button>
+                ${isDraftImg ? '' : `<button class="layer-item-btn addmask-btn" title="${t('layer.addMaskTitle')}">🎭</button>`}
                 <button class="layer-item-btn lock-btn" ${panelLocked ? 'disabled' : ''} title="${panelLocked ? t('layer.panelLockedTitle') : (individualLocked ? t('layer.unlockTitle') : t('layer.lockTitle'))}">${isLocked ? '🔒' : '🔓'}</button>
                 <button class="layer-item-btn vis-btn" title="${isHidden ? t('layer.showTitle') : t('layer.hideTitle')}">${isHidden ? '🚫' : '👁'}</button>
                 <button class="layer-item-btn delete-btn" title="${t('common.delete')}">✕</button>
             </div>
         `;
         if (!inGroup) item.prepend(makeCheckbox(img));
-        item.querySelector('.addmask-btn').addEventListener('click', async (e) => {
+        item.querySelector('.addmask-btn')?.addEventListener('click', async (e) => {
             e.stopPropagation();
             _maskEnsureElId(img);
             document.querySelector('.subtab-btn[data-subtab="mask"]')?.click();
@@ -658,6 +660,31 @@ function renderLayerPanel() {
                 else if (el.classList.contains('inserted-image')) listEl.appendChild(makeImageItem(el, idx, 2));
                 else if (el.classList.contains('draw-shape')) listEl.appendChild(makeDrawShapeItem(el, idx, 2));
                 else if (el.tagName.toLowerCase() === 'text') listEl.appendChild(makeTextItem(el, idx, 2));
+            });
+        }
+    }
+
+    // ── 下書きレイヤー（最前面・画像のみ・出力対象外） ──
+    // 行クリックで編集モードに入っている間だけプレビュー上でクリック操作できる（それ以外は常にクリック無視）
+    _rlpPanelLocked = false;
+    const draftItem = document.createElement('div');
+    const isDraftActive = state.selectedDraft;
+    draftItem.className = 'layer-item layer-item-panel' + (isDraftActive ? ' active' : '');
+    draftItem.style.paddingLeft = '6px';
+    draftItem.title = t('layer.draftRowTitle');
+    draftItem.innerHTML = `
+        <span class="layer-item-icon">📝</span><span class="layer-item-name">${t('common.draftFull')}${isDraftActive ? ' ✎' : ''}</span>
+    `;
+    draftItem.addEventListener('click', () => selectDraft());
+    listEl.appendChild(draftItem);
+
+    // 下書きg要素内の画像を表示（DOM順でソート、最前面が上）。下書きは画像のみサポート
+    if (panelSvg) {
+        const draftG = panelSvg.querySelector('g[data-draft-layer]');
+        if (draftG) {
+            const draftImgs = Array.from(draftG.children).filter(el => el.classList.contains('inserted-image'));
+            [...draftImgs].reverse().forEach((el) => {
+                listEl.appendChild(makeImageItem(el, draftImgs.indexOf(el), 2));
             });
         }
     }

@@ -292,6 +292,7 @@ async function switchActivePage(pageName) {
         state.activePage = pageRecord;
         state.selectedPanelId = null;
         state.selectedOverlay = true;
+        state.selectedDraft = false;
         state.history = [];
         await renderLayoutTab();
         updatePanelSelectDropdown();
@@ -424,7 +425,8 @@ async function createPageFromTemplate() {
             panels: JSON.parse(JSON.stringify(templateRecord.panels)).map(p => ({ ...p, panelSvgContent: p.panelSvgContent || '' })),
             svgContent: cleanSvgContent,
             basePanelPoints: templateRecord.basePanelPoints || '',
-            overlaySvgContent: templateRecord.overlaySvgContent || ''
+            overlaySvgContent: templateRecord.overlaySvgContent || '',
+            draftSvgContent: templateRecord.draftSvgContent || ''
         };
 
         await dbPut('pages', pageRecord);
@@ -433,6 +435,7 @@ async function createPageFromTemplate() {
         state.activePage = pageRecord;
         state.selectedPanelId = null;
         state.selectedOverlay = true;
+        state.selectedDraft = false;
         state.history = [];
 
         renderPageSelector();
@@ -470,7 +473,8 @@ async function renderLayoutTab() {
         state.activePage = pageRecord;
 
         // 背景SVG + 全コマコンテンツを1つのSVGに統合（clipPathが同一SVG内で解決される）
-        const mergedSvgStr = buildMergedSvg(pageRecord);
+        // includeDraft: 下書きレイヤーはプレビュー専用（出力/エクスポート側は includeDraft を渡さないため自動的に除外される）
+        const mergedSvgStr = buildMergedSvg(pageRecord, { includeDraft: true });
 
         previewContainer.innerHTML = `<div id="image-layer">${mergedSvgStr}</div>`;
 
@@ -515,6 +519,7 @@ async function renderLayoutTab() {
             svgEl.querySelectorAll('.draw-shape').forEach(s => s.style.pointerEvents = 'auto');
 
             initPanelsOnSvg(svgEl);
+            _syncDraftInteractivity(svgEl);
             initImageManipulation(svgEl, svgEl);
             initBalloonTools(svgEl, svgEl);
             initTextTools(svgEl, svgEl);
@@ -599,7 +604,9 @@ async function saveCurrentSvg(svgEl) {
 
 // 背景SVG（svgContent）に全コマのコンテンツ（defs + g要素）をマージした1つのSVG文字列を生成
 // clipPathが同一SVG内で解決されるため、コマ外表示バグが起きない
-function buildMergedSvg(pageRecord) {
+// opts.includeDraft: 下書きレイヤー（draftSvgContent）も合成するか。プレビュー表示（renderLayoutTab）専用のフラグで、
+// PDF/EPUB/PNG等の出力処理は呼び出し時にこれを渡さない（＝false）ため下書きは自動的に出力から除外される
+function buildMergedSvg(pageRecord, opts = {}) {
     if (!pageRecord || !pageRecord.svgContent) return '';
 
     const parser = new DOMParser();
@@ -672,6 +679,39 @@ function buildMergedSvg(pageRecord) {
         }
     }
 
+    // 下書きレイヤーはプレビュー専用: includeDraft指定時のみ、オーバーレイのさらに前面に合成する
+    if (opts.includeDraft && pageRecord.draftSvgContent) {
+        const draftDoc = parser.parseFromString(pageRecord.draftSvgContent, 'image/svg+xml');
+        const draftSvg = draftDoc.querySelector('svg');
+        if (draftSvg) {
+            const draftDefs = draftDoc.querySelector('defs');
+            if (draftDefs) {
+                Array.from(draftDefs.children).forEach(child => {
+                    if (child.id && defs.querySelector(`[id="${child.id}"]`)) return;
+                    defs.appendChild(doc.importNode(child, true));
+                });
+            }
+            const draftClipId = 'draft-page-clip';
+            if (pageRecord.basePanelPoints && !defs.querySelector(`[id="${draftClipId}"]`)) {
+                const clipPath = doc.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+                clipPath.setAttribute('id', draftClipId);
+                clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
+                const poly = doc.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                poly.setAttribute('points', pageRecord.basePanelPoints);
+                clipPath.appendChild(poly);
+                defs.appendChild(clipPath);
+            }
+            Array.from(draftSvg.children).forEach(child => {
+                if (child.tagName === 'defs') return;
+                const imported = doc.importNode(child, true);
+                if (imported.getAttribute && imported.getAttribute('data-draft-layer') && pageRecord.basePanelPoints) {
+                    imported.setAttribute('clip-path', `url(#${draftClipId})`);
+                }
+                svgEl.appendChild(imported);
+            });
+        }
+    }
+
     sanitizeSvgTree(svgEl);
     const serializer = new XMLSerializer();
     let result = serializer.serializeToString(svgEl);
@@ -722,6 +762,12 @@ async function savePanelSvg(panelId, panelLayerSvgEl) {
     // panel-0 または __overlay__ はオーバーレイレイヤーとして扱う
     if (panelId === 'panel-0' || panelId === '__overlay__') {
         await saveOverlaySvg(panelLayerSvgEl);
+        return;
+    }
+
+    // __draft__ は下書きレイヤーとして扱う
+    if (panelId === '__draft__') {
+        await saveDraftSvg(panelLayerSvgEl);
         return;
     }
 
@@ -838,7 +884,8 @@ function pushHistory() {
     state.history.push({
         svgContent: state.activePage.svgContent || '',
         panels: (state.activePage.panels || []).slice(),
-        overlaySvgContent: state.activePage.overlaySvgContent || ''
+        overlaySvgContent: state.activePage.overlaySvgContent || '',
+        draftSvgContent: state.activePage.draftSvgContent || ''
     });
     if (state.history.length > 20) {
         state.history.shift();
@@ -857,7 +904,8 @@ async function undo() {
             ...state.activePage,
             svgContent: prev.svgContent || '',
             panels: prev.panels || state.activePage.panels,
-            overlaySvgContent: prev.overlaySvgContent !== undefined ? prev.overlaySvgContent : (state.activePage.overlaySvgContent || '')
+            overlaySvgContent: prev.overlaySvgContent !== undefined ? prev.overlaySvgContent : (state.activePage.overlaySvgContent || ''),
+            draftSvgContent: prev.draftSvgContent !== undefined ? prev.draftSvgContent : (state.activePage.draftSvgContent || '')
         };
         try {
             await dbPut('pages', updatedRecord);
@@ -884,7 +932,8 @@ async function deleteSelectedImage() {
     const selectedImg = panelSvg.querySelector('.inserted-image.selected');
     if (selectedImg) {
         pushHistory();
-        const panelId = selectedImg.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
+        const panelId = selectedImg.getAttribute('data-panel-id') ||
+            selectedImg.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
         selectedImg.remove();
         await savePanelSvg(panelId, panelSvg);
         state.selectedImageId = null;

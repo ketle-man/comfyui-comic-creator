@@ -2291,6 +2291,7 @@ class ImageTab {
         });
 
         document.getElementById("ie-new-btn")?.addEventListener("click", () => this._newCanvas());
+        document.getElementById("ie-draft-btn")?.addEventListener("click", () => this._newDraftFromActiveWork());
         document.getElementById("ie-close-btn")?.addEventListener("click", () => this._closeDocument());
         document.getElementById("ie-undo-btn")?.addEventListener("click", () => this._undo());
         document.getElementById("ie-redo-btn")?.addEventListener("click", () => this._redo());
@@ -2679,9 +2680,35 @@ class ImageTab {
         const w = parseInt(m[1]), h = parseInt(m[2]);
         if (w < 1 || h < 1 || w > 8192 || h > 8192) { this._toast("Size must be between 1 and 8192", "error"); return; }
 
+        this._createNewCanvasWithSize(w, h, "new-canvas");
+        this._toast(`New canvas: ${w}×${h}`, "success");
+    }
+
+    /**
+     * 作業中の作品（レイアウトタブの state.activeWork、単位は1/100mm）と同じ縦横比で、
+     * 下書き用の72dpi換算ピクセルサイズの新規キャンバスを作成する（サイズ入力プロンプトなし）。
+     * 下書きはラフスケッチ用途で高解像度が不要なため、印刷解像度ではなく画面表示相当のサイズにする。
+     */
+    _newDraftFromActiveWork() {
+        const work = window._ccGetActiveWork?.();
+        if (!work || !work.width || !work.height) {
+            this._toast("No active work is open. Open or create a work in the Page tab first.", "error");
+            return;
+        }
+        const DRAFT_DPI = 72;
+        const mmToPx = (v) => Math.max(1, Math.round((v / 100 / 25.4) * DRAFT_DPI));
+        const w = mmToPx(work.width);
+        const h = mmToPx(work.height);
+
+        this._createNewCanvasWithSize(w, h, "draft");
+        this._toast(`New draft canvas: ${w}×${h}`, "success");
+    }
+
+    /** 指定サイズで新規キャンバスを作成する共通処理（_newCanvas / _newDraftFromActiveWork から呼ばれる） */
+    _createNewCanvasWithSize(w, h, baseName) {
         this._canvasW  = w;
         this._canvasH  = h;
-        this._baseName = "new-canvas";
+        this._baseName = baseName;
         this._initCanvases();
 
         // 空のキャンバスのままだと描画先レイヤーが無いため、作成直後に描画用レイヤーを1枚追加しておく
@@ -2697,7 +2724,6 @@ class ImageTab {
         this._fitToView();
 
         document.getElementById("ie-placeholder").style.display = "none";
-        this._toast(`New canvas: ${w}×${h}`, "success");
     }
 
     _initCanvases() {
@@ -3705,7 +3731,19 @@ class ImageTab {
             return;
         }
         try {
-            const inserted = await window.insertImage(dataUrl, canvas.width, canvas.height);
+            // 「下書き」ボタンで作成したキャンバス（作品と同じ縦横比の72dpi換算サイズ）は、
+            // 現在レイアウト側で何が選択されていても常に下書きレイヤーへページ全面サイズで挿入する。
+            // これにより、下書き=ページ全体のラフスケッチという対応関係が崩れず、
+            // 通常の40%センター配置の既定値による縮小表示を避けられる
+            let placement = null;
+            if (this._baseName === "draft") {
+                if (typeof window.selectPanel === "function") window.selectPanel("__draft__");
+                const work = window._ccGetActiveWork?.();
+                if (work && work.width && work.height) {
+                    placement = { x: 0, y: 0, width: work.width, height: work.height };
+                }
+            }
+            const inserted = await window.insertImage(dataUrl, canvas.width, canvas.height, {}, placement);
             if (!inserted) return; // insertImage側でコマ未選択等のalertを表示済み
             this._toast("Sent to layout", "success");
             await window.switchTab("layout");

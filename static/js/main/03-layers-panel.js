@@ -85,6 +85,7 @@ function initLayerPanel() {
             const svgEl = getPanelLayerSvg();
             if (!svgEl) return;
             if (state.selectedOverlay) await saveOverlaySvg(svgEl);
+            else if (state.selectedDraft) await saveDraftSvg(svgEl);
             else if (state.selectedPanelId) await savePanelSvg(state.selectedPanelId, svgEl);
         });
     }
@@ -109,6 +110,11 @@ function updateDuplicatePanelSelect() {
     overlayOpt.value = '__overlay__';
     overlayOpt.textContent = t('layer.overlayOptionTo');
     sel.appendChild(overlayOpt);
+    // 下書きも追加（画像のみ複製/移動可能。対象外の種類が選択されている場合は実行時にエラー表示）
+    const draftOpt = document.createElement('option');
+    draftOpt.value = '__draft__';
+    draftOpt.textContent = t('layer.draftOptionTo');
+    sel.appendChild(draftOpt);
 }
 
 // オブジェクト選択時に、そのオブジェクトが属するコマ（またはオーバーレイ）へコマ選択を同期する
@@ -117,24 +123,40 @@ function syncPanelSelectionToObject(el) {
     if (!el) return;
     const clipG = el.closest('g[data-clip-panel]');
     const overlayG = el.closest('g[data-overlay-layer]');
+    const draftG = el.closest('g[data-draft-layer]');
+    if (draftG) {
+        if (!state.selectedDraft) {
+            state.selectedPanelId = null;
+            state.selectedOverlay = false;
+            state.selectedDraft = true;
+            updatePanelSelectDropdown();
+            updateBalloonPanelSelect();
+            const svgEl = document.querySelector('#layout-preview svg');
+            if (svgEl) { highlightOverlay(svgEl, null); _syncDraftInteractivity(svgEl); }
+        }
+        return;
+    }
+    // 通常コマ/オーバーレイのオブジェクトへ同期する場合は、下書き編集モードも解除する
+    const wasDraft = state.selectedDraft;
+    state.selectedDraft = false;
     if (clipG) {
         const panelId = clipG.getAttribute('data-clip-panel');
-        if (state.selectedOverlay || state.selectedPanelId !== panelId) {
+        if (wasDraft || state.selectedOverlay || state.selectedPanelId !== panelId) {
             state.selectedPanelId = panelId;
             state.selectedOverlay = false;
             updatePanelSelectDropdown();
             updateBalloonPanelSelect();
             const svgEl = document.querySelector('#layout-preview svg');
-            if (svgEl) highlightOverlay(svgEl, panelId);
+            if (svgEl) { highlightOverlay(svgEl, panelId); if (wasDraft) _syncDraftInteractivity(svgEl); }
         }
     } else if (overlayG) {
-        if (!state.selectedOverlay) {
+        if (wasDraft || !state.selectedOverlay) {
             state.selectedPanelId = null;
             state.selectedOverlay = true;
             updatePanelSelectDropdown();
             updateBalloonPanelSelect();
             const svgEl = document.querySelector('#layout-preview svg');
-            if (svgEl) highlightOverlay(svgEl, null);
+            if (svgEl) { highlightOverlay(svgEl, null); if (wasDraft) _syncDraftInteractivity(svgEl); }
         }
     }
 }

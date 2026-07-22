@@ -47,6 +47,7 @@ const LANGUAGES = {
         'common.blue': '青',
         'common.panelName': (n) => `コマ ${n}`,
         'common.overlayFull': 'オーバーレイ（全面）',
+        'common.draftFull': '下書き（全面）',
 
         // -- DB --
         'db.blockedAlert': 'このアプリが他のタブでも開かれているため、データベースの更新が保留されています。\n他のタブを閉じる（または再読み込みする）と続行されます。',
@@ -423,6 +424,8 @@ const LANGUAGES = {
         'layout.emptyMessage': 'ページが選択されていません。ページタブで作品を作成し、左のアセットパネル「テンプレート」から挿入してください。',
 
         // -- Imageタブ --
+        'image.draftBtn': '下書き',
+        'image.draftBtnTitle': '作業中の作品と同じ縦横比・72dpi換算サイズで新規キャンバスを作成します（下書き用）',
         'image.closeTitle': '現在のドキュメントを閉じます（未保存の変更がある場合は確認します）',
         'image.pixifxLabel': '✨ PixiJS FX',
         'image.pixifxTitle': 'PixiJS FXでパーティクル・フィルタ効果を適用',
@@ -801,6 +804,7 @@ const LANGUAGES = {
         'layer.samePanelOption': '同コマへ',
         'layer.panelOptionTo': (num) => `コマ ${num} へ`,
         'layer.overlayOptionTo': 'オーバーレイへ',
+        'layer.draftOptionTo': '下書きへ',
         'layer.duplicateBtn': '複製',
         'layer.duplicateTitle': '選択オブジェクトを複製',
         'layer.moveTitle': '選択オブジェクトを移動',
@@ -935,6 +939,7 @@ const LANGUAGES = {
         'layer.confirmSelectMoveTarget': '移動するオブジェクトを選択してください。',
         'layer.selectMoveDestination': '移動先として別のコマまたはオーバーレイを選択してください。',
         'layer.moveTargetPanelNotFound': '移動先コマが見つかりません。',
+        'layer.draftImagesOnly': '下書きレイヤーには画像のみ複製/移動できます。',
         'layer.deleteGroupTitle': 'グループごと削除',
         'layer.maskUpTitle': '1つ上のレイヤーへ付け替え',
         'layer.maskDownTitle': '1つ下のレイヤーへ付け替え',
@@ -948,6 +953,7 @@ const LANGUAGES = {
         'layer.borderShowTitle': 'コマ枠線を表示',
         'layer.borderHideTitle': 'コマ枠線を非表示',
         'layer.overlayMaskTitle': 'オーバーレイ全面のマスクレイヤーを追加（個別レイヤーへのマスクは各レイヤー行の🎭から）',
+        'layer.draftRowTitle': 'クリックして下書きレイヤーを編集（編集中のみプレビュー上で画像を操作できます。それ以外は常にクリックを無視し、下のオーバーレイ/コマ/オブジェクトを操作できます。出力には含まれません）',
         'layer.openInImageTab': (name) => `"${name}" をImageタブで開く`,
         'layer.noImageSelected': '選択中の画像がありません',
 
@@ -1130,6 +1136,7 @@ const LANGUAGES = {
         'common.blue': 'Blue',
         'common.panelName': (n) => `Panel ${n}`,
         'common.overlayFull': 'Overlay (full)',
+        'common.draftFull': 'Draft (full)',
 
         // -- DB --
         'db.blockedAlert': 'This app is open in another tab, so the database update is on hold.\nClose (or reload) the other tab to continue.',
@@ -1493,6 +1500,8 @@ const LANGUAGES = {
         'layout.dndHint': '* You can also insert images by dragging & dropping them onto the preview area',
         'layout.emptyMessage': 'No page selected. Create a work in the Page tab and insert one from the "Templates" asset panel on the left.',
 
+        'image.draftBtn': 'Draft',
+        'image.draftBtnTitle': 'Create a new canvas at the same aspect ratio as the active work, sized at 72dpi (for rough sketches)',
         'image.closeTitle': 'Close the current document (asks for confirmation if there are unsaved changes)',
         'image.pixifxLabel': '✨ PixiJS FX',
         'image.pixifxTitle': 'Apply PixiJS FX particle/filter effects',
@@ -1865,6 +1874,7 @@ const LANGUAGES = {
         'layer.samePanelOption': 'Same panel',
         'layer.panelOptionTo': (num) => `To panel ${num}`,
         'layer.overlayOptionTo': 'To overlay',
+        'layer.draftOptionTo': 'To draft',
         'layer.duplicateBtn': 'Duplicate',
         'layer.duplicateTitle': 'Duplicate the selected object',
         'layer.moveTitle': 'Move the selected object',
@@ -1993,6 +2003,7 @@ const LANGUAGES = {
         'layer.confirmSelectMoveTarget': 'Please select an object to move.',
         'layer.selectMoveDestination': 'Please select another panel or the overlay as the move destination.',
         'layer.moveTargetPanelNotFound': 'The move destination panel was not found.',
+        'layer.draftImagesOnly': 'Only images can be duplicated/moved to the draft layer.',
         'layer.deleteGroupTitle': 'Delete the whole group',
         'layer.maskUpTitle': 'Reattach to the layer above',
         'layer.maskDownTitle': 'Reattach to the layer below',
@@ -2006,6 +2017,7 @@ const LANGUAGES = {
         'layer.borderShowTitle': 'Show the panel border',
         'layer.borderHideTitle': 'Hide the panel border',
         'layer.overlayMaskTitle': 'Add a mask layer for the whole overlay (use 🎭 on each layer row for per-layer masks)',
+        'layer.draftRowTitle': 'Click to edit the draft layer (images can only be manipulated in the preview while editing; otherwise clicks always pass through to the overlay/panels/objects below. Never included in output)',
         'layer.openInImageTab': (name) => `Open "${name}" in the Image tab`,
         'layer.noImageSelected': 'No image selected',
 
@@ -2183,6 +2195,7 @@ const LANGUAGES = {
         'common.blue': '蓝',
         'common.panelName': (n) => `分格 ${n}`,
         'common.overlayFull': '覆盖层（全面）',
+        'common.draftFull': '草稿（全面）',
 
         // -- DB --
         'db.blockedAlert': '此应用在其他标签页中处于打开状态，数据库更新已被挂起。\n请关闭（或重新加载）其他标签页以继续。',
@@ -2546,6 +2559,8 @@ const LANGUAGES = {
         'layout.dndHint': '※ 也可以将图像拖放到预览区域进行插入',
         'layout.emptyMessage': '未选择页面。请在页面标签页创建作品，并从左侧素材面板的“模板”中插入。',
 
+        'image.draftBtn': '草稿',
+        'image.draftBtnTitle': '以当前作品相同的宽高比、72dpi换算尺寸创建新画布（用于草图）',
         'image.closeTitle': '关闭当前文档（如有未保存的更改将进行确认）',
         'image.pixifxLabel': '✨ PixiJS FX',
         'image.pixifxTitle': '使用PixiJS FX应用粒子・滤镜效果',
@@ -2918,6 +2933,7 @@ const LANGUAGES = {
         'layer.samePanelOption': '同一分格',
         'layer.panelOptionTo': (num) => `到分格 ${num}`,
         'layer.overlayOptionTo': '到覆盖层',
+        'layer.draftOptionTo': '到草稿',
         'layer.duplicateBtn': '复制',
         'layer.duplicateTitle': '复制选中的对象',
         'layer.moveTitle': '移动选中的对象',
@@ -3046,6 +3062,7 @@ const LANGUAGES = {
         'layer.confirmSelectMoveTarget': '请选择要移动的对象。',
         'layer.selectMoveDestination': '请选择其他分格或覆盖层作为移动目标。',
         'layer.moveTargetPanelNotFound': '未找到移动目标分格。',
+        'layer.draftImagesOnly': '草稿图层只能复制/移动图像。',
         'layer.deleteGroupTitle': '删除整个组',
         'layer.maskUpTitle': '改挂到上一图层',
         'layer.maskDownTitle': '改挂到下一图层',
@@ -3059,6 +3076,7 @@ const LANGUAGES = {
         'layer.borderShowTitle': '显示分格边框',
         'layer.borderHideTitle': '隐藏分格边框',
         'layer.overlayMaskTitle': '为整个覆盖层添加蒙版图层（各图层单独的蒙版请使用各行的🎭）',
+        'layer.draftRowTitle': '点击编辑草稿图层（仅在编辑中可在预览里操作图像，其他时候点击始终穿透到下方的覆盖层/分格/对象。不会包含在输出中）',
         'layer.openInImageTab': (name) => `在Image标签页中打开"${name}"`,
         'layer.noImageSelected': '未选中图像',
 
