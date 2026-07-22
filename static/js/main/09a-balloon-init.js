@@ -467,16 +467,18 @@ function initBalloonManager() {
         });
     }
 
-    // ── フキダシ+テキスト作成/編集モーダル起動ボタン ──
-    // 選択中のフキダシがフキダシ+内包テキストなら編集モード、それ以外は新規作成として開く
+    // ── フキダシ内包テキストの作成/編集モーダル起動ボタン ──
+    // 選択中のフキダシ（textbox-* または尻尾付き等のh2タイプ）にテキストを内包・編集する。
+    // フキダシ形状自体の作成はh2挿入ボタン側に任せ、このボタンはテキストの詳細設定のみを担う
     // （ダブルクリックでの再編集＝09f-bubble-text.jsのinitBubbleTextToolsと並ぶ入口）
     const bubbleTextModalBtn = document.getElementById('bubble-text-modal-btn');
     if (bubbleTextModalBtn) {
         bubbleTextModalBtn.addEventListener('click', () => {
             if (typeof window.openBubbleTextModal !== 'function') return;
             const selectedEl = state.selectedShapeId ? document.getElementById(state.selectedShapeId) : null;
-            const isBubbleTextSelected = selectedEl && typeof _isBubbleTextType === 'function' && _isBubbleTextType(selectedEl.dataset.shapeType);
-            window.openBubbleTextModal(isBubbleTextSelected ? selectedEl : undefined);
+            const canHoldText = selectedEl && typeof _bubbleTextCanHoldText === 'function' && _bubbleTextCanHoldText(selectedEl.dataset.shapeType);
+            if (!canHoldText) { alert(t('bubbleText.selectShapeFirst')); return; }
+            window.openBubbleTextModal(selectedEl);
         });
     }
 

@@ -2614,9 +2614,16 @@ input[type="number"] {
 
 /* フキダシ+テキスト作成/編集モーダル（09f-bubble-text.js） */
 .btm-dialog {
-  width: 480px;
+  width: 560px;
   height: auto;
-  max-height: 80vh;
+  max-height: 85vh;
+}
+.btm-font-tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
 }
 .btm-body {
   display: flex;

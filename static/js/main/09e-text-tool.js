@@ -269,12 +269,16 @@ function _setTextElVertical(textEl, isVertical, keepCenter = false) {
     const y = parseFloat(textEl.getAttribute('y'));
     const fontSizeSvg = parseFloat(textEl.getAttribute('font-size')) || 40;
 
+    // SVG1.1の writing-mode="tb" 属性はSVG2/CSS Writing Modesを実装する現行ブラウザでは
+    // 無効な値として無視される（有効なのは horizontal-tb|vertical-rl|vertical-lr）ため、
+    // 属性ではなくCSSプロパティとして設定する。text-orientation:uprightで
+    // 日本語の字形を回転させず正立のまま縦に並べる
     if (isVertical) {
-        textEl.setAttribute('writing-mode', 'tb');
-        textEl.setAttribute('glyph-orientation-vertical', '0');
+        textEl.style.writingMode = 'vertical-rl';
+        textEl.style.textOrientation = 'upright';
     } else {
-        textEl.removeAttribute('writing-mode');
-        textEl.removeAttribute('glyph-orientation-vertical');
+        textEl.style.writingMode = '';
+        textEl.style.textOrientation = '';
     }
 
     textEl.querySelectorAll('tspan').forEach((ts, i) => {

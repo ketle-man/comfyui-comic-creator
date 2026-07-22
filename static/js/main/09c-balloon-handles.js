@@ -251,7 +251,7 @@ async function insertSmartBalloonTemplate(type) {
     shape.dataset.ry = initRy;
     shape.dataset.tailAngleDeg     = 45;
     shape.dataset.tailLength       = Math.max(initRx, initRy) * 0.8;
-    shape.dataset.tailWidth        = 30;
+    shape.dataset.tailWidth        = 13;
     shape.dataset.tailCurve        = 0;
     shape.dataset.fillColor        = state.balloon.color;
     shape.dataset.strokeColor      = state.balloon.borderColor;
@@ -342,7 +342,7 @@ function _syncH2UI(el) {
     setVal('h2-shape-type', type);
     setVal('h2-tail-angle',  Math.round(parseFloat(el.dataset.tailAngleDeg || 45)));
     setVal('h2-tail-length', Math.round(parseFloat(el.dataset.tailLength   || 60)));
-    setVal('h2-tail-width',  Math.round(parseFloat(el.dataset.tailWidth    || 30)));
+    setVal('h2-tail-width',  Math.round(parseFloat(el.dataset.tailWidth    || 13)));
     const curveVal = Math.round(parseFloat(el.dataset.tailCurve || 0));
     const curveOn = el.dataset.tailCurveOn === '1';
     setVal('h2-tail-curve',  curveVal);
@@ -352,7 +352,7 @@ function _syncH2UI(el) {
     if (sliderCurve) sliderCurve.disabled = !curveOn;
     setText('h2-tail-angle-val',  Math.round(parseFloat(el.dataset.tailAngleDeg || 45)) + '°');
     setText('h2-tail-length-val', Math.round(parseFloat(el.dataset.tailLength   || 60)));
-    setText('h2-tail-width-val',  Math.round(parseFloat(el.dataset.tailWidth    || 30)) + '°');
+    setText('h2-tail-width-val',  Math.round(parseFloat(el.dataset.tailWidth    || 13)) + '°');
     setText('h2-tail-curve-val',  curveVal);
     if (type === 'bomb') {
         setVal('h2-seed',           el.dataset.seed           || 1);
@@ -398,7 +398,7 @@ function _h2CalcCurveHandlePos(el) {
     const cx = parseFloat(el.dataset.cx), cy = parseFloat(el.dataset.cy);
     const rx = parseFloat(el.dataset.rx), ry = parseFloat(el.dataset.ry);
     const tailAngleDeg = parseFloat(el.dataset.tailAngleDeg || 45);
-    const tailWidth    = parseFloat(el.dataset.tailWidth    || 30);
+    const tailWidth    = parseFloat(el.dataset.tailWidth    || 13);
     const tailCurve    = parseFloat(el.dataset.tailCurve    || 0);
     const borderWidth  = parseFloat(el.dataset.borderWidth  || 3);
     const tailAngleRad = tailAngleDeg * Math.PI / 180;

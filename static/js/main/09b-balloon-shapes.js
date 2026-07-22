@@ -409,7 +409,7 @@ function generateBombPath(params) {
     const _cx = (sx + tipX) / 2 + curveOX;
     const _cy = (sy + tipY) / 2 + curveOY;
 
-    const tailHalfAngle = ((tailWidth || 30) / 2) * Math.PI / 180;
+    const tailHalfAngle = ((tailWidth || 13) / 2) * Math.PI / 180;
     const b1Rad = tailAngleRad - tailHalfAngle;
     const b2Rad = tailAngleRad + tailHalfAngle;
     // 尻尾の付け根を本体の内側にどれだけ食い込ませるか。本体と尻尾は別々のpath要素として
@@ -717,7 +717,7 @@ function _updateH2ShapePath(el) {
     const ry = parseFloat(el.dataset.ry);
     const tailAngleDeg = parseFloat(el.dataset.tailAngleDeg || 45);
     const tailLength   = parseFloat(el.dataset.tailLength   || 60);
-    const tailWidth    = parseFloat(el.dataset.tailWidth    || 30);
+    const tailWidth    = parseFloat(el.dataset.tailWidth    || 13);
     const tailCurve    = el.dataset.tailCurveOn === '1' ? parseFloat(el.dataset.tailCurve || 0) : 0;
     const angle        = parseFloat(el.dataset.angle        || 0);
     const borderWidth  = parseFloat(el.dataset.borderWidth  || 3);
@@ -916,6 +916,9 @@ function _updateH2ShapePath(el) {
     } else {
         el.removeAttribute('transform');
     }
+
+    // 内包テキスト（09f-bubble-text.js）: データがあれば同期、無ければ何もしない
+    if (typeof _bubbleTextSyncH2Text === 'function') _bubbleTextSyncH2Text(el);
 }
 
 // フキダシ or 図形要素をPNG画像に変換して同位置に複製挿入する
