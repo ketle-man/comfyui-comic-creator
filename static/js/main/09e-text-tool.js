@@ -517,9 +517,14 @@ function _fontMgrApplyFillPaintToEl(el, svgEl, styleObj, k) {
         const scale = (tx.scale || 100) / 100;
         const tw = Math.max(1, (tx.w || 100) * scale * k);
         const th = Math.max(1, (tx.h || 100) * scale * k);
+        // テクスチャ位置（ユーザーが手動指定するタイルの位相オフセット）。k倍してタイルサイズと同じ基準に揃える
+        const offX = (tx.offsetX || 0) * k;
+        const offY = (tx.offsetY || 0) * k;
         const pattern = document.createElementNS(ns, 'pattern');
         pattern.setAttribute('id', fillId);
         pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+        pattern.setAttribute('x', String(offX));
+        pattern.setAttribute('y', String(offY));
         pattern.setAttribute('width', String(tw));
         pattern.setAttribute('height', String(th));
         pattern.setAttribute('data-ccc-style-fill', '1');
@@ -527,6 +532,8 @@ function _fontMgrApplyFillPaintToEl(el, svgEl, styleObj, k) {
         pattern.setAttribute('data-ccc-tex-w', String(tx.w || 100));
         pattern.setAttribute('data-ccc-tex-h', String(tx.h || 100));
         pattern.setAttribute('data-ccc-tex-scale', String(tx.scale || 100));
+        pattern.setAttribute('data-ccc-tex-offset-x', String(tx.offsetX || 0));
+        pattern.setAttribute('data-ccc-tex-offset-y', String(tx.offsetY || 0));
         const img = document.createElementNS(ns, 'image');
         img.setAttribute('href', tx.dataUrl);
         img.setAttribute('x', '0');
@@ -688,6 +695,8 @@ function _fontMgrExtractStyleFromTextEl(textEl, svgEl) {
                 w: parseFloat(def.getAttribute('data-ccc-tex-w')) || 100,
                 h: parseFloat(def.getAttribute('data-ccc-tex-h')) || 100,
                 scale: parseFloat(def.getAttribute('data-ccc-tex-scale')) || 100,
+                offsetX: parseFloat(def.getAttribute('data-ccc-tex-offset-x')) || 0,
+                offsetY: parseFloat(def.getAttribute('data-ccc-tex-offset-y')) || 0,
             };
         } else if (!um) {
             fillSolid = fillAttr;

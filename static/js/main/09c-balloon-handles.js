@@ -34,9 +34,15 @@ async function convertShapeToImage(el, svgEl) {
         let minX = Math.min(...xs), maxX = Math.max(...xs);
         let minY = Math.min(...ys), maxY = Math.max(...ys);
 
-        // stroke幅の半分を余白として確保。フキダシはstroke-widthが子要素側にあることが多いため、
-        // 要素自身に見つからない場合は小さな固定パディングにフォールバックする
-        const strokeW = parseFloat(el.getAttribute('stroke-width') || 0);
+        // stroke幅の半分を余白として確保。getBBox()は塗り(フィル)の幾何形状のみを返し、
+        // strokeがはみ出す分は含まれないため、これを見込んで手動でパディングする。
+        // フキダシ（h2-layer-border等）はstroke-widthが要素自身ではなく子要素側にあることが
+        // 多いため、自身+子孫の中の最大stroke-widthを探す（見つからなければ小さな固定値にフォールバック）
+        let strokeW = parseFloat(el.getAttribute('stroke-width') || 0);
+        el.querySelectorAll('[stroke-width]').forEach(node => {
+            const w = parseFloat(node.getAttribute('stroke-width') || 0);
+            if (w > strokeW) strokeW = w;
+        });
         const margin  = strokeW > 0 ? strokeW / 2 : 4;
         minX -= margin; minY -= margin; maxX += margin; maxY += margin;
 
@@ -55,6 +61,13 @@ async function convertShapeToImage(el, svgEl) {
         outSvg.setAttribute('width',  w.toFixed(2));
         outSvg.setAttribute('height', h.toFixed(2));
         outSvg.setAttribute('viewBox', `${minX.toFixed(2)} ${minY.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}`);
+        // fill/strokeがurl(#...)（グラデーション・テクスチャパターン）を参照している場合、
+        // 定義本体は元svgEl側の<defs>にしかないため、単独SVGにも複製して持たせないと
+        // 参照先が解決できず塗りが失われる（テクスチャの<image>やpatternTransformもここで一緒に複製される）
+        const defsEl = svgEl.querySelector('defs');
+        if (defsEl && defsEl.childElementCount > 0) {
+            outSvg.appendChild(defsEl.cloneNode(true));
+        }
         outSvg.appendChild(clone);
 
         // data:URL画像として単独ラスタライズする際、ページ本体のGoogle Fonts <link>は

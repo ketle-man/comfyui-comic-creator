@@ -194,6 +194,14 @@ async function _layerDrawCommitInner() {
         el.setAttribute('data-raw-y', bb.y.toFixed(2));
         el.setAttribute('data-raw-w', bb.width.toFixed(2));
         el.setAttribute('data-raw-h', bb.height.toFixed(2));
+    } else if (shape === 'rect' || shape === 'ellipse' || shape === 'line') {
+        // rect/ellipse/lineは座標(x/y等)を直接書き換えて移動するため、テクスチャ塗りが
+        // シェイプに追従できるよう作成時点の生座標を保持する（17c: _drawShapeSyncTexturePatternTransform が使用）
+        const rawBB = _drawShapeGetBounds(el);
+        el.setAttribute('data-raw-x', rawBB.x.toFixed(2));
+        el.setAttribute('data-raw-y', rawBB.y.toFixed(2));
+        el.setAttribute('data-raw-w', rawBB.w.toFixed(2));
+        el.setAttribute('data-raw-h', rawBB.h.toFixed(2));
     }
 
     _layerDrawState.undoStack.push({ el, parentG: targetG });

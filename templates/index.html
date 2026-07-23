@@ -203,6 +203,7 @@
                         <button type="button" class="seg-btn" data-shape="line" data-i18n="layout.shapeLine">直線</button>
                         <button type="button" class="seg-btn" data-shape="curve" data-i18n="layout.shapeCurve">曲線</button>
                         <button type="button" class="seg-btn" data-shape="polygon" data-i18n="layout.shapePolygon">多角形</button>
+                        <button type="button" class="seg-btn" data-shape="vectorcurve" data-i18n="layout.shapeVectorCurve">ベクター曲線</button>
                         <button type="button" class="seg-btn" data-shape="chain" data-i18n="layout.shapeChain">鎖</button>
                         <button type="button" class="seg-btn" data-shape="rope" data-i18n="layout.shapeRope">ロープ</button>
                         <button type="button" class="seg-btn" data-shape="original" data-i18n="layout.shapeOriginal">My曲線</button>
@@ -214,6 +215,7 @@
                         <option value="line">直線</option>
                         <option value="curve">曲線</option>
                         <option value="polygon">多角形</option>
+                        <option value="vectorcurve">ベクター曲線</option>
                         <option value="chain">鎖</option>
                         <option value="rope">ロープ</option>
                         <option value="original">My曲線</option>
@@ -258,6 +260,8 @@
                         <img id="layer-draw-tex-thumb" alt="" style="width:24px;height:24px;object-fit:cover;border:1px solid var(--border-color);border-radius:3px;display:none;" />
                         <input type="file" id="layer-draw-tex-file" accept="image/*" style="display:none;" />
                         <label style="font-size:12px;"><span data-i18n="font.texScale">スケール</span><input type="number" id="layer-draw-tex-scale" min="1" max="1000" value="100" style="width:50px;" />%</label>
+                        <label style="font-size:12px;" data-i18n-title="layout.texOffsetXTitle" title="テクスチャ位置X"><span data-i18n="layout.texOffsetXLabel">X</span><input type="number" id="layer-draw-tex-offset-x" value="0" step="1" style="width:50px;" /></label>
+                        <label style="font-size:12px;" data-i18n-title="layout.texOffsetYTitle" title="テクスチャ位置Y"><span data-i18n="layout.texOffsetYLabel">Y</span><input type="number" id="layer-draw-tex-offset-y" value="0" step="1" style="width:50px;" /></label>
                       </div>
                       <!-- 線 -->
                       <div style="display:flex; align-items:center; gap:3px;">

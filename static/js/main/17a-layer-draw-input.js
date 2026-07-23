@@ -1,9 +1,9 @@
 // ============================================================
-// SVGレイヤーへの描画機能 分割ファイル (1/3): 初期化+オーバーレイ管理+座標変換+マウスイベント+多角形ペンツール
+// SVGレイヤーへの描画機能 分割ファイル (1/3): 初期化+オーバーレイ管理+座標変換+マウスイベント+多角形ペンツール+ベクター曲線ツール
 // 元 17-layer-draw.js（分割前）の行 1-715 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _POLY_CLOSE_THRESHOLD,_drawChainPreview,_drawRopePreview,_layerDrawApplyPropsToSelected,_layerDrawAttachOverlay,_layerDrawClientToSvg,_layerDrawDetachOverlay,_layerDrawFillRampColorAt,_layerDrawFillState,_layerDrawFillSyncUI,_layerDrawDrawGradRamp,_layerDrawGetFillStyleObj,_layerDrawLoadFillStateFromShape,_layerDrawKeyDown,_layerDrawMouseDown,_layerDrawMouseMove,_layerDrawMouseUp,_layerDrawMouseUpGlobal,_layerDrawPolyClick,_layerDrawPolyCommit,_layerDrawPolyCommitInner,_layerDrawPolyIsNearStart,_layerDrawPolyPreview,_layerDrawPolyReset,_layerDrawResizeCanvas,_layerDrawState,_layerDrawSvgToCanvas,_layerDrawUpdateStatusForShape,_layerDrawUpdateToggle,_loadDefaultOriginalImg,initLayerDraw
+// 主なトップレベル定義: _POLY_CLOSE_THRESHOLD,_drawChainPreview,_drawRopePreview,_layerDrawApplyPropsToSelected,_layerDrawAttachOverlay,_layerDrawClientToSvg,_layerDrawDetachOverlay,_layerDrawFillRampColorAt,_layerDrawFillState,_layerDrawFillSyncUI,_layerDrawDrawGradRamp,_layerDrawGetFillStyleObj,_layerDrawLoadFillStateFromShape,_layerDrawKeyDown,_layerDrawMouseDown,_layerDrawMouseMove,_layerDrawMouseUp,_layerDrawMouseUpGlobal,_layerDrawPolyClick,_layerDrawPolyCommit,_layerDrawPolyCommitInner,_layerDrawPolyIsNearStart,_layerDrawPolyPreview,_layerDrawPolyReset,_layerDrawResizeCanvas,_layerDrawState,_layerDrawSvgToCanvas,_layerDrawUpdateStatusForShape,_layerDrawUpdateToggle,_loadDefaultOriginalImg,initLayerDraw,_layerDrawVecClick,_layerDrawVecCommit,_layerDrawVecCommitInner,_layerDrawVecIsNearStart,_layerDrawVecPreview,_layerDrawVecReset,_vecBuildSplineCtx,_vecBuildSplinePathD
 // ============================================================
 
 // ─────────────────────────────────────────────
@@ -24,6 +24,8 @@ const _layerDrawState = {
     originalImg:  null,    // My曲線用画像
     polyPoints:   [],      // 多角形ペン: 確定済み頂点（SVG座標）
     polyHoverPt:  null,    // 多角形ペン: カーソル位置（SVG座標）
+    vecPoints:    [],      // ベクター曲線ペン: 確定済み頂点（SVG座標）
+    vecHoverPt:   null,    // ベクター曲線ペン: カーソル位置（SVG座標）
 };
 
 // ──────────────────────
@@ -113,6 +115,10 @@ function _layerDrawFillSyncUI() {
         if (sel) document.getElementById('layer-draw-grad-stop-color').value = sel.color;
         _layerDrawDrawGradRamp();
     }
+    if (!fillNone && _layerDrawFillState.mode === 'texture') {
+        document.getElementById('layer-draw-tex-offset-x').value = _layerDrawFillState.texture?.offsetX || 0;
+        document.getElementById('layer-draw-tex-offset-y').value = _layerDrawFillState.texture?.offsetY || 0;
+    }
 }
 
 // 現在のUI状態から _fontMgrApplyFillPaintToEl 用のstyleObjを組み立てる
@@ -130,6 +136,8 @@ function _layerDrawGetFillStyleObj() {
         fillTexture: (_layerDrawFillState.mode === 'texture' && _layerDrawFillState.texture) ? {
             ..._layerDrawFillState.texture,
             scale: parseFloat(document.getElementById('layer-draw-tex-scale').value) || 100,
+            offsetX: parseFloat(document.getElementById('layer-draw-tex-offset-x').value) || 0,
+            offsetY: parseFloat(document.getElementById('layer-draw-tex-offset-y').value) || 0,
         } : null,
     };
 }
@@ -288,6 +296,8 @@ function initLayerDraw() {
         e.target.value = '';
     });
     document.getElementById('layer-draw-tex-scale').addEventListener('input', () => _layerDrawApplyPropsToSelected(true));
+    document.getElementById('layer-draw-tex-offset-x').addEventListener('input', () => _layerDrawApplyPropsToSelected(true));
+    document.getElementById('layer-draw-tex-offset-y').addEventListener('input', () => _layerDrawApplyPropsToSelected(true));
     // 線なしチェックボックス
     document.getElementById('layer-draw-stroke-none').addEventListener('change', e => {
         document.getElementById('layer-draw-stroke').disabled       = e.target.checked;
@@ -306,8 +316,9 @@ function initLayerDraw() {
     // 形状選択変更時の初期値自動設定
     document.getElementById('layer-draw-shape').addEventListener('change', e => {
         const shape = e.target.value;
-        // 多角形の描きかけがあれば破棄
+        // 多角形・ベクター曲線の描きかけがあれば破棄
         _layerDrawPolyReset();
+        _layerDrawVecReset();
         // 描画モード中はステータス文言を形状に合わせて更新
         if (_layerDrawState.active && _layerDrawState.overlayCanvas) _layerDrawUpdateStatusForShape();
         // My曲線用画像選択UI表示切替
@@ -337,8 +348,8 @@ function initLayerDraw() {
             document.getElementById('layer-draw-opacity-value').textContent = '100%';
 
             _layerDrawApplyPropsToSelected();
-        } else if (shape === 'polygon') {
-            // 多角形は線幅の初期値のみ50に（塗り・線の有無の設定は維持）
+        } else if (shape === 'polygon' || shape === 'vectorcurve') {
+            // 多角形・ベクター曲線は線幅の初期値のみ50に（塗り・線の有無の設定は維持）
             document.getElementById('layer-draw-stroke-width').value = 50;
             _layerDrawApplyPropsToSelected();
         }
@@ -410,6 +421,9 @@ function _layerDrawApplyPropsToSelected(deferSave) {
     if (!el) return;
     const strokeNone = document.getElementById('layer-draw-stroke-none').checked;
     _fontMgrApplyFillPaintToEl(el, el.ownerSVGElement || getPanelLayerSvg(), _layerDrawGetFillStyleObj(), 1);
+    // テクスチャ塗りを再適用（新しいpatternに差し替わる）した直後、既に移動・リサイズ済みのシェイプなら
+    // 追従用のpatternTransformも再計算する（rect/ellipse/line/polygonのみ。path/gは対象外）
+    _drawShapeSyncTexturePatternTransform(el);
     const sw = parseFloat(document.getElementById('layer-draw-stroke-width').value) || 0;
     if (strokeNone || sw === 0) {
         el.setAttribute('stroke', 'none');
@@ -500,6 +514,8 @@ function _layerDrawUpdateStatusForShape() {
     const shape = document.getElementById('layer-draw-shape').value;
     if (shape === 'polygon') {
         _layerDrawSetStatus(t('draw.polygonDrawing', _layerDrawTargetLabel()));
+    } else if (shape === 'vectorcurve') {
+        _layerDrawSetStatus(t('draw.vectorDrawing', _layerDrawTargetLabel()));
     } else {
         _layerDrawSetStatus(t('draw.drawingOn', _layerDrawTargetLabel()));
     }
@@ -511,6 +527,8 @@ function _layerDrawDetachOverlay() {
     _layerDrawState.overlayCanvas = null;
     _layerDrawState.polyPoints = [];
     _layerDrawState.polyHoverPt = null;
+    _layerDrawState.vecPoints = [];
+    _layerDrawState.vecHoverPt = null;
     window.removeEventListener('mouseup', _layerDrawMouseUpGlobal);
     window.removeEventListener('keydown', _layerDrawKeyDown);
     // プレビュー要素のクリーンアップ
@@ -574,6 +592,11 @@ function _layerDrawMouseDown(e) {
         e.preventDefault();
         return;
     }
+    if (document.getElementById('layer-draw-shape').value === 'vectorcurve') {
+        _layerDrawVecClick(e);
+        e.preventDefault();
+        return;
+    }
     _layerDrawState.isDragging = true;
     _layerDrawState.startSvgPt = _layerDrawClientToSvg(e.clientX, e.clientY);
     _layerDrawState.curSvgPt   = { ..._layerDrawState.startSvgPt };
@@ -590,6 +613,13 @@ function _layerDrawMouseMove(e) {
         if (_layerDrawState.polyPoints.length > 0) {
             _layerDrawState.polyHoverPt = _layerDrawClientToSvg(e.clientX, e.clientY);
             _layerDrawPolyPreview();
+        }
+        return;
+    }
+    if (document.getElementById('layer-draw-shape').value === 'vectorcurve') {
+        if (_layerDrawState.vecPoints.length > 0) {
+            _layerDrawState.vecHoverPt = _layerDrawClientToSvg(e.clientX, e.clientY);
+            _layerDrawVecPreview();
         }
         return;
     }
@@ -794,18 +824,38 @@ function _layerDrawPolyReset() {
     if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
 }
 
-// Esc: 直前の頂点を取り消し（描画モード中のみ）
+// Esc: 直前の頂点を取り消し（多角形・ベクター曲線の描画モード中）。
+// ベクター曲線はEnterで（始点まで閉じずに）開いた線として確定できる。
 function _layerDrawKeyDown(e) {
-    if (e.key !== 'Escape') return;
     if (!_layerDrawState.active) return;
-    if (document.getElementById('layer-draw-shape').value !== 'polygon') return;
-    const t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
-    if (_layerDrawState.polyPoints.length === 0) return;
-    _layerDrawState.polyPoints.pop();
-    _layerDrawPolyPreview();
-    e.preventDefault();
-    e.stopPropagation();
+    const shape = document.getElementById('layer-draw-shape').value;
+    if (shape !== 'polygon' && shape !== 'vectorcurve') return;
+    const tgt = e.target;
+    if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)) return;
+
+    if (shape === 'polygon') {
+        if (e.key !== 'Escape') return;
+        if (_layerDrawState.polyPoints.length === 0) return;
+        _layerDrawState.polyPoints.pop();
+        _layerDrawPolyPreview();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+    }
+
+    // vectorcurve
+    if (e.key === 'Escape') {
+        if (_layerDrawState.vecPoints.length === 0) return;
+        _layerDrawState.vecPoints.pop();
+        _layerDrawVecPreview();
+        e.preventDefault();
+        e.stopPropagation();
+    } else if (e.key === 'Enter') {
+        if (_layerDrawState.vecPoints.length < 2) return;
+        e.preventDefault();
+        e.stopPropagation();
+        _layerDrawVecCommit(false);
+    }
 }
 
 // マウス位置が始点の近く（canvas px基準）かどうか
@@ -959,7 +1009,273 @@ async function _layerDrawPolyCommitInner() {
     el.setAttribute('data-angle', '0');
     el.setAttribute('data-shape-kind', 'polygon');
 
+    // 多角形は頂点(points)を直接書き換えて移動・変形するため、テクスチャ塗りが
+    // シェイプに追従できるよう作成時点の生座標を保持する（17c: _drawShapeSyncTexturePatternTransform が使用）
+    const rawBB = _polygonPointsBounds(pts);
+    el.setAttribute('data-raw-x', rawBB.x.toFixed(2));
+    el.setAttribute('data-raw-y', rawBB.y.toFixed(2));
+    el.setAttribute('data-raw-w', rawBB.w.toFixed(2));
+    el.setAttribute('data-raw-h', rawBB.h.toFixed(2));
+
     targetG.appendChild(el);
+    _layerDrawState.undoStack.push({ el, parentG: targetG });
+
+    if (state.selectedOverlay) {
+        await saveOverlaySvg(svgEl);
+    } else if (state.selectedPanelId) {
+        await savePanelSvg(state.selectedPanelId, svgEl);
+    }
+    _layerDrawSelectShape(el, svgEl);
+    return true;
+}
+
+// ──────────────────────
+// ベクター曲線ツール
+// クリックで頂点追加、Catmull-Romスプラインでプレビュー。
+// 始点付近クリックで閉じたシェイプ（塗り可）、Enterで開いた線（線のみ）として確定する。
+// ImageタブのMaskツール Vector（image-tab/MaskEditorOneTools.js の MaskVectorTool）と
+// 同じ補間式・操作感に揃えている。
+// ──────────────────────
+
+function _layerDrawVecReset() {
+    _layerDrawState.vecPoints = [];
+    _layerDrawState.vecHoverPt = null;
+    const canvas = _layerDrawState.overlayCanvas;
+    if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+// マウス位置が始点の近く（canvas px基準）かどうか
+function _layerDrawVecIsNearStart(clientX, clientY) {
+    const pts = _layerDrawState.vecPoints;
+    const canvas = _layerDrawState.overlayCanvas;
+    if (pts.length === 0 || !canvas) return false;
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    const mx = (clientX - r.left) * (canvas.width / r.width);
+    const my = (clientY - r.top) * (canvas.height / r.height);
+    const s0 = _layerDrawSvgToCanvas(pts[0].x, pts[0].y);
+    return Math.hypot(mx - s0.x, my - s0.y) <= _POLY_CLOSE_THRESHOLD;
+}
+
+// クリック: 頂点追加。始点付近クリック（3点以上）でスプラインを閉じて確定
+function _layerDrawVecClick(e) {
+    const pts = _layerDrawState.vecPoints;
+    if (pts.length === 0) {
+        _layerDrawResizeCanvas(getPanelLayerSvg(), _layerDrawState.overlayCanvas);
+    }
+    if (pts.length >= 3 && _layerDrawVecIsNearStart(e.clientX, e.clientY)) {
+        _layerDrawVecCommit(true);
+        return;
+    }
+    const pt = _layerDrawClientToSvg(e.clientX, e.clientY);
+    const last = pts[pts.length - 1];
+    if (last && Math.abs(last.x - pt.x) < 0.01 && Math.abs(last.y - pt.y) < 0.01) return; // 同一点の連打を無視
+    pts.push(pt);
+    _layerDrawState.vecHoverPt = { ...pt };
+    _layerDrawVecPreview();
+}
+
+// Catmull-Romスプラインをcanvas ctxのパスとして構築する（pts: canvas px座標）。
+// image-tab/MaskEditorOneTools.js の MaskVectorTool._buildSpline と同じ補間式。
+function _vecBuildSplineCtx(ctx, pts, closed) {
+    const n = pts.length;
+    if (n === 0) return;
+    if (n === 1) { ctx.moveTo(pts[0].x, pts[0].y); return; }
+    if (n === 2) {
+        ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[1].x, pts[1].y);
+        if (closed) ctx.closePath();
+        return;
+    }
+    let ext;
+    if (closed) {
+        ext = [pts[n - 1], ...pts, pts[0], pts[1]];
+    } else {
+        ext = [
+            { x: 2 * pts[0].x - pts[1].x, y: 2 * pts[0].y - pts[1].y },
+            ...pts,
+            { x: 2 * pts[n - 1].x - pts[n - 2].x, y: 2 * pts[n - 1].y - pts[n - 2].y },
+        ];
+    }
+    ctx.moveTo(ext[1].x, ext[1].y);
+    const count = closed ? n : n - 1;
+    for (let i = 0; i < count; i++) {
+        const [p0, p1, p2, p3] = [ext[i], ext[i + 1], ext[i + 2], ext[i + 3]];
+        ctx.bezierCurveTo(
+            p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6,
+            p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6,
+            p2.x, p2.y,
+        );
+    }
+    if (closed) ctx.closePath();
+}
+
+// _vecBuildSplineCtx と同じ補間式で、確定用のSVG <path> d属性文字列を生成する（pts: SVG座標）
+function _vecBuildSplinePathD(pts, closed) {
+    const n = pts.length;
+    if (n === 0) return '';
+    if (n === 1) return `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+    if (n === 2) {
+        let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)} L ${pts[1].x.toFixed(2)} ${pts[1].y.toFixed(2)}`;
+        if (closed) d += ' Z';
+        return d;
+    }
+    let ext;
+    if (closed) {
+        ext = [pts[n - 1], ...pts, pts[0], pts[1]];
+    } else {
+        ext = [
+            { x: 2 * pts[0].x - pts[1].x, y: 2 * pts[0].y - pts[1].y },
+            ...pts,
+            { x: 2 * pts[n - 1].x - pts[n - 2].x, y: 2 * pts[n - 1].y - pts[n - 2].y },
+        ];
+    }
+    let d = `M ${ext[1].x.toFixed(2)} ${ext[1].y.toFixed(2)}`;
+    const count = closed ? n : n - 1;
+    for (let i = 0; i < count; i++) {
+        const [p0, p1, p2, p3] = [ext[i], ext[i + 1], ext[i + 2], ext[i + 3]];
+        const c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
+        const c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
+        d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)} ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+    }
+    if (closed) d += ' Z';
+    return d;
+}
+
+// 確定済み頂点＋スプラインのラバーバンドをオーバーレイcanvasに描画
+function _layerDrawVecPreview() {
+    const canvas = _layerDrawState.overlayCanvas;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const pts = _layerDrawState.vecPoints;
+    if (pts.length === 0) return;
+    const cpts = pts.map(p => _layerDrawSvgToCanvas(p.x, p.y));
+    const hover = _layerDrawState.vecHoverPt
+        ? _layerDrawSvgToCanvas(_layerDrawState.vecHoverPt.x, _layerDrawState.vecHoverPt.y)
+        : null;
+    // 始点付近ホバー中（閉じられる状態）かどうか
+    const closable = pts.length >= 3 && hover &&
+        Math.hypot(hover.x - cpts[0].x, hover.y - cpts[0].y) <= _POLY_CLOSE_THRESHOLD;
+
+    ctx.save();
+
+    // 確定済みスプライン（実線）
+    if (cpts.length >= 2) {
+        ctx.strokeStyle = '#0077ff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        _vecBuildSplineCtx(ctx, cpts, false);
+        ctx.stroke();
+    }
+
+    // ラバーバンド（破線）: 閉じられる状態なら閉じた場合の形状をプレビュー
+    if (hover) {
+        ctx.setLineDash([5, 3]);
+        if (closable) {
+            ctx.strokeStyle = 'rgba(255,80,80,0.85)';
+            ctx.beginPath();
+            _vecBuildSplineCtx(ctx, cpts, true);
+            ctx.stroke();
+        } else {
+            ctx.strokeStyle = 'rgba(0,119,255,0.6)';
+            ctx.beginPath();
+            ctx.moveTo(cpts[cpts.length - 1].x, cpts[cpts.length - 1].y);
+            ctx.lineTo(hover.x, hover.y);
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+    }
+
+    // 頂点マーカー
+    cpts.forEach((p, i) => {
+        ctx.beginPath();
+        if (i === 0) {
+            // 始点: 閉じられる状態なら強調表示
+            ctx.arc(p.x, p.y, closable ? 7 : 5, 0, Math.PI * 2);
+            ctx.fillStyle = closable ? '#00bb55' : '#ffffff';
+            ctx.fill();
+            ctx.strokeStyle = closable ? '#008833' : '#0077ff';
+            ctx.stroke();
+        } else {
+            ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#0077ff';
+            ctx.fill();
+        }
+    });
+
+    ctx.restore();
+}
+
+// ベクター曲線の確定（<path class="draw-shape"> として追加・保存）
+// closed=true: 始点まで閉じたシェイプ（塗り適用）/ closed=false: Enterで開いた線として確定（線のみ）
+async function _layerDrawVecCommit(closed) {
+    let committed = false;
+    try {
+        committed = await _layerDrawVecCommitInner(closed);
+    } catch (err) {
+        console.error('Vector curve commit error:', err);
+    } finally {
+        _layerDrawVecReset();
+        _layerDrawState.active = false;
+        _layerDrawUpdateToggle();
+        _layerDrawDetachOverlay();
+        if (committed) _layerDrawSetStatus(t('draw.vectorCommitted'));
+    }
+}
+
+async function _layerDrawVecCommitInner(closed) {
+    const pts = _layerDrawState.vecPoints;
+    if (pts.length < 2) return;
+
+    const svgEl = getPanelLayerSvg();
+    if (!svgEl) return;
+    if (!state.selectedPanelId && !state.selectedOverlay) {
+        _layerDrawSetStatus(t('draw.selectTargetBeforeDraw'));
+        return;
+    }
+    const targetG = getOrCreateClipGroup(svgEl);
+
+    const ns          = 'http://www.w3.org/2000/svg';
+    const strokeNone  = document.getElementById('layer-draw-stroke-none').checked;
+    const strokeColor = strokeNone ? 'none' : document.getElementById('layer-draw-stroke').value;
+    const strokeW     = strokeNone ? 0      : (parseFloat(document.getElementById('layer-draw-stroke-width').value) || 0);
+    const opacity     = parseInt(document.getElementById('layer-draw-opacity').value, 10) / 100;
+
+    const el = document.createElementNS(ns, 'path');
+    el.setAttribute('d', _vecBuildSplinePathD(pts, closed));
+    if (closed) {
+        _fontMgrApplyFillPaintToEl(el, svgEl, _layerDrawGetFillStyleObj(), 1);
+    } else {
+        // 未閉合の線は塗ると見た目が破綻するため（fillは暗黙的に始点-終点を直線で閉じて塗ってしまう）塗りなし固定
+        el.setAttribute('fill', 'none');
+    }
+    if (strokeColor !== 'none' && strokeW > 0) {
+        el.setAttribute('stroke',       strokeColor);
+        el.setAttribute('stroke-width', strokeW.toString());
+    } else {
+        el.setAttribute('stroke', 'none');
+    }
+    if (opacity < 1) el.setAttribute('opacity', opacity.toFixed(3));
+
+    el.classList.add('draw-shape');
+    el.id = 'draw-' + Date.now();
+    el.setAttribute('data-angle', '0');
+    el.setAttribute('data-shape-kind', 'vectorcurve');
+
+    targetG.appendChild(el);
+
+    // 確定直後にバウンディングボックスを論理座標として保持する（移動・リサイズ・回転はこれを基準に行う。curve/chain等のpath/g要素と同じ扱い）
+    const bb = el.getBBox();
+    el.setAttribute('data-x', bb.x.toFixed(2));
+    el.setAttribute('data-y', bb.y.toFixed(2));
+    el.setAttribute('data-w', bb.width.toFixed(2));
+    el.setAttribute('data-h', bb.height.toFixed(2));
+    el.setAttribute('data-raw-x', bb.x.toFixed(2));
+    el.setAttribute('data-raw-y', bb.y.toFixed(2));
+    el.setAttribute('data-raw-w', bb.width.toFixed(2));
+    el.setAttribute('data-raw-h', bb.height.toFixed(2));
+
     _layerDrawState.undoStack.push({ el, parentG: targetG });
 
     if (state.selectedOverlay) {

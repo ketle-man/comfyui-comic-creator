@@ -3,7 +3,7 @@
 // 元 17-layer-draw.js（分割前）の行 1015-1574 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _drawShapeApplyRotation,_drawShapeExtractFillState,_drawShapeGetBounds,_drawShapeSetBounds,_drawShapeSyncProps,_drawUpdateTransformForPathG,_initEditTabTrigger,_layerDrawSelectShape,_polygonBakeRotation,_polygonDisplayPoints,_polygonGetPoints,_polygonPointsBounds,_polygonSetPoints,_renderPolygonVertexHandles,clearDrawShapeHandles,initDrawShapeManipulation,renderDrawShapeHandles,updateDrawShapeHandles
+// 主なトップレベル定義: _drawShapeApplyRotation,_drawShapeExtractFillState,_drawShapeGetBounds,_drawShapeSetBounds,_drawShapeSyncProps,_drawShapeSyncTexturePatternTransform,_drawUpdateTransformForPathG,_initEditTabTrigger,_layerDrawSelectShape,_polygonBakeRotation,_polygonDisplayPoints,_polygonGetPoints,_polygonPointsBounds,_polygonSetPoints,_renderPolygonVertexHandles,clearDrawShapeHandles,initDrawShapeManipulation,renderDrawShapeHandles,updateDrawShapeHandles
 // ============================================================
 
 // ─────────────────────────────────────────────
@@ -76,6 +76,8 @@ function _drawShapeExtractFillState(el, svgEl) {
                 w: parseFloat(def.getAttribute('data-ccc-tex-w')) || 100,
                 h: parseFloat(def.getAttribute('data-ccc-tex-h')) || 100,
                 scale: parseFloat(def.getAttribute('data-ccc-tex-scale')) || 100,
+                offsetX: parseFloat(def.getAttribute('data-ccc-tex-offset-x')) || 0,
+                offsetY: parseFloat(def.getAttribute('data-ccc-tex-offset-y')) || 0,
             };
         } else if (!um) {
             fillSolid = fillAttr;
@@ -540,6 +542,7 @@ function initDrawShapeManipulation(svgEl) {
             if (!pts[vertexIdx]) return;
             pts[vertexIdx] = { x: pt.x, y: pt.y };
             _polygonSetPoints(el, pts);
+            _drawShapeSyncTexturePatternTransform(el);
             updateDrawShapeHandles(el, svgEl);
         } else if (rotating) {
             const b  = _drawShapeGetBounds(el);
@@ -629,11 +632,48 @@ function _drawShapeSetBounds(el, x, y, w, h) {
         el.setAttribute('data-w', Math.max(1, w).toFixed(2));
         el.setAttribute('data-h', Math.max(1, h).toFixed(2));
         _drawUpdateTransformForPathG(el);
-        return; // transform は内部で処理済み
+        return; // transform は内部で処理済み（テクスチャもtransformで一緒に動くため追従処理は不要）
     }
+    // rect/ellipse/line/polygon は座標を直接書き換えて移動するため、テクスチャ塗りが
+    // シェイプに追従するようパターンにもpatternTransformを再適用する
+    _drawShapeSyncTexturePatternTransform(el);
     // 回転があれば再適用
     const angle = parseFloat(el.dataset.angle || 0);
     if (angle !== 0) _drawShapeApplyRotation(el, angle);
+}
+
+// rect/ellipse/line/polygon のテクスチャ塗り（<pattern> patternUnits="userSpaceOnUse"）は
+// 絶対座標に固定されるため、シェイプの座標を直接書き換えて移動・リサイズすると、テクスチャが
+// 「シェイプに対してスライドする」ように見えてしまう。
+// （curve/vectorcurve等のpath/g要素はtransformで移動するため、パターンも一緒に動きこの問題が起きない）
+// 作成時点の生座標（data-raw-x/y/w/h）→現在のbboxへのアフィン変換をpatternTransformとして
+// パターンにも適用し、path/g系と同じ「テクスチャがシェイプに対して動かない」見た目に揃える。
+// 回転はrect/ellipse/line/polygonでも要素自身のtransform="rotate(...)"で行われており、
+// それはパターンにもそのまま継承されるためここでは扱わない（平行移動・リサイズ分のみ補正すればよい）。
+function _drawShapeSyncTexturePatternTransform(el) {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'path' || tag === 'g') return; // これらは要素自身のtransformでテクスチャも追従するため対象外
+    const fillId = el.dataset.styleFillId;
+    if (!fillId) return;
+    const svgEl = el.ownerSVGElement;
+    const pattern = svgEl?.querySelector(`[id="${fillId}"]`);
+    if (!pattern || pattern.tagName.toLowerCase() !== 'pattern') return;
+
+    const rawX = parseFloat(el.getAttribute('data-raw-x'));
+    const rawY = parseFloat(el.getAttribute('data-raw-y'));
+    const rawW = parseFloat(el.getAttribute('data-raw-w'));
+    const rawH = parseFloat(el.getAttribute('data-raw-h'));
+    // data-raw-*を持たない旧データ（本機能追加以前に作成された図形）は補正しようがないため何もしない
+    if (!rawW || !rawH || isNaN(rawX) || isNaN(rawY)) return;
+
+    const b = _drawShapeGetBounds(el);
+    const sx = b.w / rawW, sy = b.h / rawH;
+    const tx = b.x - rawX * sx, ty = b.y - rawY * sy;
+    if (Math.abs(sx - 1) < 1e-6 && Math.abs(sy - 1) < 1e-6 && Math.abs(tx) < 0.005 && Math.abs(ty) < 0.005) {
+        pattern.removeAttribute('patternTransform');
+    } else {
+        pattern.setAttribute('patternTransform', `matrix(${sx.toFixed(6)},0,0,${sy.toFixed(6)},${tx.toFixed(4)},${ty.toFixed(4)})`);
+    }
 }
 
 // ─────────────────────────────────────────────

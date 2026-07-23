@@ -2,6 +2,29 @@
 
 ---
 
+## 2026-07-23（レイアウトのドローに「ベクター曲線」を追加、テクスチャ塗りの追従・位置指定・PNG変換時の欠落を修正）
+
+「レイアウトタブのドローツールにベクター曲線を追加したい。ImageタブのMaskツールのVectorのように描きたい」との依頼を受けて実装。続けてユーザー自身の検証で3件の追加不具合が見つかり、同じ流れで修正した。
+
+1つ目は新機能で、既存の「多角形」ペンツール（クリックで頂点追加・直線で結ぶ）と対をなす、Catmull-Romスプラインでなめらかに結ぶベクター曲線ツール。Imageタブの`MaskVectorTool`（`image-tab/MaskEditorOneTools.js`）と同じ操作感・同じ補間式に合わせた。
+
+2〜4件目はユーザーが新機能を検証中に見つけた既存不具合。「ベクター曲線・曲線にテクスチャ塗りを設定してシェイプを動かしても座標が変わらないが、矩形・楕円・多角形では変わる」→「矩形・楕円・多角形をベクター曲線と同じ（動かしてもズレない）挙動に揃えたい、その上で座標も設定可能にしたい」→「テクスチャを使ったシェイプを『図形をPNG変換』すると塗りがない状態になる」→「フキダシを画像に変換すると左・上が切れる」の順で報告され、いずれもSVGの`fill="url(#...)"`（グラデーション・テクスチャパターン）や`getBBox()`の挙動に起因する根の深い箇所だったため、原因調査から着手した。
+
+**実装**:
+- `templates/index.html` / `static/js/i18n.js`（ja/en/zh）: シェイプ選択に「ベクター曲線」ボタン・選択肢を追加。
+- `static/js/main/17a-layer-draw-input.js`: `_layerDrawVecClick`/`_layerDrawVecPreview`/`_vecBuildSplineCtx`/`_vecBuildSplinePathD`/`_layerDrawVecCommit`等を新設。クリックでノード追加、3点以上で始点付近クリック→閉じたシェイプ（`<path>`、塗り適用）として確定、Enterキー→開いた線（`fill="none"`固定）として確定、Escキーで直前のノードを取消。多角形の確定処理にも、テクスチャ追従用の生座標（`data-raw-x/y/w/h`）記録を追加。
+- `static/js/main/17c-layer-draw-handles.js`: 新設`_drawShapeSyncTexturePatternTransform(el)`。矩形・楕円・線・多角形はSVG属性（x/y/points等）を直接書き換えて移動するため、`patternUnits="userSpaceOnUse"`のテクスチャパターンが絶対座標に固定されたままシェイプに対して滑って見える問題があった（曲線・ベクター曲線は`transform`で移動するためパターンも一緒に動き問題なし）。作成時点の生座標→現在のbboxへのアフィン変換を`patternTransform`としてパターンにも適用し、`_drawShapeSetBounds`（移動・リサイズ時）と多角形の頂点個別ドラッグの両方から呼ぶことで、path/g系と同じ「テクスチャがシェイプに対して動かない」挙動に統一。回転は元々シェイプ自身の`transform="rotate(...)"`で行われておりパターンにもそのまま継承されるため対象外。
+- `static/js/main/17b-layer-draw-commit.js`: 矩形・楕円・線の作成時にも生座標（`data-raw-x/y/w/h`）を記録。
+- `static/js/main/09e-text-tool.js`: 共通の塗り適用関数`_fontMgrApplyFillPaintToEl`にテクスチャの位置オフセット（`offsetX`/`offsetY`）を追加し、パターンの`x`/`y`属性および往復用の`data-ccc-tex-offset-x/y`に反映。抽出側`_fontMgrExtractStyleFromTextEl`・`17c`の`_drawShapeExtractFillState`も同項目を読み戻すよう対応。
+- `templates/index.html` / `17a-layer-draw-input.js`: テクスチャ塗りパネルに位置X/Y入力を追加（UIへの反映・保存・選択図形からの復元）。
+- `static/js/main/09c-balloon-handles.js`（`convertShapeToImage`。フキダシ「画像に変換」とドロー「図形をPNG変換」の共通処理）: (a) クローンしたシェイプだけの単独SVGに元の`<defs>`（グラデーション・テクスチャパターンの定義本体）が複製されておらず、`fill="url(#id)"`の参照先が解決できず塗りが消えていたため、`<defs>`もクローンして持たせるよう修正。(b) 余白計算が`el`自身の`stroke-width`属性しか見ておらず、フキダシの枠線は`.h2-layer-border`など子要素側にあるため取得できず、実際の線幅を大幅に下回る固定4px余白にフォールバックしていた（`getBBox()`は塗りの幾何形状のみでstrokeのはみ出し分を含まないため、この余白不足がそのまま輪郭のクリッピングになっていた）。自身+子孫の中の最大`stroke-width`を探すよう修正。
+
+**検証**（Kapture）: ベクター曲線は閉じたシェイプ（Catmull-Romによる`C`コマンドの`<path>`、`Z`で閉じ塗り適用）・Enterでの開いた線（`fill="none"`、`Z`なし）の両方をDOM上で確認。以降の3件はユーザー自身の実機検証により解消を確認。
+
+**How to apply**: SVGの`patternUnits="userSpaceOnUse"`（`x`/`y`省略）は参照元の要素が`transform`で動く場合は自動的に追従するが、属性を直接書き換えて移動するタイプの図形では絶対座標に取り残される。「`transform`で動く図形」と「属性直書きで動く図形」が混在する実装では、後者にも生座標との差分を`patternTransform`として明示的に載せないと挙動が揃わない。また要素を単独SVGとしてクローン→ラスタライズする処理（`convertShapeToImage`等）では、`url(#...)`参照の定義本体（`<defs>`）を必ず一緒に複製すること、および`stroke-width`は要素自身ではなく子孫要素にあるケースを想定して余白を計算すること。
+
+---
+
 ## 2026-07-23（3Dポーズタブに視線ターゲット・揺れ物理トグルを追加）
 
 「現在使用しているライブラリで追加可能な機能」の検討依頼を受け、3Dポーズ機能（実体は別カスタムノード`comfyui-vrm-pose-editor`）が使う`three-vrm`ライブラリを調査。VRMLoaderPluginが`springBonePlugin`・`lookAtPlugin`を内包しており、`vrm.lookAt`（VRMLookAt）・`vrm.springBoneManager`（VRMSpringBoneManager、揺れボーンがあるモデルで生成）が既にロード時点で存在し、`VRM.update(delta)`が毎フレーム両方を自動更新していることが判明。つまり視線追従・揺れ物理は「ライブラリ内に実装済みだが配線されていないだけ」の状態だったため、UIから使えるように配線した。
