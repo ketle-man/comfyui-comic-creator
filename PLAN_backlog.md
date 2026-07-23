@@ -1,6 +1,6 @@
 # 作業計画バックログ
 
-更新日: 2026-07-22（フキダシ内包テキストの統合・縦書き対応・尻尾幅デフォルト変更 完了反映）
+更新日: 2026-07-23（3Dポーズ機能拡張 [視線ターゲット/揺れ物理] 完了・開発元フォルダへ反映済み）
 
 過去の計画書・調査・コード内 TODO を棚卸しし、未着手の作業を一元管理するためのファイル。
 着手時は該当項目の「実装メモ」を出発点にし、完了したら「完了済み」へ移動して DEVLOG.md に詳細を記録する。
@@ -20,6 +20,15 @@
 ---
 
 ## 完了済み（記録）
+
+- **3Dポーズ機能拡張（視線ターゲット/揺れ物理）**（2026-07-23 完了・承認済み）:
+  対象ライブラリ `comfyui-vrm-pose-editor`（別カスタムノード、`comfyui-comic-creator`の3Dポーズタブが動的importで再利用）が同梱する `three-vrm.module.js`（three-vrm, three.js r160同梱）を調査。
+  `VRMLoaderPlugin`（`pose_editor_core.js`が使用している完全版）は `springBonePlugin` と `lookAtPlugin` を内包しており、VRMロード時点で `vrm.lookAt`（VRMLookAt）と `vrm.springBoneManager`（VRMSpringBoneManager、VRMアセット自体に定義された髪・スカート等の揺れボーンがあれば生成）が**既に生成済み**、`VRM.update(delta)` が内部で両方を毎フレーム自動更新していることが判明。揺れ物理・視線追従は元々「配線されていないだけで中身は実装済み」の状態だった。
+  - **① 視線ターゲット（LookAt）**: `pose_editor_core.js`にドラッグ可能なシアン色の3Dマーカー(`lookAtHelperMesh`)を追加。ON時は`vrm.lookAt.target`にこのマーカーを割り当て、目・頭が追従する。マーカーはcapture()時に自動非表示化。新モデル読込時にVRM0/VRM1の正面向きに応じた初期位置へ再配置。API: `hasLookAt()` / `getLookAtEnabled()` / `toggleLookAt()`。Kaptureで実機VRM相手にトグル・マーカー表示/非表示を確認済み。
+  - **② 揺れ物理（SpringBone）**: 既存の自動シミュレーションはそのまま活かしつつ、(a) ポーズの瞬間切替（リセット/ポーズ読込/ミラー）直後に揺れボーンが「一瞬跳ねる」問題を、`springBoneManager.setInitState()`で新ポーズを基準に再アンカーして解消。(b) ON/OFFトグルは`capture()`で既に使われている「delta=0で一時停止」と同じ手法をアニメーションループに適用して実現（`_springBoneEnabled`フラグ）。API: `hasSpringBones()` / `getSpringBoneEnabled()` / `toggleSpringBoneEnabled()`。Kaptureで`hasSpringBones:true`のモデルにてトグル動作・エラー無しを確認済み。
+  - **UI配線**: ComfyUIノード側（`pose_editor_3d.js`）に「👁 視線」「🎐 揺れ」トグルボタンを追加。SPA側（`templates/index.html`の3Dポーズサブタブ + `static/js/main/23-pose3d-bridge.js`）にも同等のボタンを追加し、i18n（`i18n.js`）に日英中3言語のタイトル文言を追加済み。
+  - **擬似HDRI環境ライティングは不採用（実装後に削除）**: 当初、上空/地平線/足元の3色グラデーションをcanvas手続き生成→`THREE.PMREMGenerator`でIBL環境マップ化する方式（スタジオ/屋外/夕焼け/なしの4プリセット）を実装し`light_editor.js`にUIも追加したが、Kapture実機検証で**キャンバス全体に渡って1ピクセルも変化しないバグ**を発見。原因切り分けの結果、ユーザーの実ブラウザ環境で`OES_texture_half_float_linear`（half-floatテクスチャの線形フィルタリング）拡張が未対応で、`PMREMGenerator`がエラー無く空の環境マップを生成してしまうことが判明した（GPU/ドライバ依存で壊れやすい実装だった）。さらにVRMのMToonシェーダーは元々`envMap`/`scene.environment`を一切参照せずキャラ本体には影響しないため、直しても効果は Ground/BG Wall の反射のみに限定される。ユーザーが「Comic Creatorの用途にあまり効果がない」と判断し、機能ごと削除した（`pose_editor_core.js`のEnvironment lighting セクション・API、`light_editor.js`のEnvセレクトUI・プリセット永続化を全て除去）。**教訓**: [[vrm-pose-editor-architecture]] に記録済み。同種の環境マップ機能を将来検討する際は、まずGPU拡張(`OES_texture_half_float_linear`等)の実機確認から始めること。
+  - **開発元フォルダへの反映**: `comfyui-vrm-pose-editor`のリリース用ソースは `C:\Users\statsu-11\Desktop\now_work\vrmpose_light_plus_2\3dpose_light_editor` で管理されており、ComfyUI実行環境の `custom_nodes/comfyui-vrm-pose-editor` とは別ディレクトリ（シンボリックリンクではない）。今回の変更3ファイル（`js/pose_editor_core.js` / `js/pose_editor_3d.js` / `js/light_editor.js`）をこちらへコピーしリリース準備を完了。なお反映作業中に、この3ファイル以外にも `js/pose_library.js` と `js/vendor/`（GLTFLoader.js / OrbitControls.js / three-vrm.module.js）が実行環境側とdev側で既に差分があることが判明したが、今回のタスク範囲外のため対象外とし、コピーしていない（別途ユーザー側で要確認）。詳細は DEVLOG 2026-07-23。ヘルプ・README 3言語・DEVLOG 更新済み。
 
 - **フキダシ内包テキストの統合・縦書き対応・尻尾幅デフォルト変更**（2026-07-22 完了・承認済み）: 前日追加した「フキダシ+テキスト作成」（四角/角丸/楕円限定の新規シンプル形状）を、既存の尻尾付きフキダシ全形状（通常/角丸矩形/思考/バクダン/雲もこもこ/雲なみなみ）にも統合。「フキダシ形状の作成・調整」と「テキストの詳細設定（モーダル）」の導線は2つのまま維持し、ボタンは「テキストを内包」に役割変更（形状選択は削除、選択中フキダシへの内包・再編集専用）。縦書き対応を追加する過程で、`writing-mode="tb"`というSVG1.1属性値が現行ブラウザでは無効で機能していなかったバグを発見・修正（単独テキストツールの縦書きも同時に修正）。追加依頼でモーダルに文字色セレクト・Google/システム/カテゴリのフォントタブを追加、縦書き上下寄せの向き逆転バグを修正、尻尾幅パラメータのデフォルトを30°→13°に変更。詳細は DEVLOG 2026-07-22。ヘルプ・README 3言語更新済み。
 

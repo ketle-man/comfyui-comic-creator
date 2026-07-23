@@ -2,6 +2,24 @@
 
 ---
 
+## 2026-07-23（3Dポーズタブに視線ターゲット・揺れ物理トグルを追加）
+
+「現在使用しているライブラリで追加可能な機能」の検討依頼を受け、3Dポーズ機能（実体は別カスタムノード`comfyui-vrm-pose-editor`）が使う`three-vrm`ライブラリを調査。VRMLoaderPluginが`springBonePlugin`・`lookAtPlugin`を内包しており、`vrm.lookAt`（VRMLookAt）・`vrm.springBoneManager`（VRMSpringBoneManager、揺れボーンがあるモデルで生成）が既にロード時点で存在し、`VRM.update(delta)`が毎フレーム両方を自動更新していることが判明。つまり視線追従・揺れ物理は「ライブラリ内に実装済みだが配線されていないだけ」の状態だったため、UIから使えるように配線した。
+
+合わせてHDRI環境ライティング（擬似.hdr、`THREE.PMREMGenerator`+手続き生成グラデーション）も実装したが、Kapture実機検証でキャンバス全体1ピクセルも変化しないことを発見。原因切り分けの結果、ブラウザの`OES_texture_half_float_linear`（half-floatテクスチャの線形フィルタリング）拡張が未対応で、`PMREMGenerator`がエラーを出さずに空の環境マップを生成していたと判明。加えてVRMのMToonシェーダーは元々`envMap`/`scene.environment`を参照しないためキャラ本体には無関係（Ground/BG Wallの反射のみに影響）という効果の限定性もあり、ユーザー判断で機能ごと削除した。
+
+**実装**（`comfyui-vrm-pose-editor`側。SPAの3Dポーズタブは動的importでこのコードをそのまま利用）:
+- `js/pose_editor_core.js`: ドラッグ可能なシアン色マーカー(`lookAtHelperMesh`)を追加し、ON時に`vrm.lookAt.target`へ割り当てて目・頭を追従させる（`hasLookAt()`/`getLookAtEnabled()`/`toggleLookAt()`）。マーカーは`capture()`時に自動非表示化、新モデル読込時はVRM0/VRM1の正面向きに応じた位置へ再配置。揺れ物理は、ポーズの瞬間切替（リセット/ポーズ読込/ミラー）直後に`springBoneManager.setInitState()`で新ポーズへ再アンカーして「一瞬跳ねる」問題を解消し、ON/OFFトグルは`capture()`で既に使われている「delta=0で一時停止」と同じ手法をアニメーションループに適用（`hasSpringBones()`/`getSpringBoneEnabled()`/`toggleSpringBoneEnabled()`）。
+- `js/pose_editor_3d.js`（ComfyUIノードUI）・`comfyui-comic-creator/templates/index.html`＋`static/js/main/23-pose3d-bridge.js`（SPA UI）の両方に「👁 視線」「🎐 揺れ」トグルボタンを追加。
+- `static/js/i18n.js`: `layout.pose3dLookAtTitle`/`layout.pose3dSpringBoneTitle`をja/en/zh 3言語に追加。
+- （削除済み）HDRI環境ライティング: `pose_editor_core.js`のEnvironment lightingセクション・API、`light_editor.js`のEnvセレクトUI・ライトライブラリプリセットへの永続化を全て実装後に削除。
+
+**検証**（Kapture）: ユーザーが実際にVRMモデルを配置した状態で、視線ターゲットのマーカー表示/非表示・トグル動作、揺れ物理トグル（`hasSpringBones: true`のモデルで確認）のクリック時無エラーを確認。HDRIについては`editor.setEnvironmentPreset()`をキャンバス全ピクセルでdiff比較するテストで実装バグを検出し、上記の通り原因究明後に機能ごと削除する判断に至った。
+
+**How to apply**: サードパーティ製3Dライブラリ（three-vrm等）に機能追加を頼まれたら、まず「vendorされているクラスに実はもう実装されているが未配線なだけ」のケースがないか（該当クラス名でgrep）を先に調べる。`THREE.PMREMGenerator`のような高度なGPU機能に依存する実装は、`gl.getSupportedExtensions()`で対象拡張（`OES_texture_half_float_linear`等）の対応有無をKaptureの`evaluate`で実機確認してから着手しないと、エラーが出ないまま無効化したように見える「サイレント失敗」に気づけない。詳細は[[vrm-pose-editor-architecture]]メモリに記録。
+
+---
+
 ## 2026-07-22（PDF/EPUB/zip出力のユーザー操作エラーを修正、画像出力の解像度メタデータを追加）
 
 下書きレイヤー機能の確認後、「出力を試したところPDF/EPUB/zip保存でエラーになる」との報告（`Failed to execute 'showSaveFilePicker' on 'Window': Must be handling a user gesture to show a file picker.`）を受けて調査・修正した。原因は、`showSaveFilePicker()`はクリック等のユーザー操作から間を置かず呼ばないと失敗する仕様のところ、PDF/EPUB/zip出力は保存ダイアログを開く前に「全ページの描画・フォント埋め込み・PDF/ZIP生成」という重い非同期処理を挟んでいたため、処理に時間がかかる（ページ数が多い等）とユーザー操作の有効期限が切れていたこと。PNG単ページ出力は処理が短く済むため、たまたま失敗しにくかった。

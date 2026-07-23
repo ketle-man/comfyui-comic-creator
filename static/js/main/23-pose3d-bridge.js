@@ -23,6 +23,8 @@ function initPose3DTab() {
     const saveToPosesBtn = document.getElementById('pose3d-save-to-poses-btn');
     const libraryBtn  = document.getElementById('pose3d-library-btn');
     const lightBtn    = document.getElementById('pose3d-light-btn');
+    const lookAtBtn   = document.getElementById('pose3d-lookat-btn');
+    const springBoneBtn = document.getElementById('pose3d-springbone-btn');
     const mirrorBtn   = document.getElementById('pose3d-mirror-btn');
     const ccBtn       = document.getElementById('pose3d-cc-btn');
     const resetPBtn   = document.getElementById('pose3d-reset-pose-btn');
@@ -176,6 +178,24 @@ function initPose3DTab() {
     // ミラー（左右反転）
     if (mirrorBtn) mirrorBtn.addEventListener('click', () => {
         if (state.pose3d.editor) state.pose3d.editor.mirrorPose();
+    });
+
+    // 視線ターゲット(LookAt)トグル
+    if (lookAtBtn) lookAtBtn.addEventListener('click', () => {
+        const editor = state.pose3d.editor;
+        if (!editor) return;
+        const on = editor.toggleLookAt();
+        lookAtBtn.textContent = on ? '👁 視線: ON' : '👁 視線: OFF';
+        lookAtBtn.style.background = on ? 'var(--accent-primary, #0066cc)' : '';
+    });
+
+    // 揺れ物理(SpringBone)トグル
+    if (springBoneBtn) springBoneBtn.addEventListener('click', () => {
+        const editor = state.pose3d.editor;
+        if (!editor) return;
+        const on = editor.toggleSpringBoneEnabled();
+        springBoneBtn.textContent = on ? '🎐 揺れ: ON' : '🎐 揺れ: OFF';
+        springBoneBtn.style.background = on ? '' : 'var(--accent-primary, #0066cc)';
     });
 
     // カラー補正トグル
