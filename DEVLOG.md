@@ -2,6 +2,21 @@
 
 ---
 
+## 2026-07-24（背景パターンのカスタムSVGアップロードをセキュリティレビュー）
+
+v1.13.0リリース後、ユーザーから「カスタムSVG読み込みについてセキュリティチェックをお願いできますか」との依頼を受けて`15c-manga-bgpattern.js`のカスタムSVGアップロード経路（`_mangaBgRecolorSvgString`/`_mangaBgLoadSvgImage`/`_mangaBgBuildSvgTileCanvas`）をレビューした。
+
+アップロードされたSVGは`new Image(); img.src = "data:image/svg+xml,..."`という`<img>`要素のコンテキストで読み込まれており、ブラウザ仕様上この経路では内部の`<script>`要素やイベントハンドラ（`onload`等）は実行されない（`innerHTML`でのDOM直接挿入や`<object>`/`<iframe>`埋め込みとは異なる安全な経路）。読み込んだ画像は`ctx.drawImage()`でcanvasに描画され最終的にPNGとしてラスタライズされるため、元のSVGコードはどこにも保存・送信されない。色置換で注入する`<style>`ブロックの値は`<input type="color">`由来でブラウザが常に`#rrggbb`に正規化するため文字列注入の余地もなく、外部リソース参照を含むSVGによる`canvas.toDataURL()`のcanvas tainting（`SecurityError`）も呼び出し元の`try/catch`で握られており実害はない。重大な脆弱性は見つからなかった。
+
+レビュー中に見つけた軽微な不具合（セキュリティとは無関係）として、`renderPreview()`内の`_mangaBgRenderPatternToCanvas`呼び出しが`try/catch`で囲まれておらず、画像として解釈できない壊れたSVGファイルをアップロードすると未処理のPromise rejectionがコンソールエラーになる点を修正した。
+
+**実装**:
+- `static/js/main/15c-manga-bgpattern.js`: `renderPreview()`内のパターン描画を`try/catch`で囲み、失敗時は`console.error`でログするだけで操作を継続できるようにした。
+
+**How to apply**: ユーザーアップロードのSVGをブラウザ内で画像として扱う場合、`<img>`要素（`src`に直接ファイルURLまたはdata: URIを設定）またはCSS `background-image`経由でレンダリングする限り、内部のスクリプトは実行されない。逆に`innerHTML`でDOMに直接挿入したり`<object>`/`<iframe>`で開いたりする実装に変更する場合は、この前提が崩れるため別途サニタイズ（`<script>`除去等）が必須になる。
+
+---
+
 ## 2026-07-24（マンガツールに「背景パターン」を新規追加、デモ画像・README更新）
 
 「レイアウトタブに新しい機能、背景パターンを追加したい。マンガツール内に"背景パターン"ボタンを追加。選択中のコマ、またはオーバーレイのサイズにパターンを作成する機能のモーダルを表示します。参考としてworkflow studioの設定、テーマのカスタマイズの背景パターンをベースに機能を拡張したい」との依頼を受けて実装。続けてユーザーからのフィードバック（パラメータに回転・カスタムSVGの縦横個別サイズを追加、モーダルサイズ拡大でスクロール不要に）を反映し、4機能（PixiJS FX・ハーフトーン・マンガ効果・背景パターン）のデモ画像撮影とREADME 3言語への反映まで一連の流れで対応した。

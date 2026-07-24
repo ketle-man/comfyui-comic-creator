@@ -440,13 +440,19 @@ async function mangaBgPatternOpen() {
         // scale/svgWidth/svgHeight/gapは400pxリファレンス基準の相対値。プレビュー（小さいcanvas）と
         // 適用（大きいcanvas）で見た目の密度を一致させるため、実際のcanvasサイズに比例させる（ハーフトーンと同じ手法）
         const sizeScale = Math.max(w, h) / _MANGA_SIZE_REFERENCE_DIM;
-        await _mangaBgRenderPatternToCanvas(ctx, w, h, {
-            ...options,
-            scale: options.scale * sizeScale,
-            svgWidth: options.svgWidth * sizeScale,
-            svgHeight: options.svgHeight * sizeScale,
-            gap: options.gap * sizeScale,
-        });
+        try {
+            await _mangaBgRenderPatternToCanvas(ctx, w, h, {
+                ...options,
+                scale: options.scale * sizeScale,
+                svgWidth: options.svgWidth * sizeScale,
+                svgHeight: options.svgHeight * sizeScale,
+                gap: options.gap * sizeScale,
+            });
+        } catch (err) {
+            // 破損した/画像として解釈できないSVGがアップロードされた場合など。
+            // プレビュー更新は失敗するが操作は継続できるようにする
+            console.error('Background pattern preview failed:', err);
+        }
     }
 
     dialog.querySelector('#bp-pattern-grid').addEventListener('click', e => {
