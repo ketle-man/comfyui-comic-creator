@@ -19,20 +19,20 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 ### Layout tab
 - **Image placement** — Drag and drop images into panels; resize (aspect ratio locked by default, hold Alt to resize freely) and rotate with handles
 - **Speech balloons** — Place oval, rounded-rectangle, thought, burst, and cloud (puffy/wavy) shaped balloons inside panels, with 8-point resize handles. The **Embed Text** button lets you auto-wrap and embed text into any of these shapes (vertical writing, text color, Google/System/Category font selection, and double-click to re-edit an already-embedded text). Custom SVG balloons from assets can also have their fill/border colors changed after placement
-- **Text** — Vertical/horizontal writing, Google Fonts / system fonts, a style modal for fill, stroke, outline, and shadow. Fills support gradients, textures, and no-fill in addition to solid colors (shared between the Layout and Image tabs)
+- **Text** — Vertical/horizontal writing, Google Fonts / system fonts, a style modal for fill, stroke, outline, and shadow. Fills support gradients, textures (with adjustable X/Y position), and no-fill in addition to solid colors (shared between the Layout and Image tabs)
 - **Shape drawing (Draw)** — Draw rectangles, ellipses, lines, curves, polygons, vector curves, chains, ropes, and My Curve directly onto an SVG layer. Polygons: click to add vertices, click near the start point to close. Vector curves: click to add nodes connected by a smooth spline, click near the start point to close as a filled shape, or press Enter to commit as an open line. Fills (rectangles, ellipses, polygons, vector curves, etc.) support gradients, textures (with configurable X/Y offset that follows the shape when moved or resized), and no-fill in addition to solid colors. Converting a shape to PNG preserves these fills as well
 - **3D pose** — Place a VRM/GLB/GLTF model inside a panel, pose it, and bake it into the image. Supports a draggable LookAt target and spring bone (hair/skirt) physics (via [comfyui-vrm-pose-editor](#optional-dependencies))
 - **Groups and layer panel** — Group objects, manage stacking order, toggle visibility, lock, and **delete with the Delete / Backspace key**
 - **Draft layer** — A draft-only layer that sits in front of the overlay and covers the whole page (images only). Clicks only reach it while it's selected (edit mode); otherwise clicks pass straight through to the overlay/panels/objects below. Never included in output (JPEG/PNG/WebP/PDF/EPUB). The Image tab's "Draft" button creates a canvas at the same aspect ratio as the active work at 72dpi, and "Send to Layout" automatically inserts it into this layer at full page size
 - **I2I integration** — Send a selected image to Workflow Studio's Generate UI and bring the result back (via [ComfyUI-Workflow-Studio](#optional-dependencies))
 - **PixiJS FX** — Apply particle/filter effects to the selected image from the "Image" sub-tab (via [comfyUI-particle-pixijs](#optional-dependencies))
-- **Manga tool** — "Halftone" (an "Convert image" mode that halftones the selected image, plus a "Create pattern" mode that generates a halftone dot pattern sized to the panel/overlay) and "Manga effects" (generate and insert vignette, screentone noise, and speed lines — radial / uni flash / uni ring / linear — as transparent objects sized to the panel). Both modals let you switch the preview background between the selected image, a checkerboard, and white while adjusting
+- **Manga tool** — "Halftone" (an "Convert image" mode that halftones the selected image, plus a "Create pattern" mode that generates a halftone dot pattern sized to the panel/overlay), "Manga effects" (generate and insert vignette, screentone noise, and speed lines — radial / uni flash / uni ring / linear — as transparent objects sized to the panel), and "Background Pattern" (generate stripes, dots, checks, Japanese traditional motifs — asanoha/ichimatsu/shippou/uroko — or a custom SVG as a transparent object sized to the panel; adjustable color, opacity, size, and rotation angle, with independent width/height for custom SVGs). All three modals let you switch the preview background between the selected image, a checkerboard, and white while adjusting
 
 ### Image tab (layer-based Canvas 2D editor)
 - **Select / Text / Draw / Shape / Fill / Mask / Blur / Filter / BG Remove / Upscale** tools
 - **Draft canvas creation** — The "Draft" button (next to New) creates a new canvas with no size dialog, sized at the same aspect ratio as the active work at 72dpi (for rough sketches). "Send to Layout" inserts it into the Layout tab's draft layer at full page size
 - **Eyedropper for the Draw tool** — Pick a color directly from the canvas via the button next to the color picker
-- **Same Layer mode for the Shape tool** — Keep adding shapes to the same layer instead of creating a new one for every shape. Rectangle/ellipse fills support gradients and textures in addition to solid colors
+- **Same Layer mode for the Shape tool** — Keep adding shapes to the same layer instead of creating a new one for every shape. Rectangle/ellipse fills support gradients and textures (with adjustable X/Y position) in addition to solid colors
 - **Fill tool** — Solid color fill, or linear/radial gradient fill with a color ramp and direction pad
 - **Mask tool** — Paint/Color/Alpha/Text/Vector/Shape sub-tools, also supporting SAM3 segmentation and ABR brushes (tool set implemented with reference to [comfyui-mask-editor-one](#acknowledgements)). When Workflow Studio is installed, an **Inpaint** button is added to the sub-tool bar for mask + prompt-based generative inpainting (via [ComfyUI-Workflow-Studio](#optional-dependencies))
 - **PixiJS FX** — Apply particle/filter effects to the active layer from a toolbar button (via [comfyUI-particle-pixijs](#optional-dependencies))
@@ -148,6 +148,14 @@ See the in-app **Help** tab (available in Japanese, English, and Chinese, with s
 <p>
   <img src="docs/8_template_create.png" width="260" alt="Template creation wizard">
   <img src="docs/9_wfmgallery.png" width="260" alt="workflow studio Gallery tab">
+</p>
+<p>
+  <img src="docs/11_pixifx.png" width="260" alt="PixiJS FX filter settings">
+  <img src="docs/12_halftone.png" width="260" alt="Halftone pattern generation">
+</p>
+<p>
+  <img src="docs/13_manga_effects.png" width="260" alt="Manga effects speed lines">
+  <img src="docs/14_bgpattern.png" width="260" alt="Background pattern asanoha">
 </p>
 
 ## Architecture

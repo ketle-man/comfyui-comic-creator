@@ -92,6 +92,8 @@
                         <button type="button" id="tsm-tex-select-btn" class="btn small">${t('font.texSelectImage')}</button>
                         <img id="tsm-tex-thumb" alt="" style="width:26px;height:26px;object-fit:cover;border:1px solid #666;border-radius:3px;display:none;" />
                         <label>${t('font.texScale')}<input type="number" id="tsm-tex-scale" min="1" max="1000" value="100" style="width:55px;" />%</label>
+                        <label>${t('font.texOffsetX')}<input type="number" id="tsm-tex-offset-x" value="0" step="1" style="width:55px;" /></label>
+                        <label>${t('font.texOffsetY')}<input type="number" id="tsm-tex-offset-y" value="0" step="1" style="width:55px;" /></label>
                         <input type="file" id="tsm-tex-file" accept="image/*" style="display:none;" />
                     </div>
 
@@ -269,6 +271,8 @@
             fillState.selectedStopIdx = 0;
             fillState.texture = style?.fillTexture?.dataUrl ? { ...style.fillTexture } : null;
             if (style?.fillTexture?.scale) $('tsm-tex-scale').value = style.fillTexture.scale;
+            $('tsm-tex-offset-x').value = style?.fillTexture?.offsetX || 0;
+            $('tsm-tex-offset-y').value = style?.fillTexture?.offsetY || 0;
             syncFillUI();
         }
 
@@ -319,6 +323,8 @@
                 fillTexture: fillState.texture ? {
                     ...fillState.texture,
                     scale: parseFloat($('tsm-tex-scale').value) || 100,
+                    offsetX: parseFloat($('tsm-tex-offset-x').value) || 0,
+                    offsetY: parseFloat($('tsm-tex-offset-y').value) || 0,
                 } : null,
                 strokeEnabled: $('tsm-stroke-enable').checked,
                 strokeColor: $('tsm-stroke-color').value,
@@ -515,6 +521,8 @@
             e.target.value = '';
         });
         $('tsm-tex-scale').addEventListener('input', renderPreview);
+        $('tsm-tex-offset-x').addEventListener('input', renderPreview);
+        $('tsm-tex-offset-y').addEventListener('input', renderPreview);
 
         $('tsm-style-save-btn').addEventListener('click', () => {
             const name = $('tsm-style-name-input').value.trim();

@@ -15,7 +15,7 @@ export class ShapeTool {
         this.fillMode     = "solid"; // "solid" | "gradient" | "texture"
         this.fillGradient = { shape: "linear", angleDeg: 0, stops: [{ pos: 0, color: "#ffffff" }, { pos: 1, color: "#888888" }] };
         this.selectedFillStopIdx = 0;
-        this.fillTexture  = null;    // { img, scale } — img は選択時にロード済みの Image
+        this.fillTexture  = null;    // { img, scale, offsetX, offsetY } — img は選択時にロード済みの Image
         this.strokeColor = "#000000";
         this.strokeNone  = true;
         this.strokeWidth = 5;
@@ -195,7 +195,7 @@ export class ShapeTool {
             fillColor:   this.fillNone   ? null : this.fillColor,
             fillMode:     this.fillMode,
             fillGradient: this.fillMode === "gradient" ? { shape: this.fillGradient.shape, angleDeg: this.fillGradient.angleDeg, stops: this.fillGradient.stops.map(s => ({ ...s })) } : null,
-            fillTexture:  (this.fillMode === "texture" && this.fillTexture?.img) ? { img: this.fillTexture.img, scale: this.fillTexture.scale } : null,
+            fillTexture:  (this.fillMode === "texture" && this.fillTexture?.img) ? { img: this.fillTexture.img, scale: this.fillTexture.scale, offsetX: this.fillTexture.offsetX || 0, offsetY: this.fillTexture.offsetY || 0 } : null,
             // line / freeline / chain / rope always use stroke; ignore strokeNone
             strokeColor: (isStrokeMandatory || !this.strokeNone) ? this.strokeColor : null,
             strokeWidth: (isStrokeMandatory || !this.strokeNone) ? this.strokeWidth : 0,
@@ -345,8 +345,12 @@ export class ShapeTool {
         if (fillMode === "texture" && fillTexture?.img) {
             const pattern = ctx.createPattern(fillTexture.img, "repeat");
             const s = (fillTexture.scale || 100) / 100;
+            // テクスチャ位置（ユーザーが手動指定するタイルの位相オフセット）。図形にはテキストの
+            // fontSizeに相当する基準がないため、offsetはそのままpx単位でscale後の座標系にtranslateする
+            const offX = fillTexture.offsetX || 0;
+            const offY = fillTexture.offsetY || 0;
             if (pattern && typeof pattern.setTransform === "function" && typeof DOMMatrix !== "undefined") {
-                pattern.setTransform(new DOMMatrix().scale(s, s));
+                pattern.setTransform(new DOMMatrix().translate(offX, offY).scale(s, s));
             }
             if (pattern) return pattern;
         }

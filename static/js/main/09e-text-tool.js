@@ -133,6 +133,8 @@ function initTextTools(textSvgEl, _imageSvgEl) {
             const ratio = currentDist / (resizeInitBboxDiag / 2);
             const newSize = Math.max(6, Math.round(resizeInitFontSize * ratio));
             selectedText.setAttribute('font-size', newSize);
+            // テクスチャ塗りのタイルサイズはフォントサイズに比例するため、パターンも追従させる
+            _textSyncTexturePatternScale(selectedText);
             // tspan の x/y オフセットはフォントサイズに依存しないので再配置不要
             renderTextHandles(selectedText, textSvgEl);
             // UIのサイズ表示も更新
@@ -164,6 +166,8 @@ function initTextTools(textSvgEl, _imageSvgEl) {
             const ny = initTy + dy;
             selectedText.setAttribute('x', nx);
             selectedText.setAttribute('y', ny);
+            // テクスチャ塗りが絶対座標のまま取り残されないよう、移動分をパターンにも反映する
+            _textSyncTexturePatternTransform(selectedText);
             // tspan のx/y属性も同期（縦書きではtspanにy属性もあるため両方更新）
             selectedText.querySelectorAll('tspan[x]').forEach(ts => {
                 const ox = parseFloat(ts.dataset.origX ?? ts.getAttribute('x'));
@@ -550,6 +554,64 @@ function _fontMgrApplyFillPaintToEl(el, svgEl, styleObj, k) {
     el.setAttribute('fill', styleObj?.fill || '#000000');
 }
 
+// テキストのテクスチャ塗り（<pattern patternUnits="userSpaceOnUse">）はSVG絶対座標に固定されるため、
+// テキストのx/y属性を直接書き換えて移動すると、テクスチャが「テキストに対してスライドする」ように
+// 見えてしまう（ドロー図形のrect/ellipse/lineと同じ問題。17c-layer-draw-handles.jsの
+// _drawShapeSyncTexturePatternTransform と同じ考え方で、テキストにも移動分をpatternTransformとして
+// 適用し追従させる）。基準座標は _fontMgrApplyStyleAttrsToTextEl 適用時に dataset.texRawX/Y へ記録済み
+function _textSyncTexturePatternTransform(textEl) {
+    const fillId = textEl.dataset.styleFillId;
+    if (!fillId) return;
+    const rawX = parseFloat(textEl.dataset.texRawX);
+    const rawY = parseFloat(textEl.dataset.texRawY);
+    if (isNaN(rawX) || isNaN(rawY)) return;
+    const svgEl = textEl.ownerSVGElement;
+    const pattern = svgEl?.querySelector(`[id="${fillId}"]`);
+    if (!pattern || pattern.tagName.toLowerCase() !== 'pattern') return;
+    const curX = parseFloat(textEl.getAttribute('x')) || 0;
+    const curY = parseFloat(textEl.getAttribute('y')) || 0;
+    const dx = curX - rawX, dy = curY - rawY;
+    if (Math.abs(dx) < 0.005 && Math.abs(dy) < 0.005) {
+        pattern.removeAttribute('patternTransform');
+    } else {
+        pattern.setAttribute('patternTransform', `translate(${dx.toFixed(4)},${dy.toFixed(4)})`);
+    }
+}
+
+// テキストのフォントサイズ変更（リサイズハンドル）時、テクスチャのタイルサイズ・位相オフセットは
+// フォントサイズ100pxあたりの相対値(k=fontSize/100)で決まるため、パターンのwidth/height/x/yを
+// 新しいfont-sizeに合わせて再計算する。パターン自体は再生成せず属性の更新のみで済ませ、
+// 更新後の位置を新たな追従基準として texRawX/Y に記録し直す
+function _textSyncTexturePatternScale(textEl) {
+    const fillId = textEl.dataset.styleFillId;
+    if (!fillId) return;
+    const svgEl = textEl.ownerSVGElement;
+    const pattern = svgEl?.querySelector(`[id="${fillId}"]`);
+    if (!pattern || pattern.tagName.toLowerCase() !== 'pattern') return;
+    const texW = parseFloat(pattern.getAttribute('data-ccc-tex-w')) || 100;
+    const texH = parseFloat(pattern.getAttribute('data-ccc-tex-h')) || 100;
+    const texScale = parseFloat(pattern.getAttribute('data-ccc-tex-scale')) || 100;
+    const offsetX = parseFloat(pattern.getAttribute('data-ccc-tex-offset-x')) || 0;
+    const offsetY = parseFloat(pattern.getAttribute('data-ccc-tex-offset-y')) || 0;
+    const fs = parseFloat(textEl.getAttribute('font-size'));
+    const k = (isNaN(fs) || fs <= 0 ? 100 : fs) / 100;
+    const scale = texScale / 100;
+    const tw = Math.max(1, texW * scale * k);
+    const th = Math.max(1, texH * scale * k);
+    pattern.setAttribute('width', String(tw));
+    pattern.setAttribute('height', String(th));
+    pattern.setAttribute('x', String(offsetX * k));
+    pattern.setAttribute('y', String(offsetY * k));
+    pattern.removeAttribute('patternTransform');
+    const img = pattern.querySelector('image');
+    if (img) {
+        img.setAttribute('width', String(tw));
+        img.setAttribute('height', String(th));
+    }
+    textEl.dataset.texRawX = textEl.getAttribute('x') || '0';
+    textEl.dataset.texRawY = textEl.getAttribute('y') || '0';
+}
+
 // SVGテキスト要素へ塗り・線をネイティブ属性で、袋文字・影をSVGフィルタで適用する
 // （フィルタはfeMorphologyで既存の塗り+線の形状を膨張させてから合成するため、要素は1つのまま扱える）
 // スタイル値（線幅・袋文字幅・影）は「フォントサイズ100pxあたりのpx」の相対値(v2)。
@@ -559,6 +621,16 @@ function _fontMgrApplyStyleAttrsToTextEl(textEl, svgEl, styleObj) {
     const _fs = parseFloat(textEl.getAttribute('font-size'));
     const k = (isNaN(_fs) || _fs <= 0 ? 100 : _fs) / 100;
     _fontMgrApplyFillPaintToEl(textEl, svgEl, styleObj, k);
+    // テクスチャ塗り（<pattern patternUnits="userSpaceOnUse">）は絶対座標のため、
+    // 以後テキストのx/y移動時に _textSyncTexturePatternTransform で追従補正できるよう、
+    // パターン生成時点のx/yを基準座標として記録しておく（ドロー図形のdata-raw-x/yと同じ考え方）
+    if (styleObj?.fillMode === 'texture' && textEl.dataset.styleFillId) {
+        textEl.dataset.texRawX = textEl.getAttribute('x') || '0';
+        textEl.dataset.texRawY = textEl.getAttribute('y') || '0';
+    } else {
+        delete textEl.dataset.texRawX;
+        delete textEl.dataset.texRawY;
+    }
 
     if (styleObj?.strokeEnabled) {
         textEl.setAttribute('stroke', styleObj.strokeColor);

@@ -967,6 +967,8 @@ class ImageTab {
                     <img id="ie-shape-tex-thumb" alt="" style="width:24px;height:24px;object-fit:cover;border:1px solid var(--it-border);border-radius:3px;display:${t.fillTexture?.img?"":"none"};" ${t.fillTexture?.img?`src="${t.fillTexture.img.src}"`:""}>
                     <input type="file" id="ie-shape-tex-file" accept="image/*" style="display:none;">
                     <label style="font-size:11px;">${window.t("font.texScale")}<input type="number" id="ie-shape-tex-scale" min="1" max="1000" value="${t.fillTexture?.scale ?? 100}" style="width:50px;" class="ie-opt-input">%</label>
+                    <label style="font-size:11px;">${window.t("font.texOffsetX")}<input type="number" id="ie-shape-tex-offset-x" value="${t.fillTexture?.offsetX ?? 0}" step="1" style="width:44px;" class="ie-opt-input"></label>
+                    <label style="font-size:11px;">${window.t("font.texOffsetY")}<input type="number" id="ie-shape-tex-offset-y" value="${t.fillTexture?.offsetY ?? 0}" step="1" style="width:44px;" class="ie-opt-input"></label>
                 </div>
                 <div class="ie-opt-group" id="ie-shape-stroke-wrap" style="display:${showStrokeUI?"":"none"};">
                     <label>Stroke</label>
@@ -1057,7 +1059,7 @@ class ImageTab {
                     reader.onload = () => {
                         const img = new Image();
                         img.onload = () => {
-                            t.fillTexture = { img, scale: t.fillTexture?.scale ?? 100 };
+                            t.fillTexture = { img, scale: t.fillTexture?.scale ?? 100, offsetX: t.fillTexture?.offsetX ?? 0, offsetY: t.fillTexture?.offsetY ?? 0 };
                             this._renderToolOptions("shape");
                         };
                         img.src = reader.result;
@@ -1067,6 +1069,12 @@ class ImageTab {
                 });
                 document.getElementById("ie-shape-tex-scale")?.addEventListener("input", e => {
                     if (t.fillTexture) t.fillTexture.scale = parseFloat(e.target.value) || 100;
+                });
+                document.getElementById("ie-shape-tex-offset-x")?.addEventListener("input", e => {
+                    if (t.fillTexture) t.fillTexture.offsetX = parseFloat(e.target.value) || 0;
+                });
+                document.getElementById("ie-shape-tex-offset-y")?.addEventListener("input", e => {
+                    if (t.fillTexture) t.fillTexture.offsetY = parseFloat(e.target.value) || 0;
                 });
             }
             document.getElementById("ie-shape-stroke-none")?.addEventListener("change", e => {
@@ -4176,9 +4184,14 @@ class ImageTab {
             if (img) {
                 const pattern = ctx.createPattern(img, "repeat");
                 // タイルサイズ = 画像実寸 × (scale/100) × (fontSize/100)（SVG側と同じv2相対値基準）
-                const s = ((p.fillTexture.scale || 100) / 100) * ((p.fontSize || 100) / 100);
+                const k = (p.fontSize || 100) / 100;
+                const s = ((p.fillTexture.scale || 100) / 100) * k;
+                // テクスチャ位置（ユーザーが手動指定するタイルの位相オフセット）。SVG側の
+                // pattern x/y = offsetX*k と同じ意味になるよう、scale後の座標系でtranslateする
+                const offX = (p.fillTexture.offsetX || 0) * k;
+                const offY = (p.fillTexture.offsetY || 0) * k;
                 if (pattern && typeof pattern.setTransform === "function" && typeof DOMMatrix !== "undefined") {
-                    pattern.setTransform(new DOMMatrix().scale(s, s));
+                    pattern.setTransform(new DOMMatrix().translate(offX, offY).scale(s, s));
                 }
                 if (pattern) return pattern;
             }
