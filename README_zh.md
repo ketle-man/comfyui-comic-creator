@@ -34,9 +34,9 @@
 - **Draw工具的滴管** — 通过取色器旁的按钮直接从画布拾取颜色作为笔刷颜色
 - **Shape工具的Same Layer模式** — 每次绘制图形时叠加到同一图层，而不是新建图层。矩形・椭圆的填充除纯色外还支持渐变和纹理
 - **Fill工具** — 单色填充，或线性/放射状渐变填充（颜色渐变条与方向面板）
-- **Mask工具** — Paint/Color/Alpha/Text/Vector/Shape各子工具，也支持SAM3分割和ABR笔刷（工具构成参考了 [comfyui-mask-editor-one](#致谢) 实现）
+- **Mask工具** — Paint/Color/Alpha/Text/Vector/Shape各子工具，也支持SAM3分割和ABR笔刷（工具构成参考了 [comfyui-mask-editor-one](#致谢) 实现）。安装 Workflow Studio 后子工具栏会新增 **Inpaint** 按钮，可通过遮罩+提示词进行生成式AI局部重绘（通过 [ComfyUI-Workflow-Studio](#可选依赖) 联动）
 - **PixiJS FX** — 通过工具栏按钮为当前图层应用粒子・滤镜效果（通过 [comfyUI-particle-pixijs](#可选依赖) 联动）
-- **图层面板** — 添加、复制、删除、调整层叠顺序、不透明度，以及12种调整图层（明度、对比度、饱和度等）
+- **图层面板** — 添加、复制、删除、调整层叠顺序、不透明度，以及12种调整图层（明度、对比度、饱和度等）。多选后点击"统合"可仅合并选中的图层（合并多个遮罩图层时，结果仍保持为遮罩图层）
 - **项目保存** — 完整保存图层构成，随时可恢复继续编辑
 
 ### 字体管理
@@ -119,7 +119,7 @@ NANOBANANA_API_KEY=你的API密钥
 | 联动节点 | 启用的功能 |
 |---|---|
 | **comfyui-vrm-pose-editor** | 排版标签的 3D姿势 子标签 |
-| **ComfyUI-Workflow-Studio** | I2I联动、workflow studio标签的嵌入式图库 |
+| **ComfyUI-Workflow-Studio** | I2I联动、Image标签的Inpaint、workflow studio标签的嵌入式图库 |
 | **comfyUI-particle-pixijs** | 排版标签"图像"子标签及Image标签的 PixiJS FX（粒子・滤镜效果弹窗） |
 
 ## 使用方法

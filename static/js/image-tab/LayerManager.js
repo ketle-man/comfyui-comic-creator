@@ -185,7 +185,12 @@ export class LayerManager {
 
         const insertIdx = Math.min(...targets.map(l => this.layers.indexOf(l)));
 
-        const merged = new Layer("Merged", "image", this.width, this.height);
+        // 選択レイヤーが全てマスクレイヤーの場合、統合結果もマスクレイヤーとして作る。
+        // マスクは「透過背景+白ペイント」が規約（未ペイント部分は黒として扱われる、
+        // _exportMaskCanvas等を参照）なので、通常のimageレイヤーにしてしまうと透明部分
+        // から下のレイヤーが透けてしまい、黒であるべき箇所が黒でなくなってしまう。
+        const allMasks = targets.every(l => l.type === "mask");
+        const merged = new Layer("Merged", allMasks ? "mask" : "image", this.width, this.height);
         const ctx = merged.ctx;
         // targets は layers 配列内の出現順（前面→背面）なので、背面→前面の順に描画する
         for (let i = targets.length - 1; i >= 0; i--) {
@@ -193,7 +198,10 @@ export class LayerManager {
             if (!layer.visible) continue;
             ctx.save();
             ctx.globalAlpha = layer.opacity;
-            ctx.globalCompositeOperation = layer.blendMode;
+            // マスク統合時は各マスクのadd/subtractに応じて合成する（_buildMaskCanvasと同じ規約）
+            ctx.globalCompositeOperation = allMasks
+                ? (layer.operation === "subtract" ? "destination-out" : "lighten")
+                : layer.blendMode;
             Layer.applyTransform(ctx, layer);
             ctx.drawImage(layer.canvas, -layer.canvas.width / 2, -layer.canvas.height / 2);
             ctx.restore();

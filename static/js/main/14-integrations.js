@@ -181,6 +181,40 @@ function initI2ISettings() {
     }
 }
 
+// Inpaint設定（デフォルトワークフロー。I2I設定とは独立。OFFならWorkflow Studio側で
+// 現在読み込まれているワークフローをそのまま使う）
+const _inpaintSettings = (() => {
+    try { return JSON.parse(localStorage.getItem('ccc_inpaint_settings') || '{}'); } catch { return {}; }
+})();
+
+function _saveInpaintSettings() {
+    localStorage.setItem('ccc_inpaint_settings', JSON.stringify(_inpaintSettings));
+}
+
+let _inpaintSettingsInited = false;
+function initInpaintSettings() {
+    if (_inpaintSettingsInited) return;
+    _inpaintSettingsInited = true;
+    const enabledCb = document.getElementById('settings-inpaint-default-wf-enabled');
+    const nameInput = document.getElementById('settings-inpaint-default-wf-name');
+    const saveBtn   = document.getElementById('settings-inpaint-save-btn');
+    const statusEl  = document.getElementById('settings-inpaint-status');
+    if (!enabledCb) return;
+
+    enabledCb.checked = !!_inpaintSettings.defaultWorkflowEnabled;
+    if (nameInput) nameInput.value = _inpaintSettings.defaultWorkflowFile || 'cc_inpaint_default.json';
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            _inpaintSettings.defaultWorkflowEnabled = enabledCb.checked;
+            _inpaintSettings.defaultWorkflowFile    = (nameInput?.value || '').trim() || 'cc_inpaint_default.json';
+            _saveInpaintSettings();
+            if (statusEl) statusEl.textContent = t('settings.gmicSaved');
+            setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
+        });
+    }
+}
+
 // ==============================
 // Workflow Studio ギャラリー (iframe埋め込み)
 // ==============================
@@ -303,6 +337,56 @@ async function sendImageToWorkflowStudioI2I(blob, name, sourceTab) {
         console.error('[I2I] sendImageToWorkflowStudioI2I error:', e);
         alert(t('layout.msgWfmI2ISendFailed', e.message));
         return false;
+    }
+}
+
+// ==============================
+// Inpaint連携（Workflow Studio）
+// ==============================
+
+/**
+ * Image タブの合成画像(Blob)とマスク(Blob)をWorkflow Studio(iframe)へ送信し、
+ * Inpaint実行結果のURLを受け取る。I2Iとは異なりComic Creator側のタブ表示は
+ * 変えず（switchTab('wfmgallery')は呼ばない）、loadWfmGalleryTab()でiframeの
+ * ロードだけを裏側で保証する（.tab-contentが非activeなら画面には表示されない）。
+ * @param {Blob} imageBlob
+ * @param {Blob} maskBlob
+ * @param {{positive:string, negative:string, growMaskBy:number, denoise:number}} params
+ * @returns {Promise<{ok:boolean, url?:string, message?:string}>}
+ */
+async function sendInpaintToWorkflowStudio(imageBlob, maskBlob, params) {
+    const loaded = await loadWfmGalleryTab();
+    if (!loaded) {
+        return { ok: false, message: t('settings.wfmNotFound') };
+    }
+
+    const iframe = document.getElementById('wfmgallery-iframe');
+    const fn = iframe?.contentWindow?._wfmReceiveInpaintRequest;
+    if (typeof fn !== 'function') {
+        return { ok: false, message: 'Workflow Studio inpaint bridge is not ready' };
+    }
+
+    let workflowData = null;
+    let workflowFilename = null;
+    if (_inpaintSettings.defaultWorkflowEnabled && _inpaintSettings.defaultWorkflowFile) {
+        workflowFilename = _inpaintSettings.defaultWorkflowFile;
+        try {
+            const wfRes = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(workflowFilename)}`);
+            if (wfRes.ok) {
+                workflowData = await wfRes.json();
+            } else {
+                console.warn('[Inpaint] default workflow fetch failed:', wfRes.status);
+            }
+        } catch (e) {
+            console.warn('[Inpaint] default workflow fetch error:', e);
+        }
+    }
+
+    try {
+        return await fn(imageBlob, maskBlob, params, workflowData, workflowFilename);
+    } catch (e) {
+        console.error('[Inpaint] sendInpaintToWorkflowStudio error:', e);
+        return { ok: false, message: e.message };
     }
 }
 

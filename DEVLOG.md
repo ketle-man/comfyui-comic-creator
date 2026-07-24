@@ -2,6 +2,31 @@
 
 ---
 
+## 2026-07-24（ImageタブのMaskツールにInpaint（Workflow Studio連携）を追加）
+
+「workflow studioに追加したインペイント機能をcomic creatorにも追加したい。workflow studioのImage EditタブのインペイントメニューをImageタブに追加、Runでworkflow studioで処理して結果を表示したい。workflow studioがインストールされていない場合インペイントメニューは非表示にしたい」との依頼を受けて実装。ユーザーからのフィードバックで2点の設計変更（I2I設定と同様にInpaint専用のデフォルトワークフロー設定を追加／独立した「Inpaint」ツールボタンではなくMaskツールのサブツールバーに統合）を反映し、実機検証で見つかった3件の不具合も同じ流れで修正した。
+
+Comic CreatorのImage タブはもともとComfyUI-Workflow-StudioのImage Editタブを移植したもの（`image-tab.js`冒頭コメントに明記）。Workflow Studio側にはその後Inpaintツールが追加されており、既存のI2I連携（`iframe.contentWindow._wfmReceiveImageForI2I`を直接呼ぶ同一オリジンiframe方式）と同じパターンでInpaintの連携ブリッジを新設した。
+
+**実装**（Comic Creator側）:
+- `static/js/image-tab.js`: Maskツールのサブツールバー（Paint/Color/Alpha/Text/Vector/Shape/SAM3の右）に、Workflow Studio導入時のみ表示される「Inpaint」ボタンを追加（`_switchMaskSubtool("inpaint")`）。`_renderMaskProps`に`sub === "inpaint"`分岐を新設（Positive/Negativeプロンプト・Grow Mask By・Denoise・Run・ステータス行）。`_exportMaskCanvas`（黒背景+白マスクのグレースケール書き出し）・`_runInpaint()`（合成画像+マスクを送信→結果を新規レイヤー「Inpaint Result」として追加）・`_checkWfmAvailability()`（`/wfm`疎通確認、既存の`_checkBiRefNetAvailability`等と同パターン）を新規追加。
+- `static/js/main/14-integrations.js`: 既存の`_i2iSettings`と同構造で`_inpaintSettings`（localStorageキー`ccc_inpaint_settings`）・`initInpaintSettings()`を新設（I2Iとは独立したInpaint専用デフォルトワークフロー設定）。`sendInpaintToWorkflowStudio()`を新設（`loadWfmGalleryTab()`でiframeロードを保証しつつ、`switchTab`は呼ばずImageタブの表示のまま裏側で実行）。
+- `static/js/main/01-state.js`: 設定タブ表示時に`initInpaintSettings()`を呼ぶよう追加。
+- `templates/index.html` / `static/js/i18n.js`（ja/en/zh）: 設定タブに「Inpaint設定」ブロックを追加。
+- `static/js/image-tab/LayerManager.js`: `mergeLayers()`が統合結果を常に`type: "image"`で作成していたため、選択レイヤー全てが`type: "mask"`の場合は統合結果も`type: "mask"`として作成し、合成も各マスクのAdd/Subtractに応じた`lighten`/`destination-out`（既存の`_buildMaskCanvas`と同じ規約）に変更。従来は統合後に通常の画像レイヤーになってしまい、未ペイント部分（黒として扱われるべき箇所）が下のレイヤーを透過してしまっていた。
+- Inpaint実行時のマスクレイヤー選択（アクティブなマスク優先、なければ最前面のマスク）に`.visible`チェックを追加し、非表示のマスクレイヤーは対象から除外されるよう修正。
+
+**実装**（Workflow Studio側、`comfyUI-wf-maneger/ComfyUI-Workflow-Studio`）:
+- `static/js/image-edit-tab.js`: 既存の`_runInpaint()`から共通処理を`_runInpaintWithImages()`として切り出し、外部（Comic Creator等）向けの公開エントリポイント`runInpaintExternal()`を新設。マスクレイヤー選択に同じく`.visible`チェックを追加。
+- `static/js/gallery-tab.js`: 既存の`window._wfmReceiveImageForI2I`と同じ場所に`window._wfmReceiveInpaintRequest`を新設（デフォルトワークフローの任意プリロード→`runInpaintExternal`呼び出し→結果URLまたはエラーを返す）。
+- `static/js/comfyui-editor.js`: `_loadImageElement()`内`src instanceof Blob`が、別ウィンドウ（Comic Creator）で生成したBlob/Fileを別レルム（iframe）で判定するとコンストラクタの参照が異なり常に`false`になるバグを発見・修正（`typeof src !== "string"`による実体判定に変更）。修正前は`img.src`にBlobオブジェクトがそのまま代入され文字列化された`[object Blob]`がURLとして扱われ404エラーになっていた。
+
+**検証**（Kapture、実機`http://127.0.0.1:8189/ccc`）: マスクレイヤーを描いてInpaint実行→Workflow Studio側で生成→結果が「Inpaint Result」レイヤーとして追加されるまでの一連の流れを確認。Inpaint用デフォルトワークフローのON/OFF両方の経路を確認。非表示マスクレイヤーでRunした場合にガードメッセージが出ることと、表示状態に戻すとガードを通過することを確認。マスクレイヤー2枚を別々の位置にペイント→Shift選択→統合→結果レイヤーがマスク用アイコン（黒背景サムネイル）で表示され、ツールパネルもMask用のオプションのままであることを確認。
+
+**How to apply**: 同一オリジンiframe越しに別ウィンドウで生成したBlob/Fileを直接引数として渡す連携パターンでは、受け取り側で`instanceof Blob`のようなコンストラクタ同一性に依存するチェックを使わないこと（`typeof x !== "string"`等、実体で判定する）。ウィンドウをまたぐと同じ仕様のオブジェクトでも`instanceof`は必ず`false`になる（Blob自体はcreateObjectURL等では別レルムでも問題なく使えるため、チェック方法だけの問題）。またマスクレイヤーは「透過背景+白ペイント、未ペイント部分は黒として扱われる」という規約に依存する処理（エクスポート・サムネイル・統合等）が複数箇所にあるため、マスクレイヤーを加工する新機能を追加する際は統合先の`type`が`"mask"`のまま維持されるかを必ず確認する。
+
+---
+
 ## 2026-07-23（レイアウトのドローに「ベクター曲線」を追加、テクスチャ塗りの追従・位置指定・PNG変換時の欠落を修正）
 
 「レイアウトタブのドローツールにベクター曲線を追加したい。ImageタブのMaskツールのVectorのように描きたい」との依頼を受けて実装。続けてユーザー自身の検証で3件の追加不具合が見つかり、同じ流れで修正した。

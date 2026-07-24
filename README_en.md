@@ -34,9 +34,9 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Eyedropper for the Draw tool** — Pick a color directly from the canvas via the button next to the color picker
 - **Same Layer mode for the Shape tool** — Keep adding shapes to the same layer instead of creating a new one for every shape. Rectangle/ellipse fills support gradients and textures in addition to solid colors
 - **Fill tool** — Solid color fill, or linear/radial gradient fill with a color ramp and direction pad
-- **Mask tool** — Paint/Color/Alpha/Text/Vector/Shape sub-tools, also supporting SAM3 segmentation and ABR brushes (tool set implemented with reference to [comfyui-mask-editor-one](#acknowledgements))
+- **Mask tool** — Paint/Color/Alpha/Text/Vector/Shape sub-tools, also supporting SAM3 segmentation and ABR brushes (tool set implemented with reference to [comfyui-mask-editor-one](#acknowledgements)). When Workflow Studio is installed, an **Inpaint** button is added to the sub-tool bar for mask + prompt-based generative inpainting (via [ComfyUI-Workflow-Studio](#optional-dependencies))
 - **PixiJS FX** — Apply particle/filter effects to the active layer from a toolbar button (via [comfyUI-particle-pixijs](#optional-dependencies))
-- **Layer panel** — Add, duplicate, delete, reorder, adjust opacity, and 12 kinds of adjustment layers (brightness, contrast, saturation, etc.)
+- **Layer panel** — Add, duplicate, delete, reorder, adjust opacity, and 12 kinds of adjustment layers (brightness, contrast, saturation, etc.). Multi-select layers and click **Merge** to combine only the selected ones (merging mask layers together keeps the result as a mask layer)
 - **Project saving** — Save the entire layer composition and resume editing at any time
 
 ### Font manager
@@ -119,7 +119,7 @@ Installing the following custom nodes enables the corresponding features. Nothin
 | Companion node | Feature enabled |
 |---|---|
 | **comfyui-vrm-pose-editor** | The Layout tab's 3D Pose sub-tab |
-| **ComfyUI-Workflow-Studio** | I2I integration and the embedded gallery in the workflow studio tab |
+| **ComfyUI-Workflow-Studio** | I2I integration, Inpaint in the Image tab, and the embedded gallery in the workflow studio tab |
 | **comfyUI-particle-pixijs** | PixiJS FX (particle/filter effects modal) in the Layout tab's "Image" sub-tab and the Image tab |
 
 ## Usage

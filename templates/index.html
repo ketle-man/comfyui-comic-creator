@@ -1611,6 +1611,23 @@
                 <span id="settings-i2i-status" style="font-size:12px; color:#888;"></span>
               </div>
             </div>
+
+            <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
+              <h3 data-i18n="settings.inpaintTitle">Inpaint設定</h3>
+              <p data-i18n="settings.inpaintDesc" style="margin: 0 0 8px; font-size:12px; color:#888;">ImageタブのInpaint実行時にWorkflow Studio側で自動的に読み込むデフォルトワークフローを指定します（OFFの場合はWorkflow Studio側で現在読み込まれているワークフローを使用します）</p>
+              <div class="control-row" style="align-items:center; gap:8px; margin-bottom:10px;">
+                <input type="checkbox" id="settings-inpaint-default-wf-enabled" style="width:16px; height:16px; cursor:pointer;" />
+                <label for="settings-inpaint-default-wf-enabled" data-i18n="settings.inpaintDefaultWfEnabled" style="cursor:pointer; user-select:none;">デフォルトワークフローを使用する</label>
+              </div>
+              <div class="control-row" style="margin-bottom: 10px; align-items: center; gap: 8px;">
+                <label for="settings-inpaint-default-wf-name" data-i18n="settings.inpaintDefaultWfNameLabel" style="white-space:nowrap; min-width:160px;">ワークフローファイル名</label>
+                <input type="text" id="settings-inpaint-default-wf-name" placeholder="cc_inpaint_default.json" style="flex:1; min-width:120px;" />
+              </div>
+              <div class="control-row" style="align-items: center; gap: 8px;">
+                <button id="settings-inpaint-save-btn" class="btn small primary" data-i18n="common.save">保存</button>
+                <span id="settings-inpaint-status" style="font-size:12px; color:#888;"></span>
+              </div>
+            </div>
           </section>
 
           <!-- Help Tab -->

@@ -413,6 +413,13 @@ class ImageTab {
         // ABR brush（comic-creator側に対応ルートが無い場合は常にfalse）
         this._abrAvailable = false;
         this._abrBrushTree = [];
+        // Inpaint（Mask サブツール。Workflow Studio 未導入なら _wfmAvailable が常にfalse）
+        this._wfmAvailable     = false;
+        this._inpaintPositive  = "";
+        this._inpaintNegative  = "";
+        this._inpaintGrowMaskBy = 6;
+        this._inpaintDenoise   = 1.0;
+        this._inpaintRunning   = false;
         // 全レイヤーに掛かる全体不透明度（imgeditタブの調整レイヤーパネルから移植）
         this._globalOpacity = 1.0;
         // レイアウトタブから開いた場合の書き戻し先SVG <image> 要素（Upload/Newで開始した場合はnull）
@@ -433,6 +440,7 @@ class ImageTab {
         this._checkBiRefNetAvailability();
         this._checkSam3Availability();
         this._checkAbrAvailability();
+        this._checkWfmAvailability();
         this._loadMychainAssets();
     }
 
@@ -548,6 +556,18 @@ class ImageTab {
         } catch {
             this._abrAvailable = false;
         }
+    }
+
+    // Workflow Studio が /wfm にマウントされているか確認し、Maskサブツールバーの
+    // Inpaint ボタンの表示可否を切り替える（未導入環境ではボタン自体を出さない）
+    async _checkWfmAvailability() {
+        try {
+            const resp = await fetch("/wfm");
+            this._wfmAvailable = resp.ok;
+        } catch {
+            this._wfmAvailable = false;
+        }
+        if (this._activeTool === "mask") this._renderToolOptions("mask");
     }
 
     // ── トースト通知 ──────────────────────────────
@@ -1139,10 +1159,11 @@ class ImageTab {
                     <button class="it-btn it-btn-sm${sub === "shape"  ? " ie-opt-active" : ""}" id="ie-mask-shape-btn">Shape</button>
                     <button class="it-btn it-btn-sm${sub === "sam3"   ? " ie-opt-active" : ""}" id="ie-mask-sam3-btn"
                         ${sam3Disabled} title="${sam3Title}">SAM3</button>
+                    ${this._wfmAvailable ? `<button class="it-btn it-btn-sm${sub === "inpaint" ? " ie-opt-active" : ""}" id="ie-mask-inpaint-btn" title="Inpaint via Workflow Studio">Inpaint</button>` : ""}
                 </div>
                 <div style="width:1px;height:22px;background:var(--it-border);margin:0 4px;flex-shrink:0;"></div>
                 ${sam3Ui}
-                ${sub !== "sam3" ? `
+                ${sub !== "sam3" && sub !== "inpaint" ? `
                 <div class="ie-opt-group">
                     <label style="font-size:11px;cursor:pointer;color:var(--it-text-secondary);">
                         <input type="checkbox" id="ie-mask-invert" ${this._maskInverted ? "checked" : ""}> Invert
@@ -1179,6 +1200,9 @@ class ImageTab {
             });
             document.getElementById("ie-mask-sam3-btn")?.addEventListener("click", () => {
                 if (this._sam3Available) this._switchMaskSubtool("sam3");
+            });
+            document.getElementById("ie-mask-inpaint-btn")?.addEventListener("click", () => {
+                this._switchMaskSubtool("inpaint");
             });
             document.getElementById("ie-sam3-prompt")?.addEventListener("input", e => {
                 this._sam3Prompt = e.target.value;
@@ -1526,6 +1550,41 @@ class ImageTab {
             document.getElementById("ie-sam3-apply-btn")?.addEventListener("click", () => {
                 this._applySelectedSam3Masks();
             });
+        } else if (sub === "inpaint") {
+            body.innerHTML = `
+                <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
+                    <label>Positive Prompt</label>
+                    <textarea id="ie-inpaint-positive" rows="3" style="width:100%;resize:vertical;font-size:12px;">${this._inpaintPositive}</textarea>
+                </div>
+                <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
+                    <label>Negative Prompt</label>
+                    <textarea id="ie-inpaint-negative" rows="3" style="width:100%;resize:vertical;font-size:12px;">${this._inpaintNegative}</textarea>
+                </div>
+                <div class="ie-props-row">
+                    <label>Grow Mask By</label>
+                    <input type="number" id="ie-inpaint-grow-mask" min="0" max="200" step="1" value="${this._inpaintGrowMaskBy}" style="width:60px;">
+                </div>
+                <div class="ie-props-row">
+                    <label>Denoise</label>
+                    <input type="number" id="ie-inpaint-denoise" min="0" max="1" step="0.01" value="${this._inpaintDenoise}" style="width:60px;">
+                </div>
+                <div class="ie-props-row">
+                    <button class="it-btn it-btn-sm it-btn-primary" id="ie-inpaint-run-btn" style="flex:1;" ${this._inpaintRunning ? "disabled" : ""}>
+                        ${this._inpaintRunning ? "Running..." : "Run"}
+                    </button>
+                </div>
+                <span id="ie-inpaint-status" style="font-size:11px;color:var(--it-text-secondary);"></span>
+            `;
+            document.getElementById("ie-inpaint-positive")?.addEventListener("input", e => { this._inpaintPositive = e.target.value; });
+            document.getElementById("ie-inpaint-negative")?.addEventListener("input", e => { this._inpaintNegative = e.target.value; });
+            document.getElementById("ie-inpaint-grow-mask")?.addEventListener("input", e => {
+                this._inpaintGrowMaskBy = parseInt(e.target.value) || 0;
+            });
+            document.getElementById("ie-inpaint-denoise")?.addEventListener("input", e => {
+                this._inpaintDenoise = Math.max(0, Math.min(1, parseFloat(e.target.value)));
+                if (Number.isNaN(this._inpaintDenoise)) this._inpaintDenoise = 1.0;
+            });
+            document.getElementById("ie-inpaint-run-btn")?.addEventListener("click", () => this._runInpaint());
         } else if (sub === "color" && this._maskColorTool) {
             const t = this._maskColorTool;
             body.innerHTML = `
@@ -2251,6 +2310,72 @@ class ImageTab {
             ctx.restore();
         }
         return canvas;
+    }
+
+    // Inpaint用: マスクレイヤー(透過背景+白ペイント)を黒背景に合成し、白=インペイント対象/
+    // 黒=維持の不透明なグレースケールPNGとして書き出す（Workflow Studioの同名メソッドと同じ規約）
+    _exportMaskCanvas(maskLayer) {
+        const w = maskLayer.canvas.width, h = maskLayer.canvas.height;
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(maskLayer.canvas, 0, 0);
+        return canvas;
+    }
+
+    // Maskツールの Inpaint サブツールから呼ばれるRunハンドラ。合成画像とマスクを
+    // Workflow Studio(iframe)に送信し、実行結果を新規レイヤーとして追加する
+    async _runInpaint() {
+        if (this._inpaintRunning) return;
+        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+
+        // 非表示のマスクレイヤーはInpaint対象から除外する（目玉アイコンOFF=対象外）
+        const maskLayer = (this._layerMgr.activeLayer?.type === "mask" && this._layerMgr.activeLayer.visible)
+            ? this._layerMgr.activeLayer
+            : this._layerMgr.layers.find(l => l.type === "mask" && l.visible);
+        if (!maskLayer) { this._toast("Create or show a mask layer first (Mask tool)", "info"); return; }
+
+        if (typeof window.sendInpaintToWorkflowStudio !== "function") {
+            this._toast("Workflow Studio integration not available", "error");
+            return;
+        }
+
+        const runBtn   = document.getElementById("ie-inpaint-run-btn");
+        const statusEl = document.getElementById("ie-inpaint-status");
+        const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
+
+        this._inpaintRunning = true;
+        if (runBtn) { runBtn.disabled = true; runBtn.textContent = "Running..."; }
+        setStatus("Compositing...");
+
+        try {
+            const bgCanvas   = this._buildCompositeCanvas();
+            const imageBlob  = await new Promise((resolve) => bgCanvas.toBlob(resolve, "image/png"));
+            const maskCanvas = this._exportMaskCanvas(maskLayer);
+            const maskBlob   = await new Promise((resolve) => maskCanvas.toBlob(resolve, "image/png"));
+
+            setStatus("Generating...");
+            const result = await window.sendInpaintToWorkflowStudio(imageBlob, maskBlob, {
+                positive:   this._inpaintPositive,
+                negative:   this._inpaintNegative,
+                growMaskBy: this._inpaintGrowMaskBy,
+                denoise:    this._inpaintDenoise,
+            });
+
+            if (!result?.ok) throw new Error(result?.message || "Inpaint failed");
+
+            setStatus("Done");
+            await this._loadFromDataUrl(result.url, "Inpaint Result");
+            this._toast("Inpaint generation complete", "success");
+        } catch (err) {
+            setStatus("Error");
+            this._toast(`Inpaint failed: ${err.message}`, "error");
+        } finally {
+            this._inpaintRunning = false;
+            if (this._activeTool === "mask" && this._maskSubtool === "inpaint") this._renderMaskProps("inpaint");
+        }
     }
 
     _renderMaskLayerOverlay(ctx, maskLayer) {
