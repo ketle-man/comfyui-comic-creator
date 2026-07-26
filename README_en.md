@@ -18,6 +18,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 
 ### Layout tab
 - **Image placement** — Drag and drop images into panels; resize (aspect ratio locked by default, hold Alt to resize freely) and rotate with handles
+- **Sub-panels** — Drag to add a rectangular or circular sub-panel inside a panel as a nested image target (e.g. an inset cut). Move, resize, and rotate with handles; parts that extend outside the parent panel are automatically cropped, just like any other object. Border thickness can be set per sub-panel. A "Move sub-panel" checkbox in the layer panel toggles whether clicking inside selects the sub-panel itself instead of the objects inside it
 - **Speech balloons** — Place oval, rounded-rectangle, thought, burst, and cloud (puffy/wavy) shaped balloons inside panels, with 8-point resize handles. The **Embed Text** button lets you auto-wrap and embed text into any of these shapes (vertical writing, text color, Google/System/Category font selection, and double-click to re-edit an already-embedded text). Custom SVG balloons from assets can also have their fill/border colors changed after placement
 - **Text** — Vertical/horizontal writing, Google Fonts / system fonts, a style modal for fill, stroke, outline, and shadow. Fills support gradients, textures (with adjustable X/Y position), and no-fill in addition to solid colors (shared between the Layout and Image tabs)
 - **Shape drawing (Draw)** — Draw rectangles, ellipses, lines, curves, polygons, vector curves, chains, ropes, and My Curve directly onto an SVG layer. Polygons: click to add vertices, click near the start point to close. Vector curves: click to add nodes connected by a smooth spline, click near the start point to close as a filled shape, or press Enter to commit as an open line. Fills (rectangles, ellipses, polygons, vector curves, etc.) support gradients, textures (with configurable X/Y offset that follows the shape when moved or resized), and no-fill in addition to solid colors. Converting a shape to PNG preserves these fills as well
@@ -156,6 +157,9 @@ See the in-app **Help** tab (available in Japanese, English, and Chinese, with s
 <p>
   <img src="docs/13_manga_effects.png" width="260" alt="Manga effects speed lines">
   <img src="docs/14_bgpattern.png" width="260" alt="Background pattern asanoha">
+</p>
+<p>
+  <img src="docs/15_subpanel.png" width="260" alt="Sub-panel">
 </p>
 
 ## Architecture

@@ -132,6 +132,7 @@
             <button class="subtab-btn tool-panel-btn" data-subtab="mask" data-i18n="layout.toolMask">マスク</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="pose3d" data-i18n="layout.toolPose3d">3Dポーズ</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="manga" data-i18n="layout.toolManga">マンガ</button>
+            <button class="subtab-btn tool-panel-btn" data-subtab="subpanel" data-i18n="layout.toolSubpanel">サブコマ</button>
           </div>
         </aside>
 
@@ -146,27 +147,24 @@
                 <span id="layout-page-indicator" style="min-width:64px; text-align:center; font-size:13px;">- / -</span>
                 <button id="layout-page-next" class="btn small secondary" data-i18n-title="layout.pageNextTitle" title="次のページ" disabled>▶</button>
                 <button id="layout-page-delete" class="btn small danger" style="margin-left:8px;" data-i18n="layout.pageDeleteBtn" data-i18n-title="layout.pageDeleteTitle" title="表示中のページをゴミ箱に移動します" disabled>ページ削除</button>
-              </div>
-
-              <div class="control-row">
-                <label data-i18n="layout.panelLabel">コマ:</label>
-                <select id="panel-select" data-i18n-title="layout.panelSelectTitle" title="操作するコマを選択">
-                  <option value="" data-i18n="layout.panelSelectPlaceholder">選択してください</option>
-                </select>
                 <button id="layout-save-btn" class="btn small" style="margin-left:auto;" data-i18n="common.save" data-i18n-title="layout.saveBtnTitle" title="現在のページを保存します（作品で作業中の場合は作品にも登録）">保存</button>
               </div>
 
               <div class="control-row">
-                <button id="insert-image-btn" class="btn secondary" data-i18n="layout.insertImage">画像を挿入</button>
-                <button id="delete-image-btn" class="btn danger" data-i18n="common.delete">削除</button>
-                <button id="undo-btn" class="btn" data-i18n="layout.undoBtn">元に戻す</button>
+                <label style="white-space:nowrap;" data-i18n="layout.panelLabel">コマ:</label>
+                <select id="panel-select" data-i18n-title="layout.panelSelectTitle" title="操作するコマを選択">
+                  <option value="" data-i18n="layout.panelSelectPlaceholder">選択してください</option>
+                </select>
                 <input type="file" id="image-upload" accept="image/*" class="hidden" data-i18n-title="layout.imageUploadTitle" title="画像ファイルを選択" />
                 <label style="margin-left:auto; white-space:nowrap;" data-i18n="layout.panelBorderWidthLabel">コマ枠線幅:</label>
-                <input type="number" id="panel-border-width" value="211" min="0" max="5000" step="0.01" style="width:70px" data-i18n-title="layout.panelBorderWidthTitle" title="コマ枠線の太さ（SVG座標系単位、小数点第2位まで）" />
-                <button id="layer-draw-open-imgedit" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.openImageTabBtn" data-i18n-title="layout.openImageTabTitle" title="選択中の画像をImageタブで開く" disabled>画像タブで編集</button>
-                <button id="layout-i2i-send-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px;" data-i18n="layout.sendToI2iBtn" data-i18n-title="layout.sendToI2iTitle" title="選択中の画像をWorkflow StudioのI2I入力へ送信" disabled>I2Iへ送る</button>
-                <button id="object-center-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px;" data-i18n-title="layout.objectCenterTitle" title="選択中のオブジェクトを中央（コマ内ならコマ中心、オーバーレイならページ中心）へ移動" disabled>OC</button>
-                <button id="close-work-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px;" data-i18n="layout.closeWorkBtn" data-i18n-title="layout.closeWorkTitle" title="作品を閉じます（保存データは失われません。他タブでの作業を軽くしたいときに）">作品を閉じる</button>
+                <input type="number" id="panel-border-width" value="211" min="0" max="5000" step="0.01" style="width:52px; padding:8px 6px;" data-i18n-title="layout.panelBorderWidthTitle" title="コマ枠線の太さ（SVG座標系単位、小数点第2位まで）" />
+                <button id="delete-image-btn" class="btn danger" style="margin-left:4px;" data-i18n="common.delete">削除</button>
+                <button id="undo-btn" class="btn" data-i18n="layout.undoBtn">元に戻す</button>
+                <button id="insert-image-btn" class="btn secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.insertImage">画像を挿入</button>
+                <button id="layer-draw-open-imgedit" class="btn small secondary" style="white-space:nowrap; padding:8px 10px;" data-i18n="layout.openImageTabBtn" data-i18n-title="layout.openImageTabTitle" title="選択中の画像をImageタブで開く" disabled>画像タブで編集</button>
+                <button id="layout-i2i-send-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.sendToI2iBtn" data-i18n-title="layout.sendToI2iTitle" title="選択中の画像をWorkflow StudioのI2I入力へ送信" disabled>I2I</button>
+                <button id="object-center-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n-title="layout.objectCenterTitle" title="選択中のオブジェクトを中央（コマ内ならコマ中心、オーバーレイならページ中心）へ移動" disabled>OC</button>
+                <button id="close-work-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.closeWorkBtn" data-i18n-title="layout.closeWorkTitle" title="作品を閉じます（保存データは失われません。他タブでの作業を軽くしたいときに）">閉じる</button>
               </div>
             </div>
 
@@ -665,6 +663,28 @@
                   <button id="manga-effects-open-btn" class="btn small secondary" data-i18n="layout.mangaEffectsMenuBtn" data-i18n-title="layout.mangaEffectsMenuBtnTitle" title="選択中のコマ／オーバーレイのサイズにジャストフィットする透過オブジェクトとしてヴィネット・スクリーントーンノイズ・集中線を生成します">✨ マンガ効果</button>
                   <button id="manga-bgpattern-open-btn" class="btn small secondary" data-i18n="layout.mangaBgPatternMenuBtn" data-i18n-title="layout.mangaBgPatternMenuBtnTitle" title="選択中のコマ／オーバーレイのサイズにジャストフィットする背景パターン（ストライプ・ドット・チェック・和柄・カスタムSVG）を生成します">🎴 背景パターン</button>
                 </div>
+              </div>
+
+              <!-- サブコマサブタブ: コマの中に矩形/丸のコマをオブジェクトとして追加する -->
+              <div id="subtab-subpanel" class="subtab-content" style="display:none; flex:1; padding:0; margin:0;">
+                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                  <span style="font-size:12px; white-space:nowrap;" data-i18n="subpanel.addLabel">サブコマ追加:</span>
+                  <div id="subpanel-mode-group" class="seg-group">
+                    <button type="button" class="seg-btn" data-subpanel-mode="on">ON</button>
+                    <button type="button" class="seg-btn active" data-subpanel-mode="off">OFF</button>
+                  </div>
+                  <div id="subpanel-shape-group" class="seg-group">
+                    <button type="button" class="seg-btn active" data-subpanel-shape="rect" data-i18n="layout.shapeRect">矩形</button>
+                    <button type="button" class="seg-btn" data-subpanel-shape="ellipse" data-i18n="subpanel.shapeCircle">丸</button>
+                  </div>
+                  <span style="font-size:11px; color:var(--text-secondary);" data-i18n="subpanel.hint">※ ONにしてプレビュー上のコマ内をドラッグすると作成されます</span>
+                  <span id="subpanel-status" style="font-size:11px; color:var(--text-secondary);"></span>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:6px;">
+                  <label for="subpanel-border-width" style="font-size:12px; white-space:nowrap;" data-i18n="subpanel.borderWidthLabel">選択中のサブコマの枠線幅:</label>
+                  <input type="number" id="subpanel-border-width" min="0" max="5000" step="0.01" style="width:70px" disabled data-i18n-title="subpanel.borderWidthTitle" title="選択中のサブコマの枠線太さ（SVG座標系単位、他のサブコマ・コマとは独立）" />
+                </div>
+                <div style="margin-top:4px; font-size:11px; color:var(--text-secondary);" data-i18n="subpanel.frameModeLayerHint">※ 作成後の「サブコマ自体を操作」の切り替えは、右のレイヤーパネルのサブコマ行にあるチェックボックスで行います</div>
               </div>
 
             </div>
@@ -1861,5 +1881,6 @@
     <script src="/ccc_static/js/main/21-script-tab.js"></script>
     <script src="/ccc_static/js/main/22-help-tab.js"></script>
     <script src="/ccc_static/js/main/23-pose3d-bridge.js"></script>
+    <script src="/ccc_static/js/main/24-sub-panels.js"></script>
   </body>
 </html>

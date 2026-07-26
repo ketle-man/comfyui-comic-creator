@@ -532,40 +532,89 @@ function renderLayerPanel() {
 
     const panels = state.activePage.panels || [];
 
+    // サブコマは配列末尾に追加される（作成順）ため、そのまま並べると実際の親コマとは
+    // 無関係に「配列で直前にあるコマの子」のように見えてしまう（例: コマ1のサブコマなのに
+    // コマ2の直後に表示され、コマ2配下に見える）。表示順だけ「親コマの直後にその子サブコマ」
+    // という並びに組み替える（データ自体・番号計算はpanels/panels.indexOfを使い元のまま）
+    const _rlpChildrenOf = new Map();
+    panels.forEach(p => {
+        if (!p.parentPanelId) return;
+        if (!_rlpChildrenOf.has(p.parentPanelId)) _rlpChildrenOf.set(p.parentPanelId, []);
+        _rlpChildrenOf.get(p.parentPanelId).push(p);
+    });
+    const orderedPanels = [];
+    const _rlpAppendWithChildren = (p) => {
+        orderedPanels.push(p);
+        (_rlpChildrenOf.get(p.id) || []).forEach(_rlpAppendWithChildren);
+    };
+    panels.filter(p => !p.parentPanelId).forEach(_rlpAppendWithChildren);
+
     // ── 各コマノード ──
-    panels.forEach((panel) => {
+    orderedPanels.forEach((panel) => {
+        const isSubPanel = !!panel.parentPanelId;
         const num = (panel.number !== undefined) ? panel.number : panels.indexOf(panel) + 1;
 
         const panelItem = document.createElement('div');
         const isPanelActive = !state.selectedOverlay && state.selectedPanelId === panel.id;
-        const isBorderHidden = _isPanelBorderHidden(panel.id);
+        const isBorderHidden = !isSubPanel && _isPanelBorderHidden(panel.id);
         const isPanelLocked = _isPanelLocked(panel.id);
         _rlpPanelLocked = isPanelLocked; // 以降このコマ配下のオブジェクト生成（makeShapeItem等）で参照される
         const panelMaskLayers = panelSvg ? _maskLayerList(panelSvg, panel.id) : [];
         const panelMaskOff = panelSvg ? !!_maskTargetGroup(panelSvg, panel.id)?.hasAttribute('data-ccc-mask-off') : false;
         panelItem.className = 'layer-item layer-item-panel' + (isPanelActive ? ' active' : '') + (isPanelLocked ? ' locked-obj' : '');
-        panelItem.style.paddingLeft = '6px';
+        panelItem.style.paddingLeft = isSubPanel ? '20px' : '6px';
+        let nameLabel;
+        if (isSubPanel) {
+            const parent = panels.find(p => p.id === panel.parentPanelId);
+            const parentNum = parent ? ((parent.number !== undefined) ? parent.number : panels.indexOf(parent) + 1) : '?';
+            nameLabel = t('subpanel.optionLabel', parentNum);
+        } else {
+            nameLabel = t('common.panelName', num);
+        }
+        const isSubFrameMode = isSubPanel && _isSubPanelFrameMode(panel.id);
         panelItem.innerHTML = `
-            <span class="layer-item-icon">🔲</span><span class="layer-item-name">${t('common.panelName', num)}</span>
+            ${isSubPanel
+                ? `<input type="checkbox" class="layer-check subpanel-frame-mode-check" ${isSubFrameMode ? 'checked' : ''} title="${t('subpanel.frameModeCheckTitle')}" />`
+                : `<span class="layer-item-icon">🔲</span>`}
+            <span class="layer-item-name">${_escHtml(nameLabel)}</span>
             <div class="layer-item-btns">
                 <button class="layer-item-btn panel-lock-btn" title="${isPanelLocked ? t('layer.panelUnlockAllTitle') : t('layer.panelLockAllTitle')}">${isPanelLocked ? '🔒' : '🔓'}</button>
                 <button class="layer-item-btn mask-btn" title="${t('layer.panelMaskTitle')}"
                         style="${panelMaskLayers.length ? (panelMaskOff ? 'opacity:0.45;' : 'color:#7ab8ff;') : 'opacity:0.6;'}">🎭</button>
-                <button class="layer-item-btn border-toggle-btn" title="${isBorderHidden ? t('layer.borderShowTitle') : t('layer.borderHideTitle')}">${isBorderHidden ? '−' : '□'}</button>
+                ${isSubPanel
+                    ? `<button class="layer-item-btn subpanel-delete-btn" title="${t('subpanel.deleteTitle')}">✕</button>`
+                    : `<button class="layer-item-btn border-toggle-btn" title="${isBorderHidden ? t('layer.borderShowTitle') : t('layer.borderHideTitle')}">${isBorderHidden ? '−' : '□'}</button>`}
             </div>
         `;
+        if (isSubPanel) {
+            panelItem.querySelector('.subpanel-frame-mode-check').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await toggleSubPanelFrameMode(panel.id);
+            });
+        }
         panelItem.addEventListener('click', (e) => {
-            if (e.target.closest('.layer-item-btn')) return;
+            if (e.target.closest('.layer-item-btn') || e.target.classList.contains('subpanel-frame-mode-check')) return;
             selectPanel(panel.id);
+            if (isSubPanel) {
+                const sv = getPanelLayerSvg();
+                if (sv) renderSubPanelHandles(panel, sv);
+            }
         });
         panelItem.querySelector('.panel-lock-btn').addEventListener('click', async (e) => {
             e.stopPropagation();
             await togglePanelLock(panel.id);
         });
-        panelItem.querySelector('.border-toggle-btn').addEventListener('click', async (e) => {
-            e.stopPropagation();
-            await togglePanelBorderVisibility(panel.id);
-        });
+        if (isSubPanel) {
+            panelItem.querySelector('.subpanel-delete-btn').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await deleteSubPanel(panel.id);
+            });
+        } else {
+            panelItem.querySelector('.border-toggle-btn').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await togglePanelBorderVisibility(panel.id);
+            });
+        }
         panelItem.querySelector('.mask-btn').addEventListener('click', async (e) => {
             e.stopPropagation();
             selectPanel(panel.id);

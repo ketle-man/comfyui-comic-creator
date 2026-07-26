@@ -269,6 +269,7 @@ function selectOverlay() {
         highlightOverlay(svgEl, null);
         _syncDraftInteractivity(svgEl);
     }
+    if (typeof _subPanelSyncBorderWidthUI === 'function') _subPanelSyncBorderWidthUI();
 }
 
 function getOrCreateClipGroup(overlaySvgEl) {

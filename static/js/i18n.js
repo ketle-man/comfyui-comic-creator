@@ -150,6 +150,20 @@ const LANGUAGES = {
         'layout.toolMask': 'マスク',
         'layout.toolPose3d': '3Dポーズ',
         'layout.toolManga': 'マンガ',
+        'layout.toolSubpanel': 'サブコマ',
+
+        // -- サブコマ（コマの中に矩形/丸のコマをオブジェクトとして配置） --
+        'subpanel.addLabel': 'サブコマ追加:',
+        'subpanel.shapeCircle': '丸',
+        'subpanel.hint': '※ ONにしてプレビュー上のコマ内をドラッグすると作成されます',
+        'subpanel.creating': 'ドラッグして範囲を指定してください',
+        'subpanel.optionLabel': (n) => `└ サブコマ（コマ${n}内）`,
+        'subpanel.deleteTitle': 'このサブコマを削除',
+        'subpanel.confirmDelete': 'このサブコマを削除しますか？中の画像等も削除されます。',
+        'subpanel.frameModeLayerHint': '※ 作成後の「サブコマ自体を操作」の切り替えは、右のレイヤーパネルのサブコマ行にあるチェックボックスで行います',
+        'subpanel.borderWidthLabel': '選択中のサブコマの枠線幅:',
+        'subpanel.borderWidthTitle': '選択中のサブコマの枠線太さ（SVG座標系単位、他のサブコマ・コマとは独立）',
+        'subpanel.frameModeCheckTitle': 'ONにすると、このサブコマ内クリックで中のオブジェクトより優先してサブコマ自体を選択・移動できます',
 
         // -- レイアウトタブ: ページコントロール --
         'layout.pageLabel': 'ページ:',
@@ -169,7 +183,7 @@ const LANGUAGES = {
         'layout.openImageTabBtn': '画像タブで編集',
         'layout.openImageTabTitle': '選択中の画像をImageタブで開く',
         'layout.objectCenterTitle': '選択中のオブジェクトを中央（コマ内ならコマ中心、オーバーレイならページ中心）へ移動',
-        'layout.closeWorkBtn': '作品を閉じる',
+        'layout.closeWorkBtn': '閉じる',
         'layout.closeWorkTitle': '作品を閉じます（保存データは失われません。他タブでの作業を軽くしたいときに）',
 
         // -- レイアウトタブ: ドローサブタブ --
@@ -897,7 +911,7 @@ const LANGUAGES = {
         'layout.msgSelectImageFirst': '画像を選択してください。\nレイアウトタブでコマ内の画像をクリックして選択した後に実行してください。',
         'layout.msgNotImageOrNotBase64': '選択中の要素は画像ではないか、base64形式ではありません。',
         'layout.msgSelectObjectForCenter': 'レイヤーパネルなどで中央へ移動するオブジェクトを選択してください。',
-        'layout.sendToI2iBtn': 'I2Iへ送る',
+        'layout.sendToI2iBtn': 'I2I',
         'layout.sendToI2iTitle': '選択中の画像をWorkflow StudioのI2I入力へ送信',
         'layout.msgWfmI2INotReady': 'Workflow Studioが読み込まれていません。しばらく待ってからもう一度お試しください。',
         'layout.msgWfmI2ISendFailed': (m) => `Workflow Studioへの送信に失敗しました: ${m}`,
@@ -1273,6 +1287,20 @@ const LANGUAGES = {
         'layout.toolMask': 'Mask',
         'layout.toolPose3d': '3D Pose',
         'layout.toolManga': 'Manga',
+        'layout.toolSubpanel': 'Sub-panel',
+
+        // -- Sub-panel (place a rectangular/circular panel inside a panel as an object) --
+        'subpanel.addLabel': 'Add sub-panel:',
+        'subpanel.shapeCircle': 'Circle',
+        'subpanel.hint': '※ Turn ON, then drag inside a panel on the preview to create one.',
+        'subpanel.creating': 'Drag to define the area',
+        'subpanel.optionLabel': (n) => `└ Sub-panel (inside Panel ${n})`,
+        'subpanel.deleteTitle': 'Delete this sub-panel',
+        'subpanel.confirmDelete': 'Delete this sub-panel? Its contents (images, etc.) will also be removed.',
+        'subpanel.frameModeLayerHint': '※ After creation, toggle "operate on the sub-panel itself" using the checkbox on the sub-panel row in the layer panel on the right.',
+        'subpanel.borderWidthLabel': 'Selected sub-panel border width:',
+        'subpanel.borderWidthTitle': 'Border thickness of the selected sub-panel (SVG units, independent of other sub-panels/panels)',
+        'subpanel.frameModeCheckTitle': 'When ON, clicking inside this sub-panel selects/moves the sub-panel itself instead of objects inside it.',
 
         'layout.pageLabel': 'Page:',
         'layout.pagePrevTitle': 'Previous page',
@@ -1291,7 +1319,7 @@ const LANGUAGES = {
         'layout.openImageTabBtn': 'Edit in Image tab',
         'layout.openImageTabTitle': 'Open the selected image in the Image tab',
         'layout.objectCenterTitle': 'Move the selected object to the center (panel center inside a panel, page center for overlays)',
-        'layout.closeWorkBtn': 'Close Work',
+        'layout.closeWorkBtn': 'Close',
         'layout.closeWorkTitle': 'Close the current work (saved data is not lost — use this to lighten other tabs)',
 
         'layout.editModeBox': 'Draw',
@@ -2002,7 +2030,7 @@ const LANGUAGES = {
         'layout.msgSelectImageFirst': 'Please select an image.\nClick an image inside a panel in the Layout tab first, then run this again.',
         'layout.msgNotImageOrNotBase64': 'The selected element is not an image, or is not in base64 format.',
         'layout.msgSelectObjectForCenter': 'Please select an object to move to the center (e.g. from the layer panel).',
-        'layout.sendToI2iBtn': 'Send to I2I',
+        'layout.sendToI2iBtn': 'I2I',
         'layout.sendToI2iTitle': "Send the selected image to Workflow Studio's I2I input",
         'layout.msgWfmI2INotReady': 'Workflow Studio has not finished loading. Please wait a moment and try again.',
         'layout.msgWfmI2ISendFailed': (m) => `Failed to send to Workflow Studio: ${m}`,
@@ -2370,6 +2398,20 @@ const LANGUAGES = {
         'layout.toolMask': '蒙版',
         'layout.toolPose3d': '3D姿势',
         'layout.toolManga': '漫画',
+        'layout.toolSubpanel': '子画格',
+
+        // -- 子画格（在画格内放置矩形/圆形的子画格作为对象） --
+        'subpanel.addLabel': '添加子画格：',
+        'subpanel.shapeCircle': '圆形',
+        'subpanel.hint': '※ 打开ON后，在预览上的画格内拖动即可创建',
+        'subpanel.creating': '请拖动指定范围',
+        'subpanel.optionLabel': (n) => `└ 子画格（画格${n}内）`,
+        'subpanel.deleteTitle': '删除此子画格',
+        'subpanel.confirmDelete': '要删除此子画格吗？其中的图像等也会一并删除。',
+        'subpanel.frameModeLayerHint': '※ 创建后，可通过右侧图层面板中子画格行的复选框切换「操作子画格本身」',
+        'subpanel.borderWidthLabel': '选中子画格的边框宽度：',
+        'subpanel.borderWidthTitle': '选中子画格的边框粗细（SVG坐标单位，与其他子画格/画格相互独立）',
+        'subpanel.frameModeCheckTitle': '打开后，点击此子画格内部会优先选择/移动子画格本身，而不是其中的对象',
 
         'layout.pageLabel': '页面：',
         'layout.pagePrevTitle': '上一页',
@@ -2388,7 +2430,7 @@ const LANGUAGES = {
         'layout.openImageTabBtn': '在Image标签页编辑',
         'layout.openImageTabTitle': '在Image标签页中打开选中的图像',
         'layout.objectCenterTitle': '将选中对象移动到中心（分格内为分格中心，覆盖层为页面中心）',
-        'layout.closeWorkBtn': '关闭作品',
+        'layout.closeWorkBtn': '关闭',
         'layout.closeWorkTitle': '关闭当前作品（不会丢失已保存的数据，用于减轻其他标签页的负担）',
 
         'layout.editModeBox': '绘制',
@@ -3099,7 +3141,7 @@ const LANGUAGES = {
         'layout.msgSelectImageFirst': '请选择图像。\n请先在排版标签页中点击分格内的图像进行选择，然后再执行此操作。',
         'layout.msgNotImageOrNotBase64': '选中的元素不是图像，或不是base64格式。',
         'layout.msgSelectObjectForCenter': '请选择要移动到中心的对象（例如从图层面板中选择）。',
-        'layout.sendToI2iBtn': '发送到I2I',
+        'layout.sendToI2iBtn': 'I2I',
         'layout.sendToI2iTitle': '将选中的图像发送到Workflow Studio的I2I输入',
         'layout.msgWfmI2INotReady': 'Workflow Studio尚未加载完成，请稍后再试。',
         'layout.msgWfmI2ISendFailed': (m) => `发送到Workflow Studio失败: ${m}`,

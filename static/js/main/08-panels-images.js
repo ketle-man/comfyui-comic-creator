@@ -42,6 +42,12 @@ function initPanelsOnSvg(svgEl) {
     // 既存のoverlay/border要素を除去
     svgEl.querySelectorAll('.panel-overlay, .panel-border').forEach(el => el.remove());
 
+    // overlayの挿入基準点。「panels配列で後ろにあるものほど手前（クリック優先）」にするため、
+    // 挿入するたびにこの参照を最後に追加したoverlayへ進める（defs直後に固定挿入すると配列の
+    // 逆順になり、親コマの内側に重なるサブコマ(parentPanelId持ち)のクリックが親に奪われるため）
+    const defsEl = svgEl.querySelector('defs');
+    let overlayInsertRef = defsEl ? defsEl.nextSibling : svgEl.firstChild;
+
     state.activePage.panels.forEach(panel => {
         if (!panel.points) return;
 
@@ -61,13 +67,12 @@ function initPanelsOnSvg(svgEl) {
             selectPanel(panel.id);
         });
 
-        // defsの直後（コンテンツg要素より背面）に挿入
-        const defsEl = svgEl.querySelector('defs');
-        if (defsEl && defsEl.nextSibling) {
-            svgEl.insertBefore(overlay, defsEl.nextSibling);
+        if (overlayInsertRef) {
+            svgEl.insertBefore(overlay, overlayInsertRef);
         } else {
             svgEl.appendChild(overlay);
         }
+        overlayInsertRef = overlay.nextSibling;
 
         // --- 枠線・ハイライト用 border（最前面）---
         const border = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
@@ -176,6 +181,7 @@ function selectPanel(panelId) {
     } else {
         renderLayoutTab();
     }
+    if (typeof _subPanelSyncBorderWidthUI === 'function') _subPanelSyncBorderWidthUI();
 }
 
 // 下書きレイヤーを選択（編集モードON）。編集モード中のみ下書き内の画像をクリック・操作できる
@@ -192,6 +198,7 @@ function selectDraft() {
         highlightOverlay(svgEl, null);
         _syncDraftInteractivity(svgEl);
     }
+    if (typeof _subPanelSyncBorderWidthUI === 'function') _subPanelSyncBorderWidthUI();
 }
 
 function updatePanelSelectDropdown() {
@@ -206,8 +213,16 @@ function updatePanelSelectDropdown() {
             state.activePage.panels.forEach(panel => {
                 const option = document.createElement('option');
                 option.value = panel.id;
-                const num = (panel.number !== undefined) ? panel.number : state.activePage.panels.indexOf(panel) + 1;
-                option.textContent = t('common.panelName', num);
+                if (panel.parentPanelId) {
+                    const parent = state.activePage.panels.find(p => p.id === panel.parentPanelId);
+                    const parentNum = parent
+                        ? ((parent.number !== undefined) ? parent.number : state.activePage.panels.indexOf(parent) + 1)
+                        : '?';
+                    option.textContent = '　' + t('subpanel.optionLabel', parentNum);
+                } else {
+                    const num = (panel.number !== undefined) ? panel.number : state.activePage.panels.indexOf(panel) + 1;
+                    option.textContent = t('common.panelName', num);
+                }
                 if (state.selectedPanelId === panel.id) option.selected = true;
                 select.appendChild(option);
             });
@@ -631,7 +646,11 @@ async function insertImage(base64Data, width, height, extraAttrs = {}, placement
     for (const [k, v] of Object.entries(extraAttrs)) {
         imgEl.setAttribute(k, v);
     }
-    contentG.appendChild(imgEl);
+    // サブコマの場合、枠線ポリゴン（g[data-clip-panel]の最後の子）より手前に画像が乗って
+    // 枠線を隠してしまわないよう、枠線の直前に挿入する（枠線が無い通常コマではappendChildと同じ）
+    const subBorder = contentG.querySelector(':scope > .subpanel-border');
+    if (subBorder) contentG.insertBefore(imgEl, subBorder);
+    else contentG.appendChild(imgEl);
 
     const serializer = new XMLSerializer();
     let newPanelSvgStr = serializer.serializeToString(panelSvg);

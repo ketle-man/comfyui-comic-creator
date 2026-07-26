@@ -95,6 +95,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initMaskTool();
         initProcessingTab();
         initEditTab();
+        initSubPanelTool();
         if (typeof initNanobananaTab === 'function') initNanobananaTab();
         _initEditTabTrigger();
         console.log('Plugin Initialized');

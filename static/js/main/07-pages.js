@@ -100,9 +100,12 @@ async function initPageManager() {
                 // 実際の枠線 polygon をリアルタイム更新（inline styleで上書き）
                 setPanelPolygonStrokeWidth(svgEl, svgWidth);
                 // clipPath polygon を内側縮小（枠線の内側でクリップ）
+                // サブコマ(parentPanelId持ち)はこの一括インセット処理の対象外。
+                // 独自の枠線太さ・親コマとの交差クリップ（24-sub-panels.js）を持っており、
+                // ここで巻き込むと交差クロップが上書きされて消えてしまう
                 if (state.activePage && state.activePage.panels) {
                     state.activePage.panels.forEach(panel => {
-                        if (!panel.points) return;
+                        if (!panel.points || panel.parentPanelId) return;
                         const clipId = `panel-clip-${panel.id}`;
                         const clipPoly = svgEl.querySelector(`#${clipId} polygon`);
                         if (clipPoly) {
@@ -127,8 +130,9 @@ async function initPageManager() {
                     poly.setAttribute('stroke-width', String(svgWidth));
                 });
                 setPanelPolygonStrokeWidth(svgEl, svgWidth);
+                // サブコマは対象外（理由は上のinputハンドラのコメント参照）
                 state.activePage.panels.forEach(panel => {
-                    if (!panel.points) return;
+                    if (!panel.points || panel.parentPanelId) return;
                     const clipId = `panel-clip-${panel.id}`;
                     const clipPoly = svgEl.querySelector(`#${clipId} polygon`);
                     if (clipPoly) {
@@ -152,8 +156,9 @@ async function initPageManager() {
             state.activePage.svgContent = serializer.serializeToString(doc.querySelector('svg'));
 
             // 各コマの panelSvgContent 内 clipPath polygon を内側縮小して保存
+            // サブコマは対象外（理由は上のinputハンドラのコメント参照）
             for (const panel of state.activePage.panels) {
-                if (!panel.points || !panel.panelSvgContent) continue;
+                if (!panel.points || !panel.panelSvgContent || panel.parentPanelId) continue;
                 const clipId = `panel-clip-${panel.id}`;
                 const pdoc = parser.parseFromString(panel.panelSvgContent, 'image/svg+xml');
                 const clipPoly = pdoc.querySelector(`#${clipId} polygon`);
@@ -499,10 +504,12 @@ async function renderLayoutTab() {
                 const widthInput = document.getElementById('panel-border-width');
                 if (widthInput) widthInput.value = state.panelBorder.width;
                 // ページロード時にclipPathを現在の枠線幅に合わせて内側縮小（プレビューDOMのみ）
+                // サブコマ(parentPanelId持ち)は対象外: 独自の枠線太さ・親コマとの交差クリップ
+                // （24-sub-panels.js）を持っており、ここで巻き込むと交差クロップが消えてしまう
                 const inset = state.panelBorder.width / 2;
                 if (inset > 0 && pageRecord.panels) {
                     pageRecord.panels.forEach(panel => {
-                        if (!panel.points) return;
+                        if (!panel.points || panel.parentPanelId) return;
                         const clipId = `panel-clip-${panel.id}`;
                         const clipPoly = svgEl.querySelector(`#${clipId} polygon`);
                         if (clipPoly) {
@@ -526,6 +533,7 @@ async function renderLayoutTab() {
             initBubbleTextTools(svgEl);
             initGroupManipulation(svgEl);
             initDrawShapeManipulation(svgEl);
+            initSubPanelManipulation(svgEl);
         }
     } catch (e) {
         console.error('Preview load error:', e);
