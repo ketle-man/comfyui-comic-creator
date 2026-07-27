@@ -63,6 +63,10 @@ function _applyMosaicToRegion(ctx, x, y, w, h, size) {
 
 const UNDO_LIMIT = 20;
 
+// Crop（Selectツール）: ハンドル一辺のサイズ・当たり判定半径（キャンバス座標系のピクセル数）
+const CROP_HANDLE_SIZE = 8;
+const CROP_HANDLE_HIT_R = 8;
+
 // 調整レイヤーの定義（type → { label, defaultValue, min, max, step }）
 // 画像編集タブ(imgedit)の調整レイヤーシステムを移植したもの。
 const ADJ_DEFS = {
@@ -394,6 +398,11 @@ class ImageTab {
         this._blurDragging  = false;
         this._blurDragStart = null;
         this._blurDragCur   = null;
+        // Crop（Selectツールのサブ機能）: キャンバス全体をクロップ範囲にリサイズする
+        this._cropMode      = false;          // クロップ範囲編集中か
+        this._cropRect      = null;           // { x, y, w, h }（キャンバス/ページ座標系、ピクセル単位）
+        this._cropDragMode  = null;           // null | 'move' | 'n'|'s'|'e'|'w'|'ne'|'nw'|'se'|'sw'
+        this._cropDragStart = null;           // { x, y, rect: {x,y,w,h} } ドラッグ開始時点のスナップショット
         // G'MIC ツール状態
         this._gmicState = {
             lastResultJobId: null,
@@ -687,7 +696,10 @@ class ImageTab {
         if (this._eyedropperActive) this._setEyedropperActive(false);
         if (this._activeTool === "draw")   this._drawTool?.deactivate();
         if (this._activeTool === "text")   this._textTool?.deactivate();
-        if (this._activeTool === "select") this._selectTool?.deactivate();
+        if (this._activeTool === "select") {
+            this._selectTool?.deactivate();
+            if (this._cropMode) this._exitCropMode();
+        }
         if (this._activeTool === "shape")  this._shapeTool?.deactivate();
         if (this._activeTool === "fill") {
             this._fillTool?.deactivate();
@@ -781,7 +793,49 @@ class ImageTab {
                 <div class="ie-opt-group" style="margin-left:8px;">
                     <button class="it-btn it-btn-sm" id="ie-select-style-btn" title="${t("image.selectStyleBtnTitle")}">${t("layout.styleBtn")}</button>
                 </div>
+                <div style="width:1px;height:22px;background:var(--it-border);margin:0 6px;flex-shrink:0;"></div>
+                <div class="ie-opt-group">
+                    <button class="it-btn it-btn-sm${this._cropMode ? " ie-opt-active" : ""}" id="ie-crop-toggle-btn" title="${t("image.cropBtnTitle")}">${t("image.cropBtn")}</button>
+                </div>
+                ${this._cropMode && this._cropRect ? `
+                <div class="ie-opt-group" style="margin-left:8px;">
+                    <label style="font-size:11px;color:var(--it-text-secondary);">X</label>
+                    <input type="number" id="ie-crop-x" value="${Math.round(this._cropRect.x)}" step="1" style="width:56px;" class="ie-opt-input" title="${t("image.cropXLabel")}">
+                    <label style="font-size:11px;color:var(--it-text-secondary);">Y</label>
+                    <input type="number" id="ie-crop-y" value="${Math.round(this._cropRect.y)}" step="1" style="width:56px;" class="ie-opt-input" title="${t("image.cropYLabel")}">
+                    <label style="font-size:11px;color:var(--it-text-secondary);">W</label>
+                    <input type="number" id="ie-crop-w" value="${Math.round(this._cropRect.w)}" step="1" min="1" style="width:56px;" class="ie-opt-input" title="${t("image.cropWidthLabel")}">
+                    <label style="font-size:11px;color:var(--it-text-secondary);">H</label>
+                    <input type="number" id="ie-crop-h" value="${Math.round(this._cropRect.h)}" step="1" min="1" style="width:56px;" class="ie-opt-input" title="${t("image.cropHeightLabel")}">
+                    <button class="it-btn it-btn-sm it-btn-primary" id="ie-crop-apply-btn">${t("image.cropApply")}</button>
+                    <button class="it-btn it-btn-sm" id="ie-crop-cancel-btn">${t("image.cropCancel")}</button>
+                </div>
+                ` : ""}
             `;
+            document.getElementById("ie-crop-toggle-btn")?.addEventListener("click", () => {
+                if (this._cropMode) { this._exitCropMode(); this._renderToolOptions("select"); }
+                else this._enterCropMode();
+            });
+            if (this._cropMode && this._cropRect) {
+                const applyCropInputs = () => {
+                    const x = parseFloat(document.getElementById("ie-crop-x").value) || 0;
+                    const y = parseFloat(document.getElementById("ie-crop-y").value) || 0;
+                    const w = parseFloat(document.getElementById("ie-crop-w").value) || 1;
+                    const h = parseFloat(document.getElementById("ie-crop-h").value) || 1;
+                    this._cropRect = this._clampCropRect({ x, y, w, h });
+                    this._cropSyncInputs();
+                    this._drawCropOverlay();
+                };
+                ["ie-crop-x", "ie-crop-y", "ie-crop-w", "ie-crop-h"].forEach(id => {
+                    document.getElementById(id)?.addEventListener("change", applyCropInputs);
+                });
+                document.getElementById("ie-crop-apply-btn")?.addEventListener("click", () => this._applyCrop());
+                document.getElementById("ie-crop-cancel-btn")?.addEventListener("click", () => {
+                    this._exitCropMode();
+                    this._renderToolOptions("select");
+                });
+                this._drawCropOverlay();
+            }
             document.getElementById("ie-select-style-btn")?.addEventListener("click", () => {
                 if (!this.hasSelectedTextLayer()) {
                     this._toast(t("image.noTextLayerSelected"), "info");
@@ -2602,6 +2656,7 @@ class ImageTab {
             this._textTool.onMouseDown(pos.x, pos.y);
 
         } else if (this._activeTool === "select" && this._selectTool) {
+            if (this._cropMode) { this._onCropMouseDown(pos); return; }
             const result = this._selectTool.onMouseDown(pos.x, pos.y, this._layerMgr);
             if (result === "select") {
                 const sel = this._selectTool.getSelectedLayer();
@@ -2635,7 +2690,10 @@ class ImageTab {
             }
         }
         if (this._activeTool === "shape")  this._shapeTool?.onMouseMove(pos.x, pos.y);
-        if (this._activeTool === "select") this._selectTool?.onMouseMove(pos.x, pos.y);
+        if (this._activeTool === "select") {
+            if (this._cropMode) this._onCropMouseMove(pos);
+            else this._selectTool?.onMouseMove(pos.x, pos.y);
+        }
         if (this._activeTool === "blur" && this._blurDragging) {
             this._blurDragCur = pos;
             this._drawBlurPreview();
@@ -2658,7 +2716,10 @@ class ImageTab {
             }
         }
         if (this._activeTool === "shape")  this._shapeTool?.onMouseUp();
-        if (this._activeTool === "select") this._selectTool?.onMouseUp();
+        if (this._activeTool === "select") {
+            if (this._cropMode) { this._cropDragMode = null; this._cropDragStart = null; }
+            else this._selectTool?.onMouseUp();
+        }
         if (this._activeTool === "blur" && this._blurDragging) {
             this._blurDragging = false;
             this._applyRectEffect();
@@ -2671,13 +2732,193 @@ class ImageTab {
         // Draw/Mask: do NOT stop the stroke — window mousemove/mouseup continue tracking
         this._hideBrushCursor();
         if (this._activeTool === "shape")  this._shapeTool?.onMouseLeave();
-        if (this._activeTool === "select") this._selectTool?.onMouseLeave();
+        if (this._activeTool === "select") {
+            if (this._cropMode) { this._cropDragMode = null; this._cropDragStart = null; }
+            else this._selectTool?.onMouseLeave();
+        }
         if (this._activeTool === "mask" && this._maskSubtool === "vector") this._maskVectorTool?.onMouseLeave();
         if (this._activeTool === "blur" && this._blurDragging) {
             this._blurDragging = false;
             const overlay = document.getElementById("ie-canvas-overlay");
             if (overlay) overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
         }
+    }
+
+    // ── Crop（Selectツールのサブ機能） ────────────────
+    // キャンバス（ページ）全体をオーバーレイのクロップ範囲にリサイズする。レイヤーのピクセルデータ自体は
+    // 触らず、_canvasW/_canvasH・LayerManager.width/height を縮小し、各レイヤーのx/yをクロップ原点分
+    // シフトするだけで実現する（レイヤーは元々ページ座標系に独立配置されているため、コンポジット時に
+    // キャンバス境界で自動的にクリップされる。詳細はLayerManager.composite参照）
+
+    _enterCropMode() {
+        if (!this._layerMgr) return;
+        if (this._activeTool !== "select") { this._setActiveTool("select"); }
+        const margin = Math.round(Math.min(this._canvasW, this._canvasH) * 0.1);
+        this._cropMode = true;
+        this._cropRect = this._clampCropRect({
+            x: margin, y: margin,
+            w: this._canvasW - margin * 2,
+            h: this._canvasH - margin * 2,
+        });
+        this._cropDragMode  = null;
+        this._cropDragStart = null;
+        this._renderToolOptions("select");
+    }
+
+    _exitCropMode() {
+        this._cropMode      = false;
+        this._cropRect      = null;
+        this._cropDragMode  = null;
+        this._cropDragStart = null;
+        const overlay = document.getElementById("ie-canvas-overlay");
+        if (overlay) overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
+    }
+
+    /** クロップ範囲をキャンバス境界内・最小1pxにクランプする */
+    _clampCropRect(rect) {
+        const cw = this._canvasW, ch = this._canvasH;
+        const w = Math.max(1, Math.min(rect.w, cw));
+        const h = Math.max(1, Math.min(rect.h, ch));
+        const x = Math.max(0, Math.min(rect.x, cw - w));
+        const y = Math.max(0, Math.min(rect.y, ch - h));
+        return { x, y, w, h };
+    }
+
+    /** クロップ範囲のハンドル位置（四隅+四辺中点）をキャンバス座標で返す */
+    _cropGetHandlePositions() {
+        const { x, y, w, h } = this._cropRect;
+        return {
+            nw: { x,         y },         n: { x: x + w / 2, y },         ne: { x: x + w, y },
+            w:  { x,         y: y + h / 2 },                              e:  { x: x + w, y: y + h / 2 },
+            sw: { x,         y: y + h },  s: { x: x + w / 2, y: y + h },  se: { x: x + w, y: y + h },
+        };
+    }
+
+    /** (px,py)がどのハンドル/内部に当たるか。'move'|ハンドル名(n/s/e/w/ne/nw/se/sw)|null */
+    _cropHitHandle(px, py) {
+        if (!this._cropRect) return null;
+        const handles = this._cropGetHandlePositions();
+        for (const key of Object.keys(handles)) {
+            const p = handles[key];
+            if (Math.abs(px - p.x) <= CROP_HANDLE_HIT_R && Math.abs(py - p.y) <= CROP_HANDLE_HIT_R) return key;
+        }
+        const { x, y, w, h } = this._cropRect;
+        if (px >= x && px <= x + w && py >= y && py <= y + h) return "move";
+        return null;
+    }
+
+    _onCropMouseDown(pos) {
+        const mode = this._cropHitHandle(pos.x, pos.y);
+        if (!mode) return;
+        this._cropDragMode  = mode;
+        this._cropDragStart = { x: pos.x, y: pos.y, rect: { ...this._cropRect } };
+    }
+
+    _onCropMouseMove(pos) {
+        if (!this._cropDragMode || !this._cropDragStart) return;
+        const dx = pos.x - this._cropDragStart.x;
+        const dy = pos.y - this._cropDragStart.y;
+        const r0 = this._cropDragStart.rect;
+        const mode = this._cropDragMode;
+        let x = r0.x, y = r0.y, w = r0.w, h = r0.h;
+
+        if (mode === "move") {
+            x = r0.x + dx;
+            y = r0.y + dy;
+        } else {
+            if (mode.includes("e")) w = r0.w + dx;
+            if (mode.includes("s")) h = r0.h + dy;
+            if (mode.includes("w")) { x = r0.x + dx; w = r0.w - dx; }
+            if (mode.includes("n")) { y = r0.y + dy; h = r0.h - dy; }
+            // 反対側のハンドルを越えて負サイズにならないよう、その辺を固定した最小1pxにする
+            if (w < 1) { if (mode.includes("w")) x = r0.x + r0.w - 1; w = 1; }
+            if (h < 1) { if (mode.includes("n")) y = r0.y + r0.h - 1; h = 1; }
+        }
+
+        this._cropRect = this._clampCropRect({ x, y, w, h });
+        this._cropSyncInputs();
+        this._drawCropOverlay();
+    }
+
+    /** クロップ範囲編集中のX/Y/W/H入力欄を現在のcropRectへ同期する（入力中の欄は上書きしない） */
+    _cropSyncInputs() {
+        if (!this._cropMode || !this._cropRect) return;
+        const map = { "ie-crop-x": "x", "ie-crop-y": "y", "ie-crop-w": "w", "ie-crop-h": "h" };
+        Object.keys(map).forEach(id => {
+            const inp = document.getElementById(id);
+            if (inp && document.activeElement !== inp) inp.value = Math.round(this._cropRect[map[id]]);
+        });
+    }
+
+    _drawCropOverlay() {
+        const overlay = document.getElementById("ie-canvas-overlay");
+        if (!overlay || !this._cropRect) return;
+        const ctx = overlay.getContext("2d");
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        const { x, y, w, h } = this._cropRect;
+
+        // クロップ範囲外を半透明に暗くする
+        ctx.save();
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.beginPath();
+        ctx.rect(0, 0, overlay.width, overlay.height);
+        ctx.rect(x, y, w, h);
+        ctx.fill("evenodd");
+        ctx.restore();
+
+        // クロップ範囲の枠線
+        ctx.save();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+        ctx.restore();
+
+        // ハンドル（四隅+四辺中点）
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#333333";
+        ctx.lineWidth = 1;
+        const r = CROP_HANDLE_SIZE / 2;
+        Object.values(this._cropGetHandlePositions()).forEach(p => {
+            ctx.fillRect(p.x - r, p.y - r, CROP_HANDLE_SIZE, CROP_HANDLE_SIZE);
+            ctx.strokeRect(p.x - r, p.y - r, CROP_HANDLE_SIZE, CROP_HANDLE_SIZE);
+        });
+        ctx.restore();
+    }
+
+    /** クロップを確定実行する: キャンバスサイズを縮小し、各レイヤーをクロップ原点分シフトする */
+    _applyCrop() {
+        if (!this._layerMgr || !this._cropRect) return;
+        const canvasW = this._canvasW, canvasH = this._canvasH;
+        const { x, y, w, h } = this._clampCropRect(this._cropRect);
+
+        if (x === 0 && y === 0 && w === canvasW && h === canvasH) {
+            // 変化なし
+            this._exitCropMode();
+            this._renderToolOptions("select");
+            return;
+        }
+
+        this._saveUndo();
+
+        this._layerMgr.layers.forEach(layer => {
+            layer.x -= x;
+            layer.y -= y;
+        });
+        this._canvasW = w;
+        this._canvasH = h;
+        this._layerMgr.width  = w;
+        this._layerMgr.height = h;
+        this._resizeCanvasElements(w, h);
+
+        this._exitCropMode();
+        this._updateCompositeView();
+        this._refreshLayerList();
+        this._renderToolOptions("select");
+        if (typeof this._fitToView === "function") this._fitToView();
+        this._toast(`Cropped: ${w}×${h}`, "success");
     }
 
     // ── 画像ロード ────────────────────────────────
@@ -2859,17 +3100,26 @@ class ImageTab {
         document.getElementById("ie-placeholder").style.display = "none";
     }
 
-    _initCanvases() {
+    /** ie-canvas-draw/ie-canvas-overlay/ie-canvas-containerをw×hへリサイズする（LayerManagerには触れない）。
+     *  _initCanvases（新規/再構築時）とクロップ実行・Undo/Redo（既存LayerManagerを維持したままの
+     *  サイズ変更）の両方から共通で呼べるよう切り出してある */
+    _resizeCanvasElements(w, h) {
         const drawCanvas    = document.getElementById("ie-canvas-draw");
         const overlayCanvas = document.getElementById("ie-canvas-overlay");
-        if (drawCanvas) { drawCanvas.width = this._canvasW; drawCanvas.height = this._canvasH; }
-        if (overlayCanvas) { overlayCanvas.width = this._canvasW; overlayCanvas.height = this._canvasH; }
+        if (drawCanvas) { drawCanvas.width = w; drawCanvas.height = h; }
+        if (overlayCanvas) { overlayCanvas.width = w; overlayCanvas.height = h; }
 
         const container = document.getElementById("ie-canvas-container");
         if (container) {
-            container.style.width  = this._canvasW + "px";
-            container.style.height = this._canvasH + "px";
+            container.style.width  = w + "px";
+            container.style.height = h + "px";
         }
+    }
+
+    _initCanvases() {
+        this._resizeCanvasElements(this._canvasW, this._canvasH);
+        const drawCanvas    = document.getElementById("ie-canvas-draw");
+        const overlayCanvas = document.getElementById("ie-canvas-overlay");
 
         this._layerMgr = new LayerManager(this._canvasW, this._canvasH);
         this._layerMgr.on("change", () => this._refreshLayerList());
@@ -3336,6 +3586,8 @@ class ImageTab {
 
         document.getElementById("ie-flatten-btn")?.addEventListener("click", () => this._flattenLayers());
 
+        document.getElementById("ie-group-btn")?.addEventListener("click", () => this._groupSelectedLayers());
+
         document.getElementById("ie-layer-duplicate-btn")?.addEventListener("click", () => {
             if (!this._layerMgr) { this._toast("Open an image first", "info"); return; }
             const active = this._layerMgr.activeLayer;
@@ -3404,6 +3656,25 @@ class ImageTab {
         this._toast(t("image.mergeSelectedDone"), "success");
     }
 
+    // レイヤーパネルで2枚以上（Shift+クリック）選択中のレイヤーを1つのグループ（フォルダ）にまとめる。
+    // ピクセル内容は一切変更せず、各レイヤーのgroupIdフィールドにグループIDを持たせるだけなので、
+    // 合成順（layers配列の並び）や統合(mergeLayers)には影響しない
+    _groupSelectedLayers() {
+        if (!this._layerMgr) return;
+        if (this._selectedLayerIds.size < 2) {
+            this._toast(t("image.groupSelectFirst"), "info");
+            return;
+        }
+        this._saveUndo();
+        const groupId = this._layerMgr.createGroup([...this._selectedLayerIds]);
+        if (!groupId) {
+            this._toast(t("image.groupSelectFirst"), "info");
+            return;
+        }
+        this._refreshLayerList();
+        this._toast(t("image.groupDone"), "success");
+    }
+
     // アクティブレイヤーにPixiJSパーティクル/フィルタ効果を適用する（imgeditタブのPixiJS FX連携を移植）
     _openPixiFx() {
         if (typeof window.pixiFxOpen !== "function") {
@@ -3443,6 +3714,52 @@ class ImageTab {
         });
     }
 
+    /** レイヤー1件分の行HTML（グループメンバーの場合はindented=trueでインデントを付ける） */
+    _renderLayerRowHtml(layer, isActive, isMultiSelected, indented) {
+        const typeIcon = layer.type === "image" ? "🖼"
+            : layer.type === "text" ? "T"
+            : layer.type === "mask" ? "⬚"
+            : layer.type === "adjustment" ? ""
+            : "✏";
+        const maskApplyBtn = layer.type === "mask"
+            ? `<button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="mask-apply"
+                    title="${layer.maskApply ? "Disable clipping mask" : "Enable as clipping mask"}"
+                    style="color:${layer.maskApply ? "var(--it-primary)" : "inherit"};font-size:11px;">✂</button>
+               <button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="mask-op"
+                    title="${layer.operation === "subtract" ? "Mode: Subtract (click to switch to Add)" : "Mode: Add (click to switch to Subtract)"}"
+                    style="font-size:10px;font-weight:bold;min-width:16px;color:${layer.operation === "subtract" ? "#e2534a" : "#4db84d"};">${layer.operation === "subtract" ? "S" : "A"}</button>`
+            : "";
+        return `
+            <div class="ie-layer-item ${isActive ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}${indented ? " ie-layer-item-grouped" : ""}" data-id="${layer.id}" data-action="select" data-type="${layer.type}">
+                <button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="vis"
+                    title="${layer.visible ? "Hide" : "Show"}">${layer.visible ? "👁" : "🚫"}</button>
+                <button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="lock"
+                    title="${layer.locked ? "Unlock" : "Lock"}"
+                    style="color:${layer.locked ? "#e2a04a" : "inherit"}">${layer.locked ? "🔒" : "🔓"}</button>
+                ${maskApplyBtn}
+                <img class="ie-layer-thumb" src="${layer.getThumbnailDataURL()}" draggable="false">
+                <span class="ie-layer-type-icon" style="font-size:10px;opacity:0.7;flex-shrink:0;">${typeIcon}</span>
+                <span class="ie-layer-name">${layer.name}</span>
+            </div>
+        `;
+    }
+
+    /** グループ（フォルダ）のヘッダー行HTML */
+    _renderGroupHeaderHtml(group, members) {
+        const anyVisible = members.some(l => l.visible);
+        const allVisible  = members.every(l => l.visible);
+        return `
+            <div class="ie-layer-group-header" data-group-id="${group.id}" data-action="group-toggle">
+                <button class="ie-layer-vis-btn" data-group-id="${group.id}" data-action="group-vis"
+                    title="${allVisible ? "Hide group" : "Show group"}">${anyVisible ? "👁" : "🚫"}</button>
+                <span class="ie-layer-group-icon">${group.collapsed ? "▶" : "▼"}</span>
+                <span class="ie-layer-group-name">📁 ${group.name}</span>
+                <span class="ie-layer-group-count">${members.length}</span>
+                <button class="ie-layer-vis-btn" data-group-id="${group.id}" data-action="ungroup" title="${t("image.ungroupTitle")}">${t("image.ungroup")}</button>
+            </div>
+        `;
+    }
+
     _refreshLayerList() {
         const el = document.getElementById("ie-layer-list");
         if (!el || !this._layerMgr) return;
@@ -3451,49 +3768,60 @@ class ImageTab {
         const liveIds = new Set(this._layerMgr.layers.map(l => l.id));
         for (const id of this._selectedLayerIds) if (!liveIds.has(id)) this._selectedLayerIds.delete(id);
 
-        el.innerHTML = this._layerMgr.layers.map((layer, i) => {
-            const isActive = i === this._layerMgr.activeIndex;
-            const isMultiSelected = this._selectedLayerIds.has(layer.id);
-            const typeIcon = layer.type === "image" ? "🖼"
-                : layer.type === "text" ? "T"
-                : layer.type === "mask" ? "⬚"
-                : layer.type === "adjustment" ? ""
-                : "✏";
-            const maskApplyBtn = layer.type === "mask"
-                ? `<button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="mask-apply"
-                        title="${layer.maskApply ? "Disable clipping mask" : "Enable as clipping mask"}"
-                        style="color:${layer.maskApply ? "var(--it-primary)" : "inherit"};font-size:11px;">✂</button>
-                   <button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="mask-op"
-                        title="${layer.operation === "subtract" ? "Mode: Subtract (click to switch to Add)" : "Mode: Add (click to switch to Subtract)"}"
-                        style="font-size:10px;font-weight:bold;min-width:16px;color:${layer.operation === "subtract" ? "#e2534a" : "#4db84d"};">${layer.operation === "subtract" ? "S" : "A"}</button>`
-                : "";
-            return `
-                <div class="ie-layer-item ${isActive ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}" data-id="${layer.id}" data-action="select" data-type="${layer.type}">
-                    <button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="vis"
-                        title="${layer.visible ? "Hide" : "Show"}">${layer.visible ? "👁" : "🚫"}</button>
-                    <button class="ie-layer-vis-btn" data-id="${layer.id}" data-action="lock"
-                        title="${layer.locked ? "Unlock" : "Lock"}"
-                        style="color:${layer.locked ? "#e2a04a" : "inherit"}">${layer.locked ? "🔒" : "🔓"}</button>
-                    ${maskApplyBtn}
-                    <img class="ie-layer-thumb" src="${layer.getThumbnailDataURL()}" draggable="false">
-                    <span class="ie-layer-type-icon" style="font-size:10px;opacity:0.7;flex-shrink:0;">${typeIcon}</span>
-                    <span class="ie-layer-name">${layer.name}</span>
-                </div>
-            `;
-        }).join("");
+        const layers = this._layerMgr.layers;
+        const renderedGroups = new Set();
+        const rows = [];
+        layers.forEach((layer, i) => {
+            if (layer.groupId) {
+                if (renderedGroups.has(layer.groupId)) return; // このグループは最初のメンバー時にまとめて出力済み
+                renderedGroups.add(layer.groupId);
+                const group = this._layerMgr.groups.find(g => g.id === layer.groupId);
+                if (!group) { // データ不整合フォールバック（本来起こらない）: 通常行として表示
+                    rows.push(this._renderLayerRowHtml(layer, i === this._layerMgr.activeIndex, this._selectedLayerIds.has(layer.id), false));
+                    return;
+                }
+                // 元のlayers配列の並び順を保ったまま、このグループの全メンバーをまとめて集める
+                // （配列上は他のレイヤーと入り混じっていても、表示上はヘッダー直下に並べる）
+                const members = layers.filter(l => l.groupId === layer.groupId);
+                rows.push(this._renderGroupHeaderHtml(group, members));
+                if (!group.collapsed) {
+                    members.forEach(m => {
+                        const mi = layers.indexOf(m);
+                        rows.push(this._renderLayerRowHtml(m, mi === this._layerMgr.activeIndex, this._selectedLayerIds.has(m.id), true));
+                    });
+                }
+                return;
+            }
+            rows.push(this._renderLayerRowHtml(layer, i === this._layerMgr.activeIndex, this._selectedLayerIds.has(layer.id), false));
+        });
+        el.innerHTML = rows.join("");
 
         const flattenBtn = document.getElementById("ie-flatten-btn");
         if (flattenBtn) {
             const n = this._selectedLayerIds.size;
             flattenBtn.title = n >= 2 ? t("image.flattenSelectedTitle", n) : t("image.flattenTitle");
         }
+        const groupBtn = document.getElementById("ie-group-btn");
+        if (groupBtn) groupBtn.title = t(this._selectedLayerIds.size >= 2 ? "image.groupTitle" : "image.groupSelectFirst");
 
         el.querySelectorAll("[data-action]").forEach(node => {
             node.addEventListener("click", e => {
                 e.stopPropagation();
                 const id     = node.dataset.id;
                 const action = node.dataset.action;
-                if (action === "vis") {
+                if (action === "group-toggle") {
+                    this._layerMgr.toggleGroupCollapsed(node.dataset.groupId);
+                    this._refreshLayerList();
+                } else if (action === "group-vis") {
+                    const gid = node.dataset.groupId;
+                    const allVisible = this._layerMgr.layers.filter(l => l.groupId === gid).every(l => l.visible);
+                    this._layerMgr.setGroupVisible(gid, !allVisible);
+                    this._updateCompositeView();
+                    this._refreshLayerList();
+                } else if (action === "ungroup") {
+                    this._layerMgr.ungroup(node.dataset.groupId);
+                    this._refreshLayerList();
+                } else if (action === "vis") {
                     this._layerMgr.toggleVisible(id);
                     this._updateCompositeView();
                 } else if (action === "mask-apply") {
@@ -3601,10 +3929,19 @@ class ImageTab {
     async _restoreState(jsonStr) {
         const json = JSON.parse(jsonStr);
         await this._layerMgr.fromJSON(json);
+        // クロップ等でキャンバスサイズが変わる操作もUndo/Redo対象のため、layerMgr.width/heightが
+        // 現在の_canvasW/_canvasH・実DOM canvasサイズと食い違っていたら合わせて復元する
+        if (this._layerMgr.width !== this._canvasW || this._layerMgr.height !== this._canvasH) {
+            this._canvasW = this._layerMgr.width;
+            this._canvasH = this._layerMgr.height;
+            this._resizeCanvasElements(this._canvasW, this._canvasH);
+        }
+        if (this._cropMode) this._exitCropMode();
         this._selectTool?.clearSelection();
         this._updateCompositeView();
         this._activateCurrentTool();
         this._refreshLayerList();
+        this._renderToolOptions(this._activeTool);
     }
 
     // ── 合成・保存 ─────────────────────────────────

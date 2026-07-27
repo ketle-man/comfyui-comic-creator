@@ -549,8 +549,10 @@ function renderLayerPanel() {
     };
     panels.filter(p => !p.parentPanelId).forEach(_rlpAppendWithChildren);
 
-    // ── 各コマノード ──
-    orderedPanels.forEach((panel) => {
+    // ── 各コマノード ── サブコマの親は実コマだけでなく'__overlay__'（オーバーレイ）の場合もあるため、
+    // オーバーレイ配下のサブコマをオーバーレイ行の直後に表示するために関数として切り出し、
+    // 通常のコマループとオーバーレイセクションの両方から呼べるようにしてある
+    const renderPanelNode = (panel) => {
         const isSubPanel = !!panel.parentPanelId;
         const num = (panel.number !== undefined) ? panel.number : panels.indexOf(panel) + 1;
 
@@ -564,7 +566,9 @@ function renderLayerPanel() {
         panelItem.className = 'layer-item layer-item-panel' + (isPanelActive ? ' active' : '') + (isPanelLocked ? ' locked-obj' : '');
         panelItem.style.paddingLeft = isSubPanel ? '20px' : '6px';
         let nameLabel;
-        if (isSubPanel) {
+        if (isSubPanel && panel.parentPanelId === '__overlay__') {
+            nameLabel = t('subpanel.optionLabelOverlay');
+        } else if (isSubPanel) {
             const parent = panels.find(p => p.id === panel.parentPanelId);
             const parentNum = parent ? ((parent.number !== undefined) ? parent.number : panels.indexOf(parent) + 1) : '?';
             nameLabel = t('subpanel.optionLabel', parentNum);
@@ -653,7 +657,8 @@ function renderLayerPanel() {
                 });
             }
         }
-    });
+    };
+    orderedPanels.forEach(renderPanelNode);
 
     // ── オーバーレイレイヤー（最下段・ページ全面） ── コマの一括ロックは対象外
     _rlpPanelLocked = false;
@@ -685,6 +690,13 @@ function renderLayerPanel() {
 
     // オーバーレイのマスクレイヤー行（最前面が上）
     [...ovMaskLayers].reverse().forEach(ml => listEl.appendChild(makeMaskLayerItem('__overlay__', ml, 2)));
+
+    // オーバーレイを親コマとするサブコマ（移動/複製でオーバーレイへ付け替えられたもの）を、
+    // 実コマ配下のサブコマと同じ見た目でオーバーレイ行の直後に表示する
+    panels.filter(p => p.parentPanelId === '__overlay__').forEach(renderPanelNode);
+    // renderPanelNode内でサブコマ自身のロック状態に応じて_rlpPanelLockedが書き換わるため、
+    // 以降のオーバーレイ本体のオブジェクト一覧（コマの一括ロックの対象外）向けにリセットする
+    _rlpPanelLocked = false;
 
     // オーバーレイg要素内のオブジェクトを表示（DOM順でソートして表示）
     if (panelSvg) {

@@ -338,7 +338,7 @@ function _subPanelSelectExisting(panel, svgEl) {
 async function _subPanelCommit(panel, borderEl, svgEl) {
     _polygonBakeRotation(borderEl);
     const points = borderEl.getAttribute('points');
-    const parentPanel = state.activePage.panels.find(p => p.id === panel.parentPanelId);
+    const parentPanel = _subPanelResolveParent(panel.parentPanelId);
 
     const clipPoly = svgEl.querySelector(`[id="panel-clip-${panel.id}"] polygon`);
     if (clipPoly) clipPoly.setAttribute('points', _subPanelEffectiveClipPoints(points, parentPanel));
@@ -439,6 +439,260 @@ function initSubPanelTool() {
     }
 }
 
+// サブコマ移動時、枠だけでなく中のオブジェクト（画像・テキスト・フキダシ・ドロー図形・グループ）も
+// 一緒に動かす。15-pixifx-bridge.js の moveSelectedObjectToCenter と同じ「種別ごとに本来の
+// 位置属性（x/y、dataset.cx/cy、data-tx/ty等）へ直接焼き込む」方式を、絶対座標指定ではなく
+// dx,dyの相対移動に置き換えて流用する。単純にtransformを重ねるだけだと、画像/テキスト等の
+// ハンドル表示・移動処理がtransformを見ずx/y等の生属性だけを見て動いているため、
+// 選択ハンドルが古い位置のまま出てしまう（実際に起きた不具合）。
+// インタラクティブなドラッグ移動（initSubPanelManipulation）だけでなく、レイヤーパネル下部の
+// 移動・複製ボタン（duplicateSubPanel/moveSubPanel）からも共通で使うため、トップレベル関数にしてある
+function _subPanelSnapshotContent(panelId, svgElRef) {
+    const g = svgElRef.querySelector(`g[data-clip-panel="${CSS.escape(panelId)}"]`);
+    if (!g) return [];
+    return Array.from(g.children)
+        .filter(child => !child.classList.contains('subpanel-border'))
+        .map(child => {
+            if (child.hasAttribute('data-group-id')) {
+                return {
+                    el: child, kind: 'group',
+                    tx0: parseFloat(child.getAttribute('data-tx') || 0),
+                    ty0: parseFloat(child.getAttribute('data-ty') || 0),
+                    angle: parseFloat(child.getAttribute('data-angle') || 0),
+                    rawCx: parseFloat(child.dataset.rawCx || 0),
+                    rawCy: parseFloat(child.dataset.rawCy || 0),
+                };
+            }
+            if (child.classList.contains('draw-shape')) {
+                return { el: child, kind: 'draw-shape', bounds0: _drawShapeGetBounds(child) };
+            }
+            if (child.tagName.toLowerCase() === 'image') {
+                return {
+                    el: child, kind: 'image',
+                    x0: parseFloat(child.getAttribute('x') || 0),
+                    y0: parseFloat(child.getAttribute('y') || 0),
+                };
+            }
+            if (child.tagName.toLowerCase() === 'text') {
+                return {
+                    el: child, kind: 'text',
+                    x0: parseFloat(child.getAttribute('x') || 0),
+                    y0: parseFloat(child.getAttribute('y') || 0),
+                    tspans0: Array.from(child.querySelectorAll('tspan')).map(ts => ({
+                        el: ts,
+                        x0: ts.hasAttribute('x') ? parseFloat(ts.getAttribute('x')) : null,
+                        y0: ts.hasAttribute('y') ? parseFloat(ts.getAttribute('y')) : null,
+                    })),
+                    angle: parseFloat(child.dataset.angle || 0),
+                };
+            }
+            if (child.classList.contains('balloon-shape')) {
+                return {
+                    el: child, kind: 'balloon-shape',
+                    cx0: parseFloat(child.dataset.cx || 0),
+                    cy0: parseFloat(child.dataset.cy || 0),
+                };
+            }
+            return { el: child, kind: 'unknown' };
+        });
+}
+function _subPanelApplyContentTranslate(snapshot, dx, dy) {
+    if (!snapshot) return;
+    snapshot.forEach((snap) => {
+        const { el, kind } = snap;
+        if (kind === 'group') {
+            const tx = snap.tx0 + dx, ty = snap.ty0 + dy;
+            el.setAttribute('data-tx', tx);
+            el.setAttribute('data-ty', ty);
+            el.setAttribute('transform', `translate(${tx},${ty}) rotate(${snap.angle},${snap.rawCx},${snap.rawCy})`);
+        } else if (kind === 'draw-shape') {
+            const b = snap.bounds0;
+            _drawShapeSetBounds(el, b.x + dx, b.y + dy, b.w, b.h);
+        } else if (kind === 'image') {
+            el.setAttribute('x', snap.x0 + dx);
+            el.setAttribute('y', snap.y0 + dy);
+            applyImageTransform(el);
+        } else if (kind === 'text') {
+            el.setAttribute('x', snap.x0 + dx);
+            el.setAttribute('y', snap.y0 + dy);
+            snap.tspans0.forEach(ts => {
+                if (ts.x0 !== null) ts.el.setAttribute('x', ts.x0 + dx);
+                if (ts.y0 !== null) ts.el.setAttribute('y', ts.y0 + dy);
+            });
+            if (snap.angle) {
+                const bb = el.getBBox();
+                const bcx = bb.x + bb.width / 2, bcy = bb.y + bb.height / 2;
+                el.dataset.bboxCx = bcx;
+                el.dataset.bboxCy = bcy;
+                el.setAttribute('transform', `rotate(${snap.angle},${bcx},${bcy})`);
+            }
+        } else if (kind === 'balloon-shape') {
+            el.dataset.cx = snap.cx0 + dx;
+            el.dataset.cy = snap.cy0 + dy;
+            if (typeof _updateH2ShapePath === 'function') _updateH2ShapePath(el);
+        }
+        // kind === 'unknown' は種別不明のため位置を動かさない（何もしない）
+    });
+}
+
+// points文字列全体をdx,dyだけ平行移動する
+function _subPanelTranslatePointsStr(pointsStr, dx, dy) {
+    const pts = _subPanelParsePoints(pointsStr).map(p => ({ x: p.x + dx, y: p.y + dy }));
+    return _subPanelPointsToStr(pts);
+}
+
+// panelId（またはその祖先）を辿ってancestorIdに行き着くか（親コマ付け替え時の循環防止用）
+function _subPanelIsDescendantOf(panelId, ancestorId) {
+    if (!state.activePage) return false;
+    let cur = state.activePage.panels.find(p => p.id === panelId);
+    while (cur && cur.parentPanelId) {
+        if (cur.parentPanelId === ancestorId) return true;
+        cur = state.activePage.panels.find(p => p.id === cur.parentPanelId);
+    }
+    return false;
+}
+
+// 親コマID（実コマ/サブコマのpanels[]エントリに加え、'__overlay__'も対応）から、
+// クリップ交差・中心計算に使う「points」を持つオブジェクトを解決する。
+// オーバーレイはpanels[]の実エントリではないため、ページ全面を表すbasePanelPointsを
+// 疑似的な親の形として扱う（通常のオブジェクトがオーバーレイへ移動する際に
+// basePanelPointsの重心へ再配置されるのと同じ考え方）
+function _subPanelResolveParent(parentPanelId) {
+    if (!state.activePage || !parentPanelId) return null;
+    if (parentPanelId === '__overlay__') {
+        return state.activePage.basePanelPoints ? { points: state.activePage.basePanelPoints } : null;
+    }
+    return state.activePage.panels.find(p => p.id === parentPanelId) || null;
+}
+
+// ── サブコマの複製 ──
+// targetParentId省略時（または現在の親と同じ場合）は同じ親コマ内にOFFSETずらして複製する。
+// 別の親コマを指定した場合は、複製元の親コマ中心→複製先コマ中心への平行移動を適用し、
+// クリップ（親コマとの交差ポリゴン）も複製先コマとの交差に更新する
+async function duplicateSubPanel(subId, targetParentId) {
+    if (!state.activePage) return;
+    const subPanel = state.activePage.panels.find(p => p.id === subId);
+    if (!subPanel || !subPanel.parentPanelId) return;
+
+    const parentId = targetParentId || subPanel.parentPanelId;
+    const targetParent = _subPanelResolveParent(parentId);
+    if (!targetParent || parentId === subPanel.id || _subPanelIsDescendantOf(parentId, subPanel.id)) {
+        alert(t('layer.duplicateTargetPanelNotFound'));
+        return;
+    }
+
+    const panelSvg = getPanelLayerSvg();
+    if (!panelSvg) return;
+    const srcG = panelSvg.querySelector(`g[data-clip-panel="${CSS.escape(subId)}"]`);
+    if (!srcG) return;
+
+    pushHistory();
+
+    const sameParent = parentId === subPanel.parentPanelId;
+    let dx = 20, dy = 20; // 同じ親内複製は他オブジェクトの複製と同じOFFSET
+    if (!sameParent) {
+        const oldParent = _subPanelResolveParent(subPanel.parentPanelId);
+        const oldCenter = _polygonCenter((oldParent && oldParent.points) || subPanel.points) || { x: 0, y: 0 };
+        const newCenter = _polygonCenter(targetParent.points) || oldCenter;
+        dx = newCenter.x - oldCenter.x;
+        dy = newCenter.y - oldCenter.y;
+    }
+
+    const newId = 'subpanel_' + Date.now();
+    const newPoints = _subPanelTranslatePointsStr(subPanel.points, dx, dy);
+
+    // 枠線+中身をまるごとクローンしてIDを付け替え（グループ複製と同じ_cloneWithNewIdsを流用）
+    const cloneG = _cloneWithNewIds(srcG);
+    cloneG.setAttribute('data-clip-panel', newId);
+    cloneG.setAttribute('clip-path', `url(#panel-clip-${newId})`);
+    const cloneBorder = cloneG.querySelector('.subpanel-border');
+    if (cloneBorder) cloneBorder.setAttribute('points', newPoints);
+
+    const ns = 'http://www.w3.org/2000/svg';
+    let defsEl = panelSvg.querySelector('defs');
+    if (!defsEl) {
+        defsEl = document.createElementNS(ns, 'defs');
+        panelSvg.insertBefore(defsEl, panelSvg.firstChild);
+    }
+    const clipPath = document.createElementNS(ns, 'clipPath');
+    clipPath.setAttribute('id', `panel-clip-${newId}`);
+    clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
+    const clipPoly = document.createElementNS(ns, 'polygon');
+    clipPoly.setAttribute('points', _subPanelEffectiveClipPoints(newPoints, targetParent));
+    clipPath.appendChild(clipPoly);
+    defsEl.appendChild(clipPath);
+
+    panelSvg.appendChild(cloneG);
+    const snapshot = _subPanelSnapshotContent(newId, panelSvg);
+    _subPanelApplyContentTranslate(snapshot, dx, dy);
+
+    const newPanel = { id: newId, points: newPoints, parentPanelId: parentId, shape: subPanel.shape, panelSvgContent: '' };
+    state.activePage = { ...state.activePage, panels: [...state.activePage.panels, newPanel] };
+    await savePanelSvg(newId, panelSvg); // panels[]へのdbPutも内部で行われる
+
+    await renderLayoutTab();
+    selectPanel(newId);
+    const freshSvg = getPanelLayerSvg();
+    const freshPanel = state.activePage.panels.find(p => p.id === newId);
+    if (freshSvg && freshPanel) renderSubPanelHandles(freshPanel, freshSvg);
+}
+
+// ── サブコマの移動（親コマの付け替え） ──
+// 同じidのまま、複製元の親コマ中心→複製先コマ中心へ再配置し、クリップ（親コマとの交差）を再計算する
+async function moveSubPanel(subId, targetParentId) {
+    if (!state.activePage) return;
+    const subPanel = state.activePage.panels.find(p => p.id === subId);
+    if (!subPanel || !subPanel.parentPanelId) return;
+
+    if (!targetParentId || targetParentId === subPanel.parentPanelId) {
+        alert(t('layer.selectMoveDestination'));
+        return;
+    }
+    const targetParent = _subPanelResolveParent(targetParentId);
+    if (!targetParent || targetParentId === subPanel.id || _subPanelIsDescendantOf(targetParentId, subPanel.id)) {
+        alert(t('layer.moveTargetPanelNotFound'));
+        return;
+    }
+    if (_isPanelLocked(subId)) return;
+
+    const panelSvg = getPanelLayerSvg();
+    if (!panelSvg) return;
+    const g = panelSvg.querySelector(`g[data-clip-panel="${CSS.escape(subId)}"]`);
+    const border = g ? g.querySelector('.subpanel-border') : null;
+    if (!g || !border) return;
+
+    pushHistory();
+
+    const oldParent = _subPanelResolveParent(subPanel.parentPanelId);
+    const oldCenter = _polygonCenter((oldParent && oldParent.points) || subPanel.points) || { x: 0, y: 0 };
+    const newCenter = _polygonCenter(targetParent.points) || oldCenter;
+    const dx = newCenter.x - oldCenter.x;
+    const dy = newCenter.y - oldCenter.y;
+
+    const newPoints = _subPanelTranslatePointsStr(subPanel.points, dx, dy);
+    border.setAttribute('points', newPoints);
+
+    const clipPoly = panelSvg.querySelector(`[id="panel-clip-${subId}"] polygon`);
+    if (clipPoly) clipPoly.setAttribute('points', _subPanelEffectiveClipPoints(newPoints, targetParent));
+
+    const highlightPoly = panelSvg.querySelector(`.panel-border[data-panel-id="${subId}"]`);
+    if (highlightPoly) highlightPoly.setAttribute('points', newPoints);
+
+    const snapshot = _subPanelSnapshotContent(subId, panelSvg);
+    _subPanelApplyContentTranslate(snapshot, dx, dy);
+
+    const updatedPanels = state.activePage.panels.map(p =>
+        p.id === subId ? { ...p, points: newPoints, parentPanelId: targetParentId } : p);
+    state.activePage = { ...state.activePage, panels: updatedPanels };
+    await savePanelSvg(subId, panelSvg); // panels[]へのdbPutも内部で行われる
+
+    await renderLayoutTab();
+    selectPanel(subId);
+    const freshSvg = getPanelLayerSvg();
+    const freshPanel = state.activePage.panels.find(p => p.id === subId);
+    if (freshSvg && freshPanel) renderSubPanelHandles(freshPanel, freshSvg);
+}
+
 // ── 作成ドラッグ・移動・リサイズ・回転の統合操作 ──
 let _subPanelManipWinMouseUp = null;
 
@@ -453,100 +707,6 @@ function initSubPanelManipulation(svgEl) {
     let creatingEl = null;
     let activePanel = null;
     let moveContentSnapshot = null; // 'move'中: 中身のオブジェクトも枠と一緒に平行移動するための元座標記録
-
-    // サブコマ移動時、枠だけでなく中のオブジェクト（画像・テキスト・フキダシ・ドロー図形・グループ）も
-    // 一緒に動かす。15-pixifx-bridge.js の moveSelectedObjectToCenter と同じ「種別ごとに本来の
-    // 位置属性（x/y、dataset.cx/cy、data-tx/ty等）へ直接焼き込む」方式を、絶対座標指定ではなく
-    // dx,dyの相対移動に置き換えて流用する。単純にtransformを重ねるだけだと、画像/テキスト等の
-    // ハンドル表示・移動処理がtransformを見ずx/y等の生属性だけを見て動いているため、
-    // 選択ハンドルが古い位置のまま出てしまう（実際に起きた不具合）
-    const _subPanelSnapshotContent = (panelId, svgElRef) => {
-        const g = svgElRef.querySelector(`g[data-clip-panel="${CSS.escape(panelId)}"]`);
-        if (!g) return [];
-        return Array.from(g.children)
-            .filter(child => !child.classList.contains('subpanel-border'))
-            .map(child => {
-                if (child.hasAttribute('data-group-id')) {
-                    return {
-                        el: child, kind: 'group',
-                        tx0: parseFloat(child.getAttribute('data-tx') || 0),
-                        ty0: parseFloat(child.getAttribute('data-ty') || 0),
-                        angle: parseFloat(child.getAttribute('data-angle') || 0),
-                        rawCx: parseFloat(child.dataset.rawCx || 0),
-                        rawCy: parseFloat(child.dataset.rawCy || 0),
-                    };
-                }
-                if (child.classList.contains('draw-shape')) {
-                    return { el: child, kind: 'draw-shape', bounds0: _drawShapeGetBounds(child) };
-                }
-                if (child.tagName.toLowerCase() === 'image') {
-                    return {
-                        el: child, kind: 'image',
-                        x0: parseFloat(child.getAttribute('x') || 0),
-                        y0: parseFloat(child.getAttribute('y') || 0),
-                    };
-                }
-                if (child.tagName.toLowerCase() === 'text') {
-                    return {
-                        el: child, kind: 'text',
-                        x0: parseFloat(child.getAttribute('x') || 0),
-                        y0: parseFloat(child.getAttribute('y') || 0),
-                        tspans0: Array.from(child.querySelectorAll('tspan')).map(ts => ({
-                            el: ts,
-                            x0: ts.hasAttribute('x') ? parseFloat(ts.getAttribute('x')) : null,
-                            y0: ts.hasAttribute('y') ? parseFloat(ts.getAttribute('y')) : null,
-                        })),
-                        angle: parseFloat(child.dataset.angle || 0),
-                    };
-                }
-                if (child.classList.contains('balloon-shape')) {
-                    return {
-                        el: child, kind: 'balloon-shape',
-                        cx0: parseFloat(child.dataset.cx || 0),
-                        cy0: parseFloat(child.dataset.cy || 0),
-                    };
-                }
-                return { el: child, kind: 'unknown' };
-            });
-    };
-    const _subPanelApplyContentTranslate = (dx, dy) => {
-        if (!moveContentSnapshot) return;
-        moveContentSnapshot.forEach((snap) => {
-            const { el, kind } = snap;
-            if (kind === 'group') {
-                const tx = snap.tx0 + dx, ty = snap.ty0 + dy;
-                el.setAttribute('data-tx', tx);
-                el.setAttribute('data-ty', ty);
-                el.setAttribute('transform', `translate(${tx},${ty}) rotate(${snap.angle},${snap.rawCx},${snap.rawCy})`);
-            } else if (kind === 'draw-shape') {
-                const b = snap.bounds0;
-                _drawShapeSetBounds(el, b.x + dx, b.y + dy, b.w, b.h);
-            } else if (kind === 'image') {
-                el.setAttribute('x', snap.x0 + dx);
-                el.setAttribute('y', snap.y0 + dy);
-                applyImageTransform(el);
-            } else if (kind === 'text') {
-                el.setAttribute('x', snap.x0 + dx);
-                el.setAttribute('y', snap.y0 + dy);
-                snap.tspans0.forEach(ts => {
-                    if (ts.x0 !== null) ts.el.setAttribute('x', ts.x0 + dx);
-                    if (ts.y0 !== null) ts.el.setAttribute('y', ts.y0 + dy);
-                });
-                if (snap.angle) {
-                    const bb = el.getBBox();
-                    const bcx = bb.x + bb.width / 2, bcy = bb.y + bb.height / 2;
-                    el.dataset.bboxCx = bcx;
-                    el.dataset.bboxCy = bcy;
-                    el.setAttribute('transform', `rotate(${snap.angle},${bcx},${bcy})`);
-                }
-            } else if (kind === 'balloon-shape') {
-                el.dataset.cx = snap.cx0 + dx;
-                el.dataset.cy = snap.cy0 + dy;
-                if (typeof _updateH2ShapePath === 'function') _updateH2ShapePath(el);
-            }
-            // kind === 'unknown' は種別不明のため位置を動かさない（何もしない）
-        });
-    };
 
     const getSvgPt = (clientX, clientY) => {
         const pt = svgEl.createSVGPoint();
@@ -721,7 +881,7 @@ function initSubPanelManipulation(svgEl) {
         } else if (mode === 'move') {
             const b = initBounds;
             _drawShapeSetBounds(el, b.x + dx, b.y + dy, b.w, b.h);
-            _subPanelApplyContentTranslate(dx, dy);
+            _subPanelApplyContentTranslate(moveContentSnapshot, dx, dy);
             updateSubPanelHandles(el, svgEl);
         }
     });

@@ -31,6 +31,7 @@ export class Layer {
         this.operation  = "add";       // マスクレイヤー合成モード: "add" | "subtract"
         this.adjType    = null;        // 調整レイヤー種別（'brightness'等）type==='adjustment'時のみ使用
         this.adjValue   = 0;           // 調整レイヤーの効果量
+        this.groupId    = null;        // 所属レイヤーグループのid（LayerManager.groups参照）。未所属はnull
     }
 
     clear() {
@@ -84,6 +85,7 @@ export class Layer {
             operation:  this.operation  ?? "add",
             adjType:    this.adjType    ?? null,
             adjValue:   this.adjValue   ?? 0,
+            groupId:    this.groupId    ?? null,
         };
     }
 
@@ -108,6 +110,7 @@ export class Layer {
         layer.operation  = json.operation  ?? "add";
         layer.adjType    = json.adjType    ?? null;
         layer.adjValue   = json.adjValue   ?? 0;
+        layer.groupId    = json.groupId    ?? null;
 
         if (json.imageData) {
             return new Promise(resolve => {
@@ -140,6 +143,7 @@ export class LayerManager {
         this.layers = [];  // 先頭 = 最前面
         this.activeIndex = 0;
         this._listeners  = [];
+        this.groups = [];  // [{ id, name, collapsed }]。メンバーはlayer.groupIdで判定（配列上の並びは変更しない）
     }
 
     get activeLayer() { return this.layers[this.activeIndex] ?? null; }
@@ -207,9 +211,15 @@ export class LayerManager {
             ctx.restore();
         }
 
+        // 統合対象が全て同一グループのメンバーだった場合のみ、統合結果もそのグループに残す
+        // （グループをまたぐ統合や未所属レイヤーが混ざる場合は所属なしにする）
+        const srcGroupIds = new Set(targets.map(l => l.groupId).filter(Boolean));
+        merged.groupId = srcGroupIds.size === 1 ? [...srcGroupIds][0] : null;
+
         this.layers = this.layers.filter(l => !idSet.has(l.id));
         this.layers.splice(insertIdx, 0, merged);
         this.activeIndex = insertIdx;
+        this._pruneEmptyGroups();
         this._emit("change");
         return merged;
     }
@@ -220,7 +230,50 @@ export class LayerManager {
         if (idx < 0) return;
         this.layers.splice(idx, 1);
         this.activeIndex = Math.max(0, Math.min(this.activeIndex, this.layers.length - 1));
+        this._pruneEmptyGroups();
         this._emit("change");
+    }
+
+    // ── レイヤーグループ ──────────────────────────
+    // グループはlayers配列自体の並びには触れず、各レイヤーのgroupIdフィールドだけで
+    // メンバーシップを管理する（配列は常に実z-order＝合成順を表すという既存の前提を壊さないため）。
+    // レイヤーパネル側の表示だけがgroupIdを見てグループヘッダー配下にまとめて描画する
+
+    /** 選択レイヤー群を新規グループにまとめる（2枚未満なら何もせずnullを返す） */
+    createGroup(layerIds, name) {
+        const idSet = new Set(layerIds);
+        const targets = this.layers.filter(l => idSet.has(l.id));
+        if (targets.length < 2) return null;
+        const groupId = crypto.randomUUID();
+        // 既に別グループに所属していたレイヤーはそちらから抜けるため、空になった旧グループを掃除する
+        targets.forEach(l => { l.groupId = groupId; });
+        this.groups.push({ id: groupId, name: name || `Group ${this.groups.length + 1}`, collapsed: false });
+        this._pruneEmptyGroups();
+        this._emit("change");
+        return groupId;
+    }
+
+    /** グループ解除（メンバーレイヤー自体は削除しない） */
+    ungroup(groupId) {
+        this.layers.forEach(l => { if (l.groupId === groupId) l.groupId = null; });
+        this.groups = this.groups.filter(g => g.id !== groupId);
+        this._emit("change");
+    }
+
+    toggleGroupCollapsed(groupId) {
+        const group = this.groups.find(g => g.id === groupId);
+        if (group) { group.collapsed = !group.collapsed; this._emit("change"); }
+    }
+
+    /** グループ内の全レイヤーの表示/非表示を一括設定する */
+    setGroupVisible(groupId, visible) {
+        this.layers.forEach(l => { if (l.groupId === groupId) l.visible = visible; });
+        this._emit("change");
+    }
+
+    /** メンバーが1枚もいなくなったグループ定義を掃除する（deleteLayer/mergeLayers後に呼ぶ） */
+    _pruneEmptyGroups() {
+        this.groups = this.groups.filter(g => this.layers.some(l => l.groupId === g.id));
     }
 
     setActive(id) {
@@ -292,6 +345,7 @@ export class LayerManager {
         copy.operation = src.operation;
         copy.adjType   = src.adjType;
         copy.adjValue  = src.adjValue;
+        copy.groupId   = src.groupId; // 複製は元と同じグループに残す
         this.layers.splice(idx, 0, copy); // 先頭=最前面のため、元のindexに挿入すると元の直上に来る
         this.activeIndex = idx;
         this._emit("change");
@@ -326,12 +380,22 @@ export class LayerManager {
     }
 
     toJSON() {
-        return { layers: this.layers.map(l => l.toJSON()), width: this.width, height: this.height };
+        return {
+            layers: this.layers.map(l => l.toJSON()),
+            width: this.width, height: this.height,
+            groups: this.groups.map(g => ({ ...g })),
+        };
     }
 
     async fromJSON(json) {
         this.layers = await Promise.all((json.layers || []).map(lj => Layer.fromJSON(lj)));
         this.activeIndex = 0;
+        // toJSON()はwidth/heightも保存するため、クロップ等でキャンバスサイズを変えた操作の
+        // undo/redoが正しく効くよう、こちらも復元する（従来はlayersだけ復元しており、
+        // width/heightが変わる操作を経由すると復元後もサイズが変化前のまま残ってしまっていた）
+        if (typeof json.width === "number")  this.width  = json.width;
+        if (typeof json.height === "number") this.height = json.height;
+        this.groups = (json.groups || []).map(g => ({ ...g }));
         this._emit("change");
     }
 }

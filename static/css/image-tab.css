@@ -367,6 +367,19 @@
     flex: 1;
 }
 
+.ie-layers-header-row2 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 6px;
+    border-bottom: 1px solid var(--it-border);
+    flex-shrink: 0;
+}
+
+.ie-layers-header-row2 .it-btn {
+    flex: 1;
+}
+
 .ie-layer-list {
     flex: 1;
     overflow-y: auto;
@@ -433,6 +446,50 @@
 
 .ie-layer-vis-btn:hover {
     opacity: 1;
+}
+
+/* レイヤーグループ（フォルダ）ヘッダー行。メンバーレイヤーはgroupIdで判定し、
+   このヘッダーの直後にまとめて表示される（layers配列自体の並びは変更しない） */
+.ie-layer-group-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    -webkit-user-select: none;
+    user-select: none;
+    color: var(--it-text-secondary);
+    transition: background 0.1s;
+}
+
+.ie-layer-group-header:hover {
+    background: var(--it-surface-hover);
+}
+
+.ie-layer-group-icon {
+    flex-shrink: 0;
+    font-size: 9px;
+    width: 12px;
+    text-align: center;
+}
+
+.ie-layer-group-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ie-layer-group-count {
+    font-size: 10px;
+    color: var(--it-text-secondary);
+    flex-shrink: 0;
+}
+
+.ie-layer-item-grouped {
+    padding-left: 20px;
 }
 
 .ie-adj-add-row {

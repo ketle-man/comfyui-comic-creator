@@ -262,6 +262,9 @@ async function duplicateSelectedObject(targetPanelId) {
     }
 
     if (!srcEl || !srcEl.parentNode) {
+        // 選択中がサブコマ（コマ扱いのpanelsエントリ）の場合は専用の複製処理に委譲する
+        const subPanel = (typeof _subPanelCurrentSelected === 'function') ? _subPanelCurrentSelected() : null;
+        if (subPanel) { await duplicateSubPanel(subPanel.id, targetPanelId); return; }
         alert(t('layer.confirmSelectDuplicateTarget'));
         return;
     }
@@ -571,6 +574,9 @@ async function moveSelectedObject(targetPanelId) {
     }
 
     if (!srcEl || !srcEl.parentNode) {
+        // 選択中がサブコマ（コマ扱いのpanelsエントリ）の場合は専用の移動処理（親コマ付け替え）に委譲する
+        const subPanel = (typeof _subPanelCurrentSelected === 'function') ? _subPanelCurrentSelected() : null;
+        if (subPanel) { await moveSubPanel(subPanel.id, targetPanelId); return; }
         alert(t('layer.confirmSelectMoveTarget'));
         return;
     }

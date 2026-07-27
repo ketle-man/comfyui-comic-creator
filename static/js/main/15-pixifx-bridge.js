@@ -99,6 +99,75 @@ async function sendSelectedImageToI2I() {
     }
 }
 
+// ページのSVG座標単位（mm×100相当。10-output-pages.jsの_getExportBaseWorkSize等と同じ規約）の
+// 幅・高さを、I2I入力として十分な解像度のピクセルサイズへ変換する。
+// pageRecord.width/heightをそのままcanvasのピクセル数として使うと（A4=21000×29700など）
+// 数億ピクセル規模のcanvasになりtoBlobが失敗する（実際に発生した不具合の原因）ため、
+// 出力タブの解像度自動計算（_applyExportDpi）と同じ mm→px 換算 + _EXPORT_MAX_SIZE クランプを行う
+const _PI2I_DPI = 150;
+function _pi2iResolvePagePixelSize(pageRecord) {
+    let svgW = pageRecord.width, svgH = pageRecord.height;
+    if (!(svgW > 0) || !(svgH > 0)) {
+        // width/heightが無い（または不正な）ページ用のフォールバック: svgContentのviewBoxから求める
+        const doc = new DOMParser().parseFromString(pageRecord.svgContent, 'image/svg+xml');
+        const svgEl = doc.querySelector('svg');
+        const vb = ((svgEl && svgEl.getAttribute('viewBox')) || '0 0 21000 29700').trim().split(/\s+/).map(Number);
+        svgW = vb[2] || 21000;
+        svgH = vb[3] || 29700;
+    }
+    const widthMm  = svgW / 100;
+    const heightMm = svgH / 100;
+    let w = Math.round(widthMm  * _PI2I_DPI / 25.4);
+    let h = Math.round(heightMm * _PI2I_DPI / 25.4);
+    if (w > _EXPORT_MAX_SIZE || h > _EXPORT_MAX_SIZE) {
+        const scale = Math.min(_EXPORT_MAX_SIZE / w, _EXPORT_MAX_SIZE / h);
+        w = Math.max(1, Math.round(w * scale));
+        h = Math.max(1, Math.round(h * scale));
+    }
+    return { w, h };
+}
+
+// レイアウトタブ「PI2I」ボタン: 現在のページ全体をPNGとして書き出し、Workflow StudioのGenerate UI
+// Image入力スロットへ送信する（単一画像を送るsendSelectedImageToI2Iのページ全体版）。
+// PNG化は既存のPDF/EPUB/PNG出力（12-text-png-export.js）と同じ経路
+// （buildMergedSvg→embedFontsInSvg→drawSvgOnCanvas→canvas.toBlob）を流用し、
+// 下書きレイヤーは既存の出力処理と同様に含めない（buildMergedSvgにopts.includeDraftを渡さない）
+async function sendCurrentPageToI2I() {
+    if (!state.activePage) {
+        alert(t('layout.msgNoActivePage'));
+        return;
+    }
+    try {
+        const pageRecord = await dbGet('pages', state.activePage.name);
+        if (!pageRecord || !pageRecord.svgContent) {
+            alert(t('page.msgPageDataNotFound', state.activePage.name));
+            return;
+        }
+
+        const mergedSvg = buildMergedSvg(pageRecord);
+        const rawSvg = mergedSvg || pageRecord.svgContent;
+        const embeddedSvg = await embedFontsInSvg(rawSvg);
+
+        const { w: pxW, h: pxH } = _pi2iResolvePagePixelSize(pageRecord);
+        const canvas = document.getElementById('render-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width  = pxW;
+        canvas.height = pxH;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await drawSvgOnCanvas(ctx, embeddedSvg, pxW, pxH);
+
+        const blob = await new Promise((resolve, reject) => {
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error(t('page.errBlobGenFailed'))), 'image/png');
+        });
+
+        await sendImageToWorkflowStudioI2I(blob, pageRecord.name || 'cc-page', 'layout');
+    } catch (e) {
+        alert(t('layout.msgWfmI2ISendFailed', e.message));
+    }
+}
+
 // 「OC」ボタン: 選択中オブジェクト（画像/テキスト/フキダシ/グループ/draw-shape）を中央へ移動する。
 // コマ内のオブジェクトはそのコマの中心、オーバーレイ配下のオブジェクトはページ全体の中心へ移動する。
 // コマ外にドラッグして操作不能になったオブジェクトを、レイヤーパネルから選択して復帰させる用途を想定。

@@ -375,6 +375,9 @@ function initEditTab() {
     // I2Iへ送るボタン: 選択中の画像をWorkflow Studioへ送信
     document.getElementById('layout-i2i-send-btn')?.addEventListener('click', sendSelectedImageToI2I);
 
+    // PI2Iへ送るボタン: 現在のページ全体をPNG化してWorkflow Studioへ送信
+    document.getElementById('layout-pi2i-send-btn')?.addEventListener('click', sendCurrentPageToI2I);
+
     // OCボタン: 選択中オブジェクトをコマ/ページ中央へ移動
     document.getElementById('object-center-btn')?.addEventListener('click', moveSelectedObjectToCenter);
 }

@@ -3,7 +3,7 @@
 // 元 11-works.js（分割前）の行 1-691 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: RESERVED_GROUP_NAMES,STOCK_GROUP,TRASH_GROUP,TRASH_GROUP_LABEL,WORK_SIZE_PRESETS,_BACKUP_DB_STORES,_BACKUP_FORMAT,_BACKUP_LS_KEYS,_adoptOrphanPagesToStock,_assetTmplSelected,_closeWorkCreateDialog,_getOrBuildPageThumb,_initWorkCreateDialog,_initWorkMgr,_openWorkCreateDialog,_renderGroupList,_scalePointsStr,_scaleSvgContentByWrap,_scaleSvgElementTree,_workBackupExport,_workBackupImport,_workCreate,_workDlgApplyPreset,_workDlgGetPreset,_workDlgRebuildPresetSelect,_workListTab,_workMeta,_workSelected,_workSetActive,_workSetListTab,_workSizePresets,_workTimestampStr,_workUpdateActiveLabel,_workUpdateOpenBtn,insertTemplatePageToWork,openWork,renderAssetTemplateGrid,renderWorkList
+// 主なトップレベル定義: RESERVED_GROUP_NAMES,STOCK_GROUP,TRASH_GROUP,TRASH_GROUP_LABEL,WORK_SIZE_PRESETS,_BACKUP_DB_STORES,_BACKUP_FORMAT,_BACKUP_LS_KEYS,_adoptOrphanPagesToStock,_assetTmplExpandedGroups,_assetTmplSelected,_closeWorkCreateDialog,_getOrBuildPageThumb,_initWorkCreateDialog,_initWorkMgr,_openWorkCreateDialog,_renderGroupList,_scalePointsStr,_scaleSvgContentByWrap,_scaleSvgElementTree,_workBackupExport,_workBackupImport,_workCreate,_workDlgApplyPreset,_workDlgGetPreset,_workDlgRebuildPresetSelect,_workListTab,_workMeta,_workSelected,_workSetActive,_workSetListTab,_workSizePresets,_workTimestampStr,_workUpdateActiveLabel,_workUpdateOpenBtn,insertTemplatePageToWork,openWork,renderAssetTemplateGrid,renderWorkList
 // ============================================================
 
 // ==============================
@@ -45,6 +45,8 @@ let _workSelected = null;
 let _workListTab = 'works';
 /** アセットパネルのテンプレートタブで選択中のテンプレート名 */
 let _assetTmplSelected = null;
+/** アセットパネルのテンプレートタブで展開中のグループ名の集合（初期状態は空＝全グループ折りたたみ） */
+const _assetTmplExpandedGroups = new Set();
 
 function _workTimestampStr(d = new Date()) {
     const p = n => String(n).padStart(2, '0');
@@ -629,6 +631,12 @@ async function _workBackupImport(file) {
 // アセットパネル: テンプレートタブ
 // ------------------------------
 
+// テンプレート数が増えても目的のテンプレートを素早く選べるよう、既存のテンプレートグループ機能
+// （_tmplGroups、「ページ」タブ→「テンプレート」サブタブのグループ管理で作成・割り当てられたもの、
+// 06b-template-manager.js）を流用して折りたたみ可能なグループヘッダーで表示する。
+// グループ未所属のテンプレートは従来通りヘッダー無しでそのまま並べる（グループ機能を使っていない
+// 場合は見た目が変わらない）。展開状態は_assetTmplExpandedGroupsに保持し、初期状態（未展開時）は
+// 全グループ折りたたみになる
 function renderAssetTemplateGrid() {
     const grid = document.getElementById('asset-template-grid');
     if (!grid) return;
@@ -639,7 +647,8 @@ function renderAssetTemplateGrid() {
     }
 
     grid.innerHTML = '';
-    state.templates.forEach(template => {
+
+    const makeCard = (template) => {
         const card = document.createElement('div');
         card.className = 'page-thumb-card';
         card.dataset.templateName = template.name;
@@ -662,8 +671,52 @@ function renderAssetTemplateGrid() {
             if (btn) btn.disabled = false;
         });
         card.addEventListener('dblclick', () => insertTemplatePageToWork(template.name));
-        grid.appendChild(card);
+        return card;
+    };
+
+    // グループ名（アルファベット順）ごとにテンプレートを振り分け、未所属は別扱い
+    const groupedMembers = new Map(); // groupName -> template[]
+    const ungrouped = [];
+    state.templates.forEach(template => {
+        const g = _tmplGroups.groupOf(template.name);
+        if (g) {
+            if (!groupedMembers.has(g)) groupedMembers.set(g, []);
+            groupedMembers.get(g).push(template);
+        } else {
+            ungrouped.push(template);
+        }
     });
+
+    _tmplGroups.groupNames().forEach(groupName => {
+        const members = groupedMembers.get(groupName);
+        if (!members || !members.length) return; // 空グループは表示しない
+
+        const isExpanded = _assetTmplExpandedGroups.has(groupName);
+        const header = document.createElement('div');
+        header.className = 'asset-folder' + (isExpanded ? '' : ' collapsed');
+        header.innerHTML =
+            `<span class="asset-folder-icon">${isExpanded ? '▼' : '▶'}</span>` +
+            `<span class="asset-folder-name">${_escHtml(groupName)}</span>` +
+            `<span class="asset-tmpl-group-count">${members.length}</span>`;
+
+        const list = document.createElement('div');
+        list.className = 'asset-tmpl-group-list' + (isExpanded ? '' : ' collapsed');
+        members.forEach(template => list.appendChild(makeCard(template)));
+
+        header.addEventListener('click', () => {
+            const nowExpanded = !_assetTmplExpandedGroups.has(groupName);
+            if (nowExpanded) _assetTmplExpandedGroups.add(groupName);
+            else _assetTmplExpandedGroups.delete(groupName);
+            header.classList.toggle('collapsed', !nowExpanded);
+            header.querySelector('.asset-folder-icon').textContent = nowExpanded ? '▼' : '▶';
+            list.classList.toggle('collapsed', !nowExpanded);
+        });
+
+        grid.appendChild(header);
+        grid.appendChild(list);
+    });
+
+    ungrouped.forEach(template => grid.appendChild(makeCard(template)));
 }
 
 /** テンプレートを作品サイズにリサイズして新規ページとして追加し、レイアウトに展開する */

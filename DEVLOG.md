@@ -2,6 +2,115 @@
 
 ---
 
+## 2026-07-27（本セッションで追加した5機能をヘルプ・READMEへ反映）
+
+「ヘルプを更新してください」「README、DEVLOGを更新してください」との依頼を受け、本セッションで実装した以下5点をアプリ内ヘルプタブ（`static/js/main/22-help-tab.js`、日本語のみ・全言語共通表示）とREADME（`README.md`/`README_en.md`/`README_zh.md`の3言語）に反映した。
+
+- サブコマのレイヤーパネルからの複製・移動（オーバーレイへの移動含む）
+- アセットパネル「テンプレート」タブのグループ折りたたみ表示
+- Imageタブ Selectツールの「✂ クロップ」機能
+- Imageタブのレイヤーグループ（📁）機能とレイヤーパネル上部メニューの2行化
+- レイアウトタブの「PI2I」（ページ全体をPNGでWorkflow Studioへ送信）機能
+
+ヘルプタブ側は、レイアウトタブの既存「I2I連携（Workflow Studio）」の解説と設定タブの既存「I2I設定」の解説を相互参照させ、デフォルトワークフロー自動読み込み設定が「I2I」「PI2I」の両ボタンに共通で効くことを明記した。
+
+**How to apply**: ヘルプタブのデータ（`_HELP_DATA`）は日本語のみの単一配列で、UIの表示言語設定に関わらずヘルプ内容は常に日本語表示になる（i18n.jsの3言語辞書とは別系統）。機能追加時にヘルプへ反映する際は、この配列内の該当セクション（`id`と`heading`で特定）を探して追記すればよく、i18n側の翻訳作業は不要。README側は3ファイルとも同じ見出し構成で並行しているため、1機能につき3ファイルへ同内容を翻訳して反映する。
+
+---
+
+## 2026-07-27（レイアウトタブに「PI2I」機能を新規追加、ページ全体をWorkflow StudioのI2Iへ送信）
+
+「ページI2I機能（PI2I）を追加したい。ページとしてPNGで出力、WorkflowStudioに送ります」との依頼を受けて実装。
+
+既存の「I2Iへ送る」ボタン（`sendSelectedImageToI2I`、`static/js/main/15-pixifx-bridge.js`）は選択中の`<image>`要素1枚をBlob化して送るだけの単一画像版だったが、送信先の`sendImageToWorkflowStudioI2I(blob, name, sourceTab)`（`14-integrations.js`）自体は任意のBlobを受け取れる汎用実装で、`state.selectedImageEl`には一切依存していなかったため、ページ全体のPNG化さえ用意すれば流用できることが分かった。ページ全体のPNG化も、既存のPDF/EPUB/PNG出力（`12-text-png-export.js`の`handleExport()`）が使っている経路（`buildMergedSvg`→`embedFontsInSvg`→`drawSvgOnCanvas`→共有`#render-canvas`の`canvas.toBlob`）をそのまま流用できたため、新規のPNG化ロジックは書かず、既存の出力パイプラインに乗せた。
+
+**実装**:
+- `static/js/main/15-pixifx-bridge.js`: 新規`sendCurrentPageToI2I()`。`state.activePage`から`dbGet('pages', ...)`でpageRecordを取得→`buildMergedSvg(pageRecord)`（既存出力と同じくオプション無し＝下書きレイヤーは含めない）→`embedFontsInSvg`→共有`#render-canvas`に白背景で`drawSvgOnCanvas`→`canvas.toBlob('image/png')`→`sendImageToWorkflowStudioI2I(blob, pageRecord.name, 'layout')`という一連の流れ。単一画像版の`sendSelectedImageToI2I`と同じエラーハンドリング（`layout.msgWfmI2ISendFailed`）に合わせた。
+- `templates/index.html`: レイアウトタブの上部メニューに「PI2I」ボタン（`#layout-pi2i-send-btn`）を「I2I」ボタンの直後に追加。画像選択に依存しないため（既存の「I2I」ボタンと異なり）常時有効。
+- `static/js/main/16-processing-edit-tabs.js`: クリックハンドラを`sendSelectedImageToI2I`の登録直後に追加。
+- `static/js/i18n.js`: `layout.sendToPi2iBtn`/`sendToPi2iTitle`/`msgNoActivePage`をja/en/zhに追加（`msgNoActivePage`はページ未オープン時のガード用。既存の`msgSelectImageFirst`は文言が「画像を選択」に固定されておりページ未オープンの文脈と合わないため、専用キーを新設した）。
+
+**How to apply**: 「単一オブジェクトを外部連携へ送る」機能（今回のI2I）を「ページ全体」等の広い単位に拡張したい場合、まず送信先の橋渡し関数（`sendImageToWorkflowStudioI2I`等）が本当に対象オブジェクト固有の状態（`state.selectedImageEl`等）に依存しているか確認するとよい。多くの場合、橋渡し関数自体は「Blobを受け取って送るだけ」の汎用実装になっており、新しく用意すべきは「対象をBlobに変換する経路」だけで済む。今回のようにその変換経路（SVG→PNG）が別の既存機能（PDF/EPUB/PNG出力）で既に確立済みなら、それをそのまま呼び出すのが最小実装になる。
+
+**追記（同日、実機検証後）**: 実機で「Workflow Studioへの送信に失敗しました: Blob生成失敗」が発生（ComfyUI再起動後も再現、ワークフロー自体は生成可能とのことでcanvas側の問題と判断）。原因は`canvas.width = pageRecord.width; canvas.height = pageRecord.height;`で、`pageRecord.width/height`はピクセル数ではなく**SVG座標単位（mm×100相当。A4なら21000×29700）**で保持されている値だったこと。これをそのままcanvasのピクセルサイズに使うと約6億2000万ピクセル相当の巨大canvasになり、`canvas.toBlob()`が（例外を投げず）コールバックに`null`を返して`page.errBlobGenFailed`に落ちていた。出力タブの解像度自動計算（`_applyExportDpi`、`10-output-pages.js`）が同じmm×100値を`mm = 値/100`→`px = mm * dpi / 25.4`で変換し`_EXPORT_MAX_SIZE`（8000px）でクランプしているのと同じ考え方を、新設の`_pi2iResolvePagePixelSize(pageRecord)`として`15-pixifx-bridge.js`内に実装（DPIは固定150、`_EXPORT_MAX_SIZE`は出力タブの定数をそのまま流用）。`pageRecord.width/height`が無い/不正な場合はsvgContentの`viewBox`からもフォールバック取得するようにした。
+
+**How to apply（追記）**: このアプリでは「作品/ページのwidth・height」はどこで保持されていても一貫して**SVG座標単位（mm×100）**であり、ピクセル値ではない（`WORK_SIZE_PRESETS`のA4が`{width:21000, height:29700}`であることからも分かる）。新しくcanvasへラスタライズする処理を書く際は、既存の出力コード（`12-text-png-export.js`/`10-output-pages.js`）のように必ずDPI等でpx換算してから`canvas.width/height`に設定すること。巨大canvasでの失敗は例外にならず`toBlob`/`toDataURL`が`null`を返すだけなので、開発中に気づきにくい。
+
+---
+
+## 2026-07-27（Imageタブにレイヤーグループ機能を追加、レイヤーパネル上部メニューを2行化）
+
+「レイヤーグループを可能にしたい。レイヤー上部メニューを2行にして下段にグループと統合ボタンにしてください」との依頼を受けて実装。
+
+ImageタブのレイヤーモデルはLayoutタブ（SVG、`state.activePage.panels[]`）とは全く別物で、`LayerManager.layers`が実ピクセルを持つ`Layer`オブジェクトのフラット配列（`composite()`が配列順そのまま前面→背面の合成順として扱う）だったため、グループを配列内の疑似レイヤー（`type:"group"`等）として実装すると`composite`/`mergeLayers`/`toJSON`/`fromJSON`など複数箇所に分岐追加が必要になり影響範囲が大きくなる。そこで、各`Layer`に`groupId`フィールドを追加し、`LayerManager.groups`（`{id, name, collapsed}`の配列、メンバーは`layer.groupId`で判定）という**配列の外側にある並行レジストリ**として実装した。これにより`layers`配列自体の並び（＝実際の合成順）には一切手を加えず、レイヤーパネルの表示だけがグループヘッダー配下にメンバーをまとめて描画する（Layoutタブのサブコマで使った「データの配列順は変えず表示だけ並べ替える」パターンと同じ考え方）。
+
+**実装**:
+- `static/js/image-tab/LayerManager.js`: `Layer`に`groupId`（デフォルトnull）を追加し`toJSON`/`fromJSON`にも反映。`LayerManager`に`groups`配列を追加し、`createGroup(layerIds, name)`（2枚以上選択時のみグループ化、既に別グループにいた場合はそちらから抜ける）・`ungroup(groupId)`・`toggleGroupCollapsed(groupId)`・`setGroupVisible(groupId, visible)`・`_pruneEmptyGroups()`（メンバー0枚になったグループ定義を自動掃除、`deleteLayer`/`mergeLayers`/`createGroup`後に呼ぶ）を新設。`mergeLayers()`は統合対象が全て同一グループのメンバーだった場合のみ統合結果もそのグループに残す。`duplicateLayer()`も複製後に元と同じグループへ残すよう`groupId`をコピー。`LayerManager.toJSON`/`fromJSON`（マネージャー単位）にも`groups`を追加し、Undo/Redoでグループごと復元できるようにした。
+- `static/js/image-tab.js`: `_refreshLayerList()`を、`layers`配列の並び順を保ったまま`groupId`でメンバーをまとめてグループヘッダー（📁アイコン・件数・一括表示/非表示ボタン・解除ボタン、クリックで折りたたみ）配下に描画するよう変更（`_renderLayerRowHtml`/`_renderGroupHeaderHtml`に処理を切り出し）。新規`_groupSelectedLayers()`を追加し、レイヤーパネルの既存の複数選択（Shift+クリック、`_selectedLayerIds`）をそのまま「グループ化するレイヤーの選択」として流用した。
+- `templates/index.html` / `static/css/image-tab.css`: レイヤーパネル上部の`.ie-layers-header`（1行）を2行に分割し、1行目に既存のAdd/Mask追加/削除/上へ/下への各ボタン、新設の2行目（`.ie-layers-header-row2`）に「📁 グループ」ボタンと、既存の「統合」ボタン（`#ie-flatten-btn`、元々1行目末尾にあったものを移動）を配置。
+- `static/js/i18n.js`: `image.group`/`groupTitle`/`groupSelectFirst`/`groupDone`/`ungroup`/`ungroupTitle`をja/en/zhに追加。
+
+「統合」ボタン自体は今回新規実装したものではなく、既存の`mergeLayers()`（選択レイヤーのみ統合、2026-07-24のInpaint機能追加時にマスクレイヤー対応で修正済み）に繋がる既存ボタンをレイアウト変更に伴い2行目へ移設しただけである。
+
+**How to apply**: 既存のデータモデル（今回で言う`LayerManager.layers`の「配列順＝実際の描画/合成順」という不変条件）を壊さずに新しい「グルーピング」概念を追加したい場合、対象の配列に疑似要素を混ぜ込むより、外側の並行レジストリ（id参照ベースのメンバーシップ）として実装する方が、既存の合成・シリアライズ・統合ロジックへの影響を最小化できる。表示順の組み替えが必要な場合も、実データの並びには手を付けず「レンダリング時にメンバーをまとめて描画する」だけで対応できる（[[comic-creator-workflow]]のサブコマ表示順対応と同じ考え方）。
+
+---
+
+## 2026-07-27（ImageタブのSelectメニューに「クロップ」ツールを新規追加）
+
+「Selectメニューにクロップボタンを追加。オーバーレイのクロップエリアをサイズ変更し実行としたい。メニューにはx,yでサイズしても可能にしたい」との依頼を受けて実装。
+
+Imageタブのキャンバス/レイヤーモデルを調査したところ、各レイヤーは自身のネイティブ解像度の独立した`<canvas>`（`layer.canvas`）を持ち、ページ全体上の配置は`layer.x/y`（絶対座標）で表現されている（`LayerManager.composite`が`layer.x/y`起点で合成し、ページキャンバス境界外はそのまま描画クリップされる仕組み）ことが分かった。このため「クロップ」は各レイヤーのピクセルデータを一切書き換えず、①`_canvasW/_canvasH`（ページ全体サイズ）とクロップ後サイズへ縮小、②全レイヤーの`x/y`をクロップ原点分シフト、③`#ie-canvas-draw`/`#ie-canvas-overlay`/`#ie-canvas-container`のリサイズ、の3点だけで実現できる設計にした。
+
+**実装**:
+- `static/js/image-tab.js`: Selectツールのオプションパネル（`_renderToolOptions`の`toolId === "select"`分岐）に「✂ クロップ」トグルボタンを追加。ONにすると`#ie-canvas-overlay`上にドラッグ可能なクロップ範囲（半透明の範囲外オーバーレイ＋点線枠＋四隅/四辺中点の8ハンドル、`_drawCropOverlay`/`_cropGetHandlePositions`/`_cropHitHandle`）を表示し、同時にX/Y/W/H数値入力欄も表示してドラッグ・数値入力のどちらでも範囲を調整できるようにした（`_onCropMouseDown`/`_onCropMouseMove`をSelectツールのマウスディスパッチ内に分岐追加）。「実行」ボタンで`_applyCrop()`を呼び、上記3点の変更を適用する。「キャンセル」またはクロップボタン再クリックで`_exitCropMode()`により編集前の状態のまま抜けられる。
+- `_initCanvases()`内のキャンバス要素リサイズ処理（`ie-canvas-draw`/`ie-canvas-overlay`/`ie-canvas-container`のwidth/height設定）を`_resizeCanvasElements(w, h)`として切り出し、新規キャンバス作成時とクロップ実行時の両方から共通で呼べるようにした（`LayerManager`の再構築は伴わない、既存レイヤーを維持したままのリサイズ用）。
+- `static/js/image-tab/LayerManager.js`: `fromJSON()`が`toJSON()`で保存していたはずの`width`/`height`を復元していなかった（従来はキャンバスサイズを変える操作自体が存在せず、Undo/Redoで顕在化していなかった潜在バグ）ため修正。あわせて`image-tab.js`の`_restoreState()`（Undo/Redo共通処理）で、復元後の`layerMgr.width/height`が現在の`_canvasW/_canvasH`と食い違っていれば`_resizeCanvasElements`で同期するようにし、クロップ操作もUndo/Redoで正しくキャンバスサイズごと戻る/やり直せるようにした。
+- `static/js/i18n.js`: `image.cropBtn`/`cropBtnTitle`/`cropXLabel`/`cropYLabel`/`cropWidthLabel`/`cropHeightLabel`/`cropApply`/`cropCancel`をja/en/zhに追加。
+
+**How to apply**: Imageタブのようにレイヤーがページ座標系へ絶対配置される合成モデル（`layer.x/y` + `composite`時にキャンバス境界でクリップ）を持つエディタでキャンバスサイズを変更する機能を作る場合、レイヤーのピクセルバッファ自体を再サンプリングする必要はなく、「ページサイズを変える」＋「全レイヤーのオフセットをシフトする」の2点で足りる。また`toJSON`が保存している値は将来的に何かの操作がその値を変更する可能性がある以上、対応する`fromJSON`側で必ず復元しておかないと、Undo/Redoが暗黙に「その値は不変」という前提に依存してしまい、後から来た機能（今回のクロップ）が原因不明の状態不整合を起こす。
+
+---
+
+## 2026-07-27（アセットパネルのテンプレート"T"タブをグループ折りたたみ表示に対応）
+
+「テンプレート数が増えることでサムネが小さくなりすぎる対策とグループ表示による素早い選択を兼ねたい」との依頼を受けて実装。対象範囲（テンプレートTタブのみ／ページPタブは対象外）とグループ分けの基準（既存のテンプレートグループ機能を流用）は質問して確認した。
+
+「ページ」タブ→「テンプレート」サブタブ側に既にグループ管理機能（`_tmplGroups`、`06b-template-manager.js`。グループの作成・削除・リネームとテンプレートの割り当てをlocalStorage `template_groups` に永続化）があったため、新しいデータ層は作らず、アセットパネル側の表示だけをこのデータを読んで組み替える形にした。
+
+**実装**:
+- `static/js/main/11a-work-manager.js`: `renderAssetTemplateGrid()`を、テンプレートを`_tmplGroups.groupOf()`でグループ別に振り分けてから描画するよう変更。グループは`.asset-folder`（アセットツリーの折りたたみフォルダと同じCSSクラス、`static/css/style.css`）のヘッダー行＋件数バッジで表示し、クリックで展開/折りたたみを切り替える。展開状態はモジュールスコープの`_assetTmplExpandedGroups`（Set）に保持し、初期状態（未展開）は空集合＝全グループ折りたたみになる。グループ未所属のテンプレートは従来通りヘッダー無しでそのまま並べるため、グループ機能を使っていないユーザーには見た目の変化がない。空グループ（所属テンプレート0件）は表示しない。
+- `static/css/style.css`: グループ内カード列用の`.asset-tmpl-group-list`（`.asset-list`と同じ考え方で`.collapsed`時`display:none`）と件数バッジ`.asset-tmpl-group-count`を追加。
+
+**How to apply**: 同じ「グループ分け」概念を複数のUI（今回は「ページ」タブのテンプレート管理と、アセットパネルのテンプレートタブ）で使う場合、データ層（`_tmplGroups`等）を一本化して片方は表示専用にすると、グループの作成・削除・リネーム・割り当てロジックを二重実装せずに済む。折りたたみUIは`.asset-folder`/`.asset-list`（アセットツリーで既に確立済みのクラス・挙動）を流用すると、新規CSSは「グループ内リストの入れ物」用の最小限で足りる。
+
+---
+
+## 2026-07-27（サブコマをレイヤーパネル下部の「移動」「複製」ボタンに対応）
+
+「前回追加したサブコマについてレイヤーパネル下部のレイヤー移動、複製は可能ですか？」との質問を受けて調査したところ、下部の移動/複製ボタン（`duplicateSelectedObject`/`moveSelectedObject`、`05-groups-move.js`）は`state.selectedGroupId`/`selectedShapeId`/`selectedImageEl`/`selectedTextEl`/`selectedDrawId`のいずれかしか見ておらず、サブコマ選択は通常のコマ選択と同じ`state.selectedPanelId`を使う仕組みのため対象外だった（押しても「対象を選択してください」のアラートが出るだけで何も起きない）ことが判明。「実装願います」との依頼を受けて対応した。
+
+**実装**:
+- `static/js/main/24-sub-panels.js`: インタラクティブなドラッグ移動用に`initSubPanelManipulation`のクロージャ内に閉じていた`_subPanelSnapshotContent`/`_subPanelApplyContentTranslate`（中身のオブジェクトを種別ごとの正規座標属性で平行移動するロジック）をトップレベル関数に切り出し、新規の`duplicateSubPanel(subId, targetParentId)`/`moveSubPanel(subId, targetParentId)`から共通利用できるようにした。
+  - `duplicateSubPanel`: 対象未指定（＝同じ親コマ）ならオブジェクト複製と同じOFFSET(20,20)でずらして複製、異なる親コマを指定した場合は複製元/複製先の親コマ中心の差分だけ平行移動。枠線・中身ともに`_cloneWithNewIds`（グループ複製で使用の既存ヘルパー）でID一括付け替えし、新規`panel-clip-<newId>`クリップパスを複製先親コマとの交差ポリゴン（既存の`_subPanelEffectiveClipPoints`）で作成。
+  - `moveSubPanel`: 同じidのまま`parentPanelId`を付け替え、複製元/複製先の親コマ中心の差分だけ枠線・クリップ・中身を平行移動。自分自身や自分の子孫サブコマを移動先に選ぶ循環参照は`_subPanelIsDescendantOf`でガード。
+  - どちらも通常のコマ・パネルSVG永続化経路（`savePanelSvg`）をそのまま利用（`state.activePage.panels`にエントリを追加/更新後、`savePanelSvg`が内部で対応エントリを見つけてDOM内容を書き戻し+dbPutする既存動作に乗せている）。
+- `static/js/main/05-groups-move.js`: `duplicateSelectedObject`/`moveSelectedObject`が対象オブジェクトなし判定した直後に、選択中が`_subPanelCurrentSelected()`（既存ヘルパー）で取得できるサブコマかどうかをチェックし、該当すれば`duplicateSubPanel`/`moveSubPanel`に委譲する分岐を追加。既存のレイヤーパネル下部UI（移動先コマ選択ドロップダウン・移動/複製ボタン）をそのまま流用できる。
+- i18nメッセージは既存の`layer.duplicateTargetPanelNotFound`等（汎用的な文言のため）をそのまま流用し、新規キー追加はなし。
+
+**How to apply**: 「コマ」抽象を流用して作られた新しいエントリ種別（[[comic-creator-workflow]]のサブコマのような）にレイヤーパネルの既存の移動/複製ボタンを対応させる場合、対象特定ロジックがチェックする`state.selected*`変数の一覧に新しい選択状態判定を追加するだけで、UI（ドロップダウン・ボタン）は無改造のまま流用できる。中身のオブジェクトを種別ごとに正しく追従移動させるロジック（`_subPanelApplyContentTranslate`等）はクロージャ内に一度書くと使い回しづらくなるため、インタラクティブ操作専用に見えても最初からトップレベル関数として書いておくと、後から「同じ移動をプログラム的にも呼びたい」という要望に対応しやすい。
+
+**追記（同日、実機検証後）**: 上記の移動/複製を実機確認した後、「オーバーレイへも可能にしたい」との追加依頼を受けて対応した。オーバーレイは`state.activePage.panels[]`の実エントリではない（`'__overlay__'`という特別なID文字列で扱われる）ため、サブコマの`parentPanelId`にそのまま`'__overlay__'`を許すと、①`_subPanelEffectiveClipPoints`等の「親コマのpointsで交差クリップ」計算が`state.activePage.panels.find(...)`で親が見つからず素通り（無クリップ）になる、②レイヤーパネルの表示ロジック（`orderedPanels`はトップレベルコマから`parentPanelId`を辿って子を並べる仕組みのため、親が実在しない`'__overlay__'`だとどこからも辿り着けず表示から消える）という2つの穴があった。
+- `24-sub-panels.js`: `_subPanelResolveParent(parentPanelId)`を新設し、`'__overlay__'`の場合は`state.activePage.basePanelPoints`（ページ全面の形）を疑似的な親として返すようにした。`_subPanelCommit`（ドラッグ確定時のクリップ再計算）・`duplicateSubPanel`・`moveSubPanel`の親コマ解決をすべてこれ経由に統一し、通常のオブジェクトがオーバーレイへ移動する際に`basePanelPoints`の重心へ再配置されるのと同じ考え方で中心合わせできるようにした。
+- `04b-layer-panel-render.js`: コマ1件分の行+マスク行+中身オブジェクト一覧を描画する処理を`renderPanelNode`関数として切り出し、通常のコマ一覧ループに加えて、オーバーレイ行の直後でも`panels.filter(p => p.parentPanelId === '__overlay__')`分を呼べるようにした（オーバーレイもコマ一括ロックの対象外という既存仕様に合わせ、呼び出し後に`_rlpPanelLocked`をリセットする処理も追加）。表示名は`parentPanelId === '__overlay__'`のときだけ専用ラベル（`subpanel.optionLabelOverlay`）を出すよう分岐。
+- `i18n.js`: `subpanel.optionLabelOverlay`をja/en/zhに追加。
+
+移動先コマ選択ドロップダウン自体は既存の`updateDuplicatePanelSelect`（`03-layers-panel.js`）がもともと`__overlay__`オプションを無条件で持っていたため、UI側の変更は不要だった。
+
+**How to apply**: 「実コマの集合（`panels[]`）」と「オーバーレイ（`__overlay__`という特別なID）」のように、同じ「親」概念を扱う先が「配列内の実エントリ」と「配列外の特別な存在」に分かれている場合、`.find(p => p.id === X)`をそのまま使い回すコードは後者で静かに`undefined`を返して意図しない動作（クリップ無効化・表示から消失等）になりやすい。`X === '__overlay__'`等の特別値を吸収して両者を同じインターフェース（今回は`{points}`を持つオブジェクト）に正規化する解決関数を1つ作り、すべての参照箇所をそれ経由に統一するとこの種の穴を防ぎやすい。
+
+---
+
 ## 2026-07-27（レイアウトタブに「サブコマ」機能を新規追加、実機検証で見つかった不具合を順次修正）
 
 「レイアウトタブでコマの中にコマをオブジェクトとして入れたい。矩形、丸でサイズ変更、移動を可能としたい」との依頼を受けて実装。続けてユーザー自身の実機検証で複数の不具合・追加要望（回転対応、コマ外へのはみ出し、サブコマ自体と中のオブジェクトの操作の切り分け、枠線幅の個別設定、上部メニューのレイアウト整理）が見つかり、同じ流れで対応した。

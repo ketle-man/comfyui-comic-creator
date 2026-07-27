@@ -310,6 +310,23 @@ main {
   word-break: break-all;
 }
 
+/* アセットパネル「テンプレート」タブ: 折りたたみ可能なグループヘッダー（.asset-folder流用）配下のカード列 */
+.asset-tmpl-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 12px;
+}
+
+.asset-tmpl-group-list.collapsed {
+  display: none;
+}
+
+.asset-tmpl-group-count {
+  font-size: 11px;
+  color: var(--text-secondary, #999);
+}
+
 /* アセットパネル「フォント」タブ: スタイル/プリセットのサムネ一覧 */
 .asset-font-bg-row {
   display: flex;

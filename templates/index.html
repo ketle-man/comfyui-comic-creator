@@ -163,6 +163,7 @@
                 <button id="insert-image-btn" class="btn secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.insertImage">画像を挿入</button>
                 <button id="layer-draw-open-imgedit" class="btn small secondary" style="white-space:nowrap; padding:8px 10px;" data-i18n="layout.openImageTabBtn" data-i18n-title="layout.openImageTabTitle" title="選択中の画像をImageタブで開く" disabled>画像タブで編集</button>
                 <button id="layout-i2i-send-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.sendToI2iBtn" data-i18n-title="layout.sendToI2iTitle" title="選択中の画像をWorkflow StudioのI2I入力へ送信" disabled>I2I</button>
+                <button id="layout-pi2i-send-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.sendToPi2iBtn" data-i18n-title="layout.sendToPi2iTitle" title="現在のページ全体をPNGとしてWorkflow StudioのI2I入力へ送信">PI2I</button>
                 <button id="object-center-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n-title="layout.objectCenterTitle" title="選択中のオブジェクトを中央（コマ内ならコマ中心、オーバーレイならページ中心）へ移動" disabled>OC</button>
                 <button id="close-work-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.closeWorkBtn" data-i18n-title="layout.closeWorkTitle" title="作品を閉じます（保存データは失われません。他タブでの作業を軽くしたいときに）">閉じる</button>
               </div>
@@ -765,6 +766,9 @@
                   <button class="it-btn it-btn-sm" id="ie-del-layer-btn" title="Delete layer">−</button>
                   <button class="it-btn it-btn-sm" id="ie-layer-up-btn"   title="Move up">↑</button>
                   <button class="it-btn it-btn-sm" id="ie-layer-down-btn" title="Move down">↓</button>
+                </div>
+                <div class="ie-layers-header-row2">
+                  <button class="it-btn it-btn-sm" id="ie-group-btn" data-i18n="image.group" data-i18n-title="image.groupTitle" title="選択中の複数レイヤーをグループ化します（Shift+クリックで複数選択）">📁 グループ</button>
                   <button class="it-btn it-btn-sm" id="ie-flatten-btn" data-i18n="image.flatten" data-i18n-title="image.flattenTitle" title="全レイヤーを1枚に統合">統合</button>
                 </div>
                 <div class="ie-global-opacity-row">
