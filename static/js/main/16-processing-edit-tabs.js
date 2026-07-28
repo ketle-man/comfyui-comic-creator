@@ -337,8 +337,20 @@ function initEditTab() {
             btn.style.background = 'var(--bg-primary)';
             const mode = btn.dataset.editMode;
             document.getElementById('edit-panel-box').style.display      = mode === 'box'       ? '' : 'none';
+            document.getElementById('edit-panel-paint').style.display    = mode === 'paint'      ? '' : 'none';
             document.getElementById('edit-panel-svg-color').style.display = mode === 'svg-color' ? '' : 'none';
             document.getElementById('edit-panel-svg-png').style.display   = mode === 'svg-png'   ? '' : 'none';
+            // ドロータブから離れたら描画ONを解除。ペイントタブから離れてもペイントONを解除
+            if (mode !== 'box' && typeof _layerDrawState !== 'undefined' && _layerDrawState.active) {
+                _layerDrawState.active = false;
+                _layerDrawUpdateToggle();
+                _layerDrawDetachOverlay();
+            }
+            if (mode !== 'paint' && typeof _paintToolState !== 'undefined' && _paintToolState.active) {
+                _paintToolState.active = false;
+                _paintUpdateToggle();
+                _paintDetachOverlay();
+            }
         });
     });
 
@@ -368,6 +380,9 @@ function initEditTab() {
 
     // レイヤー描画初期化
     initLayerDraw();
+
+    // ペイントツール初期化（ラスターブラシ。ドローとは別タブ・別状態で動作）
+    initPaintTool();
 
     // 画像タブで編集ボタン: Imageタブで開く
     document.getElementById('layer-draw-open-imgedit').addEventListener('click', openImageTabWithSelected);

@@ -296,6 +296,21 @@ function renderDrawShapeHandles(el, svgEl) {
     rotC.style.pointerEvents = 'auto';
     svgEl.appendChild(rotC);
 
+    // 中央移動ハンドル（塗りなし・細い線などクリック判定が細く掴みにくい図形でも
+    // 確実に移動操作できるよう、バウンディングボックス中央に常時表示する）
+    // 回転中心=バウンディングボックス中心なので、回転していても位置補正は不要
+    const moveSize = r * 2;
+    const moveH = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    moveH.setAttribute('x', x + w / 2 - moveSize / 2);
+    moveH.setAttribute('y', y + h / 2 - moveSize / 2);
+    moveH.setAttribute('width', moveSize);
+    moveH.setAttribute('height', moveSize);
+    moveH.setAttribute('stroke-width', sw);
+    moveH.setAttribute('class', 'draw-handle move-handle');
+    moveH.setAttribute('data-handle-type', 'move');
+    moveH.style.pointerEvents = 'auto';
+    svgEl.appendChild(moveH);
+
     // 多角形は頂点ハンドル（四角）も表示
     if (tag === 'polygon') _renderPolygonVertexHandles(el, svgEl, r);
 }
@@ -343,6 +358,7 @@ function updateDrawShapeHandles(el, svgEl) {
     positions['rotate'] = [rotHx, rotHy];
 
     svgEl.querySelectorAll('.draw-handle').forEach(h => {
+        if (h.dataset.handleType === 'move') return; // rect要素のためcx/cyでなくx/yで別途更新
         const pos = positions[h.dataset.handleType];
         if (pos) { h.setAttribute('cx', pos[0]); h.setAttribute('cy', pos[1]); }
     });
@@ -350,6 +366,13 @@ function updateDrawShapeHandles(el, svgEl) {
     if (rLine) {
         rLine.setAttribute('x1', rotTopX); rLine.setAttribute('y1', rotTopY);
         rLine.setAttribute('x2', rotHx);   rLine.setAttribute('y2', rotHy);
+    }
+    // 中央移動ハンドル（回転中心=バウンディングボックス中心なので位置補正不要）
+    const moveH = svgEl.querySelector('.draw-handle.move-handle');
+    if (moveH) {
+        const size = parseFloat(moveH.getAttribute('width')) || 0;
+        moveH.setAttribute('x', x + w / 2 - size / 2);
+        moveH.setAttribute('y', y + h / 2 - size / 2);
     }
 
     // polygon の頂点ハンドル位置を更新
@@ -384,8 +407,13 @@ function _drawUpdateTransformForPathG(el) {
     const cx = x + w / 2;
     const cy = y + h / 2;
 
-    const svg = el.ownerSVGElement;
-    if (!svg) return;
+    // createSVGMatrix()は行列演算用のファクトリに過ぎず、ドキュメントに接続されている必要はない。
+    // el.ownerSVGElementは要素が現在ライブDOMに接続されている場合のみ祖先<svg>を返すため、
+    // 移動・複製処理でクローンをまだ挿入する前（DOM未接続）にこの関数を呼ぶとnullになり、
+    // 以前はここでtransformの更新自体をスキップしてしまっていた
+    // （＝data-x/data-yだけ新位置になり、実際の描画位置は移動前のまま残る不具合の原因）。
+    // 未接続時は使い捨ての<svg>要素で代替し、常に行列を計算できるようにする。
+    const svg = el.ownerSVGElement || document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 
     // 1. Mapping: Raw (intrinsic) -> Logical (axis-aligned)
     // T(x, y) * S(sw, sh) * T(-rx, -ry)
@@ -502,6 +530,17 @@ function initDrawShapeManipulation(svgEl) {
             e.preventDefault(); e.stopPropagation();
             return;
         }
+        // 中央移動ハンドル（塗りなし・細い線などクリック判定が細い図形でも
+        // 確実に掴んで移動できるよう、図形本体の当たり判定に頼らず移動を開始する）
+        const mvh = e.target.closest('.draw-handle.move-handle');
+        if (mvh && el && !_isObjectLocked(el)) {
+            const pt = getSvgPt(e.clientX, e.clientY);
+            initBounds = { ..._drawShapeGetBounds(el) };
+            startSvgX  = pt.x; startSvgY = pt.y;
+            dragging   = true;
+            e.preventDefault(); e.stopPropagation();
+            return;
+        }
         // draw-shape 本体ドラッグ（移動）
         const ds = e.target.closest('.draw-shape');
         if (ds && !_isObjectLocked(ds)) {
@@ -583,7 +622,20 @@ function initDrawShapeManipulation(svgEl) {
             updateDrawShapeHandles(el, svgEl);
         } else if (dragging) {
             const b = initBounds;
-            _drawShapeSetBounds(el, b.x + dx, b.y + dy, b.w, b.h);
+            if (tag === 'line') {
+                // lineはx1,y1→x2,y2の向き（始点/終点）を保持したまま平行移動する。
+                // bbox(x,y,w,h)経由で再構築すると常にnw→se向きに直されて反転してしまうため、
+                // 生の端点座標に直接dx,dyを加算する。
+                el.setAttribute('x1', (b.x1 + dx).toFixed(2));
+                el.setAttribute('y1', (b.y1 + dy).toFixed(2));
+                el.setAttribute('x2', (b.x2 + dx).toFixed(2));
+                el.setAttribute('y2', (b.y2 + dy).toFixed(2));
+                _drawShapeSyncTexturePatternTransform(el);
+                const angle = parseFloat(el.dataset.angle || 0);
+                if (angle !== 0) _drawShapeApplyRotation(el, angle);
+            } else {
+                _drawShapeSetBounds(el, b.x + dx, b.y + dy, b.w, b.h);
+            }
             updateDrawShapeHandles(el, svgEl);
         }
     });

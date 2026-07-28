@@ -320,6 +320,7 @@ function _layerDrawSetStatus(msg) {
 }
 
 function _layerDrawTargetLabel() {
+    if (state.selectedDraft) return t('draw.targetDraft');
     if (state.selectedOverlay) return t('draw.targetOverlay');
     if (state.selectedPanelId) return t('draw.targetPanel', state.selectedPanelId);
     return t('draw.targetNone');

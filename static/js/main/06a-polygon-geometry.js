@@ -161,7 +161,8 @@ function _applyCenterTranslate(el, srcCx, srcCy, dstCx, dstCy) {
     }
 
     const tag = el.tagName.toLowerCase();
-    if (tag === 'image' || tag === 'text' || tag === 'rect') {
+    const isDrawShape = el.classList.contains('draw-shape');
+    if (tag === 'image' || tag === 'text' || (tag === 'rect' && !isDrawShape)) {
         el.setAttribute('x', parseFloat(el.getAttribute('x') || 0) + dx);
         el.setAttribute('y', parseFloat(el.getAttribute('y') || 0) + dy);
         if (tag === 'text') {
@@ -178,6 +179,36 @@ function _applyCenterTranslate(el, srcCx, srcCy, dstCx, dstCy) {
         el.dataset.cx = parseFloat(el.dataset.cx || '0') + dx;
         el.dataset.cy = parseFloat(el.dataset.cy || '0') + dy;
         _updateH2ShapePath(el);
+    } else if (isDrawShape && (tag === 'rect' || tag === 'ellipse' || tag === 'line' || tag === 'polygon')) {
+        // ドロー図形（矩形・楕円・直線・多角形）: transformを付与するとgetBBox/handle計算側
+        // （_drawShapeGetBounds）は生のx/y/cx/cy/points等しか見ないため座標系がズレて
+        // 「見た目は移動したのにバウンディングボックス・ハンドルが元の位置に残る」原因になる。
+        // 各図形の実座標を直接動かして、handle計算側の前提と一致させる。
+        if (tag === 'rect') {
+            el.setAttribute('x', parseFloat(el.getAttribute('x') || 0) + dx);
+            el.setAttribute('y', parseFloat(el.getAttribute('y') || 0) + dy);
+        } else if (tag === 'ellipse') {
+            el.setAttribute('cx', parseFloat(el.getAttribute('cx') || 0) + dx);
+            el.setAttribute('cy', parseFloat(el.getAttribute('cy') || 0) + dy);
+        } else if (tag === 'line') {
+            el.setAttribute('x1', parseFloat(el.getAttribute('x1') || 0) + dx);
+            el.setAttribute('y1', parseFloat(el.getAttribute('y1') || 0) + dy);
+            el.setAttribute('x2', parseFloat(el.getAttribute('x2') || 0) + dx);
+            el.setAttribute('y2', parseFloat(el.getAttribute('y2') || 0) + dy);
+        } else if (tag === 'polygon') {
+            _polygonSetPoints(el, _polygonGetPoints(el).map(p => ({ x: p.x + dx, y: p.y + dy })));
+        }
+        // 回転transformが付いている場合、そのpivot(cx,cy)は移動前の位置のまま焼き込まれているため、
+        // 新しい位置を基準に回転transformを引き直す（回転していなければno-op同然）
+        const angle = parseFloat(el.dataset.angle || 0);
+        if (typeof _drawShapeApplyRotation === 'function') _drawShapeApplyRotation(el, angle);
+    } else if (isDrawShape && (tag === 'path' || tag === 'g')) {
+        // ドロー図形の曲線・鎖・ロープ・My曲線・多角形ペン等（path/g）は data-x/data-y が
+        // 論理座標の基準で、transformはそこから_drawUpdateTransformForPathGが都度再構築するため、
+        // 直接transformへtranslateを足し込んでも次回の再構築で失われる。data-x/yを直接動かす。
+        el.setAttribute('data-x', (parseFloat(el.getAttribute('data-x') || 0) + dx).toFixed(2));
+        el.setAttribute('data-y', (parseFloat(el.getAttribute('data-y') || 0) + dy).toFixed(2));
+        if (typeof _drawUpdateTransformForPathG === 'function') _drawUpdateTransformForPathG(el);
     } else {
         // その他（未分類の図形）: 既存transformの前にtranslateを追加
         const existing = el.getAttribute('transform') || '';
@@ -226,17 +257,41 @@ function _cloneWithNewIds(srcEl) {
 
 // 同コマ複製時のオフセット適用
 function _applyOffset(clone, OFFSET) {
-    if (clone.hasAttribute('transform')) {
-        const existing = clone.getAttribute('transform');
-        clone.setAttribute('transform', `translate(${OFFSET},${OFFSET}) ${existing}`);
-    } else {
-        const tag = clone.tagName.toLowerCase();
-        if (tag === 'image' || tag === 'text' || tag === 'rect') {
+    const tag = clone.tagName.toLowerCase();
+    const isDrawShape = clone.classList.contains('draw-shape');
+    // ドロー図形はtransformへの単純な追加ではなく、_applyCenterTranslateと同じく実座標
+    // （x/y, cx/cy, x1/y1/x2/y2, points, data-x/data-y）を直接動かす。transformだけを
+    // 書き換えると_drawShapeGetBounds（バウンディングボックス・ハンドル計算）が見る生座標と
+    // ズレて「見た目は複製されたのにバウンディングボックスが元の位置に残る」原因になる。
+    if (isDrawShape && (tag === 'rect' || tag === 'ellipse' || tag === 'line' || tag === 'polygon')) {
+        if (tag === 'rect') {
             clone.setAttribute('x', parseFloat(clone.getAttribute('x') || 0) + OFFSET);
             clone.setAttribute('y', parseFloat(clone.getAttribute('y') || 0) + OFFSET);
-        } else {
-            clone.setAttribute('transform', `translate(${OFFSET},${OFFSET})`);
+        } else if (tag === 'ellipse') {
+            clone.setAttribute('cx', parseFloat(clone.getAttribute('cx') || 0) + OFFSET);
+            clone.setAttribute('cy', parseFloat(clone.getAttribute('cy') || 0) + OFFSET);
+        } else if (tag === 'line') {
+            clone.setAttribute('x1', parseFloat(clone.getAttribute('x1') || 0) + OFFSET);
+            clone.setAttribute('y1', parseFloat(clone.getAttribute('y1') || 0) + OFFSET);
+            clone.setAttribute('x2', parseFloat(clone.getAttribute('x2') || 0) + OFFSET);
+            clone.setAttribute('y2', parseFloat(clone.getAttribute('y2') || 0) + OFFSET);
+        } else if (tag === 'polygon') {
+            _polygonSetPoints(clone, _polygonGetPoints(clone).map(p => ({ x: p.x + OFFSET, y: p.y + OFFSET })));
         }
+        const angle = parseFloat(clone.dataset.angle || 0);
+        if (typeof _drawShapeApplyRotation === 'function') _drawShapeApplyRotation(clone, angle);
+    } else if (isDrawShape && (tag === 'path' || tag === 'g')) {
+        clone.setAttribute('data-x', (parseFloat(clone.getAttribute('data-x') || 0) + OFFSET).toFixed(2));
+        clone.setAttribute('data-y', (parseFloat(clone.getAttribute('data-y') || 0) + OFFSET).toFixed(2));
+        if (typeof _drawUpdateTransformForPathG === 'function') _drawUpdateTransformForPathG(clone);
+    } else if (clone.hasAttribute('transform')) {
+        const existing = clone.getAttribute('transform');
+        clone.setAttribute('transform', `translate(${OFFSET},${OFFSET}) ${existing}`);
+    } else if (tag === 'image' || tag === 'text' || tag === 'rect') {
+        clone.setAttribute('x', parseFloat(clone.getAttribute('x') || 0) + OFFSET);
+        clone.setAttribute('y', parseFloat(clone.getAttribute('y') || 0) + OFFSET);
+    } else {
+        clone.setAttribute('transform', `translate(${OFFSET},${OFFSET})`);
     }
 }
 

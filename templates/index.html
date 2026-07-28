@@ -176,6 +176,7 @@
                 <!-- Editモード切り替えタブ -->
                 <div style="display:flex; gap:4px; margin-bottom:6px; border-bottom:1px solid var(--border-color); padding-bottom:4px;">
                   <button class="edit-mode-tab-btn active" data-edit-mode="box" style="font-size:11px; padding:2px 8px; border:1px solid var(--border-color); border-radius:3px 3px 0 0; background:var(--bg-primary); color:var(--text-primary); cursor:pointer;" data-i18n="layout.editModeBox">ドロー</button>
+                  <button class="edit-mode-tab-btn" data-edit-mode="paint" style="font-size:11px; padding:2px 8px; border:1px solid var(--border-color); border-radius:3px 3px 0 0; background:var(--bg-secondary); color:var(--text-primary); cursor:pointer;" data-i18n="layout.editModePaint">ペイント</button>
                   <button class="edit-mode-tab-btn" data-edit-mode="svg-color" style="font-size:11px; padding:2px 8px; border:1px solid var(--border-color); border-radius:3px 3px 0 0; background:var(--bg-secondary); color:var(--text-primary); cursor:pointer;" data-i18n="layout.editModeSvgColor">SVG色変更</button>
                   <button class="edit-mode-tab-btn" data-edit-mode="svg-png" style="font-size:11px; padding:2px 8px; border:1px solid var(--border-color); border-radius:3px 3px 0 0; background:var(--bg-secondary); color:var(--text-primary); cursor:pointer;" data-i18n="layout.editModeSvgPng">SVG→PNG</button>
                 </div>
@@ -283,6 +284,37 @@
                     </div>
                     <div id="layer-draw-status" style="font-size:11px; color:var(--text-secondary); margin-top:3px;"></div>
                   </div>
+                </div>
+
+                <!-- ペイントモード（ラスターブラシ。既存のベクター図形ドローとは別系統） -->
+                <div id="edit-panel-paint" style="display:none;">
+                  <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:3px;">
+                      <span style="font-size:12px; white-space:nowrap;" data-i18n="layout.drawLabel">描画:</span>
+                      <div id="paint-mode-group" class="seg-group">
+                        <button type="button" class="seg-btn" data-paint-mode="on">ON</button>
+                        <button type="button" class="seg-btn active" data-paint-mode="off">OFF</button>
+                      </div>
+                    </div>
+                    <button type="button" id="paint-add-object-btn" class="btn small" data-i18n="layout.addPaintObjectBtn" data-i18n-title="layout.addPaintObjectBtnTitle" title="選択中のコマ/オーバーレイ/下書きレイヤーのサイズで透過画像を追加します">ペイントを追加</button>
+                    <div style="display:flex; align-items:center; gap:3px;">
+                      <label style="font-size:12px;" data-i18n="layout.paintBrushColorLabel">ブラシ色:</label>
+                      <input type="color" id="paint-brush-color" value="#000000" />
+                    </div>
+                    <div style="display:flex; align-items:center; gap:3px;">
+                      <label style="font-size:12px;" data-i18n="layout.paintBrushWidthLabel">サイズ:</label>
+                      <input type="range" id="paint-brush-width" min="1" max="500" value="40" style="width:90px;" data-i18n-title="layout.paintBrushWidthTitle" title="ブラシサイズ（SVG単位）" />
+                      <span id="paint-brush-width-value" style="font-size:12px; min-width:30px; display:inline-block;">40</span>
+                    </div>
+                    <button type="button" id="paint-brush-x5-btn" class="btn small paint-x5-btn" data-i18n-title="layout.paintBrushX5Title" title="ブラシサイズを5倍にして使用（クリックで切替）">x5</button>
+                    <button type="button" id="paint-eraser-btn" class="btn small paint-eraser-btn" data-i18n="layout.paintEraserLabel" data-i18n-title="layout.paintEraserBtnTitle" title="消しゴムモードの切り替え">消しゴム</button>
+                    <div style="display:flex; align-items:center; gap:3px;">
+                      <label style="font-size:12px;" data-i18n="layout.opacityLabel">不透明度:</label>
+                      <input type="range" id="paint-opacity" min="0" max="100" value="100" style="width:60px;" />
+                      <span id="paint-opacity-value" style="font-size:12px;">100%</span>
+                    </div>
+                  </div>
+                  <div id="paint-status" style="font-size:11px; color:var(--text-secondary); margin-top:3px;"></div>
                 </div>
 
                 <!-- SVG色変更モード -->
@@ -1879,6 +1911,7 @@
     <script src="/ccc_static/js/main/17a-layer-draw-input.js"></script>
     <script src="/ccc_static/js/main/17b-layer-draw-commit.js"></script>
     <script src="/ccc_static/js/main/17c-layer-draw-handles.js"></script>
+    <script src="/ccc_static/js/main/17d-layer-draw-paint.js"></script>
     <script src="/ccc_static/js/main/18-svg-color-png.js"></script>
     <script src="/ccc_static/js/main/19-font-manager.js"></script>
     <script src="/ccc_static/js/main/20-font-presets.js"></script>

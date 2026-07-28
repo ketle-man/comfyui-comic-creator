@@ -245,14 +245,18 @@ async function saveOverlaySvg(panelLayerSvgEl) {
         str = str.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
     }
 
-    const updatedRecord = { ...state.activePage, overlaySvgContent: str };
-    try {
-        await dbPut('pages', updatedRecord, { deferThumb: true });
-        state.activePage = updatedRecord;
-        renderLayerPanel();
-    } catch (e) {
-        console.error('Overlay save error:', e);
-    }
+    // state.activePageの読み取り〜反映は直列化キューを通す（他の並行保存との競合でこの変更が
+    // 上書き消失するのを防ぐ。詳細は_enqueueActivePageSaveのコメント参照）
+    await _enqueueActivePageSave(async () => {
+        const updatedRecord = { ...state.activePage, overlaySvgContent: str };
+        try {
+            await dbPut('pages', updatedRecord, { deferThumb: true });
+            state.activePage = updatedRecord;
+            renderLayerPanel();
+        } catch (e) {
+            console.error('Overlay save error:', e);
+        }
+    });
 }
 
 // オーバーレイレイヤーを選択

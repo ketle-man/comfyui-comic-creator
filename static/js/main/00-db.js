@@ -119,6 +119,19 @@ function _scheduleThumbUpdate(storeName, data) {
     _thumbDebounceTimers.set(key, timer);
 }
 
+// state.activePage の read-modify-write（{...state.activePage, X: Y} → dbPut → state.activePage = 更新後）を
+// 直列化するためのグローバルキュー。savePanelSvg/saveOverlaySvg/saveDraftSvgはいずれもこのパターンで
+// state.activePageを更新するが、複数のオブジェクト削除・移動などを短時間に連続実行すると、後発の呼び出しが
+// 先発の呼び出しの`state.activePage = 更新後`が完了する前に古いstate.activePageをスプレッドしてしまい、
+// 先発の変更（例: 削除）が後発の保存で上書きされて消えてしまう（＝削除したはずのレイヤーが復活する）。
+// このキューに通すことで、各呼び出しの「読み取り→dbPut→state.activePage反映」を完全に順番に実行させる。
+let _activePageSaveQueue = Promise.resolve();
+function _enqueueActivePageSave(fn) {
+    const run = _activePageSaveQueue.then(fn, fn);
+    _activePageSaveQueue = run.then(() => {}, () => {}); // 失敗してもキューは途切れさせない
+    return run;
+}
+
 // opts.deferThumb=true の場合、サムネイル計算をdebounceして保存を即座に返す。
 // レイアウトタブ内の高頻度なコマ編集保存（savePanelSvg/saveOverlaySvg）から使う。
 // 未指定時は従来通り、保存前にサムネイルを同期計算して埋め込む

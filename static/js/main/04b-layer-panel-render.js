@@ -133,9 +133,12 @@ function renderLayerPanel() {
         const isActive = img.id === state.selectedImageId;
         const src = img.getAttribute('href') || img.getAttribute('xlink:href') || '';
         const isVector = src.startsWith('data:image/svg');
-        const icon = isVector ? '⬡' : '🖼';
+        const isPaintObject = img.dataset.cccPaintObject === '1';
+        const icon = isPaintObject ? '🖌' : (isVector ? '⬡' : '🖼');
         if (!img.dataset.name) {
-            img.dataset.name = isVector ? `SVG ${objIdx + 1}` : t('layer.imageName', objIdx + 1);
+            img.dataset.name = isPaintObject
+                ? t('layer.paintName', objIdx + 1)
+                : (isVector ? `SVG ${objIdx + 1}` : t('layer.imageName', objIdx + 1));
         }
         const name = img.dataset.name;
         // 下書きレイヤー内の画像はマスク機能非対応（下書きは画像の配置・移動のみをサポート）

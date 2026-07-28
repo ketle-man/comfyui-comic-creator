@@ -275,92 +275,98 @@ async function insertImageToOverlay(base64Data, width, height, placement = null,
 
     pushHistory();
 
-    const ns = 'http://www.w3.org/2000/svg';
-    const parser = new DOMParser();
+    // state.activePage.overlaySvgContentの読み取り〜反映を直列化キューに通す。
+    // ここを外に出すと、他の並行保存（削除等）がキュー内で先に完了する前にこの関数が古い
+    // overlaySvgContentを読んでしまい、その並行保存分の変更が後から上書き消失し得る
+    // （詳細は_enqueueActivePageSaveのコメント参照）。
+    await _enqueueActivePageSave(async () => {
+        const ns = 'http://www.w3.org/2000/svg';
+        const parser = new DOMParser();
 
-    // ページのviewBoxからサイズを取得
-    const imgSvg = parser.parseFromString(state.activePage.svgContent, 'image/svg+xml').querySelector('svg');
-    const vb = imgSvg ? imgSvg.getAttribute('viewBox') : '0 0 21000 29700';
-    const [, , pageW, pageH] = vb.split(' ').map(Number);
+        // ページのviewBoxからサイズを取得
+        const imgSvg = parser.parseFromString(state.activePage.svgContent, 'image/svg+xml').querySelector('svg');
+        const vb = imgSvg ? imgSvg.getAttribute('viewBox') : '0 0 21000 29700';
+        const [, , pageW, pageH] = vb.split(' ').map(Number);
 
-    // 挿入サイズ（ページ幅の40%、placement指定時はそちらを優先）
-    let insertW, insertH, insertX, insertY;
-    if (placement) {
-        ({ x: insertX, y: insertY, width: insertW, height: insertH } = placement);
-    } else {
-        insertW = pageW * 0.4;
-        insertH = insertW * (height / width);
-        insertX = (pageW - insertW) / 2;
-        insertY = (pageH - insertH) / 2;
-    }
-
-    // overlaySvgContent をパースまたは新規作成
-    const existingStr = state.activePage.overlaySvgContent || '';
-    let overlayDoc, overlaySvg;
-    if (existingStr) {
-        overlayDoc = parser.parseFromString(existingStr, 'image/svg+xml');
-        overlaySvg = overlayDoc.querySelector('svg');
-    }
-    if (!overlaySvg) {
-        overlayDoc = document.implementation.createDocument(ns, 'svg', null);
-        overlaySvg = overlayDoc.documentElement;
-        overlaySvg.setAttribute('xmlns', ns);
-        overlaySvg.setAttribute('viewBox', vb);
-    }
-
-    // basePanelPoints がある場合、clipPath定義をdefsに保存
-    const basePts = state.activePage.basePanelPoints;
-    const overlayClipId = 'overlay-page-clip';
-    if (basePts) {
-        let defs = overlayDoc.querySelector('defs');
-        if (!defs) {
-            defs = overlayDoc.createElementNS(ns, 'defs');
-            overlaySvg.insertBefore(defs, overlaySvg.firstChild);
+        // 挿入サイズ（ページ幅の40%、placement指定時はそちらを優先）
+        let insertW, insertH, insertX, insertY;
+        if (placement) {
+            ({ x: insertX, y: insertY, width: insertW, height: insertH } = placement);
+        } else {
+            insertW = pageW * 0.4;
+            insertH = insertW * (height / width);
+            insertX = (pageW - insertW) / 2;
+            insertY = (pageH - insertH) / 2;
         }
-        if (!defs.querySelector(`[id="${overlayClipId}"]`)) {
-            const clipPath = overlayDoc.createElementNS(ns, 'clipPath');
-            clipPath.setAttribute('id', overlayClipId);
-            clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
-            const poly = overlayDoc.createElementNS(ns, 'polygon');
-            poly.setAttribute('points', basePts);
-            clipPath.appendChild(poly);
-            defs.appendChild(clipPath);
+
+        // overlaySvgContent をパースまたは新規作成
+        const existingStr = state.activePage.overlaySvgContent || '';
+        let overlayDoc, overlaySvg;
+        if (existingStr) {
+            overlayDoc = parser.parseFromString(existingStr, 'image/svg+xml');
+            overlaySvg = overlayDoc.querySelector('svg');
         }
-    }
+        if (!overlaySvg) {
+            overlayDoc = document.implementation.createDocument(ns, 'svg', null);
+            overlaySvg = overlayDoc.documentElement;
+            overlaySvg.setAttribute('xmlns', ns);
+            overlaySvg.setAttribute('viewBox', vb);
+        }
 
-    // g[data-overlay-layer] を取得または作成
-    let overlayG = overlayDoc.querySelector('g[data-overlay-layer]');
-    if (!overlayG) {
-        overlayG = overlayDoc.createElementNS(ns, 'g');
-        overlayG.setAttribute('data-overlay-layer', 'true');
-        if (basePts) overlayG.setAttribute('clip-path', `url(#${overlayClipId})`);
-        overlaySvg.appendChild(overlayG);
-    }
+        // basePanelPoints がある場合、clipPath定義をdefsに保存
+        const basePts = state.activePage.basePanelPoints;
+        const overlayClipId = 'overlay-page-clip';
+        if (basePts) {
+            let defs = overlayDoc.querySelector('defs');
+            if (!defs) {
+                defs = overlayDoc.createElementNS(ns, 'defs');
+                overlaySvg.insertBefore(defs, overlaySvg.firstChild);
+            }
+            if (!defs.querySelector(`[id="${overlayClipId}"]`)) {
+                const clipPath = overlayDoc.createElementNS(ns, 'clipPath');
+                clipPath.setAttribute('id', overlayClipId);
+                clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
+                const poly = overlayDoc.createElementNS(ns, 'polygon');
+                poly.setAttribute('points', basePts);
+                clipPath.appendChild(poly);
+                defs.appendChild(clipPath);
+            }
+        }
 
-    // image要素を作成
-    const imgEl = overlayDoc.createElementNS(ns, 'image');
-    imgEl.setAttribute('href', base64Data);
-    imgEl.setAttribute('x', insertX);
-    imgEl.setAttribute('y', insertY);
-    imgEl.setAttribute('width', insertW);
-    imgEl.setAttribute('height', insertH);
-    imgEl.setAttribute('class', 'inserted-image');
-    imgEl.setAttribute('id', 'img-' + Date.now());
-    imgEl.setAttribute('data-panel-id', '__overlay__');
-    for (const [k, v] of Object.entries(extraAttrs)) {
-        imgEl.setAttribute(k, v);
-    }
-    overlayG.appendChild(imgEl);
+        // g[data-overlay-layer] を取得または作成
+        let overlayG = overlayDoc.querySelector('g[data-overlay-layer]');
+        if (!overlayG) {
+            overlayG = overlayDoc.createElementNS(ns, 'g');
+            overlayG.setAttribute('data-overlay-layer', 'true');
+            if (basePts) overlayG.setAttribute('clip-path', `url(#${overlayClipId})`);
+            overlaySvg.appendChild(overlayG);
+        }
 
-    const serializer = new XMLSerializer();
-    let str = serializer.serializeToString(overlaySvg);
-    if (!str.includes('xmlns="http://www.w3.org/2000/svg"')) {
-        str = str.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-    }
+        // image要素を作成
+        const imgEl = overlayDoc.createElementNS(ns, 'image');
+        imgEl.setAttribute('href', base64Data);
+        imgEl.setAttribute('x', insertX);
+        imgEl.setAttribute('y', insertY);
+        imgEl.setAttribute('width', insertW);
+        imgEl.setAttribute('height', insertH);
+        imgEl.setAttribute('class', 'inserted-image');
+        imgEl.setAttribute('id', 'img-' + Date.now());
+        imgEl.setAttribute('data-panel-id', '__overlay__');
+        for (const [k, v] of Object.entries(extraAttrs)) {
+            imgEl.setAttribute(k, v);
+        }
+        overlayG.appendChild(imgEl);
 
-    const updatedRecord = { ...state.activePage, overlaySvgContent: str };
-    await dbPut('pages', updatedRecord);
-    state.activePage = updatedRecord;
+        const serializer = new XMLSerializer();
+        let str = serializer.serializeToString(overlaySvg);
+        if (!str.includes('xmlns="http://www.w3.org/2000/svg"')) {
+            str = str.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+
+        const updatedRecord = { ...state.activePage, overlaySvgContent: str };
+        await dbPut('pages', updatedRecord);
+        state.activePage = updatedRecord;
+    });
 
     await renderLayoutTab();
 }
@@ -440,14 +446,18 @@ async function saveDraftSvg(panelLayerSvgEl) {
         str = str.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
     }
 
-    const updatedRecord = { ...state.activePage, draftSvgContent: str };
-    try {
-        await dbPut('pages', updatedRecord, { deferThumb: true });
-        state.activePage = updatedRecord;
-        renderLayerPanel();
-    } catch (e) {
-        console.error('Draft layer save error:', e);
-    }
+    // state.activePageの読み取り〜反映は直列化キューを通す（他の並行保存との競合でこの変更が
+    // 上書き消失するのを防ぐ。詳細は_enqueueActivePageSaveのコメント参照）
+    await _enqueueActivePageSave(async () => {
+        const updatedRecord = { ...state.activePage, draftSvgContent: str };
+        try {
+            await dbPut('pages', updatedRecord, { deferThumb: true });
+            state.activePage = updatedRecord;
+            renderLayerPanel();
+        } catch (e) {
+            console.error('Draft layer save error:', e);
+        }
+    });
 }
 
 // 下書きレイヤーに画像を挿入（クリップなし・出力対象外）。insertImageToOverlayと同じ構造
@@ -456,86 +466,89 @@ async function insertImageToDraft(base64Data, width, height, placement = null, e
 
     pushHistory();
 
-    const ns = 'http://www.w3.org/2000/svg';
-    const parser = new DOMParser();
+    // state.activePage.draftSvgContentの読み取り〜反映を直列化キューに通す（理由はinsertImageToOverlay参照）
+    await _enqueueActivePageSave(async () => {
+        const ns = 'http://www.w3.org/2000/svg';
+        const parser = new DOMParser();
 
-    const imgSvg = parser.parseFromString(state.activePage.svgContent, 'image/svg+xml').querySelector('svg');
-    const vb = imgSvg ? imgSvg.getAttribute('viewBox') : '0 0 21000 29700';
-    const [, , pageW, pageH] = vb.split(' ').map(Number);
+        const imgSvg = parser.parseFromString(state.activePage.svgContent, 'image/svg+xml').querySelector('svg');
+        const vb = imgSvg ? imgSvg.getAttribute('viewBox') : '0 0 21000 29700';
+        const [, , pageW, pageH] = vb.split(' ').map(Number);
 
-    let insertW, insertH, insertX, insertY;
-    if (placement) {
-        ({ x: insertX, y: insertY, width: insertW, height: insertH } = placement);
-    } else {
-        insertW = pageW * 0.4;
-        insertH = insertW * (height / width);
-        insertX = (pageW - insertW) / 2;
-        insertY = (pageH - insertH) / 2;
-    }
-
-    const existingStr = state.activePage.draftSvgContent || '';
-    let draftDoc, draftSvg;
-    if (existingStr) {
-        draftDoc = parser.parseFromString(existingStr, 'image/svg+xml');
-        draftSvg = draftDoc.querySelector('svg');
-    }
-    if (!draftSvg) {
-        draftDoc = document.implementation.createDocument(ns, 'svg', null);
-        draftSvg = draftDoc.documentElement;
-        draftSvg.setAttribute('xmlns', ns);
-        draftSvg.setAttribute('viewBox', vb);
-    }
-
-    const basePts = state.activePage.basePanelPoints;
-    const draftClipId = 'draft-page-clip';
-    if (basePts) {
-        let defs = draftDoc.querySelector('defs');
-        if (!defs) {
-            defs = draftDoc.createElementNS(ns, 'defs');
-            draftSvg.insertBefore(defs, draftSvg.firstChild);
+        let insertW, insertH, insertX, insertY;
+        if (placement) {
+            ({ x: insertX, y: insertY, width: insertW, height: insertH } = placement);
+        } else {
+            insertW = pageW * 0.4;
+            insertH = insertW * (height / width);
+            insertX = (pageW - insertW) / 2;
+            insertY = (pageH - insertH) / 2;
         }
-        if (!defs.querySelector(`[id="${draftClipId}"]`)) {
-            const clipPath = draftDoc.createElementNS(ns, 'clipPath');
-            clipPath.setAttribute('id', draftClipId);
-            clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
-            const poly = draftDoc.createElementNS(ns, 'polygon');
-            poly.setAttribute('points', basePts);
-            clipPath.appendChild(poly);
-            defs.appendChild(clipPath);
+
+        const existingStr = state.activePage.draftSvgContent || '';
+        let draftDoc, draftSvg;
+        if (existingStr) {
+            draftDoc = parser.parseFromString(existingStr, 'image/svg+xml');
+            draftSvg = draftDoc.querySelector('svg');
         }
-    }
+        if (!draftSvg) {
+            draftDoc = document.implementation.createDocument(ns, 'svg', null);
+            draftSvg = draftDoc.documentElement;
+            draftSvg.setAttribute('xmlns', ns);
+            draftSvg.setAttribute('viewBox', vb);
+        }
 
-    let draftG = draftDoc.querySelector('g[data-draft-layer]');
-    if (!draftG) {
-        draftG = draftDoc.createElementNS(ns, 'g');
-        draftG.setAttribute('data-draft-layer', 'true');
-        if (basePts) draftG.setAttribute('clip-path', `url(#${draftClipId})`);
-        draftSvg.appendChild(draftG);
-    }
+        const basePts = state.activePage.basePanelPoints;
+        const draftClipId = 'draft-page-clip';
+        if (basePts) {
+            let defs = draftDoc.querySelector('defs');
+            if (!defs) {
+                defs = draftDoc.createElementNS(ns, 'defs');
+                draftSvg.insertBefore(defs, draftSvg.firstChild);
+            }
+            if (!defs.querySelector(`[id="${draftClipId}"]`)) {
+                const clipPath = draftDoc.createElementNS(ns, 'clipPath');
+                clipPath.setAttribute('id', draftClipId);
+                clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
+                const poly = draftDoc.createElementNS(ns, 'polygon');
+                poly.setAttribute('points', basePts);
+                clipPath.appendChild(poly);
+                defs.appendChild(clipPath);
+            }
+        }
 
-    const imgEl = draftDoc.createElementNS(ns, 'image');
-    imgEl.setAttribute('href', base64Data);
-    imgEl.setAttribute('x', insertX);
-    imgEl.setAttribute('y', insertY);
-    imgEl.setAttribute('width', insertW);
-    imgEl.setAttribute('height', insertH);
-    imgEl.setAttribute('class', 'inserted-image');
-    imgEl.setAttribute('id', 'img-' + Date.now());
-    imgEl.setAttribute('data-panel-id', '__draft__');
-    for (const [k, v] of Object.entries(extraAttrs)) {
-        imgEl.setAttribute(k, v);
-    }
-    draftG.appendChild(imgEl);
+        let draftG = draftDoc.querySelector('g[data-draft-layer]');
+        if (!draftG) {
+            draftG = draftDoc.createElementNS(ns, 'g');
+            draftG.setAttribute('data-draft-layer', 'true');
+            if (basePts) draftG.setAttribute('clip-path', `url(#${draftClipId})`);
+            draftSvg.appendChild(draftG);
+        }
 
-    const serializer = new XMLSerializer();
-    let str = serializer.serializeToString(draftSvg);
-    if (!str.includes('xmlns="http://www.w3.org/2000/svg"')) {
-        str = str.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-    }
+        const imgEl = draftDoc.createElementNS(ns, 'image');
+        imgEl.setAttribute('href', base64Data);
+        imgEl.setAttribute('x', insertX);
+        imgEl.setAttribute('y', insertY);
+        imgEl.setAttribute('width', insertW);
+        imgEl.setAttribute('height', insertH);
+        imgEl.setAttribute('class', 'inserted-image');
+        imgEl.setAttribute('id', 'img-' + Date.now());
+        imgEl.setAttribute('data-panel-id', '__draft__');
+        for (const [k, v] of Object.entries(extraAttrs)) {
+            imgEl.setAttribute(k, v);
+        }
+        draftG.appendChild(imgEl);
 
-    const updatedRecord = { ...state.activePage, draftSvgContent: str };
-    await dbPut('pages', updatedRecord);
-    state.activePage = updatedRecord;
+        const serializer = new XMLSerializer();
+        let str = serializer.serializeToString(draftSvg);
+        if (!str.includes('xmlns="http://www.w3.org/2000/svg"')) {
+            str = str.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+
+        const updatedRecord = { ...state.activePage, draftSvgContent: str };
+        await dbPut('pages', updatedRecord);
+        state.activePage = updatedRecord;
+    });
 
     await renderLayoutTab();
 }
@@ -559,112 +572,120 @@ async function insertImage(base64Data, width, height, extraAttrs = {}, placement
         return false;
     }
 
-    const panel = state.activePage.panels.find(p => p.id === state.selectedPanelId);
-    if (!panel) return false;
-
     pushHistory();
 
-    const ns = 'http://www.w3.org/2000/svg';
-    const parser = new DOMParser();
+    // state.activePage.panelsの読み取り〜反映を直列化キューに通す（理由はinsertImageToOverlay参照）。
+    // panel自体もキュー内で最新のstate.activePageから取得し直す（古い参照を使わない）。
+    let failReason = null; // null=成功, 'no-panel'|'no-size'=失敗理由
+    await _enqueueActivePageSave(async () => {
+        const panel = state.activePage.panels.find(p => p.id === state.selectedPanelId);
+        if (!panel) { failReason = 'no-panel'; return; }
 
-    // コマのbboxを計算
-    let pWidth, pHeight, pX, pY;
-    if (panel.points) {
-        const bbox = getBoundingBoxFromPoints(panel.points);
-        if (bbox) { pWidth = bbox.width; pHeight = bbox.height; pX = bbox.x; pY = bbox.y; }
-    }
-    if (!pWidth && panel.width) {
-        pWidth = panel.width; pHeight = panel.height; pX = panel.x; pY = panel.y;
-    }
-    if (!pWidth || !pHeight) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const parser = new DOMParser();
+
+        // コマのbboxを計算
+        let pWidth, pHeight, pX, pY;
+        if (panel.points) {
+            const bbox = getBoundingBoxFromPoints(panel.points);
+            if (bbox) { pWidth = bbox.width; pHeight = bbox.height; pX = bbox.x; pY = bbox.y; }
+        }
+        if (!pWidth && panel.width) {
+            pWidth = panel.width; pHeight = panel.height; pX = panel.x; pY = panel.y;
+        }
+        if (!pWidth || !pHeight) { failReason = 'no-size'; return; }
+
+        // panelSvgContent をパース（または新規作成）
+        const existingSvgStr = panel.panelSvgContent || '';
+        const imgSvg = parser.parseFromString(state.activePage.svgContent, 'image/svg+xml').querySelector('svg');
+        const vb = imgSvg ? imgSvg.getAttribute('viewBox') : '0 0 21000 29700';
+
+        let panelDoc, panelSvg;
+        if (existingSvgStr) {
+            panelDoc = parser.parseFromString(existingSvgStr, 'image/svg+xml');
+            panelSvg = panelDoc.querySelector('svg');
+        }
+        if (!panelSvg) {
+            panelDoc = document.implementation.createDocument(ns, 'svg', null);
+            panelSvg = panelDoc.documentElement;
+            panelSvg.setAttribute('xmlns', ns);
+            panelSvg.setAttribute('viewBox', vb);
+        }
+
+        // defs に clipPath を追加（なければ）
+        const clipId = `panel-clip-${panel.id}`;
+        let defs = panelDoc.querySelector('defs');
+        if (!defs) {
+            defs = panelDoc.createElementNS(ns, 'defs');
+            panelSvg.insertBefore(defs, panelSvg.firstChild);
+        }
+        if (!panelDoc.querySelector(`[id="${clipId}"]`) && panel.points) {
+            const clipPath = panelDoc.createElementNS(ns, 'clipPath');
+            clipPath.setAttribute('id', clipId);
+            clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
+            const poly = panelDoc.createElementNS(ns, 'polygon');
+            poly.setAttribute('points', panel.points);
+            clipPath.appendChild(poly);
+            defs.appendChild(clipPath);
+        }
+
+        // コマのコンテンツg要素（clip-path適用）を取得または作成
+        let contentG = panelDoc.querySelector(`g[data-clip-panel="${panel.id}"]`);
+        if (!contentG) {
+            contentG = panelDoc.createElementNS(ns, 'g');
+            contentG.setAttribute('clip-path', `url(#${clipId})`);
+            contentG.setAttribute('data-clip-panel', panel.id);
+            panelSvg.appendChild(contentG);
+        }
+
+        // image要素を作成してgに追加
+        const imgEl = panelDoc.createElementNS(ns, 'image');
+        imgEl.setAttribute('href', base64Data);
+        let newX, newY, newWidth, newHeight;
+        if (placement) {
+            ({ x: newX, y: newY, width: newWidth, height: newHeight } = placement);
+        } else {
+            newX = pX; newY = pY;
+            newWidth  = pWidth;
+            newHeight = newWidth * (height / width);
+        }
+        imgEl.setAttribute('x', newX);
+        imgEl.setAttribute('y', newY);
+        imgEl.setAttribute('width', newWidth);
+        imgEl.setAttribute('height', newHeight);
+        imgEl.setAttribute('class', 'inserted-image');
+        imgEl.setAttribute('id', 'img-' + Date.now());
+        imgEl.setAttribute('data-panel-id', panel.id);
+        // 追加属性（3Dポーズ再編集用 data-pose3d-* 等）
+        for (const [k, v] of Object.entries(extraAttrs)) {
+            imgEl.setAttribute(k, v);
+        }
+        // サブコマの場合、枠線ポリゴン（g[data-clip-panel]の最後の子）より手前に画像が乗って
+        // 枠線を隠してしまわないよう、枠線の直前に挿入する（枠線が無い通常コマではappendChildと同じ）
+        const subBorder = contentG.querySelector(':scope > .subpanel-border');
+        if (subBorder) contentG.insertBefore(imgEl, subBorder);
+        else contentG.appendChild(imgEl);
+
+        const serializer = new XMLSerializer();
+        let newPanelSvgStr = serializer.serializeToString(panelSvg);
+        if (!newPanelSvgStr.includes('xmlns="http://www.w3.org/2000/svg"')) {
+            newPanelSvgStr = newPanelSvgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+
+        // panels配列の該当コマを更新
+        const updatedPanels = state.activePage.panels.map(p =>
+            p.id === panel.id ? { ...p, panelSvgContent: newPanelSvgStr } : p
+        );
+        const updatedRecord = { ...state.activePage, panels: updatedPanels };
+        await dbPut('pages', updatedRecord);
+        state.activePage = updatedRecord;
+    });
+
+    if (failReason === 'no-panel') return false;
+    if (failReason === 'no-size') {
         alert(t('layout.msgPanelSizeUnavailable'));
         return false;
     }
-
-    // panelSvgContent をパース（または新規作成）
-    const existingSvgStr = panel.panelSvgContent || '';
-    const imgSvg = parser.parseFromString(state.activePage.svgContent, 'image/svg+xml').querySelector('svg');
-    const vb = imgSvg ? imgSvg.getAttribute('viewBox') : '0 0 21000 29700';
-
-    let panelDoc, panelSvg;
-    if (existingSvgStr) {
-        panelDoc = parser.parseFromString(existingSvgStr, 'image/svg+xml');
-        panelSvg = panelDoc.querySelector('svg');
-    }
-    if (!panelSvg) {
-        panelDoc = document.implementation.createDocument(ns, 'svg', null);
-        panelSvg = panelDoc.documentElement;
-        panelSvg.setAttribute('xmlns', ns);
-        panelSvg.setAttribute('viewBox', vb);
-    }
-
-    // defs に clipPath を追加（なければ）
-    const clipId = `panel-clip-${panel.id}`;
-    let defs = panelDoc.querySelector('defs');
-    if (!defs) {
-        defs = panelDoc.createElementNS(ns, 'defs');
-        panelSvg.insertBefore(defs, panelSvg.firstChild);
-    }
-    if (!panelDoc.querySelector(`[id="${clipId}"]`) && panel.points) {
-        const clipPath = panelDoc.createElementNS(ns, 'clipPath');
-        clipPath.setAttribute('id', clipId);
-        clipPath.setAttribute('clipPathUnits', 'userSpaceOnUse');
-        const poly = panelDoc.createElementNS(ns, 'polygon');
-        poly.setAttribute('points', panel.points);
-        clipPath.appendChild(poly);
-        defs.appendChild(clipPath);
-    }
-
-    // コマのコンテンツg要素（clip-path適用）を取得または作成
-    let contentG = panelDoc.querySelector(`g[data-clip-panel="${panel.id}"]`);
-    if (!contentG) {
-        contentG = panelDoc.createElementNS(ns, 'g');
-        contentG.setAttribute('clip-path', `url(#${clipId})`);
-        contentG.setAttribute('data-clip-panel', panel.id);
-        panelSvg.appendChild(contentG);
-    }
-
-    // image要素を作成してgに追加
-    const imgEl = panelDoc.createElementNS(ns, 'image');
-    imgEl.setAttribute('href', base64Data);
-    let newX, newY, newWidth, newHeight;
-    if (placement) {
-        ({ x: newX, y: newY, width: newWidth, height: newHeight } = placement);
-    } else {
-        newX = pX; newY = pY;
-        newWidth  = pWidth;
-        newHeight = newWidth * (height / width);
-    }
-    imgEl.setAttribute('x', newX);
-    imgEl.setAttribute('y', newY);
-    imgEl.setAttribute('width', newWidth);
-    imgEl.setAttribute('height', newHeight);
-    imgEl.setAttribute('class', 'inserted-image');
-    imgEl.setAttribute('id', 'img-' + Date.now());
-    imgEl.setAttribute('data-panel-id', panel.id);
-    // 追加属性（3Dポーズ再編集用 data-pose3d-* 等）
-    for (const [k, v] of Object.entries(extraAttrs)) {
-        imgEl.setAttribute(k, v);
-    }
-    // サブコマの場合、枠線ポリゴン（g[data-clip-panel]の最後の子）より手前に画像が乗って
-    // 枠線を隠してしまわないよう、枠線の直前に挿入する（枠線が無い通常コマではappendChildと同じ）
-    const subBorder = contentG.querySelector(':scope > .subpanel-border');
-    if (subBorder) contentG.insertBefore(imgEl, subBorder);
-    else contentG.appendChild(imgEl);
-
-    const serializer = new XMLSerializer();
-    let newPanelSvgStr = serializer.serializeToString(panelSvg);
-    if (!newPanelSvgStr.includes('xmlns="http://www.w3.org/2000/svg"')) {
-        newPanelSvgStr = newPanelSvgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-    }
-
-    // panels配列の該当コマを更新
-    const updatedPanels = state.activePage.panels.map(p =>
-        p.id === panel.id ? { ...p, panelSvgContent: newPanelSvgStr } : p
-    );
-    const updatedRecord = { ...state.activePage, panels: updatedPanels };
-    await dbPut('pages', updatedRecord);
-    state.activePage = updatedRecord;
 
     await renderLayoutTab();
     return true;

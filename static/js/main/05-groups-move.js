@@ -295,11 +295,22 @@ async function duplicateSelectedObject(targetPanelId) {
     // グループは data-tx/ty を加えた値が表示中心になる
     let srcCx = 0, srcCy = 0;
     try {
-        const bb = srcEl.getBBox();
-        const extraTx = parseFloat(srcEl.getAttribute('data-tx') || '0');
-        const extraTy = parseFloat(srcEl.getAttribute('data-ty') || '0');
-        srcCx = bb.x + extraTx + bb.width / 2;
-        srcCy = bb.y + extraTy + bb.height / 2;
+        const srcTagLower = srcEl.tagName.toLowerCase();
+        if (srcEl.classList.contains('draw-shape') && (srcTagLower === 'path' || srcTagLower === 'g')) {
+            // path/g系ドロー図形（曲線・鎖・ロープ・My曲線・ベクター曲線）はdata-x/y/w/hが
+            // 現在の論理座標そのもの。getBBox()は<path>の元のd属性・移動/リサイズ前の生ジオメトリしか
+            // 返さない（transformで動かしている分は反映されない）ため、一度でも移動・リサイズ済みの
+            // 図形だと中心計算がズレて複製・移動先の位置がおかしくなる（別コマへの移動を繰り返すと
+            // 誤差が蓄積し、コマの外へはみ出て見えなくなることもある）。
+            srcCx = parseFloat(srcEl.getAttribute('data-x') || 0) + parseFloat(srcEl.getAttribute('data-w') || 0) / 2;
+            srcCy = parseFloat(srcEl.getAttribute('data-y') || 0) + parseFloat(srcEl.getAttribute('data-h') || 0) / 2;
+        } else {
+            const bb = srcEl.getBBox();
+            const extraTx = parseFloat(srcEl.getAttribute('data-tx') || '0');
+            const extraTy = parseFloat(srcEl.getAttribute('data-ty') || '0');
+            srcCx = bb.x + extraTx + bb.width / 2;
+            srcCy = bb.y + extraTy + bb.height / 2;
+        }
     } catch(e) { /* getBBox失敗時は0,0のまま */ }
 
     // ── 異コマへの複製：panelSvgContent を直接パースして追加・保存 ──
@@ -407,7 +418,13 @@ async function duplicateSelectedObject(targetPanelId) {
     const clonedEl = cloneDoc.querySelector('svg').firstElementChild;
     const clonedElId = clonedEl?.id || null;
     if (clonedEl) {
-        destG.appendChild(destDoc.importNode(clonedEl, true));
+        const importedNode = destDoc.importNode(clonedEl, true);
+        // 画像は data-panel-id で所属パネルを追跡している（削除・ロック・表示切替ボタン等が参照）ため、
+        // 異コマへ複製した際は複製先のIDに更新しておく（放置すると複製元パネルのIDを指したままになる）
+        if (importedNode.tagName && importedNode.tagName.toLowerCase() === 'image') {
+            importedNode.setAttribute('data-panel-id', targetPanelId);
+        }
+        destG.appendChild(importedNode);
     }
 
     // 複製要素が参照するフィルタ定義（袋文字・影のテキストスタイル等）を表示SVGのdefsから持ち回る
@@ -419,12 +436,16 @@ async function duplicateSelectedObject(targetPanelId) {
         newPanelSvgStr = newPanelSvgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
     }
 
-    const updatedPanels = state.activePage.panels.map(p =>
-        p.id === targetPanelId ? { ...p, panelSvgContent: newPanelSvgStr } : p
-    );
-    const updatedRecord = { ...state.activePage, panels: updatedPanels };
-    await dbPut('pages', updatedRecord);
-    state.activePage = updatedRecord;
+    // state.activePageの読み取り〜反映は直列化キューを通す（他の並行保存との競合を防ぐ。
+    // 詳細はinsertImageToOverlay/_enqueueActivePageSaveのコメント参照）
+    await _enqueueActivePageSave(async () => {
+        const updatedPanels = state.activePage.panels.map(p =>
+            p.id === targetPanelId ? { ...p, panelSvgContent: newPanelSvgStr } : p
+        );
+        const updatedRecord = { ...state.activePage, panels: updatedPanels };
+        await dbPut('pages', updatedRecord);
+        state.activePage = updatedRecord;
+    });
 
     // 再描画（DOM再構築）。この時点では複製元の選択状態を一旦クリアしておく
     state.selectedGroupId = null;
@@ -597,14 +618,27 @@ async function moveSelectedObject(targetPanelId) {
 
     pushHistory();
 
+    // 以降で例外が起きた場合、これまでは無反応（コンソールに未捕捉のPromise拒否が出るのみ）で
+    // ユーザーからは「移動が効かない」ようにしか見えなかったため、原因を可視化できるようtry/catchで囲む
+    try {
+
     // 移動元の表示上の中心をライブDOMから取得
     let srcCx = 0, srcCy = 0;
     try {
-        const bb = srcEl.getBBox();
-        const extraTx = parseFloat(srcEl.getAttribute('data-tx') || '0');
-        const extraTy = parseFloat(srcEl.getAttribute('data-ty') || '0');
-        srcCx = bb.x + extraTx + bb.width / 2;
-        srcCy = bb.y + extraTy + bb.height / 2;
+        const srcTagLower = srcEl.tagName.toLowerCase();
+        if (srcEl.classList.contains('draw-shape') && (srcTagLower === 'path' || srcTagLower === 'g')) {
+            // path/g系ドロー図形（曲線・鎖・ロープ・My曲線・ベクター曲線）はdata-x/y/w/hが
+            // 現在の論理座標そのもの。getBBox()は移動/リサイズ前の生ジオメトリしか返さないため、
+            // 一度でも移動・リサイズ済みの図形だと中心計算がズレる（詳細はduplicateSelectedObject参照）
+            srcCx = parseFloat(srcEl.getAttribute('data-x') || 0) + parseFloat(srcEl.getAttribute('data-w') || 0) / 2;
+            srcCy = parseFloat(srcEl.getAttribute('data-y') || 0) + parseFloat(srcEl.getAttribute('data-h') || 0) / 2;
+        } else {
+            const bb = srcEl.getBBox();
+            const extraTx = parseFloat(srcEl.getAttribute('data-tx') || '0');
+            const extraTy = parseFloat(srcEl.getAttribute('data-ty') || '0');
+            srcCx = bb.x + extraTx + bb.width / 2;
+            srcCy = bb.y + extraTy + bb.height / 2;
+        }
     } catch (e) { /* getBBox失敗時は0,0のまま */ }
 
     // ── オーバーレイへの移動 ──
@@ -768,7 +802,14 @@ async function moveSelectedObject(targetPanelId) {
     const clonedEl = cloneDoc.querySelector('svg').firstElementChild;
     const clonedElId = clonedEl?.id || null;
     if (clonedEl) {
-        destG.appendChild(destDoc.importNode(clonedEl, true));
+        const importedNode = destDoc.importNode(clonedEl, true);
+        // 画像は data-panel-id で所属パネルを追跡している（削除・ロック・表示切替ボタン等が参照）ため、
+        // 異コマへ移動した際は移動先のIDに更新しておく（放置すると移動元パネルのIDを指したままになり、
+        // 移動後にそのオブジェクトを削除・ロック等すると誤って移動元パネル側を保存してしまう）
+        if (importedNode.tagName && importedNode.tagName.toLowerCase() === 'image') {
+            importedNode.setAttribute('data-panel-id', targetPanelId);
+        }
+        destG.appendChild(importedNode);
     }
 
     // 移動要素が参照するフィルタ定義（袋文字・影のテキストスタイル等）を表示SVGのdefsから持ち回る
@@ -779,12 +820,15 @@ async function moveSelectedObject(targetPanelId) {
     if (!newPanelSvgStr.includes('xmlns="http://www.w3.org/2000/svg"')) {
         newPanelSvgStr = newPanelSvgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
     }
-    // 移動先パネルをDBに先行保存（state.activePage を最新化）
-    const preSavePanels = state.activePage.panels.map(p =>
-        p.id === targetPanelId ? { ...p, panelSvgContent: newPanelSvgStr } : p
-    );
-    await dbPut('pages', { ...state.activePage, panels: preSavePanels });
-    state.activePage = { ...state.activePage, panels: preSavePanels };
+    // 移動先パネルをDBに先行保存（state.activePage を最新化）。読み取り〜反映は直列化キューを通す
+    // （他の並行保存との競合を防ぐ。詳細はinsertImageToOverlay/_enqueueActivePageSaveのコメント参照）
+    await _enqueueActivePageSave(async () => {
+        const preSavePanels = state.activePage.panels.map(p =>
+            p.id === targetPanelId ? { ...p, panelSvgContent: newPanelSvgStr } : p
+        );
+        await dbPut('pages', { ...state.activePage, panels: preSavePanels });
+        state.activePage = { ...state.activePage, panels: preSavePanels };
+    });
 
     // 移動元からライブDOMで要素を削除し、savePanelSvg でライブDOM全体を保存
     // → 保存済み文字列のパース編集ではなくライブDOMを使うことで他オブジェクトの位置が保たれる
@@ -820,6 +864,11 @@ async function moveSelectedObject(targetPanelId) {
         if (liveClone) _selectClone(liveClone, newPanelSvg);
     }
     renderLayerPanel();
+
+    } catch (e) {
+        console.error('Move object error:', e);
+        alert(t('common.errorPrefix', e.message));
+    }
 }
 
 // ── 複製ヘルパー ──

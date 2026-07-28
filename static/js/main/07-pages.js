@@ -854,19 +854,23 @@ async function savePanelSvg(panelId, panelLayerSvgEl) {
         panelSvgStr = panelSvgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
     }
 
-    // state.activePage.panels の該当パネルを更新
-    const updatedPanels = state.activePage.panels.map(p =>
-        p.id === panelId ? { ...p, panelSvgContent: panelSvgStr } : p
-    );
-    const updatedRecord = { ...state.activePage, panels: updatedPanels };
+    // state.activePageの読み取り〜反映は直列化キューを通す（他の並行保存との競合でこの変更が
+    // 上書き消失するのを防ぐ。詳細は_enqueueActivePageSaveのコメント参照）
+    await _enqueueActivePageSave(async () => {
+        // state.activePage.panels の該当パネルを更新（キュー内で最新のstate.activePageを読む）
+        const updatedPanels = state.activePage.panels.map(p =>
+            p.id === panelId ? { ...p, panelSvgContent: panelSvgStr } : p
+        );
+        const updatedRecord = { ...state.activePage, panels: updatedPanels };
 
-    try {
-        await dbPut('pages', updatedRecord, { deferThumb: true });
-        state.activePage = updatedRecord;
-        renderLayerPanel();
-    } catch (e) {
-        console.error('Panel save error:', e);
-    }
+        try {
+            await dbPut('pages', updatedRecord, { deferThumb: true });
+            state.activePage = updatedRecord;
+            renderLayerPanel();
+        } catch (e) {
+            console.error('Panel save error:', e);
+        }
+    });
 }
 
 // 後方互換のためのエイリアス（呼び出し箇所が残っている場合の安全弁）

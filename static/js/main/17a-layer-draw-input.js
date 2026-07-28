@@ -465,7 +465,8 @@ function _layerDrawFlushPendingSave() {
 async function _layerDrawSaveSelected() {
     const svgEl = getPanelLayerSvg();
     if (!svgEl) return;
-    if (state.selectedOverlay) await saveOverlaySvg(svgEl);
+    if (state.selectedDraft) await saveDraftSvg(svgEl);
+    else if (state.selectedOverlay) await saveOverlaySvg(svgEl);
     else if (state.selectedPanelId) await savePanelSvg(state.selectedPanelId, svgEl);
 }
 
