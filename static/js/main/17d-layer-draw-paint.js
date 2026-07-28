@@ -51,6 +51,8 @@ function initPaintTool() {
     document.getElementById('paint-eraser-btn').addEventListener('click', e => {
         e.currentTarget.classList.toggle('active');
     });
+
+    document.getElementById('paint-merge-btn').addEventListener('click', _paintMergeSelected);
 }
 
 function _paintSyncBrushWidthDisplay() {
@@ -115,7 +117,14 @@ async function _paintAddObject() {
 
     const canvas = document.createElement('canvas');
     canvas.width = pxW; canvas.height = pxH;
-    const dataUrl = canvas.toDataURL('image/png'); // 全ピクセル透過のPNG
+    // 「背景色」がONの場合は不透明色で塗りつぶす。透過のままI2Iへ送ると、多くの生成モデルは
+    // 透過部分を黒として解釈してしまうため、その対策として背景色を指定できるようにしている。
+    if (document.getElementById('paint-bg-enable').checked) {
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = document.getElementById('paint-bg-color').value;
+        ctx.fillRect(0, 0, pxW, pxH);
+    }
+    const dataUrl = canvas.toDataURL('image/png');
 
     const paintId = 'img-paint-' + Date.now();
     const ok = await insertImage(dataUrl, pxW, pxH,
@@ -134,6 +143,144 @@ async function _paintAddObject() {
     _paintAttachOverlay();
 
     _paintSetStatus(t('draw.paintObjectAdded', pxW, pxH));
+}
+
+// ──────────────────────
+// 複数画像の統合（Imageタブのレイヤー統合と同等の機能）
+// レイヤーパネルのチェックボックスで選択した画像・ペイントレイヤー（2枚以上）を
+// 1枚のPNGに合成し、選択中の画像を削除して統合結果に置き換える。
+// I2Iは選択中の1オブジェクトしか送れないため、複数レイヤーをまとめて送りたい場合の対策。
+// ──────────────────────
+async function _paintMergeSelected() {
+    const checked = [...state.checkedLayerEls].filter(el => el.classList && el.classList.contains('inserted-image'));
+    if (checked.length < 2) {
+        _paintSetStatus(t('draw.paintMergeSelectAtLeast2'));
+        return;
+    }
+
+    const panelSvg = getPanelLayerSvg();
+    if (!panelSvg) return;
+
+    // 全て同じ親（同一コマ／オーバーレイ／下書き）に属しているか確認（異なる座標系のものは合成できない）
+    const parentEl = checked[0].parentNode;
+    if (!checked.every(el => el.parentNode === parentEl)) {
+        alert(t('layer.groupSamePanelOnly'));
+        return;
+    }
+    if (checked.some(el => _isObjectLocked(el))) {
+        _paintSetStatus(t('draw.paintMergeLocked'));
+        return;
+    }
+
+    // DOM順（＝現在の重ね順）で並べ替え
+    const sorted = Array.from(parentEl.children).filter(c => checked.includes(c));
+
+    // 各画像の絶対座標系での四隅を集計し、統合結果のバウンディングボックス（ユニオン）を求める
+    // （data-angleによる回転transformがある場合はその行列で四隅を変換してから集計する）
+    const ns = 'http://www.w3.org/2000/svg';
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const cornersOf = (el) => {
+        const x = parseFloat(el.getAttribute('x')) || 0;
+        const y = parseFloat(el.getAttribute('y')) || 0;
+        const w = parseFloat(el.getAttribute('width')) || 0;
+        const h = parseFloat(el.getAttribute('height')) || 0;
+        let pts = [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }];
+        if (el.transform && el.transform.baseVal.numberOfItems > 0) {
+            const m = el.transform.baseVal.consolidate().matrix;
+            const svgPt = panelSvg.createSVGPoint();
+            pts = pts.map(p => { svgPt.x = p.x; svgPt.y = p.y; const r = svgPt.matrixTransform(m); return { x: r.x, y: r.y }; });
+        }
+        return pts;
+    };
+    sorted.forEach(el => {
+        cornersOf(el).forEach(p => {
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y > maxY) maxY = p.y;
+        });
+    });
+    const unionW = Math.max(1, maxX - minX);
+    const unionH = Math.max(1, maxY - minY);
+
+    // 選択画像だけを含む単独SVGを構築してラスタライズ（convertShapeToImageと同じ手法）
+    const outSvg = document.createElementNS(ns, 'svg');
+    outSvg.setAttribute('xmlns', ns);
+    outSvg.setAttribute('width', unionW.toFixed(2));
+    outSvg.setAttribute('height', unionH.toFixed(2));
+    outSvg.setAttribute('viewBox', `0 0 ${unionW.toFixed(2)} ${unionH.toFixed(2)}`);
+    const wrapG = document.createElementNS(ns, 'g');
+    wrapG.setAttribute('transform', `translate(${(-minX).toFixed(2)},${(-minY).toFixed(2)})`);
+    sorted.forEach(el => {
+        const clone = el.cloneNode(true);
+        clone.classList.remove('selected');
+        clone.querySelectorAll('.image-handle, .image-bbox, .image-rotate-line').forEach(h => h.remove());
+        wrapG.appendChild(clone);
+    });
+    outSvg.appendChild(wrapG);
+
+    let svgText = new XMLSerializer().serializeToString(outSvg);
+    if (typeof embedFontsInSvg === 'function') svgText = await embedFontsInSvg(svgText);
+
+    let img;
+    try {
+        const dataUrl = _svgTextToDataUrl(svgText);
+        img = new Image();
+        await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = dataUrl; });
+    } catch (err) {
+        console.error('Paint merge rasterize error:', err);
+        _paintSetStatus(t('draw.paintMergeError'));
+        return;
+    }
+
+    const MAX_DIM = 2000;
+    const scale = Math.min(1, MAX_DIM / Math.max(unionW, unionH));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(unionW * scale));
+    canvas.height = Math.max(1, Math.round(unionH * scale));
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const mergedDataUrl = canvas.toDataURL('image/png');
+
+    pushHistory();
+
+    const panelId = checked[0].getAttribute('data-panel-id') ||
+        parentEl.getAttribute('data-clip-panel') ||
+        (parentEl.hasAttribute('data-overlay-layer') ? '__overlay__' :
+        (parentEl.hasAttribute('data-draft-layer') ? '__draft__' : (state.selectedPanelId || 'panel-0')));
+
+    const mergedId = 'img-merged-' + Date.now();
+    const mergedEl = document.createElementNS(ns, 'image');
+    mergedEl.setAttribute('href', mergedDataUrl);
+    mergedEl.setAttribute('x', minX.toFixed(2));
+    mergedEl.setAttribute('y', minY.toFixed(2));
+    mergedEl.setAttribute('width', unionW.toFixed(2));
+    mergedEl.setAttribute('height', unionH.toFixed(2));
+    mergedEl.setAttribute('class', 'inserted-image');
+    mergedEl.setAttribute('id', mergedId);
+    mergedEl.setAttribute('data-panel-id', panelId);
+
+    // 最前面だった画像（sorted末尾）の直後に挿入し、重ね順の見た目を保つ
+    const insertBeforeEl = sorted[sorted.length - 1].nextSibling;
+    parentEl.insertBefore(mergedEl, insertBeforeEl);
+    sorted.forEach(el => { state.checkedLayerEls.delete(el); el.remove(); });
+
+    state.selectedImageId = null;
+    state.selectedImageEl = null;
+    clearImageHandles();
+    await savePanelSvg(panelId, panelSvg); // panelIdに応じてsaveOverlaySvg/saveDraftSvgへ自動振り分け
+
+    // 複製・移動系の処理と同様にDOM全体を再構築する。ここを省略すると、統合直後だけ
+    // 画像本体のドラッグ移動が効かなくなることがある（他コマへ移動→戻すと直る、という
+    // 症状から、renderLayoutTab()経由でのイベントリスナー再バインドが必要と判明）。
+    await renderLayoutTab();
+
+    const newPanelSvg = getPanelLayerSvg();
+    if (newPanelSvg) {
+        const liveEl = newPanelSvg.querySelector(`#${CSS.escape(mergedId)}`);
+        if (liveEl) _selectClone(liveEl, newPanelSvg);
+    }
+    renderLayerPanel();
+    _paintSetStatus(t('draw.paintMergeDone', sorted.length));
 }
 
 // ──────────────────────
@@ -233,7 +380,9 @@ function _paintSvgPtToLocal(el, svgPt) {
 async function _paintMouseDown(e) {
     if (!_paintToolState.active) return;
     const el = state.selectedImageEl;
-    if (!el || el.dataset.cccPaintObject !== '1') {
+    // ペイントオブジェクトだけでなく、通常の画像（統合結果や挿入済み写真など）にも直接
+    // ブラシ描画できるようにする。対象は「選択中の<image>要素」であること以外は問わない。
+    if (!el || !el.classList.contains('inserted-image')) {
         _paintSetStatus(t('draw.paintSelectObjectFirst'));
         e.preventDefault();
         return;

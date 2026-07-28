@@ -296,6 +296,13 @@
                         <button type="button" class="seg-btn active" data-paint-mode="off">OFF</button>
                       </div>
                     </div>
+                    <div style="display:flex; align-items:center; gap:3px;">
+                      <label style="font-size:12px; display:flex; align-items:center; gap:2px;">
+                        <input type="checkbox" id="paint-bg-enable" />
+                        <span data-i18n="layout.paintBgEnableLabel">背景色</span>
+                      </label>
+                      <input type="color" id="paint-bg-color" value="#ffffff" data-i18n-title="layout.paintBgColorTitle" title="ペイントオブジェクト追加時に背景を塗りつぶす色（I2I送信時に透過部分が黒くなるのを防ぎます）" />
+                    </div>
                     <button type="button" id="paint-add-object-btn" class="btn small" data-i18n="layout.addPaintObjectBtn" data-i18n-title="layout.addPaintObjectBtnTitle" title="選択中のコマ/オーバーレイ/下書きレイヤーのサイズで透過画像を追加します">ペイントを追加</button>
                     <div style="display:flex; align-items:center; gap:3px;">
                       <label style="font-size:12px;" data-i18n="layout.paintBrushColorLabel">ブラシ色:</label>
@@ -313,6 +320,7 @@
                       <input type="range" id="paint-opacity" min="0" max="100" value="100" style="width:60px;" />
                       <span id="paint-opacity-value" style="font-size:12px;">100%</span>
                     </div>
+                    <button type="button" id="paint-merge-btn" class="btn small secondary" data-i18n="layout.paintMergeBtn" data-i18n-title="layout.paintMergeBtnTitle" title="レイヤーパネルでチェックした画像・ペイントレイヤー（2つ以上）を1枚の画像に統合します">選択画像を統合</button>
                   </div>
                   <div id="paint-status" style="font-size:11px; color:var(--text-secondary); margin-top:3px;"></div>
                 </div>
