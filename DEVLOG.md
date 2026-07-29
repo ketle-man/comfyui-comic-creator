@@ -1382,7 +1382,7 @@ Phase 1完了（下記エントリ）に続き、Phase 2（JS動的生成文言�
 
 ## 2026-07-10（多言語化(i18n)着手：基盤構築 + Phase 1一部）
 
-ユーザー要望「i18n化したい、作業計画を立ててほしい」。対象言語は英語＋中国語（日本語含め3言語）、翻訳文はClaudeが作成、**段階的に**進める方針で合意（プランファイル: `C:\Users\statsu-11\.claude\plans\purrfect-tumbling-ullman.md`）。
+ユーザー要望「i18n化したい、作業計画を立ててほしい」。対象言語は英語＋中国語（日本語含め3言語）、翻訳文はClaudeが作成、**段階的に**進める方針で合意。
 
 ### 事前調査で判明した重要事項
 - 姉妹プロジェクト ComfyUI-Workflow-Studio（`comfyUI-wf-maneger/ComfyUI-Workflow-Studio`）に完成済みのi18nシステム（`static/js/i18n.js`、en/ja/zh、`t()`関数、設定タブの言語セレクタ、`location.reload()`方式）が存在し、これを本プロジェクトの制約（classic `<script>`共有グローバルスコープ、ESモジュールではない）に合わせて移植する形にした。
@@ -1716,7 +1716,7 @@ Kaptureで、リロード後を含め作品カード選択→ページ一覧の�
 ## 2026-07-09（レイアウトタブ「3Dポーズ」をcomfyui-vrm-pose-editorへの依存に全面移行）
 
 ### 概要
-レイアウトタブ「3Dポーズ」サブタブが独自に持っていたThree.js/VRM実装（`static/js/pose3d.js`、ライトエディタ・ポーズライブラリなしの簡易版）を廃止し、別途インストール済みのComfyUIカスタムノード「comfyui-vrm-pose-editor」（インストール先: `custom_nodes/comfyui-vrm-pose-editor`、開発元: `C:\Users\statsu-11\Desktop\now_work\vrmpose_light_plus_2\3dpose_light_editor`）へ依存する薄いブリッジ構成に全面移行した。ノードの現在のフル機能（ポーズライブラリ・ライトエディタ・ミラー・Ground/BGWall/シャドウ）をレイアウトタブから直接利用できるようになった。
+レイアウトタブ「3Dポーズ」サブタブが独自に持っていたThree.js/VRM実装（`static/js/pose3d.js`、ライトエディタ・ポーズライブラリなしの簡易版）を廃止し、別途インストール済みのComfyUIカスタムノード「comfyui-vrm-pose-editor」（インストール先: `custom_nodes/comfyui-vrm-pose-editor`、開発元は別リポジトリで管理）へ依存する薄いブリッジ構成に全面移行した。ノードの現在のフル機能（ポーズライブラリ・ライトエディタ・ミラー・Ground/BGWall/シャドウ）をレイアウトタブから直接利用できるようになった。
 
 ### comfyui-vrm-pose-editor側の変更（開発元→インストール先の順に反映）
 - `js/pose_editor_3d.js`（ComfyUIノードUIとComfyUI非依存のコア`initPoseEditor3D`が1934行の同一ファイルに同居していた）を分割。658〜1934行目を新規`js/pose_editor_core.js`に切り出し`export`化
