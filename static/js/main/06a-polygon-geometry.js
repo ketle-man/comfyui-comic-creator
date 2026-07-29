@@ -251,6 +251,22 @@ function _cloneWithNewIds(srcEl) {
                 }
             });
         });
+
+        // 延長フキダシの data-linked-to-id / コネクタの data-connector-for も同様にID参照のため、
+        // 複製範囲内（idMapに登録されたID）を指している場合は新IDへ張り替える。
+        // 複製範囲外のベースを指す延長は、そのまま元IDを参照する独立要素として残す。
+        const linkCandidates = clone.hasAttribute('data-linked-to-id') ? [clone] : [];
+        clone.querySelectorAll('[data-linked-to-id]').forEach(el => linkCandidates.push(el));
+        linkCandidates.forEach(el => {
+            const oldBaseId = el.getAttribute('data-linked-to-id');
+            if (idMap[oldBaseId]) el.setAttribute('data-linked-to-id', idMap[oldBaseId]);
+        });
+        const connectorCandidates = clone.hasAttribute('data-connector-for') ? [clone] : [];
+        clone.querySelectorAll('[data-connector-for]').forEach(el => connectorCandidates.push(el));
+        connectorCandidates.forEach(el => {
+            const oldExtId = el.getAttribute('data-connector-for');
+            if (idMap[oldExtId]) el.setAttribute('data-connector-for', idMap[oldExtId]);
+        });
     }
     return clone;
 }

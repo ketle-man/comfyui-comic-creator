@@ -307,10 +307,91 @@ async function insertSmartBalloonTemplate(type) {
     await savePanelSvg(panelId, overlaySvgEl);
 }
 
+// 選択中のフキダシ（ベース）と同じ形状・スタイルの延長フキダシを、ネック（コネクタ）で
+// 連結した状態で追加する。ベースの dataset.linkedToId を持たせることで論理的に紐付け、
+// 実際の見た目のネックは _updateBalloonConnector（09b-balloon-shapes.js）が担う。
+async function addExtensionBalloon() {
+    if (!state.selectedShapeId) return;
+    const baseEl = document.getElementById(state.selectedShapeId);
+    if (!baseEl || !baseEl.classList.contains('balloon-shape')) return;
+    const type = baseEl.dataset.shapeType;
+    const isH2 = (type === 'bomb' || type === 'thought' || type === 'normal' || type === 'rect' || type === 'cloudpuffy' || type === 'cloudwavy');
+    if (!isH2) return; // シンプル版フキダシ+内包テキスト（尻尾なし）は延長対象外
+
+    const overlaySvgEl = baseEl.ownerSVGElement || baseEl.closest('svg');
+    if (!overlaySvgEl) return;
+
+    pushHistory();
+
+    const cx = parseFloat(baseEl.dataset.cx), cy = parseFloat(baseEl.dataset.cy);
+    const rx = parseFloat(baseEl.dataset.rx), ry = parseFloat(baseEl.dataset.ry);
+
+    // ベースの右下方向にオフセットして配置。ページ外にはみ出す場合はviewBox内に収める
+    const vb = overlaySvgEl.viewBox.baseVal;
+    let newCx = cx + rx * 1.6;
+    let newCy = cy + ry * 1.2;
+    if (vb && vb.width && vb.height) {
+        newCx = Math.min(Math.max(newCx, rx), vb.width - rx);
+        newCy = Math.min(Math.max(newCy, ry), vb.height - ry);
+    }
+
+    const id = 'shape-' + Date.now();
+    const ns = 'http://www.w3.org/2000/svg';
+    const shape = document.createElementNS(ns, 'g');
+    shape.id = id;
+    shape.setAttribute('class', 'balloon-shape');
+    shape.dataset.shapeType = type;
+    shape.dataset.cx = newCx;
+    shape.dataset.cy = newCy;
+    shape.dataset.rx = rx;
+    shape.dataset.ry = ry;
+    shape.dataset.tailAngleDeg = baseEl.dataset.tailAngleDeg || 45;
+    shape.dataset.tailLength   = 0; // ネックのみで連結表現するため、自身の突き出し尻尾は非表示
+    shape.dataset.tailWidth    = baseEl.dataset.tailWidth || 13;
+    shape.dataset.tailCurve    = 0;
+    shape.dataset.fillColor    = baseEl.dataset.fillColor;
+    shape.dataset.strokeColor  = baseEl.dataset.strokeColor;
+    shape.dataset.borderWidth  = baseEl.dataset.borderWidth;
+    shape.dataset.linkedToId   = baseEl.id;
+    if (type === 'bomb') {
+        shape.dataset.seed          = baseEl.dataset.seed;
+        shape.dataset.spikeCount    = baseEl.dataset.spikeCount;
+        shape.dataset.spikeLevel    = baseEl.dataset.spikeLevel;
+        shape.dataset.spikeVariance = baseEl.dataset.spikeVariance;
+    } else if (type === 'thought') {
+        shape.dataset.thoughtBubbleSize   = baseEl.dataset.thoughtBubbleSize;
+        shape.dataset.thoughtBubbleCount  = baseEl.dataset.thoughtBubbleCount;
+        shape.dataset.thoughtBubbleOffset = baseEl.dataset.thoughtBubbleOffset;
+    } else if (type === 'rect') {
+        shape.dataset.rectRadius = baseEl.dataset.rectRadius;
+    } else if (type === 'cloudpuffy' || type === 'cloudwavy') {
+        shape.dataset.seed           = baseEl.dataset.seed;
+        shape.dataset.shapeCount     = baseEl.dataset.shapeCount;
+        shape.dataset.shapeAmplitude = baseEl.dataset.shapeAmplitude;
+        shape.dataset.shapeVariation = baseEl.dataset.shapeVariation;
+    }
+    shape.style.pointerEvents = 'auto';
+
+    baseEl.parentNode.appendChild(shape);
+    updateShapePath(shape); // 本体パス生成＋_updateBalloonConnectorによるネック初回描画
+
+    state.selectedShapeId = id;
+    document.querySelectorAll('.balloon-shape').forEach(s => s.classList.remove('selected'));
+    shape.classList.add('selected');
+    state.balloon.isEditMode = true;
+    updateBalloonUI();
+    renderHandles(shape);
+
+    const panelId = shape.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
+    await savePanelSvg(panelId, overlaySvgEl);
+}
+
 function clearHandles() {
     document.querySelectorAll('.balloon-handle, .balloon-bbox, .balloon-rotate-line, .tail-cp-line').forEach(h => h.remove());
     const toImageBtn = document.getElementById('h2-to-image-btn');
     if (toImageBtn) toImageBtn.disabled = true;
+    const addExtBtn = document.getElementById('h2-add-extension-btn');
+    if (addExtBtn) addExtBtn.disabled = true;
 }
 
 // 無回転のフキダシ形状(cx,cy,rx,ry)と回転角(度)から、回転後の8ハンドル位置(絶対座標)を計算する。
@@ -423,8 +504,8 @@ function _h2CalcCurveHandlePos(el) {
     // 縁取りを描画しているため、この食い込みが枠線の太さ(borderWidth)より浅いと、
     // 尻尾が細いほど接合部の縁取りが噛み合わず隙間（細い線）が見えてしまう
     const overlap = Math.max(2, borderWidth + 2);
-    const bp1 = _h2BoundaryPointFor(el, b1Rad);
-    const bp2 = _h2BoundaryPointFor(el, b2Rad);
+    const bp1 = _h2TailBoundaryPoint(el, b1Rad);
+    const bp2 = _h2TailBoundaryPoint(el, b2Rad);
     const scale1 = bp1.r > 0 ? Math.max(0, bp1.r - overlap) / bp1.r : 0;
     const scale2 = bp2.r > 0 ? Math.max(0, bp2.r - overlap) / bp2.r : 0;
     const b1x = cx + bp1.x * scale1;
@@ -455,7 +536,7 @@ function _updateH2HandlePositions(el) {
     const tailLength   = parseFloat(el.dataset.tailLength   || 60);
     const tailAngleRad = tailAngleDeg * Math.PI / 180;
     const type = el.dataset.shapeType;
-    const bp = _h2BoundaryPointFor(el, tailAngleRad);
+    const bp = _h2TailBoundaryPoint(el, tailAngleRad);
     const tailDxLocal = bp.x + tailLength * Math.cos(tailAngleRad);
     const tailDyLocal = bp.y + tailLength * Math.sin(tailAngleRad);
     const angle = parseFloat(el.dataset.angle || 0);
@@ -520,6 +601,8 @@ function renderHandles(el) {
 
     const type = el.dataset.shapeType;
     const isH2 = (type === 'bomb' || type === 'thought' || type === 'normal' || type === 'rect' || type === 'cloudpuffy' || type === 'cloudwavy');
+    const addExtBtn = document.getElementById('h2-add-extension-btn');
+    if (addExtBtn) addExtBtn.disabled = !isH2;
     // シンプル版フキダシ+内包テキスト（09f-bubble-text.js）は尻尾を持たないため専用ハンドルを出さない
     const isBubbleText = typeof _isBubbleTextType === 'function' && _isBubbleTextType(type);
 
@@ -569,7 +652,7 @@ function renderHandles(el) {
     const tailAngleDeg = parseFloat(el.dataset.tailAngleDeg || 45);
     const tailLength   = parseFloat(el.dataset.tailLength   || 60);
     const tailAngleRad = tailAngleDeg * Math.PI / 180;
-    const bp = _h2BoundaryPointFor(el, tailAngleRad);
+    const bp = _h2TailBoundaryPoint(el, tailAngleRad);
     const balloonAngle0 = parseFloat(el.dataset.angle || 0);
     const balloonRad0 = balloonAngle0 * Math.PI / 180;
     const tailDxLocal = bp.x + tailLength * Math.cos(tailAngleRad);

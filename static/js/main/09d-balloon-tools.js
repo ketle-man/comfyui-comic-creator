@@ -94,9 +94,6 @@ function initBalloonTools(overlaySvgEl, _panelSvgEl) {
             // h2タイプ: 尻尾先端位置から角度と長さを計算
             const tsCx = parseFloat(targetShape.dataset.cx);
             const tsCy = parseFloat(targetShape.dataset.cy);
-            const tsRx = parseFloat(targetShape.dataset.rx);
-            const tsRy = parseFloat(targetShape.dataset.ry);
-            const tsType = targetShape.dataset.shapeType;
             // 回転を考慮: マウス位置(グローバル座標)をフキダシのローカル座標系(無回転)へ逆回転する
             // （tailAngleDegはフキダシ本体の無回転座標系での角度のため）
             const tsAngle = parseFloat(targetShape.dataset.angle || 0);
@@ -107,9 +104,9 @@ function initBalloonTools(overlaySvgEl, _panelSvgEl) {
             const dy = -dxG * sinR + dyG * cosR;
             const newAngleDeg = Math.atan2(dy, dx) * 180 / Math.PI;
             const tailAngleRad2 = newAngleDeg * Math.PI / 180;
-            const tsBpType = tsType === 'rect' ? 'rect' : 'normal';
-            const tsBpR = tsType === 'rect' ? Math.min(parseFloat(targetShape.dataset.rectRadius || 80), tsRx, tsRy) : undefined;
-            const bp2 = _h2_getBoundaryPoint(tsBpType, tsRx, tsRy, tailAngleRad2, tsBpR);
+            // 延長フキダシがその方向にある場合、_h2TailBoundaryPointが延長側の外周まで
+            // 境界点を延長するため、尻尾を延長側までドラッグして動かせるようになる
+            const bp2 = _h2TailBoundaryPoint(targetShape, tailAngleRad2);
             const distFromCenter = Math.hypot(dx, dy);
             const distFromBoundary = Math.hypot(bp2.x, bp2.y);
             const newLength = Math.max(0, distFromCenter - distFromBoundary);

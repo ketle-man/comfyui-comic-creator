@@ -686,6 +686,72 @@ function _h2BoundaryPointFor(el, angleRad) {
     return _h2_getBoundaryPoint(bpType, rx, ry, angleRad, bpR);
 }
 
+// 原点(originX,originY)から単位方向ベクトル(dirX,dirY)へ伸びるレイが、シェイプelの輪郭を
+// 抜ける距離(tMinより遠い側の交点)を、輪郭上のサンプリング＋二分探索で近似的に求める。
+// elの形状は任意（楕円/角丸矩形/雲）でよく、_h2BoundaryPointFor経由で境界半径を判定するため
+// 個別の交差式を持たない形状にも汎用的に対応できる。一度も交差しなければnullを返す。
+function _h2RayExitDistance(el, originX, originY, dirX, dirY, tMin) {
+    const ecx = parseFloat(el.dataset.cx), ecy = parseFloat(el.dataset.cy);
+    const eAngle = parseFloat(el.dataset.angle || 0) * Math.PI / 180;
+    const erx = parseFloat(el.dataset.rx), ery = parseFloat(el.dataset.ry);
+    const maxReach = tMin + Math.hypot(ecx - originX, ecy - originY) + Math.max(erx, ery) * 2;
+
+    const isInside = (t) => {
+        const px = originX + dirX * t, py = originY + dirY * t;
+        // シェイプのローカル座標系（無回転）へ変換してから境界半径と比較する
+        const lx0 = px - ecx, ly0 = py - ecy;
+        const cosA = Math.cos(-eAngle), sinA = Math.sin(-eAngle);
+        const lx = lx0 * cosA - ly0 * sinA;
+        const ly = lx0 * sinA + ly0 * cosA;
+        const r = Math.hypot(lx, ly);
+        if (r === 0) return true;
+        const boundary = _h2BoundaryPointFor(el, Math.atan2(ly, lx)).r;
+        return r <= boundary;
+    };
+
+    const STEPS = 60;
+    let lastInsideIdx = -1;
+    for (let i = 0; i <= STEPS; i++) {
+        const t = tMin + (maxReach - tMin) * (i / STEPS);
+        if (isInside(t)) lastInsideIdx = i;
+    }
+    if (lastInsideIdx === -1) return null; // レイが一度もこのシェイプの内側に入らない＝交差しない
+
+    // 内側だった最後のサンプルと、その次(外側)のサンプルの間を二分探索で精緻化する
+    let loT = tMin + (maxReach - tMin) * (lastInsideIdx / STEPS);
+    let hiT = lastInsideIdx < STEPS ? tMin + (maxReach - tMin) * ((lastInsideIdx + 1) / STEPS) : maxReach;
+    for (let i = 0; i < 20; i++) {
+        const midT = (loT + hiT) / 2;
+        if (isInside(midT)) loT = midT; else hiT = midT;
+    }
+    return loT;
+}
+
+// フキダシelの尻尾（ローカル角度angleRad方向）の実効境界点を求める。elが延長フキダシを
+// 持つ場合、その方向にある延長フキダシまでレイをマーチングし、より外側（延長側）の輪郭上に
+// 境界点を再配置することで、フキダシ同士が連結・重なっていても尻尾を延長側の外周まで
+// 動かせるようにする（Comic Lifeの「尻尾が延長を含めた外周で動く」挙動に合わせるため）。
+// 延長を持たない場合や、その方向に延長が無い場合は通常どおり自身の境界点をそのまま返す。
+function _h2TailBoundaryPoint(el, angleRad) {
+    const bp = _h2BoundaryPointFor(el, angleRad);
+    const exts = document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(el.id)}"]`);
+    if (exts.length === 0) return bp;
+
+    const cx = parseFloat(el.dataset.cx), cy = parseFloat(el.dataset.cy);
+    const elAngleRad = parseFloat(el.dataset.angle || 0) * Math.PI / 180;
+    // ローカル角度angleRadを、自身の回転を反映した絶対方向ベクトルに変換する
+    const dirX = Math.cos(angleRad) * Math.cos(elAngleRad) - Math.sin(angleRad) * Math.sin(elAngleRad);
+    const dirY = Math.cos(angleRad) * Math.sin(elAngleRad) + Math.sin(angleRad) * Math.cos(elAngleRad);
+
+    let maxR = bp.r;
+    exts.forEach(ext => {
+        const t = _h2RayExitDistance(ext, cx, cy, dirX, dirY, maxR);
+        if (t !== null && t > maxR) maxR = t;
+    });
+    if (maxR === bp.r) return bp;
+    return { x: Math.cos(angleRad) * maxR, y: Math.sin(angleRad) * maxR, r: maxR };
+}
+
 // hukidasi2 互換: 雲(もこもこ) パス生成。参考ノードの _cloud_mask_scalloped を移植。
 // 内側の楕円 + その周囲に等弧長で配置した円(バンプ)群の和集合を、中心からの光線と
 // (楕円 or 各バンプ円)の遠い方の交点距離の最大値として輪郭を近似する
@@ -706,6 +772,127 @@ function generateCloudPuffyPath(params) {
 
 function updateShapePath(el) {
     _updateH2ShapePath(el);
+}
+
+// 延長フキダシ（dataset.linkedToId でベースを参照する balloon-shape）とベースを結ぶ
+// ネック（コネクタ）を描画・更新する。ベース/延長どちらの子要素でもない独立したpath要素として
+// 両シェイプより手前（DOM順で前）に配置し、両者の現在位置から毎回パスを再構築することで、
+// どちらを動かしても常に境界点同士が正しくつながった見た目になる。
+function _updateBalloonConnector(extEl) {
+    const svgEl = extEl.ownerSVGElement || extEl.closest('svg');
+    if (!svgEl) return;
+    const baseId = extEl.dataset.linkedToId;
+    const baseEl = baseId ? document.getElementById(baseId) : null;
+
+    if (!baseEl) {
+        // ベースが見つからない（削除済み等）: 孤立したコネクタを除去
+        svgEl.querySelector(`.balloon-connector-fill[data-connector-for="${CSS.escape(extEl.id)}"]`)?.remove();
+        svgEl.querySelector(`.balloon-connector-border[data-connector-for="${CSS.escape(extEl.id)}"]`)?.remove();
+        return;
+    }
+
+    const cx1 = parseFloat(baseEl.dataset.cx), cy1 = parseFloat(baseEl.dataset.cy);
+    const cx2 = parseFloat(extEl.dataset.cx),  cy2 = parseFloat(extEl.dataset.cy);
+    const angle1 = parseFloat(baseEl.dataset.angle || 0) * Math.PI / 180;
+    const angle2 = parseFloat(extEl.dataset.angle  || 0) * Math.PI / 180;
+
+    // 絶対座標系での中心間方向角
+    const globalAngle = Math.atan2(cy2 - cy1, cx2 - cx1);
+
+    // 各シェイプのローカル座標系（無回転）での境界点を求め、自身の回転角で絶対座標に変換する
+    const boundaryAbs = (el, cx, cy, angleRad, dirAngleGlobal) => {
+        const localAngle = dirAngleGlobal - angleRad;
+        const bp = _h2BoundaryPointFor(el, localAngle);
+        return {
+            x: cx + bp.x * Math.cos(angleRad) - bp.y * Math.sin(angleRad),
+            y: cy + bp.x * Math.sin(angleRad) + bp.y * Math.cos(angleRad),
+            localAngle,
+        };
+    };
+    // 開口幅（半角、既存の尻尾のtailWidthに相当）とその方向での境界点を、指定した中心角から
+    // +-halfAngle 分ずらして計算するヘルパー
+    const sideBoundaryAbs = (el, cx, cy, angleRad, dirAngleGlobal, halfAngle, overlap) => {
+        const p1 = boundaryAbs(el, cx, cy, angleRad, dirAngleGlobal - halfAngle);
+        const p2 = boundaryAbs(el, cx, cy, angleRad, dirAngleGlobal + halfAngle);
+        const shrink = (bpLocalAngle, px, py) => {
+            const bp = _h2BoundaryPointFor(el, bpLocalAngle);
+            const r = bp.r > 0 ? Math.max(0, bp.r - overlap) / bp.r : 0;
+            const lx = bp.x * r, ly = bp.y * r;
+            return {
+                x: cx + lx * Math.cos(angleRad) - ly * Math.sin(angleRad),
+                y: cy + lx * Math.sin(angleRad) + ly * Math.cos(angleRad),
+            };
+        };
+        return {
+            b1: shrink(p1.localAngle, p1.x, p1.y),
+            b2: shrink(p2.localAngle, p2.x, p2.y),
+        };
+    };
+
+    const baseHalfAngle = (parseFloat(baseEl.dataset.tailWidth || 13) / 2) * Math.PI / 180;
+    const extHalfAngle  = (parseFloat(extEl.dataset.tailWidth  || 13) / 2) * Math.PI / 180;
+    // コネクタは本体・尻尾のような二層(境界線+塗り)構造を持たず単独のstroke+fillのため、
+    // ベース/延長の不透明な本体（後から描画されて手前に来る）に確実に隠れるよう、通常の
+    // 尻尾の食い込み量（borderWidth+2）よりも深く食い込ませて、鋭角の頂点でstrokeのmiter結合が
+    // 外側にはみ出しても本体の内側に収まるようにする
+    const overlap = Math.max(2, parseFloat(baseEl.dataset.borderWidth || 3) * 2 + 4);
+
+    const baseSide = sideBoundaryAbs(baseEl, cx1, cy1, angle1, globalAngle, baseHalfAngle, overlap);
+    const extSide  = sideBoundaryAbs(extEl,  cx2, cy2, angle2, globalAngle + Math.PI, extHalfAngle, overlap);
+
+    // ネックの太さがゼロ（同一地点）になるのを避ける最小の緩やかな膨らみを、中点法線方向に付与する
+    const midX = (cx1 + cx2) / 2, midY = (cy1 + cy2) / 2;
+    const normalAngle = globalAngle + Math.PI / 2;
+    const dist = Math.hypot(cx2 - cx1, cy2 - cy1);
+    const bulge = Math.min(dist * 0.12, 40);
+    const c1x = midX + Math.cos(normalAngle) * bulge, c1y = midY + Math.sin(normalAngle) * bulge;
+    const c2x = midX - Math.cos(normalAngle) * bulge, c2y = midY - Math.sin(normalAngle) * bulge;
+
+    // 塗り(閉じた蝶ネクタイ形)と縁取り(自由端の2曲線のみ)を別要素に分ける。
+    // 縁取りをフキダシ本体との接合部(b1_base〜b2_base間、b1_ext〜b2_ext間)まで含めて
+    // 閉じたstrokeにすると、その部分がフキダシの内側に食い込んでいても輪郭線として
+    // 見えてしまう（重なり部分に余計な線が出る原因）。接合部は塗りのみで覆い、実際に
+    // 露出する自由端の2曲線だけをオープンパスとしてstrokeすることで、フキダシと重なる
+    // 部分には一切線を描かず、外周として見える部分にだけ線を引く。
+    const fillPath =
+        `M ${baseSide.b1.x},${baseSide.b1.y}` +
+        ` Q ${c1x},${c1y} ${extSide.b2.x},${extSide.b2.y}` +
+        ` L ${extSide.b1.x},${extSide.b1.y}` +
+        ` Q ${c2x},${c2y} ${baseSide.b2.x},${baseSide.b2.y}` +
+        ` Z`;
+    const borderPath =
+        `M ${baseSide.b1.x},${baseSide.b1.y} Q ${c1x},${c1y} ${extSide.b2.x},${extSide.b2.y}` +
+        ` M ${extSide.b1.x},${extSide.b1.y} Q ${c2x},${c2y} ${baseSide.b2.x},${baseSide.b2.y}`;
+
+    let connectorFill = svgEl.querySelector(`.balloon-connector-fill[data-connector-for="${CSS.escape(extEl.id)}"]`);
+    let connectorBorder = svgEl.querySelector(`.balloon-connector-border[data-connector-for="${CSS.escape(extEl.id)}"]`);
+    if (!connectorFill) {
+        connectorFill = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        connectorFill.setAttribute('class', 'balloon-connector-fill');
+        connectorFill.dataset.connectorFor = extEl.id;
+        connectorFill.style.pointerEvents = 'none';
+        connectorBorder = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        connectorBorder.setAttribute('class', 'balloon-connector-border');
+        connectorBorder.dataset.connectorFor = extEl.id;
+        connectorBorder.setAttribute('fill', 'none');
+        connectorBorder.style.pointerEvents = 'none';
+        // ベースより手前・両シェイプより奥（DOM順で先頭）に、塗り→縁取りの順で配置する
+        // （縁取りは塗りの上に重ねることで自由端がフキダシの色と綺麗に繋がって見える）
+        const parent = baseEl.parentNode;
+        if (parent) {
+            parent.insertBefore(connectorFill, parent.firstChild);
+            parent.insertBefore(connectorBorder, connectorFill.nextSibling);
+        }
+    }
+    connectorFill.setAttribute('d', fillPath);
+    connectorFill.setAttribute('fill', baseEl.dataset.fillColor || '#ffffff');
+
+    const bw = parseFloat(baseEl.dataset.borderWidth || 3);
+    connectorBorder.setAttribute('d', borderPath);
+    connectorBorder.setAttribute('stroke', bw === 0 ? 'none' : (baseEl.dataset.strokeColor || '#000000'));
+    connectorBorder.setAttribute('stroke-width', bw);
+    connectorBorder.setAttribute('stroke-linejoin', 'round');
+    connectorBorder.setAttribute('stroke-linecap', 'round');
 }
 
 // hukidasi2 互換タイプ（bomb/thought/normal）の描画更新
@@ -770,7 +957,7 @@ function _updateH2ShapePath(el) {
         // 尻尾
         const tailAngleRad = tailAngleDeg * Math.PI / 180;
         const normalRad    = tailAngleRad + Math.PI / 2;
-        const bpTip = _h2_getBoundaryPoint('rect', rx, ry, tailAngleRad, r);
+        const bpTip = _h2TailBoundaryPoint(el, tailAngleRad);
         const tipX  = cx + bpTip.x + tailLength * Math.cos(tailAngleRad);
         const tipY  = cy + bpTip.y + tailLength * Math.sin(tailAngleRad);
         const halfAngleRad = (tailWidth / 2) * Math.PI / 180;
@@ -780,8 +967,10 @@ function _updateH2ShapePath(el) {
     // 縁取りを描画しているため、この食い込みが枠線の太さ(borderWidth)より浅いと、
     // 尻尾が細いほど接合部の縁取りが噛み合わず隙間（細い線）が見えてしまう
     const overlap = Math.max(2, borderWidth + 2);
-        const bp1 = _h2_getBoundaryPoint('rect', rx, ry, b1Rad, r);
-        const bp2 = _h2_getBoundaryPoint('rect', rx, ry, b2Rad, r);
+        // 延長フキダシがその方向にある場合、_h2TailBoundaryPointが延長側の外周まで
+        // 境界点を延長するため、尻尾（付け根・先端とも）が連結先の外周まで動かせるようになる
+        const bp1 = _h2TailBoundaryPoint(el, b1Rad);
+        const bp2 = _h2TailBoundaryPoint(el, b2Rad);
         const b1 = { x: cx + Math.max(0, bp1.r - overlap) * Math.cos(b1Rad), y: cy + Math.max(0, bp1.r - overlap) * Math.sin(b1Rad) };
         const b2 = { x: cx + Math.max(0, bp2.r - overlap) * Math.cos(b2Rad), y: cy + Math.max(0, bp2.r - overlap) * Math.sin(b2Rad) };
         // 制御点 = b1b2中点 + 法線オフセット（tailCurve=0なら直線）
@@ -806,15 +995,17 @@ function _updateH2ShapePath(el) {
         const b2Rad = tailAngleRad + halfAngleRad;
         const overlap = Math.max(2, borderWidth + 2);
 
-        const bpTip = _h2BoundaryPointFor(el, tailAngleRad);
+        // 延長フキダシがその方向にある場合、_h2TailBoundaryPointが延長側の外周まで
+        // 境界点を延長するため、尻尾（付け根・先端とも）が連結先の外周まで動かせるようになる
+        const bpTip = _h2TailBoundaryPoint(el, tailAngleRad);
         const tipX  = cx + bpTip.x + tailLength * Math.cos(tailAngleRad);
         const tipY  = cy + bpTip.y + tailLength * Math.sin(tailAngleRad);
 
         // 尻尾の付け根を本体の内側に食い込ませる（自身の中心方向に沿って縮める。
         // 実輪郭上の点は真の極角とパラメトリック角がずれることがあるため、
         // b1Rad方向へ再投影せず、その点自身の方向ベクトルをそのまま縮小する）
-        const bp1 = _h2BoundaryPointFor(el, b1Rad);
-        const bp2 = _h2BoundaryPointFor(el, b2Rad);
+        const bp1 = _h2TailBoundaryPoint(el, b1Rad);
+        const bp2 = _h2TailBoundaryPoint(el, b2Rad);
         const scale1 = bp1.r > 0 ? Math.max(0, bp1.r - overlap) / bp1.r : 0;
         const scale2 = bp2.r > 0 ? Math.max(0, bp2.r - overlap) / bp2.r : 0;
         const b1 = { x: cx + bp1.x * scale1, y: cy + bp1.y * scale1 };
@@ -843,7 +1034,9 @@ function _updateH2ShapePath(el) {
         // normal: 楕円 + 尻尾（hukidasi2方式）
         const tailAngleRad = tailAngleDeg * Math.PI / 180;
         const normalRad    = tailAngleRad + Math.PI / 2;
-        const bpTip = _h2_getBoundaryPoint('normal', rx, ry, tailAngleRad);
+        // 延長フキダシがその方向にある場合、_h2TailBoundaryPointが延長側の外周まで
+        // 境界点を延長するため、尻尾（付け根・先端とも）が連結先の外周まで動かせるようになる
+        const bpTip = _h2TailBoundaryPoint(el, tailAngleRad);
         const tipX  = cx + bpTip.x + tailLength * Math.cos(tailAngleRad);
         const tipY  = cy + bpTip.y + tailLength * Math.sin(tailAngleRad);
         const halfAngleRad = (tailWidth / 2) * Math.PI / 180;
@@ -853,8 +1046,8 @@ function _updateH2ShapePath(el) {
     // 縁取りを描画しているため、この食い込みが枠線の太さ(borderWidth)より浅いと、
     // 尻尾が細いほど接合部の縁取りが噛み合わず隙間（細い線）が見えてしまう
         const overlap = Math.max(2, borderWidth + 2);
-        const bp1 = _h2_getBoundaryPoint('normal', rx, ry, b1Rad);
-        const bp2 = _h2_getBoundaryPoint('normal', rx, ry, b2Rad);
+        const bp1 = _h2TailBoundaryPoint(el, b1Rad);
+        const bp2 = _h2TailBoundaryPoint(el, b2Rad);
         const b1 = { x: cx + Math.max(0, bp1.r - overlap) * Math.cos(b1Rad), y: cy + Math.max(0, bp1.r - overlap) * Math.sin(b1Rad) };
         const b2 = { x: cx + Math.max(0, bp2.r - overlap) * Math.cos(b2Rad), y: cy + Math.max(0, bp2.r - overlap) * Math.sin(b2Rad) };
         // 本体楕円
@@ -914,9 +1107,21 @@ function _updateH2ShapePath(el) {
 
     // 色・枠線
     const sw = borderWidth * 2; // border/fillで相殺して実質borderWidthになる
-    el.querySelector('.h2-layer-border').setAttribute('stroke-width', sw);
-    el.querySelector('.h2-layer-border').setAttribute('stroke', borderWidth === 0 ? 'none' : strokeColor);
-    el.querySelector('.h2-layer-border').setAttribute('fill', strokeColor);
+    // 延長フキダシで連結されているシェイプ（自身がベースで延長を持つ、または自身が延長）は、
+    // 個別の枠線をそのまま出すと共有リング（_updateChainUnionRing）と二重に見えたり、
+    // フキダシ同士が重なった箇所で内部に余計な線が出たりするため、自身の枠線は非表示にし、
+    // 連結全体の外周だけをリングとして描画する（fill-layerは通常どおり内側を白く塗る）
+    const hasChainPartners = !!el.dataset.linkedToId ||
+        !!document.querySelector(`.balloon-shape[data-linked-to-id="${CSS.escape(el.id)}"]`);
+    const borderLayerEl = el.querySelector('.h2-layer-border');
+    if (hasChainPartners) {
+        borderLayerEl.setAttribute('stroke', 'none');
+        borderLayerEl.setAttribute('fill', 'none');
+    } else {
+        borderLayerEl.setAttribute('stroke-width', sw);
+        borderLayerEl.setAttribute('stroke', borderWidth === 0 ? 'none' : strokeColor);
+        borderLayerEl.setAttribute('fill', strokeColor);
+    }
     el.querySelector('.h2-layer-fill').setAttribute('fill', fillColor);
 
     // 回転
@@ -928,6 +1133,96 @@ function _updateH2ShapePath(el) {
 
     // 内包テキスト（09f-bubble-text.js）: データがあれば同期、無ければ何もしない
     if (typeof _bubbleTextSyncH2Text === 'function') _bubbleTextSyncH2Text(el);
+
+    // 延長フキダシ連結: 自身が延長なら自分のコネクタを、自分がベースの延長を持っていれば
+    // それらのコネクタ・チェーン共有リングも合わせて再計算する（リサイズ・回転・本体移動・
+    // 尻尾ドラッグ等、このシェイプの見た目が変わるすべての経路がここを通るため、
+    // この一箇所で追従を担保できる）
+    if (el.dataset.linkedToId) _updateBalloonConnector(el);
+    const chainBaseEl = el.dataset.linkedToId ? document.getElementById(el.dataset.linkedToId) : el;
+    if (chainBaseEl) {
+        _updateChainUnionRing(chainBaseEl);
+        document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(chainBaseEl.id)}"]`).forEach(ext => {
+            if (ext !== el) _updateBalloonConnector(ext);
+        });
+    }
+}
+
+// 延長フキダシで連結されたベース+延長群（チェーン）の外周のみを1本のリングとして描画する。
+// 各メンバー自身の個別の枠線は_updateH2ShapePath側で非表示にし、代わりにこの共有リングだけを
+// 表示することで、フキダシ同士が重なっていても内部に余計な境界線が出ないようにする。
+// SVGにはパスの論理和(union)が無いため、<mask mask-type="alpha">に各メンバーの本体・尻尾パスを
+// 複製して集め（枠線太さ分だけ外側に膨らませる）、その合成シルエットでstrokeColorの矩形を
+// 型抜きする。各メンバー自身のfill-layer（内側の白塗り、通常どおり描画される）がその上に
+// 重なることで、結果的に連結全体の外周だけが細いリングとして見える。
+function _updateChainUnionRing(baseEl) {
+    const svgEl = baseEl.ownerSVGElement || baseEl.closest('svg');
+    if (!svgEl) return;
+    const ringId = `chain-ring-${baseEl.id}`;
+    const maskId = `chain-mask-${baseEl.id}`;
+    const exts = Array.from(document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(baseEl.id)}"]`));
+
+    if (exts.length === 0) {
+        // 延長が無くなった場合、共有リングは不要（ベースは通常の個別枠線に戻る）
+        svgEl.querySelector(`#${CSS.escape(ringId)}`)?.remove();
+        svgEl.querySelector(`#${CSS.escape(maskId)}`)?.remove();
+        return;
+    }
+
+    const members = [baseEl, ...exts];
+
+    let defs = svgEl.querySelector('defs');
+    if (!defs) {
+        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        svgEl.insertBefore(defs, svgEl.firstChild);
+    }
+
+    let mask = defs.querySelector(`#${CSS.escape(maskId)}`);
+    if (!mask) {
+        mask = document.createElementNS('http://www.w3.org/2000/svg', 'mask');
+        mask.id = maskId;
+        mask.setAttribute('mask-type', 'alpha');
+        defs.appendChild(mask);
+    }
+    mask.innerHTML = '';
+    members.forEach(m => {
+        const bw = parseFloat(m.dataset.borderWidth || 3);
+        const angle = parseFloat(m.dataset.angle || 0);
+        const mcx = parseFloat(m.dataset.cx), mcy = parseFloat(m.dataset.cy);
+        ['h2-bg-body', 'h2-bg-tail'].forEach(cls => {
+            const src = m.querySelector(`.${cls}`);
+            const d = src && src.getAttribute('d');
+            if (!d) return;
+            const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            p.setAttribute('d', d);
+            p.setAttribute('fill', '#fff');
+            if (bw > 0) {
+                p.setAttribute('stroke', '#fff');
+                p.setAttribute('stroke-width', bw * 2);
+                p.setAttribute('stroke-linejoin', 'round');
+            }
+            if (angle) p.setAttribute('transform', `rotate(${angle},${mcx},${mcy})`);
+            mask.appendChild(p);
+        });
+    });
+
+    let ring = svgEl.querySelector(`#${CSS.escape(ringId)}`);
+    if (!ring) {
+        ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        ring.id = ringId;
+        ring.style.pointerEvents = 'none';
+    }
+    const vb = svgEl.viewBox.baseVal;
+    ring.setAttribute('x', 0);
+    ring.setAttribute('y', 0);
+    ring.setAttribute('width', (vb && vb.width) || 21000);
+    ring.setAttribute('height', (vb && vb.height) || 29700);
+    ring.setAttribute('fill', baseEl.dataset.strokeColor || '#000000');
+    ring.setAttribute('mask', `url(#${maskId})`);
+    // ネックのコネクタや各シェイプ本体より必ず奥に描画されるよう、呼び出し順に関わらず
+    // 毎回最背面（DOM順で先頭）へ再配置する
+    const parent = baseEl.parentNode;
+    if (parent) parent.insertBefore(ring, parent.firstChild);
 }
 
 // フキダシ or 図形要素をPNG画像に変換して同位置に複製挿入する

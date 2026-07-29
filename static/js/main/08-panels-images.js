@@ -1269,6 +1269,7 @@ function initImageManipulation(svgEl, balloonSvgEl) {
         let balloonTarget = null;
         let balloonHistoryPushed = false; // 実際にドラッグで動かした場合のみhistoryへ積む（クリック選択だけでは積まない）
         let balloonStartX, balloonStartY, balloonInitialCx, balloonInitialCy;
+        let balloonLinkedExts = []; // ドラッグ中のベースにリンクされた延長フキダシ（{el, cx0, cy0}）
 
         balloonSvgEl.addEventListener('mousedown', (e) => {
             // ハンドル操作はinitBalloonToolsに委ねる（balloon-handleはスキップ）
@@ -1299,6 +1300,11 @@ function initImageManipulation(svgEl, balloonSvgEl) {
             balloonInitialCy = parseFloat(shape.dataset.cy);
             state.selectedShapeId = shape.id;
 
+            // このシェイプがベースの場合、リンクされた延長フキダシも同じ量だけ平行移動させる
+            // （延長側をドラッグした場合はここが空配列になり、ベースは動かずネックだけが伸縮する）
+            balloonLinkedExts = Array.from(document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(shape.id)}"]`))
+                .map(ext => ({ el: ext, cx0: parseFloat(ext.dataset.cx), cy0: parseFloat(ext.dataset.cy) }));
+
             // 編集モードをONにしてハンドルを表示
             state.balloon.isEditMode = true;
             updateBalloonUI();
@@ -1326,6 +1332,14 @@ function initImageManipulation(svgEl, balloonSvgEl) {
             if (state.balloon.isEditMode && state.selectedShapeId === balloonTarget.id) {
                 _updateH2HandlePositions(balloonTarget);
             }
+
+            // ベースを移動した場合、リンクされた延長フキダシも同じ量だけ平行移動させる
+            // （ネックは_updateH2ShapePath内のフックで自動的に再計算される）
+            balloonLinkedExts.forEach(({ el, cx0, cy0 }) => {
+                el.dataset.cx = cx0 + dx;
+                el.dataset.cy = cy0 + dy;
+                _updateH2ShapePath(el);
+            });
         };
         document.addEventListener('mousemove', _balloonManipDocMouseMove);
 
@@ -1335,6 +1349,7 @@ function initImageManipulation(svgEl, balloonSvgEl) {
                 const panelId = balloonTarget.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
                 await savePanelSvg(panelId, balloonSvgEl);
                 balloonTarget = null;
+                balloonLinkedExts = [];
             }
         };
 

@@ -467,6 +467,14 @@ function initBalloonManager() {
         });
     }
 
+    // ── 延長フキダシ追加ボタン（選択中のフキダシと同形状をネックで連結して追加） ──
+    const h2AddExtensionBtn = document.getElementById('h2-add-extension-btn');
+    if (h2AddExtensionBtn) {
+        h2AddExtensionBtn.addEventListener('click', async () => {
+            await addExtensionBalloon();
+        });
+    }
+
     // ── フキダシ内包テキストの作成/編集モーダル起動ボタン ──
     // 選択中のフキダシ（textbox-* または尻尾付き等のh2タイプ）にテキストを内包・編集する。
     // フキダシ形状自体の作成はh2挿入ボタン側に任せ、このボタンはテキストの詳細設定のみを担う

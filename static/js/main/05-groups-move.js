@@ -512,13 +512,33 @@ async function deleteSelectedObject() {
     pushHistory();
     state.checkedLayerEls.delete(el);
 
+    // 延長フキダシ自身を削除する場合、削除後にベース側の枠線/共有リングを再計算するため
+    // 削除前にベースIDを控えておく（elを消した後ではdataset自体が読めなくなるため）
+    let deletedLinkedToId = null;
+
     switch (kind) {
         case 'group':
             if (state.selectedGroupId === el.id) { state.selectedGroupId = null; clearGroupHandles(); }
             break;
-        case 'shape':
+        case 'shape': {
             if (state.selectedShapeId === el.id) { state.selectedShapeId = null; clearHandles(); }
+            deletedLinkedToId = el.dataset.linkedToId || null;
+            // 削除対象がベースの場合、リンクされた延長フキダシとそのネックも道連れで削除する
+            // （延長フキダシ自身を削除した場合はこのクエリが空振りし、自分自身とそのネックだけが通常どおり削除される）
+            document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(el.id)}"]`).forEach(ext => {
+                document.querySelector(`.balloon-connector-fill[data-connector-for="${CSS.escape(ext.id)}"]`)?.remove();
+                document.querySelector(`.balloon-connector-border[data-connector-for="${CSS.escape(ext.id)}"]`)?.remove();
+                if (state.selectedShapeId === ext.id) { state.selectedShapeId = null; clearHandles(); }
+                state.checkedLayerEls.delete(ext);
+                ext.remove();
+            });
+            document.querySelector(`.balloon-connector-fill[data-connector-for="${CSS.escape(el.id)}"]`)?.remove();
+            document.querySelector(`.balloon-connector-border[data-connector-for="${CSS.escape(el.id)}"]`)?.remove();
+            // ベース自身を削除した場合、道連れの延長は上で消したので共有リング/マスクも除去する
+            document.getElementById(`chain-ring-${el.id}`)?.remove();
+            document.getElementById(`chain-mask-${el.id}`)?.remove();
             break;
+        }
         case 'image':
             if (state.selectedImageId === el.id || state.selectedImageEl === el) {
                 state.selectedImageId = null; state.selectedImageEl = null; clearImageHandles();
@@ -546,6 +566,14 @@ async function deleteSelectedObject() {
     }
 
     el.remove();
+
+    // 延長フキダシを削除した場合、ベース側は枠線非表示・共有リング表示のままになってしまうため、
+    // ベースを再描画して「延長が無ければ通常の個別枠線に戻す／延長が他に残っていれば
+    // 共有リングを残り数分で作り直す」を反映させる
+    if (deletedLinkedToId) {
+        const baseEl = document.getElementById(deletedLinkedToId);
+        if (baseEl) _updateH2ShapePath(baseEl);
+    }
 
     const curSvg = getPanelLayerSvg();
     if (curSvg) {
