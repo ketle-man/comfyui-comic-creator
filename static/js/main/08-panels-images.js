@@ -693,9 +693,13 @@ async function insertImage(base64Data, width, height, extraAttrs = {}, placement
 
 /**
  * URL（/ccc_comfyui_output/... 等）を fetch して base64 dataURL に変換し、
- * insertImage() でコマに挿入する共通ヘルパー
+ * insertImage() でコマに挿入する共通ヘルパー。
+ * placement（{x,y,width,height}、SVG座標系）を渡すと、insertImage側の既定サイズ
+ * （コマ/オーバーレイ幅の40%等）を使わずその位置・サイズで挿入する
+ * （レイアウトタブ「I2I」モーダルのページ全体対象で、結果をページ全面サイズのまま
+ * オーバーレイへ挿入するために使用）。
  */
-async function insertImageFromUrl(url) {
+async function insertImageFromUrl(url, placement = null) {
     if (typeof insertImage !== 'function') return;
     try {
         const res = await fetch(url);
@@ -739,7 +743,7 @@ async function insertImageFromUrl(url) {
                 imgW = 1000; imgH = 1000;
             }
         }
-        await insertImage(dataUrl, imgW, imgH);
+        await insertImage(dataUrl, imgW, imgH, {}, placement);
         if (typeof switchTab === 'function') switchTab('layout');
     } catch (e) {
         console.error('insertImageFromUrl error:', e);

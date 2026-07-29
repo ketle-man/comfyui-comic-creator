@@ -326,7 +326,6 @@ async function switchTab(tabId) {
     } else if (tabId === 'settings') {
         initEagleSettings();
         initGmicSettings();
-        initI2ISettings();
         initInpaintSettings();
     } else if (tabId === 'fontmgr') {
         await initFontMgrTab();

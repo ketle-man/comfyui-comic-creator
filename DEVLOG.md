@@ -2,6 +2,59 @@
 
 ---
 
+## 2026-07-29（設定タブ「Inpaint設定」見出しの英語・中国語訳の欠落を修正）
+
+直前のSelect I2I／レイアウトI2Iモーダル追加作業で発見していた既知の翻訳漏れ（`_HELP_I18N.en`/`.zh`に設定タブ「Inpaint設定」見出しが一件も存在せず、日本語版`_HELP_DATA`にしか無かった）に対応。日本語版の内容（デフォルトワークフロー指定・保存手順・有効/無効時の挙動・ブラウザ保存の旨）をそのまま英語・中国語に翻訳し、両ロケールのsettingsセクション末尾に追加。3言語とも見出し数が一致すること（settings: 5見出し、image-tab: 8見出し）を確認済み。
+
+**How to apply**: [[comic-creator-workflow]]にある通り、ヘルプタブの英語・中国語訳は日本語版と完全に独立したデータで自動同期されない。見出し単位で丸ごと欠落することがあるため、関連機能のヘルプを触る際は都度、日本語版と同じ見出し数が3言語で揃っているか確認する。
+
+---
+
+## 2026-07-29（レイアウトタブの「I2I」「PI2I」ボタンを1つの「I2I」モーダルに統合）
+
+「レイアウトタブのI2I、PI2Iを１つのモーダル（I2I）にして同様の内容で実行できるようにしたい」との依頼を受けて実装。直前に追加したImageタブ「Select I2I」パネル（本DEVLOGの直下エントリ参照）と同じ体験を、レイアウトタブでもモーダルとして提供する。
+
+**実装: 統合モーダル**（`static/js/main/15-pixifx-bridge.js` `openLayoutI2IModal()`新規）
+`templates/index.html`の`layout-i2i-send-btn`（I2I）・`layout-pi2i-send-btn`（PI2I）の2ボタンを、常時有効な単一の`layout-i2i-modal-btn`（ラベル「I2I」）に統合。クリックで開くモーダルは、`.tsm-overlay`/`.tsm-dialog`パターン（09f-bubble-text.js等と同型）で実装し、Target（選択画像／ページ全体）トグル・Positive/Negative Prompt・Denoise・Run・I2I設定（デフォルトワークフロー使用チェック＋ファイル名、`14-integrations.js`の`getI2ISettingsState`/`saveI2ISettingsState`をそのまま使用しSelect I2Iパネルと共有）を持つ。実行は既存の`sendI2IRunToWorkflowStudio()`ブリッジをそのまま流用（Workflow Studio側の変更は不要）。既存`sendSelectedImageToI2I()`/`sendCurrentPageToI2I()`の画像Blob取得部分を`_getSelectedImageBlob()`/`_getPageBlob()`に切り出して共通化し、元の2関数は削除（`sendImageToWorkflowStudioI2I`自体はImageタブの「I2Iへ送る」ボタンが引き続き使うため残置）。`04b-layer-panel-render.js`の旧ボタン無効化ロジック、`16-processing-edit-tabs.js`のボタンイベント登録もあわせて更新。
+
+**実機フィードバックによる追加修正（4点）**
+1. **Layerモードと同じ「新規追加」方針への統一**: 当初「選択画像」対象のRun結果はページ全体対象と同様に単純挿入する設計だったが、実装時点でレイアウトタブに「選択中の画像を置き換える」汎用関数が存在しないと判明。Select I2Iパネルでも直前のセッションで同様の理由から「新規レイヤー追加」に統一した経緯があったため、レイアウトタブも一貫して常に新規画像として挿入する設計で確定（ユーザー確認済み）。
+2. **ページ全体対象の挿入先とサイズ**: 実機確認後、「ページ全体の生成結果はオーバーレイに追加したい」「サイズが小さくなっている」の2点フィードバックを受けて対応。`insertImageFromUrl()`（`08-panels-images.js`）に`placement`引数を追加（後方互換のため省略可）し、`insertImage(dataUrl, imgW, imgH, {}, placement)`へそのまま渡せるようにした。`_pi2iResolvePagePixelSize()`がSVG座標系（mm×100）でのページサイズ`svgW`/`svgH`も返すよう拡張し、`_getPageBlob()`の戻り値を`{blob, pageW, pageH}`に変更。ページ全体対象のRunでは実行直前に`state.selectedOverlay = true`をセットしてから`insertImageFromUrl(result.url, {x:0, y:0, width:pageW, height:pageH})`を呼ぶことで、常にオーバーレイへページ全面サイズ（`insertImageToOverlay`の既定=挿入先の40%縮小を回避）で挿入されるようにした。
+3. **対象トグルの視認性**: 「対象選択ボタンの選択状態がわかりにくい」というフィードバック。原因はCSSの設計自体にあった——`.btn.active`という汎用ルールは存在せず、既存の`.tmplwiz-orientation-buttons .btn.active`/`.btm-shape-btns .btn.active`のように**親要素でスコープしたセレクタでのみ**背景色が定義されている（`active`クラス単体では見た目が変わらない）。同様に`.btn.primary`という汎用ルールも存在しない。新規`.li2i-target-btn.active { background-color: var(--primary-color); color: white; }`をstyle.cssに追加して解決。
+4. **レイアウト微調整**: Positive/Negative textareaを3行→5行に、モーダル幅を900px→720px（`.li2i-dialog`、既定の`.tsm-dialog`比20%減）に、本文左右にpadding 24px（`.li2i-body`）を追加。Runボタンは`margin-left:auto`でステータステキストと分離し行右端に配置。
+
+**検証**: Kaptureで実機確認（`15-pixifx-bridge.js`は非moduleのため`window.関数名=...`で直接上書きしリロード不要で検証）。選択画像対象・ページ全体対象の両方でRun→実際にWorkflow Studioで生成→結果が新規画像として正しい挿入先・サイズで反映されることを確認。
+
+**How to apply**:
+- レイアウトタブに新しい`.btn`ベースのトグルボタン群を追加する際、`active`クラスをtoggleするだけでは見た目が変わらないことがある（既存の`.btn.active`ルールがすべて親要素スコープ付きのため）。新規トグルには対応するスコープ付きCSS（`.独自クラス.active {...}`）を必ず追加すること。同様に`.btn.primary`も見た目に影響しない可能性があるため、色を保証したい場合はスコープ付きCSSか既存の`.btn.primary`実装箇所を確認してから使う。
+- `insertImage()`系の関数は「コマ/オーバーレイ幅の40%」という既定サイズを前提にしている。ページ全体のI2I結果のような「対象そのものと同じサイズで挿入したい」ケースでは、`placement`引数を明示的に渡す必要がある（省略すると意図せず縮小される）。
+
+---
+
+## 2026-07-29（Imageタブ Selectツールに常時I2Iパネル「Select I2I」を新規追加、I2I設定を設定タブから移設）
+
+「Imageタブのセレクトメニューもプロパティを常時表示、マスクメニューのinpaintのようにI2I用のPositive Prompt、Negative Prompt、Ksampler設定Denoise、Run、I2I設定（設定タブのI2I設定を移設）をしたい」との依頼を受けて実装。既存のMaskツール「Inpaint」サブツール（プロパティパネル常時表示＋その場でWorkflow Studio実行→結果を新規レイヤーとして反映、という完成済みパターン）をマスク処理抜きで踏襲した。
+
+**実装1: comic-creator側 image-tab.js**
+`_setActiveTool()`のプロパティペイン非表示条件（`toolId !== "mask" && ... !== "fill"`）に`&& toolId !== "select"`を追加し、Selectツール選択中も`#ie-props-pane`が常時表示されるようにした。新規`_renderSelectI2IProps()`（`_renderMaskProps("inpaint")`と同型）で、Target（All/Layerトグル）・Positive/Negative Prompt・Denoise・Run・ステータス・I2I設定の各UIを`#ie-props-body`にinnerHTML生成する。実行本体`_runSelectI2I()`は、Allモードは`_buildCompositeCanvas()`（既存のInpaintと同じ合成）、Layerモードは`this._layerMgr.activeLayer.canvas`（変形前の生コンテンツ）をPNG化して`sendI2IRunToWorkflowStudio()`へ渡す。結果の反映は当初「Layerモードは元レイヤーのcanvas内容を直接差し替え」で実装したが、実機確認後のフィードバックで「Layerモードも新規レイヤーとして追加したい」と修正依頼があり、新規`_addI2IResultAsLayer()`に差し替えた。元レイヤーと同じ`displayW/displayH/x/y/rotation/flipX/flipY`を引き継いだ新規レイヤー（名前は`<元レイヤー名> I2I`）を追加し、元レイヤー自体は変更しない（Allモードは従来どおり`_loadFromDataUrl(result.url, "I2I Result")`で新規レイヤー化、これは無改造）。
+
+**実装2: I2I設定の移設**
+設定タブの「I2I設定」ブロック（`templates/index.html`、デフォルトワークフロー使用チェック＋ファイル名）を削除し、Select I2Iパネル内に同等のUIを新設。`14-integrations.js`の`initI2ISettings()`（設定タブDOM前提の初期化）を削除し、代わりに`window.getI2ISettingsState()`/`saveI2ISettingsState()`という薄いgetter/setterに置き換えた。設定データ自体（`_i2iSettings`、localStorage `ccc_i2i_settings`）はレイアウトタブの既存I2I送信（`sendImageToWorkflowStudioI2I`）と共有のため変更していない。`01-state.js`の設定タブ初期化からは`initI2ISettings()`呼び出しを削除（`initInpaintSettings()`は据え置き、Inpaint設定は今回移設対象外）。
+
+**実装3: Workflow Studio側（別リポジトリ、新規ブリッジ）**
+既存のInpaint実行ブリッジ（`gallery-tab.js`の`_wfmReceiveInpaintRequest` → `image-edit-tab.js`の`runInpaintExternal`/`_runInpaintWithImages`）を参考に、マスク不要のI2I版を新設。`image-edit-tab.js`に`_runI2IWithImage()`（`comfyEditor.applyImageToSlot()`→`setPromptText()`×2→`setInpaintParams({denoise})`→`window._wfmGenerateTab.generate()`→結果URL取得）と外部エントリポイント`runI2IExternal()`を追加。`setInpaintParams()`は`growMaskBy`未指定なら自動的にスキップされる既存実装だったため、denoise単体用の新規セッターは不要だった。`gallery-tab.js`に`window._wfmReceiveI2IRunRequest`を追加し、`comic-creator`側からの呼び出しを受ける。既存の`_wfmReceiveImageForI2I`（画像を送るだけ、レイアウトタブのI2I/PI2Iボタンが使用）は無改造。変更後、開発リポジトリから`custom_nodes\comfyui-workflow-studio\`（ComfyUI本体側、シンボリックリンクではなく通常コピー）へ手動反映。
+
+**検証**: Kaptureで実機検証。`window._ccImageTab`のプロトタイプに新規メソッドを注入し、ページをリロードせずにUI・実行フロー（All/Layer両モードでの実際のI2I生成→新規レイヤー追加）を確認した。
+
+**ドキュメント**: ヘルプタブ（`_HELP_DATA`日本語＋`_HELP_I18N.en`/`.zh`）に新規見出し「Select I2I（Workflow Studio連携）」を追加し、既存の設定タブ・I2I連携（Workflow Studio）の解説もUI移設を反映。README（3言語）にも同内容を追記。あわせて、既存の「Inpaint（Workflow Studio連携）」見出しと設定タブ「Inpaint設定」見出しが英語・中国語訳に一件も存在しない（日本語版のみ）という既存の翻訳漏れを発見。Image タブの Inpaint 見出しは今回の作業ついでに英語・中国語へ追加したが、設定タブの Inpaint 設定見出しの翻訳漏れは今回のスコープ外として未対応のまま残した。
+
+**How to apply**:
+- Workflow Studio連携で「その場で実行し結果を受け取る」機能（Inpaintパターン）を新設する際は、`comfyEditor.applyImageToSlot`/`setPromptText`/`setInpaintParams`/`window._wfmGenerateTab.generate`が既にマスクなし用途にも流用できる設計になっている（`growMaskBy`等のオプション引数は未指定なら書き込みをスキップする）。新規のI2I的な機能を追加するたびにWorkflow Studio側のプリミティブを増やす必要は薄い。
+- Kaptureでリロード禁止の検証を行う際、`type="module"`で読み込まれるクラス（`window._ccImageTab`のようにwindow公開されているインスタンス）は、`Object.getPrototypeOf(instance)`にメソッドを直接生やせば、ページをリロードせずに新規実装の動作確認ができる。iframe埋め込みの別アプリ（Workflow Studio）側の変更は、`iframe.contentWindow.location.reload()`でiframeだけ再読み込みすれば反映できる（ホストページ全体のリロードは不要）。
+- ヘルプタブの英語・中国語訳（`_HELP_I18N`）に日本語版と比べて見出し自体が丸ごと欠落していることがある（今回のInpaint関連2見出し）。新機能のドキュメントを書く前に、関連する既存見出しがそもそも3言語揃っているか確認する価値がある。
+
+---
+
 ## 2026-07-28（ペイントツールに背景色指定・画像への直接描画・複数画像統合を追加、統合直後にドラッグできない不具合を修正）
 
 前回追加したペイントツールの実機検証フィードバックを受けて3点追加、実装中に見つかったバグを1点修正した。

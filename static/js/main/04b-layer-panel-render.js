@@ -766,10 +766,6 @@ function renderLayerPanel() {
             : t('layer.noImageSelected');
     }
 
-    // 「I2Iへ送る」ボタン: 画像選択中のみ有効
-    const i2iSendBtn = document.getElementById('layout-i2i-send-btn');
-    if (i2iSendBtn) i2iSendBtn.disabled = !state.selectedImageEl;
-
     // 「OC」ボタン（選択オブジェクトを中央へ移動）: 何らかのオブジェクト選択中のみ有効
     const ocBtn = document.getElementById('object-center-btn');
     if (ocBtn) ocBtn.disabled = !_layerOpacityGetSelected();

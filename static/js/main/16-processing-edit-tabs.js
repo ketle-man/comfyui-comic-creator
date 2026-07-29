@@ -387,11 +387,8 @@ function initEditTab() {
     // 画像タブで編集ボタン: Imageタブで開く
     document.getElementById('layer-draw-open-imgedit').addEventListener('click', openImageTabWithSelected);
 
-    // I2Iへ送るボタン: 選択中の画像をWorkflow Studioへ送信
-    document.getElementById('layout-i2i-send-btn')?.addEventListener('click', sendSelectedImageToI2I);
-
-    // PI2Iへ送るボタン: 現在のページ全体をPNG化してWorkflow Studioへ送信
-    document.getElementById('layout-pi2i-send-btn')?.addEventListener('click', sendCurrentPageToI2I);
+    // I2Iボタン: 選択画像またはページ全体をWorkflow Studioへ送信し、その場でI2I実行するモーダルを開く
+    document.getElementById('layout-i2i-modal-btn')?.addEventListener('click', openLayoutI2IModal);
 
     // OCボタン: 選択中オブジェクトをコマ/ページ中央へ移動
     document.getElementById('object-center-btn')?.addEventListener('click', moveSelectedObjectToCenter);

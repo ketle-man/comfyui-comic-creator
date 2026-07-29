@@ -418,7 +418,10 @@ function openBubbleTextModal(existingEl) {
         <div class="tsm-body btm-body">
             <div class="btm-controls">
                 <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
-                    <label class="fontmgr-style-group-label">${t('bubbleText.textLabel')}</label>
+                    <label class="fontmgr-style-group-label" style="display:flex; align-items:center; justify-content:space-between;">
+                        <span>${t('bubbleText.textLabel')}</span>
+                        <button type="button" id="btm-script-insert-btn" class="btn small" title="${t('bubbleText.scriptInsertTitle')}">Insert</button>
+                    </label>
                     <textarea id="btm-text-input" placeholder="${t('bubbleText.textPlaceholder')}" rows="5"></textarea>
                 </div>
                 <div class="fontmgr-style-group">
@@ -528,6 +531,21 @@ function openBubbleTextModal(existingEl) {
     const onKeydown = (e) => { if (e.key === 'Escape') closeAndCleanup(); };
     document.addEventListener('keydown', onKeydown);
     const closeAndCleanup = () => { document.removeEventListener('keydown', onKeydown); close(); };
+
+    // スクリプトタブのプロットで選択中のセル（シーン／要素／セリフ・説明等）を、
+    // テキストエリアのカーソル位置に挿入する（09e-text-tool.js の insertScriptDialogueText と同じ取得元）
+    $('btm-script-insert-btn').addEventListener('click', () => {
+        const text = _scriptGetSelectedDialogue();
+        if (text == null) { alert(t('textTool.selectScriptCell')); return; }
+        if (!text.trim()) { alert(t('textTool.emptyCell')); return; }
+        const textarea = $('btm-text-input');
+        const start = textarea.selectionStart ?? textarea.value.length;
+        const end = textarea.selectionEnd ?? textarea.value.length;
+        textarea.value = textarea.value.slice(0, start) + text + textarea.value.slice(end);
+        textarea.focus();
+        const pos = start + text.length;
+        textarea.setSelectionRange(pos, pos);
+    });
 
     $('btm-close-btn').addEventListener('click', closeAndCleanup);
     $('btm-cancel-btn').addEventListener('click', closeAndCleanup);

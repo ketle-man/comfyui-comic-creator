@@ -429,6 +429,12 @@ class ImageTab {
         this._inpaintGrowMaskBy = 6;
         this._inpaintDenoise   = 1.0;
         this._inpaintRunning   = false;
+        // Select→I2I（Select ツール専用の常時プロパティパネル。Inpaintと対称の構成）
+        this._selectI2IMode     = "all"; // "all"（composite全体） | "layer"（選択中レイヤー単体）
+        this._selectI2IPositive = "";
+        this._selectI2INegative = "";
+        this._selectI2IDenoise  = 1.0;
+        this._selectI2IRunning  = false;
         // 全レイヤーに掛かる全体不透明度（imgeditタブの調整レイヤーパネルから移植）
         this._globalOpacity = 1.0;
         // レイアウトタブから開いた場合の書き戻し先SVG <image> 要素（Upload/Newで開始した場合はnull）
@@ -717,8 +723,9 @@ class ImageTab {
                 overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
             }
         }
-        // Draw/Mask/Fill以外に切り替えたらプロパティペインを非表示
-        if (toolId !== "mask" && toolId !== "draw" && toolId !== "fill") {
+        // Draw/Mask/Fill/Select以外に切り替えたらプロパティペインを非表示
+        // （SelectはInpaintと同様、常時プロパティパネル(I2I)を表示する）
+        if (toolId !== "mask" && toolId !== "draw" && toolId !== "fill" && toolId !== "select") {
             const pane = document.getElementById("ie-props-pane");
             if (pane) pane.style.display = "none";
         }
@@ -880,6 +887,8 @@ class ImageTab {
                 this._updateCompositeView();
                 this._refreshLayerList();
             });
+
+            this._renderSelectI2IProps();
 
         } else if (toolId === "draw" && this._drawTool) {
             el.innerHTML = "";
@@ -1448,6 +1457,179 @@ class ImageTab {
             const def = TOOL_DEFS.find(d => d.id === toolId);
             el.innerHTML = `<span style="font-size:12px;color:var(--it-text-secondary);">${def?.label ?? toolId}: coming soon</span>`;
         }
+    }
+
+    // Select ツール専用の常時プロパティパネル（Mask/Inpaintの _renderMaskProps("inpaint") と対称構成）。
+    // All（composite全体）/ Layer（選択中レイヤー単体）を切り替えてI2Iを実行できる。
+    // I2I設定（デフォルトワークフロー）は設定タブから移設し、ここで読み書きする。
+    _renderSelectI2IProps() {
+        const pane  = document.getElementById("ie-props-pane");
+        const body  = document.getElementById("ie-props-body");
+        const title = document.getElementById("ie-props-title");
+        if (!pane || !body) return;
+        pane.style.display = "flex";
+        if (title) title.textContent = "I2I";
+
+        const modeAll = this._selectI2IMode === "all";
+        body.innerHTML = `
+            <div class="ie-props-row">
+                <label>Target</label>
+                <div style="display:flex;gap:4px;">
+                    <button class="it-btn it-btn-sm${modeAll ? " ie-opt-active" : ""}" id="ie-sel-i2i-mode-all" style="flex:1;">All</button>
+                    <button class="it-btn it-btn-sm${!modeAll ? " ie-opt-active" : ""}" id="ie-sel-i2i-mode-layer" style="flex:1;">Layer</button>
+                </div>
+            </div>
+            <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
+                <label>Positive Prompt</label>
+                <textarea id="ie-sel-i2i-positive" rows="3" style="width:100%;resize:vertical;font-size:12px;">${this._selectI2IPositive}</textarea>
+            </div>
+            <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
+                <label>Negative Prompt</label>
+                <textarea id="ie-sel-i2i-negative" rows="3" style="width:100%;resize:vertical;font-size:12px;">${this._selectI2INegative}</textarea>
+            </div>
+            <div class="ie-props-row">
+                <label>Denoise</label>
+                <input type="number" id="ie-sel-i2i-denoise" min="0" max="1" step="0.01" value="${this._selectI2IDenoise}" style="width:60px;">
+            </div>
+            <div class="ie-props-row">
+                <button class="it-btn it-btn-sm it-btn-primary" id="ie-sel-i2i-run-btn" style="flex:1;" ${this._selectI2IRunning ? "disabled" : ""}>
+                    ${this._selectI2IRunning ? "Running..." : "Run"}
+                </button>
+            </div>
+            <span id="ie-sel-i2i-status" style="font-size:11px;color:var(--it-text-secondary);"></span>
+            <div style="margin:6px 0 4px;border-top:1px solid var(--it-border);padding-top:6px;font-size:10px;color:var(--it-text-secondary);letter-spacing:0.05em;">
+                I2I SETTINGS
+            </div>
+            <div class="ie-props-row">
+                <label style="cursor:pointer;display:flex;align-items:center;gap:4px;">
+                    <input type="checkbox" id="ie-i2i-default-wf-enabled"> Use default workflow
+                </label>
+            </div>
+            <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
+                <label>Workflow file</label>
+                <input type="text" id="ie-i2i-default-wf-name" placeholder="cc_i2i_default.json" style="width:100%;">
+            </div>
+            <div class="ie-props-row">
+                <button class="it-btn it-btn-sm" id="ie-i2i-settings-save-btn">Save</button>
+                <span id="ie-i2i-settings-status" style="font-size:11px;color:var(--it-text-secondary);"></span>
+            </div>
+        `;
+        document.getElementById("ie-sel-i2i-mode-all")?.addEventListener("click", () => {
+            this._selectI2IMode = "all";
+            this._renderSelectI2IProps();
+        });
+        document.getElementById("ie-sel-i2i-mode-layer")?.addEventListener("click", () => {
+            this._selectI2IMode = "layer";
+            this._renderSelectI2IProps();
+        });
+        document.getElementById("ie-sel-i2i-positive")?.addEventListener("input", e => { this._selectI2IPositive = e.target.value; });
+        document.getElementById("ie-sel-i2i-negative")?.addEventListener("input", e => { this._selectI2INegative = e.target.value; });
+        document.getElementById("ie-sel-i2i-denoise")?.addEventListener("input", e => {
+            this._selectI2IDenoise = Math.max(0, Math.min(1, parseFloat(e.target.value)));
+            if (Number.isNaN(this._selectI2IDenoise)) this._selectI2IDenoise = 1.0;
+        });
+        document.getElementById("ie-sel-i2i-run-btn")?.addEventListener("click", () => this._runSelectI2I());
+
+        this._bindI2ISettingsPanel();
+    }
+
+    // I2I設定（デフォルトワークフロー使用有無・ファイル名）の読み込み・保存バインド。
+    // データ自体は static/js/main/14-integrations.js の _i2iSettings（レイアウトタブのI2I送信と共有）。
+    _bindI2ISettingsPanel() {
+        const enabledCb = document.getElementById("ie-i2i-default-wf-enabled");
+        const nameInput = document.getElementById("ie-i2i-default-wf-name");
+        const saveBtn   = document.getElementById("ie-i2i-settings-save-btn");
+        const statusEl  = document.getElementById("ie-i2i-settings-status");
+        if (!enabledCb || typeof window.getI2ISettingsState !== "function") return;
+
+        const cur = window.getI2ISettingsState();
+        enabledCb.checked = cur.enabled;
+        if (nameInput) nameInput.value = cur.file;
+
+        saveBtn?.addEventListener("click", () => {
+            window.saveI2ISettingsState(enabledCb.checked, nameInput?.value);
+            if (statusEl) {
+                statusEl.textContent = "Saved";
+                setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 2000);
+            }
+        });
+    }
+
+    // Select→I2I実行本体。_runInpaint()と対称の構造（マスク不要・All/Layerモード分岐あり）。
+    async _runSelectI2I() {
+        if (this._selectI2IRunning) return;
+        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (typeof window.sendI2IRunToWorkflowStudio !== "function") {
+            this._toast("Workflow Studio integration not available", "error");
+            return;
+        }
+
+        let sourceCanvas, targetLayer = null;
+        if (this._selectI2IMode === "layer") {
+            targetLayer = this._layerMgr.activeLayer;
+            if (!targetLayer) { this._toast("No active layer", "error"); return; }
+            sourceCanvas = targetLayer.canvas;
+        } else {
+            sourceCanvas = this._buildCompositeCanvas();
+        }
+
+        const runBtn   = document.getElementById("ie-sel-i2i-run-btn");
+        const statusEl = document.getElementById("ie-sel-i2i-status");
+        const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
+
+        this._selectI2IRunning = true;
+        if (runBtn) { runBtn.disabled = true; runBtn.textContent = "Running..."; }
+        setStatus("Uploading...");
+
+        try {
+            const imageBlob = await new Promise(resolve => sourceCanvas.toBlob(resolve, "image/png"));
+            setStatus("Generating...");
+            const result = await window.sendI2IRunToWorkflowStudio(imageBlob, {
+                positive: this._selectI2IPositive,
+                negative: this._selectI2INegative,
+                denoise:  this._selectI2IDenoise,
+            });
+
+            if (!result?.ok) throw new Error(result?.message || "I2I failed");
+
+            setStatus("Done");
+            if (this._selectI2IMode === "layer") {
+                await this._addI2IResultAsLayer(targetLayer, result.url);
+            } else {
+                await this._loadFromDataUrl(result.url, "I2I Result");
+            }
+            this._toast("I2I generation complete", "success");
+        } catch (err) {
+            setStatus("Error");
+            this._toast(`I2I failed: ${err.message}`, "error");
+        } finally {
+            this._selectI2IRunning = false;
+            if (this._activeTool === "select") this._renderSelectI2IProps();
+        }
+    }
+
+    // Layerモードの結果反映: 元レイヤーは変更せず、同じ配置（displayW/displayH/x/y/rotation/flip）を
+    // 引き継いだ新規レイヤーとして結果画像を追加する（Allモードの_loadFromDataUrlと同様、常に新規レイヤー化）。
+    async _addI2IResultAsLayer(layer, dataUrl) {
+        const img = await new Promise((resolve, reject) => {
+            const i = new Image();
+            i.onload  = () => resolve(i);
+            i.onerror = () => reject(new Error("Failed to load result image"));
+            i.src = dataUrl;
+        });
+        this._saveUndo();
+        const newLayer = this._layerMgr.addLayer("image", `${layer.name} I2I`, {
+            contentW: img.width, contentH: img.height,
+            displayW: layer.displayW, displayH: layer.displayH,
+            x: layer.x, y: layer.y,
+        });
+        newLayer.rotation = layer.rotation;
+        newLayer.flipX    = layer.flipX;
+        newLayer.flipY    = layer.flipY;
+        newLayer.ctx.drawImage(img, 0, 0);
+        this._layerMgr.setActive(newLayer.id);
+        this._updateCompositeView();
+        this._refreshLayerList();
     }
 
     _renderMaskProps(sub) {

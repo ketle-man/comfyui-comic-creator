@@ -157,28 +157,20 @@ function _saveI2ISettings() {
     localStorage.setItem('ccc_i2i_settings', JSON.stringify(_i2iSettings));
 }
 
-let _i2iSettingsInited = false;
-function initI2ISettings() {
-    if (_i2iSettingsInited) return;
-    _i2iSettingsInited = true;
-    const enabledCb = document.getElementById('settings-i2i-default-wf-enabled');
-    const nameInput = document.getElementById('settings-i2i-default-wf-name');
-    const saveBtn   = document.getElementById('settings-i2i-save-btn');
-    const statusEl  = document.getElementById('settings-i2i-status');
-    if (!enabledCb) return;
+// I2I設定UIは設定タブから撤去し、Imageタブ「Select→I2I」プロパティパネル内に移設した
+// （static/js/image-tab.js の _bindI2ISettingsPanel() が下記2関数を使って読み書きする）。
+// データ自体（_i2iSettings/_saveI2ISettings）はレイアウトタブの既存I2I送信と共有のため変更しない。
+function getI2ISettingsState() {
+    return {
+        enabled: !!_i2iSettings.defaultWorkflowEnabled,
+        file: _i2iSettings.defaultWorkflowFile || 'cc_i2i_default.json',
+    };
+}
 
-    enabledCb.checked = !!_i2iSettings.defaultWorkflowEnabled;
-    if (nameInput) nameInput.value = _i2iSettings.defaultWorkflowFile || 'cc_i2i_default.json';
-
-    if (saveBtn) {
-        saveBtn.addEventListener('click', () => {
-            _i2iSettings.defaultWorkflowEnabled = enabledCb.checked;
-            _i2iSettings.defaultWorkflowFile    = (nameInput?.value || '').trim() || 'cc_i2i_default.json';
-            _saveI2ISettings();
-            if (statusEl) statusEl.textContent = t('settings.gmicSaved');
-            setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
-        });
-    }
+function saveI2ISettingsState(enabled, file) {
+    _i2iSettings.defaultWorkflowEnabled = !!enabled;
+    _i2iSettings.defaultWorkflowFile    = (file || '').trim() || 'cc_i2i_default.json';
+    _saveI2ISettings();
 }
 
 // Inpaint設定（デフォルトワークフロー。I2I設定とは独立。OFFならWorkflow Studio側で
@@ -386,6 +378,54 @@ async function sendInpaintToWorkflowStudio(imageBlob, maskBlob, params) {
         return await fn(imageBlob, maskBlob, params, workflowData, workflowFilename);
     } catch (e) {
         console.error('[Inpaint] sendInpaintToWorkflowStudio error:', e);
+        return { ok: false, message: e.message };
+    }
+}
+
+// ==============================
+// Select I2I連携（Workflow Studio、マスク不要のI2I実行）
+// ==============================
+
+/**
+ * ImageタブのSelectツール「I2I」パネルから、画像(Blob、composite全体または選択レイヤー単体)を
+ * Workflow Studio(iframe)へ送信し、I2I実行結果のURLを受け取る。Inpaintと同様タブ切替はしない
+ * （loadWfmGalleryTab()でiframeロードのみ保証）。
+ * @param {Blob} imageBlob
+ * @param {{positive:string, negative:string, denoise:number}} params
+ * @returns {Promise<{ok:boolean, url?:string, message?:string}>}
+ */
+async function sendI2IRunToWorkflowStudio(imageBlob, params) {
+    const loaded = await loadWfmGalleryTab();
+    if (!loaded) {
+        return { ok: false, message: t('settings.wfmNotFound') };
+    }
+
+    const iframe = document.getElementById('wfmgallery-iframe');
+    const fn = iframe?.contentWindow?._wfmReceiveI2IRunRequest;
+    if (typeof fn !== 'function') {
+        return { ok: false, message: 'Workflow Studio I2I run bridge is not ready' };
+    }
+
+    let workflowData = null;
+    let workflowFilename = null;
+    if (_i2iSettings.defaultWorkflowEnabled && _i2iSettings.defaultWorkflowFile) {
+        workflowFilename = _i2iSettings.defaultWorkflowFile;
+        try {
+            const wfRes = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(workflowFilename)}`);
+            if (wfRes.ok) {
+                workflowData = await wfRes.json();
+            } else {
+                console.warn('[I2I Run] default workflow fetch failed:', wfRes.status);
+            }
+        } catch (e) {
+            console.warn('[I2I Run] default workflow fetch error:', e);
+        }
+    }
+
+    try {
+        return await fn(imageBlob, params, workflowData, workflowFilename);
+    } catch (e) {
+        console.error('[I2I Run] sendI2IRunToWorkflowStudio error:', e);
         return { ok: false, message: e.message };
     }
 }

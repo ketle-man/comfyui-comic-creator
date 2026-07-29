@@ -162,8 +162,7 @@
                 <button id="undo-btn" class="btn" data-i18n="layout.undoBtn">元に戻す</button>
                 <button id="insert-image-btn" class="btn secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.insertImage">画像を挿入</button>
                 <button id="layer-draw-open-imgedit" class="btn small secondary" style="white-space:nowrap; padding:8px 10px;" data-i18n="layout.openImageTabBtn" data-i18n-title="layout.openImageTabTitle" title="選択中の画像をImageタブで開く" disabled>画像タブで編集</button>
-                <button id="layout-i2i-send-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.sendToI2iBtn" data-i18n-title="layout.sendToI2iTitle" title="選択中の画像をWorkflow StudioのI2I入力へ送信" disabled>I2I</button>
-                <button id="layout-pi2i-send-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.sendToPi2iBtn" data-i18n-title="layout.sendToPi2iTitle" title="現在のページ全体をPNGとしてWorkflow StudioのI2I入力へ送信">PI2I</button>
+                <button id="layout-i2i-modal-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.i2iModalBtn" data-i18n-title="layout.i2iModalTitle" title="選択画像またはページ全体をWorkflow Studioへ送信し、その場でI2I生成を実行">I2I</button>
                 <button id="object-center-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n-title="layout.objectCenterTitle" title="選択中のオブジェクトを中央（コマ内ならコマ中心、オーバーレイならページ中心）へ移動" disabled>OC</button>
                 <button id="close-work-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.closeWorkBtn" data-i18n-title="layout.closeWorkTitle" title="作品を閉じます（保存データは失われません。他タブでの作業を軽くしたいときに）">閉じる</button>
               </div>
@@ -1657,23 +1656,6 @@
               <div class="control-row" style="align-items: center; gap: 8px;">
                 <button id="settings-gmic-save-btn" class="btn small primary" data-i18n="common.save">保存</button>
                 <span id="settings-gmic-status" style="font-size:12px; color:#888;"></span>
-              </div>
-            </div>
-
-            <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
-              <h3 data-i18n="settings.i2iTitle">I2I設定</h3>
-              <p data-i18n="settings.i2iDesc" style="margin: 0 0 8px; font-size:12px; color:#888;">「I2Iへ送る」実行時にWorkflow Studio側で自動的に読み込むデフォルトワークフローを指定します（ComfyUIのuser/default/workflowsフォルダ内のファイル名）</p>
-              <div class="control-row" style="align-items:center; gap:8px; margin-bottom:10px;">
-                <input type="checkbox" id="settings-i2i-default-wf-enabled" style="width:16px; height:16px; cursor:pointer;" />
-                <label for="settings-i2i-default-wf-enabled" data-i18n="settings.i2iDefaultWfEnabled" style="cursor:pointer; user-select:none;">デフォルトワークフローを使用する</label>
-              </div>
-              <div class="control-row" style="margin-bottom: 10px; align-items: center; gap: 8px;">
-                <label for="settings-i2i-default-wf-name" data-i18n="settings.i2iDefaultWfNameLabel" style="white-space:nowrap; min-width:160px;">ワークフローファイル名</label>
-                <input type="text" id="settings-i2i-default-wf-name" placeholder="cc_i2i_default.json" style="flex:1; min-width:120px;" />
-              </div>
-              <div class="control-row" style="align-items: center; gap: 8px;">
-                <button id="settings-i2i-save-btn" class="btn small primary" data-i18n="common.save">保存</button>
-                <span id="settings-i2i-status" style="font-size:12px; color:#888;"></span>
               </div>
             </div>
 

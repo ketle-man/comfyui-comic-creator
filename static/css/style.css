@@ -2667,6 +2667,18 @@ input[type="number"] {
   flex-shrink: 0;
 }
 
+/* レイアウトタブ I2I モーダル（15-pixifx-bridge.js openLayoutI2IModal） */
+.li2i-dialog {
+  width: 720px;
+}
+.li2i-body {
+  padding: 14px 24px;
+}
+.li2i-target-btn.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+
 /* フキダシ+テキスト作成/編集モーダル（09f-bubble-text.js） */
 .btm-dialog {
   width: 560px;

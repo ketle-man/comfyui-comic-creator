@@ -3,7 +3,7 @@
 // 元 main.js の行 13098-13257 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: initPixiFxButtons,moveSelectedObjectToCenter,openImageTabWithSelected,pixiFxOpenForLayout
+// 主なトップレベル定義: initPixiFxButtons,moveSelectedObjectToCenter,openImageTabWithSelected,openLayoutI2IModal,pixiFxOpenForLayout
 // ============================================================
 
 // ============================================================
@@ -78,25 +78,21 @@ async function openImageTabWithSelected() {
     }
 }
 
-// レイアウトタブ「I2Iへ送る」ボタン: 選択中の画像をWorkflow StudioのGenerate UI Image入力スロットへ送信する
-async function sendSelectedImageToI2I() {
+// レイアウトタブ「I2I」モーダル用: 選択中の画像要素からBlobを取得する
+// （sendSelectedImageToI2Iのblob取得部分を切り出したもの。openLayoutI2IModal()から使う）
+async function _getSelectedImageBlob() {
     const imgEl = state.selectedImageEl;
     if (!imgEl) {
         alert(t('layout.msgSelectImageFirst'));
-        return;
+        return null;
     }
     const href = imgEl.getAttribute('href') || imgEl.getAttribute('xlink:href') || '';
     if (!href.startsWith('data:image/')) {
         alert(t('layout.msgNotImageOrNotBase64'));
-        return;
+        return null;
     }
-    try {
-        const res = await fetch(href);
-        const blob = await res.blob();
-        await sendImageToWorkflowStudioI2I(blob, imgEl.dataset.name || 'cc-image', 'layout');
-    } catch (e) {
-        alert(t('layout.msgWfmI2ISendFailed', e.message));
-    }
+    const res = await fetch(href);
+    return await res.blob();
 }
 
 // ページのSVG座標単位（mm×100相当。10-output-pages.jsの_getExportBaseWorkSize等と同じ規約）の
@@ -124,48 +120,221 @@ function _pi2iResolvePagePixelSize(pageRecord) {
         w = Math.max(1, Math.round(w * scale));
         h = Math.max(1, Math.round(h * scale));
     }
-    return { w, h };
+    // svgW/svgHはSVG座標系（mm×100）でのページサイズ。オーバーレイへページ全面サイズで
+    // 挿入する際のplacement計算に使う（insertImageFromUrlのplacement引数、openLayoutI2IModal参照）
+    return { w, h, svgW, svgH };
 }
 
-// レイアウトタブ「PI2I」ボタン: 現在のページ全体をPNGとして書き出し、Workflow StudioのGenerate UI
-// Image入力スロットへ送信する（単一画像を送るsendSelectedImageToI2Iのページ全体版）。
+// レイアウトタブ「I2I」モーダル用: 現在のページ全体をPNG化してBlobを取得する
+// （sendCurrentPageToI2Iのblob取得部分を切り出したもの。openLayoutI2IModal()から使う）。
 // PNG化は既存のPDF/EPUB/PNG出力（12-text-png-export.js）と同じ経路
 // （buildMergedSvg→embedFontsInSvg→drawSvgOnCanvas→canvas.toBlob）を流用し、
-// 下書きレイヤーは既存の出力処理と同様に含めない（buildMergedSvgにopts.includeDraftを渡さない）
-async function sendCurrentPageToI2I() {
+// 下書きレイヤーは既存の出力処理と同様に含めない（buildMergedSvgにopts.includeDraftを渡さない）。
+// 戻り値のpageW/pageHはSVG座標系（mm×100）でのページサイズで、結果画像をオーバーレイへ
+// ページ全面サイズのまま挿入するためのplacement計算に使う（openLayoutI2IModal参照）
+async function _getPageBlob() {
     if (!state.activePage) {
         alert(t('layout.msgNoActivePage'));
-        return;
+        return null;
     }
-    try {
-        const pageRecord = await dbGet('pages', state.activePage.name);
-        if (!pageRecord || !pageRecord.svgContent) {
-            alert(t('page.msgPageDataNotFound', state.activePage.name));
+    const pageRecord = await dbGet('pages', state.activePage.name);
+    if (!pageRecord || !pageRecord.svgContent) {
+        alert(t('page.msgPageDataNotFound', state.activePage.name));
+        return null;
+    }
+
+    const mergedSvg = buildMergedSvg(pageRecord);
+    const rawSvg = mergedSvg || pageRecord.svgContent;
+    const embeddedSvg = await embedFontsInSvg(rawSvg);
+
+    const { w: pxW, h: pxH, svgW: pageW, svgH: pageH } = _pi2iResolvePagePixelSize(pageRecord);
+    const canvas = document.getElementById('render-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width  = pxW;
+    canvas.height = pxH;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await drawSvgOnCanvas(ctx, embeddedSvg, pxW, pxH);
+
+    const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error(t('page.errBlobGenFailed'))), 'image/png');
+    });
+    return { blob, pageW, pageH };
+}
+
+// ============================================================
+// レイアウトタブ「I2I」モーダル
+// 選択画像またはページ全体をWorkflow Studioへ送信し、その場でI2I生成を実行する
+// （Imageタブの Select I2I パネル `_renderSelectI2IProps`/`_runSelectI2I` と同内容）。
+// 状態はモジュールスコープに保持し、モーダルを開き直しても入力値を引き継ぐ
+// （bubble-text-modal等と異なり編集対象=既存要素という概念が無いため）。
+// ============================================================
+
+let _layoutI2ITarget   = 'page'; // 'selected' | 'page'
+let _layoutI2IPositive = '';
+let _layoutI2INegative = '';
+let _layoutI2IDenoise  = 1.0;
+
+function openLayoutI2IModal() {
+    _layoutI2ITarget = state.selectedImageEl ? 'selected' : 'page';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'tsm-overlay';
+
+    const dialog = document.createElement('div');
+    dialog.className = 'tsm-dialog li2i-dialog';
+    dialog.innerHTML = `
+        <div class="tsm-header">
+            <h3>${t('layout.i2iModalHeading')}</h3>
+            <button type="button" id="li2i-close-btn" class="tsm-close-btn" title="${t('common.close')}">×</button>
+        </div>
+        <div class="tsm-body li2i-body">
+            <div class="fontmgr-style-group">
+                <label class="fontmgr-style-group-label">${t('layout.i2iTargetLabel')}</label>
+                <div style="display:flex; gap:4px;">
+                    <button type="button" class="btn small secondary li2i-target-btn" data-target="selected">${t('layout.i2iTargetSelected')}</button>
+                    <button type="button" class="btn small secondary li2i-target-btn" data-target="page">${t('layout.i2iTargetPage')}</button>
+                </div>
+            </div>
+            <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
+                <label class="fontmgr-style-group-label">${t('layout.i2iPositiveLabel')}</label>
+                <textarea id="li2i-positive" rows="5"></textarea>
+            </div>
+            <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
+                <label class="fontmgr-style-group-label">${t('layout.i2iNegativeLabel')}</label>
+                <textarea id="li2i-negative" rows="5"></textarea>
+            </div>
+            <div class="fontmgr-style-group">
+                <label>${t('layout.i2iDenoiseLabel')}</label>
+                <input type="number" id="li2i-denoise" min="0" max="1" step="0.01" style="width:70px;">
+            </div>
+            <div class="fontmgr-style-group">
+                <span id="li2i-status" style="font-size:12px; color:var(--text-secondary);"></span>
+                <button type="button" id="li2i-run-btn" class="btn primary" style="margin-left:auto;">${t('layout.i2iRunBtn')}</button>
+            </div>
+            <div style="margin:8px 0 4px; border-top:1px solid var(--border-color); padding-top:8px; font-size:11px; color:var(--text-secondary); letter-spacing:0.05em;">
+                ${t('layout.i2iSettingsHeading')}
+            </div>
+            <div class="fontmgr-style-group">
+                <label style="cursor:pointer; display:flex; align-items:center; gap:4px;">
+                    <input type="checkbox" id="li2i-default-wf-enabled"> ${t('layout.i2iUseDefaultWf')}
+                </label>
+            </div>
+            <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
+                <label class="fontmgr-style-group-label">${t('layout.i2iWfFileLabel')}</label>
+                <input type="text" id="li2i-default-wf-name" placeholder="cc_i2i_default.json">
+            </div>
+            <div class="fontmgr-style-group">
+                <button type="button" id="li2i-settings-save-btn" class="btn small secondary">${t('common.save')}</button>
+                <span id="li2i-settings-status" style="font-size:11px; color:var(--text-secondary); margin-left:8px;"></span>
+            </div>
+        </div>
+    `;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    const $ = id => dialog.querySelector('#' + id);
+
+    $('li2i-positive').value = _layoutI2IPositive;
+    $('li2i-negative').value = _layoutI2INegative;
+    $('li2i-denoise').value  = _layoutI2IDenoise;
+
+    const syncTargetButtons = () => {
+        dialog.querySelectorAll('.li2i-target-btn').forEach(b => {
+            const active = b.dataset.target === _layoutI2ITarget;
+            b.classList.toggle('active', active);
+            b.classList.toggle('secondary', !active);
+        });
+    };
+    syncTargetButtons();
+    dialog.querySelectorAll('.li2i-target-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            _layoutI2ITarget = btn.dataset.target;
+            syncTargetButtons();
+        });
+    });
+
+    $('li2i-positive').addEventListener('input', e => { _layoutI2IPositive = e.target.value; });
+    $('li2i-negative').addEventListener('input', e => { _layoutI2INegative = e.target.value; });
+    $('li2i-denoise').addEventListener('input', e => {
+        _layoutI2IDenoise = Math.max(0, Math.min(1, parseFloat(e.target.value)));
+        if (Number.isNaN(_layoutI2IDenoise)) _layoutI2IDenoise = 1.0;
+    });
+
+    // I2I設定（Imageタブの Select I2I パネルと共有データ、14-integrations.js）
+    if (typeof window.getI2ISettingsState === 'function') {
+        const cur = window.getI2ISettingsState();
+        $('li2i-default-wf-enabled').checked = cur.enabled;
+        $('li2i-default-wf-name').value = cur.file;
+    }
+    $('li2i-settings-save-btn').addEventListener('click', () => {
+        if (typeof window.saveI2ISettingsState !== 'function') return;
+        window.saveI2ISettingsState($('li2i-default-wf-enabled').checked, $('li2i-default-wf-name').value);
+        const statusEl = $('li2i-settings-status');
+        statusEl.textContent = t('layout.i2iSettingsSaved');
+        setTimeout(() => { statusEl.textContent = ''; }, 2000);
+    });
+
+    const close = () => document.body.removeChild(overlay);
+    const onKeydown = (e) => { if (e.key === 'Escape') closeAndCleanup(); };
+    document.addEventListener('keydown', onKeydown);
+    const closeAndCleanup = () => { document.removeEventListener('keydown', onKeydown); close(); };
+
+    $('li2i-close-btn').addEventListener('click', closeAndCleanup);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeAndCleanup(); });
+
+    $('li2i-run-btn').addEventListener('click', async () => {
+        const runBtn   = $('li2i-run-btn');
+        const statusEl = $('li2i-status');
+        const setStatus = (msg) => { statusEl.textContent = msg; };
+
+        if (typeof window.sendI2IRunToWorkflowStudio !== 'function') {
+            alert(t('layout.msgWfmI2INotReady'));
             return;
         }
 
-        const mergedSvg = buildMergedSvg(pageRecord);
-        const rawSvg = mergedSvg || pageRecord.svgContent;
-        const embeddedSvg = await embedFontsInSvg(rawSvg);
+        runBtn.disabled = true;
+        runBtn.textContent = t('layout.i2iRunningBtn');
+        setStatus(t('layout.i2iStatusUploading'));
 
-        const { w: pxW, h: pxH } = _pi2iResolvePagePixelSize(pageRecord);
-        const canvas = document.getElementById('render-canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width  = pxW;
-        canvas.height = pxH;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        await drawSvgOnCanvas(ctx, embeddedSvg, pxW, pxH);
+        try {
+            let blob, pageW = null, pageH = null;
+            if (_layoutI2ITarget === 'selected') {
+                blob = await _getSelectedImageBlob();
+            } else {
+                const pageResult = await _getPageBlob();
+                if (pageResult) { blob = pageResult.blob; pageW = pageResult.pageW; pageH = pageResult.pageH; }
+            }
+            if (!blob) { setStatus(''); return; }
 
-        const blob = await new Promise((resolve, reject) => {
-            canvas.toBlob(b => b ? resolve(b) : reject(new Error(t('page.errBlobGenFailed'))), 'image/png');
-        });
+            setStatus(t('layout.i2iStatusGenerating'));
+            const result = await window.sendI2IRunToWorkflowStudio(blob, {
+                positive: _layoutI2IPositive,
+                negative: _layoutI2INegative,
+                denoise:  _layoutI2IDenoise,
+            });
+            if (!result?.ok) throw new Error(result?.message || 'I2I failed');
 
-        await sendImageToWorkflowStudioI2I(blob, pageRecord.name || 'cc-page', 'layout');
-    } catch (e) {
-        alert(t('layout.msgWfmI2ISendFailed', e.message));
-    }
+            setStatus(t('layout.i2iStatusDone'));
+            closeAndCleanup();
+            // ページ全体対象の結果は、選択中のコマに関わらず常にオーバーレイへ、
+            // ページ全面サイズ（insertImageの既定=40%縮小を避けるためplacement指定）で追加する
+            if (_layoutI2ITarget === 'page') {
+                state.selectedOverlay = true;
+                state.selectedDraft = false;
+                await insertImageFromUrl(result.url, { x: 0, y: 0, width: pageW, height: pageH });
+            } else {
+                await insertImageFromUrl(result.url);
+            }
+        } catch (e) {
+            setStatus(t('layout.i2iStatusError'));
+            alert(t('layout.msgWfmI2ISendFailed', e.message));
+        } finally {
+            runBtn.disabled = false;
+            runBtn.textContent = t('layout.i2iRunBtn');
+        }
+    });
 }
 
 // 「OC」ボタン: 選択中オブジェクト（画像/テキスト/フキダシ/グループ/draw-shape）を中央へ移動する。

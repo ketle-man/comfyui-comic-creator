@@ -15,7 +15,10 @@
 
 ## 未着手
 
-現在、未着手の項目はなし。
+- **ライブペイント／Blender連携の実現可能性調査**（2026-07-29 調査のみ実施・未着手）: ユーザー依頼「krita-ai-diffusionのライブペイント」「krita_blender_workflow_bridge（Krita-Blender連携）」をこのプロジェクトで実現可能か調査。
+  - **ライブペイント（krita-ai-diffusion）**: ソース（`ai_diffusion/model/model.py` の `LiveScheduler`/`LiveWorkspace`）を確認。100ms間隔ポーリング＋デバウンス（直近変更から grace_period秒 or 最初の変更からmax_wait_time=3秒）でComfyUIへWebSocket経由ジョブ投入、完了シグナルで自動反映という仕組み。Comic Creatorでは既存のI2I連携（PI2I: ページPNG化→Workflow Studio送信→呼び戻し）をJS側debounce＋ComfyUI標準WebSocket API購読で拡張すれば実現可能と判断（技術的に可能、Workflow Studio側にもプレビュー購読口の追加が必要）。ブラウザCanvas2DのPNGエンコード＋アップロード往復はKritaのネイティブpixel bufferより重いため、軽量モデル（LCM/Turbo系）＋低解像度プレビュー前提でないと「ライブ」感は出ない。
+  - **Blender連携（krita_blender_workflow_bridge）**: GitLab READMEを確認。Krita・Blenderは別プロセスで、ファイルシステム経由（スケッチ画像・`.blend`・レンダリング結果PNG）でデータ交換し、Krita側からBlender実行ファイルをsubprocessとして呼び出す方式。Comic Creatorでは既存のG'MIC連携パターン（`py/ccc.py`の`_gmic_run_gui`/`handle_local_gmic_status`: subprocess起動→job_idポーリング→結果ファイルbase64回収、`_validate_local_exe_path`によるexeパス検証）をそのまま横展開すれば実現可能と判断。3Dポーズ機能（Three.js内製、[[vrm-pose-editor-architecture]]参照）とは競合せず、複雑な3Dシーン制作が必要な場合の別機能という位置づけになる。Blenderは`--background --python`実行のためG'MICよりレイテンシが大きく、非同期ジョブ＋進捗UIは必須。
+  - 調査結果の詳細（コード抜粋・実装方針）は memory `external-reference-live-paint-blender-bridge` に記録済み。着手時はここから設計・実装フェーズへ進める（未指示のため今回は調査のみで着手せず）。
 
 ---
 
