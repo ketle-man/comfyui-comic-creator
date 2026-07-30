@@ -116,7 +116,12 @@ function renderLayerPanel() {
             pushHistory();
             if (state.selectedShapeId === shape.id) { state.selectedShapeId = null; clearHandles(); }
             state.checkedLayerEls.delete(shape);
+            // 延長フキダシの道連れ削除・ネック/共有リングの後始末は09b-balloon-shapes.jsの
+            // 共通ヘルパーに集約（Delete/Backspaceキー経由の05-groups-move.jsと共有）。
+            // これを経由しないと、延長・ネック・共有リングが消し忘れられて保存後もゴミが残る
+            const linkedToId = _h2CleanupBalloonChainBeforeDelete(shape);
             shape.remove();
+            _h2RefreshChainAfterDelete(linkedToId);
             const curSvg = getPanelLayerSvg();
             if (curSvg) await savePanelSvg(state.selectedPanelId || 'panel-0', curSvg);
             renderLayerPanel();

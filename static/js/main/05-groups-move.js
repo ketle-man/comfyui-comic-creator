@@ -522,21 +522,9 @@ async function deleteSelectedObject() {
             break;
         case 'shape': {
             if (state.selectedShapeId === el.id) { state.selectedShapeId = null; clearHandles(); }
-            deletedLinkedToId = el.dataset.linkedToId || null;
-            // 削除対象がベースの場合、リンクされた延長フキダシとそのネックも道連れで削除する
-            // （延長フキダシ自身を削除した場合はこのクエリが空振りし、自分自身とそのネックだけが通常どおり削除される）
-            document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(el.id)}"]`).forEach(ext => {
-                document.querySelector(`.balloon-connector-fill[data-connector-for="${CSS.escape(ext.id)}"]`)?.remove();
-                document.querySelector(`.balloon-connector-border[data-connector-for="${CSS.escape(ext.id)}"]`)?.remove();
-                if (state.selectedShapeId === ext.id) { state.selectedShapeId = null; clearHandles(); }
-                state.checkedLayerEls.delete(ext);
-                ext.remove();
-            });
-            document.querySelector(`.balloon-connector-fill[data-connector-for="${CSS.escape(el.id)}"]`)?.remove();
-            document.querySelector(`.balloon-connector-border[data-connector-for="${CSS.escape(el.id)}"]`)?.remove();
-            // ベース自身を削除した場合、道連れの延長は上で消したので共有リング/マスクも除去する
-            document.getElementById(`chain-ring-${el.id}`)?.remove();
-            document.getElementById(`chain-mask-${el.id}`)?.remove();
+            // 延長フキダシの道連れ削除・ネック/共有リングの後始末は09b-balloon-shapes.jsの
+            // 共通ヘルパーに集約（レイヤーパネルの✕ボタンとも共有）
+            deletedLinkedToId = _h2CleanupBalloonChainBeforeDelete(el);
             break;
         }
         case 'image':
@@ -567,13 +555,8 @@ async function deleteSelectedObject() {
 
     el.remove();
 
-    // 延長フキダシを削除した場合、ベース側は枠線非表示・共有リング表示のままになってしまうため、
-    // ベースを再描画して「延長が無ければ通常の個別枠線に戻す／延長が他に残っていれば
-    // 共有リングを残り数分で作り直す」を反映させる
-    if (deletedLinkedToId) {
-        const baseEl = document.getElementById(deletedLinkedToId);
-        if (baseEl) _updateH2ShapePath(baseEl);
-    }
+    // 延長フキダシを削除した場合、ベース側の枠線表示・共有リングを現在の延長数に合わせて更新する
+    _h2RefreshChainAfterDelete(deletedLinkedToId);
 
     const curSvg = getPanelLayerSvg();
     if (curSvg) {

@@ -259,6 +259,7 @@ const LANGUAGES = {
         'layout.tailLabel': '尻尾',
         'layout.angleLabel': '角度:',
         'layout.lengthLabel': '長さ:',
+        'layout.tailNoneLabel': '尻尾なし',
         'layout.curveLabel': 'カーブ:',
         'layout.seedLabel': 'シード:',
         'layout.spikeCountLabel': 'トゲ数:',
@@ -1102,6 +1103,8 @@ const LANGUAGES = {
 
         // -- ページ/作品管理 実行時メッセージ（Phase 2, 07/10/11a/11b） --
         'layout.msgNoImageSelected': '画像が選択されていません。',
+        'layout.msgNoObjectSelected': '削除対象が選択されていません。',
+        'layout.deleteObjectBtnTitle': '選択中のオブジェクト（画像・フキダシ・テキスト・図形・グループ）を削除します',
         'layout.msgSelectImage': '画像を選択してください',
         'layout.msgImageBase64Unavailable': '画像のbase64データを取得できませんでした',
         'layout.procSvgBgRemoving': 'SVG背景除去中...',
@@ -1448,6 +1451,7 @@ const LANGUAGES = {
         'layout.tailLabel': 'Tail',
         'layout.angleLabel': 'Angle:',
         'layout.lengthLabel': 'Length:',
+        'layout.tailNoneLabel': 'No tail',
         'layout.curveLabel': 'Curve:',
         'layout.seedLabel': 'Seed:',
         'layout.spikeCountLabel': 'Spikes:',
@@ -2269,6 +2273,8 @@ const LANGUAGES = {
         'draw.shapeToPngDone': (w, h) => `Converted to PNG and inserted (${w}×${h})`,
 
         'layout.msgNoImageSelected': 'No image is selected.',
+        'layout.msgNoObjectSelected': 'No object is selected to delete.',
+        'layout.deleteObjectBtnTitle': 'Deletes the currently selected object (image, balloon, text, shape, or group)',
         'layout.msgSelectImage': 'Please select an image',
         'layout.msgImageBase64Unavailable': 'Could not get base64 data for the image',
         'layout.procSvgBgRemoving': 'Removing SVG background...',
@@ -2614,6 +2620,7 @@ const LANGUAGES = {
         'layout.tailLabel': '尾巴',
         'layout.angleLabel': '角度：',
         'layout.lengthLabel': '长度：',
+        'layout.tailNoneLabel': '无尾巴',
         'layout.curveLabel': '曲线：',
         'layout.seedLabel': '种子：',
         'layout.spikeCountLabel': '尖刺数：',
@@ -3435,6 +3442,8 @@ const LANGUAGES = {
         'draw.shapeToPngDone': (w, h) => `已转换为PNG并插入（${w}×${h}）`,
 
         'layout.msgNoImageSelected': '未选择图像。',
+        'layout.msgNoObjectSelected': '未选中要删除的对象。',
+        'layout.deleteObjectBtnTitle': '删除当前选中的对象（图像、对话气泡、文字、图形或分组）',
         'layout.msgSelectImage': '请选择图像',
         'layout.msgImageBase64Unavailable': '无法获取图像的base64数据',
         'layout.procSvgBgRemoving': '正在移除SVG背景...',

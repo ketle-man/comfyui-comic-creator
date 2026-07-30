@@ -3,7 +3,7 @@
 // 元 main.js の行 5053-5897 に相当
 // <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
 // 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _collectReferencedFilters,_layoutPageDelete,_layoutPageList,_layoutPageNav,_updatePageThumbGridActive,buildMergedSvg,createPageFromTemplate,deleteSelectedImage,initPageManager,loadPages,pushHistory,renderLayoutTab,renderPageSelector,renderPageThumbGrid,saveCurrentSvg,savePanelSvg,saveShapeSvg,saveTextSvg,switchActivePage,undo,updateLayoutPageNav
+// 主なトップレベル定義: _collectReferencedFilters,_layoutPageDelete,_layoutPageList,_layoutPageNav,_updatePageThumbGridActive,buildMergedSvg,createPageFromTemplate,initPageManager,loadPages,pushHistory,renderLayoutTab,renderPageSelector,renderPageThumbGrid,saveCurrentSvg,savePanelSvg,saveShapeSvg,saveTextSvg,switchActivePage,undo,updateLayoutPageNav
 // ============================================================
 
 // ==============================
@@ -56,9 +56,15 @@ async function initPageManager() {
         insertImgBtn.addEventListener('click', handleInsertImageFromLocal);
     }
 
+    // 「削除」ボタン: 画像だけでなく、選択中のオブジェクト（フキダシ・テキスト・図形・グループも
+    // 含む）を汎用的に削除する。実体は05-groups-move.jsのdeleteSelectedObject()
+    // （Delete/Backspaceキーと共通、延長フキダシの連結解除等の後始末も含む）
     const deleteImgBtn = document.getElementById('delete-image-btn');
     if (deleteImgBtn) {
-        deleteImgBtn.addEventListener('click', deleteSelectedImage);
+        deleteImgBtn.addEventListener('click', async () => {
+            const deleted = await deleteSelectedObject();
+            if (!deleted) alert(t('layout.msgNoObjectSelected'));
+        });
     }
 
     const undoBtn = document.getElementById('undo-btn');
@@ -931,27 +937,6 @@ async function undo() {
         } catch (e) {
             console.error('Undo error:', e);
         }
-    }
-}
-
-async function deleteSelectedImage() {
-    const container = getActiveContainer();
-    if (!container) return;
-
-    const panelSvg = getPanelLayerSvg(container);
-    if (!panelSvg) return;
-
-    const selectedImg = panelSvg.querySelector('.inserted-image.selected');
-    if (selectedImg) {
-        pushHistory();
-        const panelId = selectedImg.getAttribute('data-panel-id') ||
-            selectedImg.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
-        selectedImg.remove();
-        await savePanelSvg(panelId, panelSvg);
-        state.selectedImageId = null;
-        state.selectedImageEl = null;
-    } else {
-        alert(t('layout.msgNoImageSelected'));
     }
 }
 

@@ -564,6 +564,36 @@ function initBalloonManager() {
         });
     }
 
+    // 尻尾なしチェックボックス: ONで尻尾の長さを0にする（延長フキダシの既定と同じ状態）。
+    // OFFに戻したときは、ON化前の長さを覚えておいて復元する（無ければ既定値60）
+    const cbTailNone = document.getElementById('h2-tail-none');
+    if (cbTailNone) {
+        cbTailNone.addEventListener('change', (e) => {
+            const el = state.selectedShapeId ? document.getElementById(state.selectedShapeId) : null;
+            if (!el) return;
+            const slider = document.getElementById('h2-tail-length');
+            const textEl = document.getElementById('h2-tail-length-val');
+            const on = e.target.checked;
+            let newLength;
+            if (on) {
+                // 現在の長さを復元用に保持してから0にする（既に0ならそのまま=保持値なし）
+                const cur = parseFloat(el.dataset.tailLength || 60);
+                if (cur > 0) el.dataset.tailLengthPrev = cur;
+                newLength = 0;
+            } else {
+                newLength = parseFloat(el.dataset.tailLengthPrev || 60);
+                if (newLength <= 0) newLength = 60;
+            }
+            el.dataset.tailLength = newLength;
+            if (slider) { slider.value = newLength; slider.disabled = on; }
+            if (textEl) textEl.textContent = Math.round(newLength);
+            _updateH2ShapePath(el);
+            if (state.balloon.isEditMode) _updateH2HandlePositions(el);
+            const svgEl = el.ownerSVGElement;
+            if (svgEl) saveShapeSvg(svgEl);
+        });
+    }
+
     // h2の種類セレクト変更: 選択中フキダシの種類を変更
     const h2TypeSel = document.getElementById('h2-shape-type');
     if (h2TypeSel) {

@@ -774,6 +774,19 @@ function updateShapePath(el) {
     _updateH2ShapePath(el);
 }
 
+// parentの子要素の中から、targetNodes（ベース・延長のシェイプ要素群）のうちDOM順で最初に
+// 現れるものを返す。ネックのコネクタや連結の共有リングは、この要素の直前（＝すぐ奥）に
+// 配置することで、画像挿入やレイヤーパネルでの重ね順変更によって別のオブジェクトが
+// ベース・延長の間に割り込んでも、常に両シェイプのすぐ下に留まり続ける（間に挟まった
+// オブジェクトに隠されて見えなくなることを防ぐ）。見つからなければnullを返す。
+function _h2ChainAnchorNode(parent, targetNodes) {
+    const targetSet = new Set(targetNodes);
+    for (const child of parent.children) {
+        if (targetSet.has(child)) return child;
+    }
+    return null;
+}
+
 // 延長フキダシ（dataset.linkedToId でベースを参照する balloon-shape）とベースを結ぶ
 // ネック（コネクタ）を描画・更新する。ベース/延長どちらの子要素でもない独立したpath要素として
 // 両シェイプより手前（DOM順で前）に配置し、両者の現在位置から毎回パスを再構築することで、
@@ -876,11 +889,17 @@ function _updateBalloonConnector(extEl) {
         connectorBorder.dataset.connectorFor = extEl.id;
         connectorBorder.setAttribute('fill', 'none');
         connectorBorder.style.pointerEvents = 'none';
-        // ベースより手前・両シェイプより奥（DOM順で先頭）に、塗り→縁取りの順で配置する
-        // （縁取りは塗りの上に重ねることで自由端がフキダシの色と綺麗に繋がって見える）
+    }
+    {
+        // ベース・延長どちらより奥（DOM順で先）にあるかは、画像挿入やレイヤーの重ね順変更で
+        // 変わり得るため、固定位置（parent先頭）ではなく毎回「ベース/延長のうちDOM順で
+        // 先に来る方の直前」を計算し直して配置する。他のオブジェクトがベース/延長の間に
+        // 割り込んで挿入されても、ネックが必ず両シェイプの直下（すぐ奥）に留まり、
+        // 間に挟まった別オブジェクトに隠されて見えなくなることを防ぐ
         const parent = baseEl.parentNode;
         if (parent) {
-            parent.insertBefore(connectorFill, parent.firstChild);
+            const anchor = _h2ChainAnchorNode(parent, [baseEl, extEl]);
+            parent.insertBefore(connectorFill, anchor || parent.firstChild);
             parent.insertBefore(connectorBorder, connectorFill.nextSibling);
         }
     }
@@ -1137,15 +1156,55 @@ function _updateH2ShapePath(el) {
     // 延長フキダシ連結: 自身が延長なら自分のコネクタを、自分がベースの延長を持っていれば
     // それらのコネクタ・チェーン共有リングも合わせて再計算する（リサイズ・回転・本体移動・
     // 尻尾ドラッグ等、このシェイプの見た目が変わるすべての経路がここを通るため、
-    // この一箇所で追従を担保できる）
-    if (el.dataset.linkedToId) _updateBalloonConnector(el);
+    // この一箇所で追従を担保できる）。共有リングは_h2ChainAnchorNodeで求めた位置の直前に
+    // 挿入されるため、必ずリング→ネックの順で呼び出す（ネックを先に呼ぶと、後から挿入される
+    // リングがネックより手前＝ネックを隠す位置に来てしまう）
     const chainBaseEl = el.dataset.linkedToId ? document.getElementById(el.dataset.linkedToId) : el;
     if (chainBaseEl) {
         _updateChainUnionRing(chainBaseEl);
+        if (el.dataset.linkedToId) _updateBalloonConnector(el);
         document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(chainBaseEl.id)}"]`).forEach(ext => {
             if (ext !== el) _updateBalloonConnector(ext);
         });
+    } else if (el.dataset.linkedToId) {
+        // chainBaseElが見つからない（ベース削除済み等）場合でも、孤立コネクタの
+        // クリーンアップ自体は_updateBalloonConnector内で行われるため呼び出しておく
+        _updateBalloonConnector(el);
     }
+}
+
+// フキダシelを削除する直前に呼ぶ後始末。elがベースなら道連れの延長・そのネック・
+// 共有リング/マスクを、elが延長ならel自身の分のネックを削除する。呼び出し元（レイヤーパネルの
+// ✕ボタン、Delete/Backspaceキーの2箇所）で削除方法が違っても同じ後始末になるよう共通化した
+// （2026-07-30発覚: レイヤーパネルの✕ボタンがこの処理を経由しない独自の削除コードを持っていた
+// ため、ネック・共有リングが消し忘れられ、削除後もフキダシ形状の黒塗り・矩形などの
+// ゴミが残ったまま保存されてしまう不具合があった）。
+// 戻り値: elがdata-linked-to-idを持てばそのベースのid（呼び出し元はel.remove()の後に
+// _h2RefreshChainAfterDeleteへ渡すこと）、無ければnull
+function _h2CleanupBalloonChainBeforeDelete(el) {
+    const linkedToId = el.dataset.linkedToId || null;
+    document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(el.id)}"]`).forEach(ext => {
+        document.querySelector(`.balloon-connector-fill[data-connector-for="${CSS.escape(ext.id)}"]`)?.remove();
+        document.querySelector(`.balloon-connector-border[data-connector-for="${CSS.escape(ext.id)}"]`)?.remove();
+        if (state.selectedShapeId === ext.id) { state.selectedShapeId = null; clearHandles(); }
+        state.checkedLayerEls.delete(ext);
+        ext.remove();
+    });
+    document.querySelector(`.balloon-connector-fill[data-connector-for="${CSS.escape(el.id)}"]`)?.remove();
+    document.querySelector(`.balloon-connector-border[data-connector-for="${CSS.escape(el.id)}"]`)?.remove();
+    document.getElementById(`chain-ring-${el.id}`)?.remove();
+    document.getElementById(`chain-mask-${el.id}`)?.remove();
+    return linkedToId;
+}
+
+// _h2CleanupBalloonChainBeforeDelete と対になる後始末。削除された延長のベースを再描画し、
+// 枠線表示・共有リングを現在の延長数に合わせて更新する（延長が0になれば通常の個別枠線に
+// 戻り、まだ延長が残っていれば共有リングを残り数分で作り直す）。呼び出し元はel.remove()の
+// 「後」にこれを呼ぶこと（削除前だとクエリに削除対象自身が残ってしまう）
+function _h2RefreshChainAfterDelete(linkedToId) {
+    if (!linkedToId) return;
+    const baseEl = document.getElementById(linkedToId);
+    if (baseEl) _updateH2ShapePath(baseEl);
 }
 
 // 延長フキダシで連結されたベース+延長群（チェーン）の外周のみを1本のリングとして描画する。
@@ -1182,6 +1241,12 @@ function _updateChainUnionRing(baseEl) {
         mask = document.createElementNS('http://www.w3.org/2000/svg', 'mask');
         mask.id = maskId;
         mask.setAttribute('mask-type', 'alpha');
+        // savePanelSvg/saveOverlaySvg は data-ccc-mask 属性が付いた<mask>だけをdefsに持ち回る
+        // （それ以外は保存対象の抽出SVGに含まれず消えてしまう）。既存のレイヤーマスク機構
+        // （04a-mask-core.js）と同じ規約に合わせ、値にはベースのidを指定する（保存側は
+        // 「その値と同じidの要素がコマ/オーバーレイ内に存在するか」で判定するため、
+        // ベース自身のidを指定すれば必ず一致する）
+        mask.setAttribute('data-ccc-mask', baseEl.id);
         defs.appendChild(mask);
     }
     mask.innerHTML = '';
@@ -1212,17 +1277,33 @@ function _updateChainUnionRing(baseEl) {
         ring.id = ringId;
         ring.style.pointerEvents = 'none';
     }
-    const vb = svgEl.viewBox.baseVal;
-    ring.setAttribute('x', 0);
-    ring.setAttribute('y', 0);
-    ring.setAttribute('width', (vb && vb.width) || 21000);
-    ring.setAttribute('height', (vb && vb.height) || 29700);
+    // ページ全面ではなく、チェーン各メンバーの外接矩形＋余白に限定する（保存時にmask定義が
+    // 何らかの理由で失われた場合でも、maskなしで描画される事故の被害をこの範囲に留めるため）
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    members.forEach(m => {
+        const mcx = parseFloat(m.dataset.cx), mcy = parseFloat(m.dataset.cy);
+        const mrx = parseFloat(m.dataset.rx), mry = parseFloat(m.dataset.ry);
+        const pad = Math.max(mrx, mry) * 0.5 + parseFloat(m.dataset.borderWidth || 3) * 2;
+        const reach = Math.max(mrx, mry) + pad;
+        minX = Math.min(minX, mcx - reach); maxX = Math.max(maxX, mcx + reach);
+        minY = Math.min(minY, mcy - reach); maxY = Math.max(maxY, mcy + reach);
+    });
+    ring.setAttribute('x', minX);
+    ring.setAttribute('y', minY);
+    ring.setAttribute('width', Math.max(1, maxX - minX));
+    ring.setAttribute('height', Math.max(1, maxY - minY));
     ring.setAttribute('fill', baseEl.dataset.strokeColor || '#000000');
     ring.setAttribute('mask', `url(#${maskId})`);
-    // ネックのコネクタや各シェイプ本体より必ず奥に描画されるよう、呼び出し順に関わらず
-    // 毎回最背面（DOM順で先頭）へ再配置する
+    // 各メンバー本体より必ず奥に描画されるようにする。ただし固定で最背面（parent先頭）に
+    // 置くと、画像挿入やレイヤーパネルでの重ね順変更で他のオブジェクトがリングとメンバーの
+    // 間に割り込み、リングがそのオブジェクトに隠されて見えなくなる（2026-07-30発覚の不具合）。
+    // 呼び出しのたびに「メンバーのうちDOM順で最初に現れるものの直前」を計算し直して
+    // 配置することで、間に他オブジェクトが挟まっても常にメンバーのすぐ奥に留まるようにする
     const parent = baseEl.parentNode;
-    if (parent) parent.insertBefore(ring, parent.firstChild);
+    if (parent) {
+        const anchor = _h2ChainAnchorNode(parent, members);
+        parent.insertBefore(ring, anchor || parent.firstChild);
+    }
 }
 
 // フキダシ or 図形要素をPNG画像に変換して同位置に複製挿入する

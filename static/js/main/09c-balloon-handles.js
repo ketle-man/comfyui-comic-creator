@@ -437,6 +437,11 @@ function _syncH2UI(el) {
     setVal('h2-tail-angle',  Math.round(parseFloat(el.dataset.tailAngleDeg || 45)));
     setVal('h2-tail-length', Math.round(parseFloat(el.dataset.tailLength   || 60)));
     setVal('h2-tail-width',  Math.round(parseFloat(el.dataset.tailWidth    || 13)));
+    const tailNone = parseFloat(el.dataset.tailLength || 60) === 0;
+    const cbTailNone = document.getElementById('h2-tail-none');
+    if (cbTailNone) cbTailNone.checked = tailNone;
+    const sliderLength = document.getElementById('h2-tail-length');
+    if (sliderLength) sliderLength.disabled = tailNone;
     const curveVal = Math.round(parseFloat(el.dataset.tailCurve || 0));
     const curveOn = el.dataset.tailCurveOn === '1';
     setVal('h2-tail-curve',  curveVal);
