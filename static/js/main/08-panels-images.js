@@ -1300,9 +1300,12 @@ function initImageManipulation(svgEl, balloonSvgEl) {
             balloonInitialCy = parseFloat(shape.dataset.cy);
             state.selectedShapeId = shape.id;
 
-            // このシェイプがベースの場合、リンクされた延長フキダシも同じ量だけ平行移動させる
-            // （延長側をドラッグした場合はここが空配列になり、ベースは動かずネックだけが伸縮する）
-            balloonLinkedExts = Array.from(document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(shape.id)}"]`))
+            // このシェイプがベースの場合、リンクされた延長フキダシ（孫・ひ孫まで含めたチェーン
+            // 全体）も同じ量だけ平行移動させる（延長側をドラッグした場合はここが空配列になり、
+            // ベースは動かずネックだけが伸縮する）。直接の子だけを見ると、親→子→孫のように
+            // 多段連結された場合に孫が置き去りになる（09b-balloon-shapes.jsの
+            // _h2ChainAllDescendantsと同じ理由）
+            balloonLinkedExts = (typeof _h2ChainAllDescendants === 'function' ? _h2ChainAllDescendants(shape) : [])
                 .map(ext => ({ el: ext, cx0: parseFloat(ext.dataset.cx), cy0: parseFloat(ext.dataset.cy) }));
 
             // 編集モードをONにしてハンドルを表示

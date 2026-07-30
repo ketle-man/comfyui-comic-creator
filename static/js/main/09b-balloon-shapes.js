@@ -787,6 +787,42 @@ function _h2ChainAnchorNode(parent, targetNodes) {
     return null;
 }
 
+// elから data-linked-to-id を辿り、連結チェーンの最上位（リンク元を持たない）ベース要素を
+// 返す。親→子→孫のように何段連結されていても最上位まで遡る（1段しか見ないと、孫フキダシの
+// 場合に「子」を誤ってベース扱いしてしまい、共有リングが親+子・子+孫の2つに分裂して継ぎ目が
+// 出る不具合があった）。途中でベースが見つからない（削除済み等）場合や循環参照はnullを返す
+function _h2ChainRootEl(el) {
+    let cur = el;
+    const visited = new Set([el.id]);
+    while (cur.dataset.linkedToId) {
+        const parent = document.getElementById(cur.dataset.linkedToId);
+        if (!parent || visited.has(parent.id)) return null;
+        visited.add(parent.id);
+        cur = parent;
+    }
+    return cur;
+}
+
+// rootElを起点に、data-linked-to-id で直接・間接に連なる延長フキダシ（子・孫・ひ孫...）を
+// 再帰的にすべて収集して返す（rootEl自身は含まない）。共有リング・ネック追従・連結削除など
+// 「見た目上ひとつながりのチェーン全体」を扱う箇所は、直接の子だけを見る実装だと孫以降が
+// 漏れるため、このヘルパーに一本化する
+function _h2ChainAllDescendants(rootEl) {
+    const result = [];
+    const queue = [rootEl];
+    const visited = new Set([rootEl.id]);
+    while (queue.length) {
+        const cur = queue.shift();
+        document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(cur.id)}"]`).forEach(ext => {
+            if (visited.has(ext.id)) return;
+            visited.add(ext.id);
+            result.push(ext);
+            queue.push(ext);
+        });
+    }
+    return result;
+}
+
 // 延長フキダシ（dataset.linkedToId でベースを参照する balloon-shape）とベースを結ぶ
 // ネック（コネクタ）を描画・更新する。ベース/延長どちらの子要素でもない独立したpath要素として
 // 両シェイプより手前（DOM順で前）に配置し、両者の現在位置から毎回パスを再構築することで、
@@ -1159,15 +1195,17 @@ function _updateH2ShapePath(el) {
     // この一箇所で追従を担保できる）。共有リングは_h2ChainAnchorNodeで求めた位置の直前に
     // 挿入されるため、必ずリング→ネックの順で呼び出す（ネックを先に呼ぶと、後から挿入される
     // リングがネックより手前＝ネックを隠す位置に来てしまう）
-    const chainBaseEl = el.dataset.linkedToId ? document.getElementById(el.dataset.linkedToId) : el;
-    if (chainBaseEl) {
-        _updateChainUnionRing(chainBaseEl);
+    const chainRootEl = el.dataset.linkedToId ? _h2ChainRootEl(el) : el;
+    if (chainRootEl) {
+        _updateChainUnionRing(chainRootEl);
         if (el.dataset.linkedToId) _updateBalloonConnector(el);
-        document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(chainBaseEl.id)}"]`).forEach(ext => {
+        // 孫・ひ孫まで含めたチェーン全体ぶんのネックを再計算する（直接の子だけでは
+        // 親→子→孫のような多段連結で孫側のネックが取り残される）
+        _h2ChainAllDescendants(chainRootEl).forEach(ext => {
             if (ext !== el) _updateBalloonConnector(ext);
         });
     } else if (el.dataset.linkedToId) {
-        // chainBaseElが見つからない（ベース削除済み等）場合でも、孤立コネクタの
+        // chainRootElが見つからない（ベース削除済み等）場合でも、孤立コネクタの
         // クリーンアップ自体は_updateBalloonConnector内で行われるため呼び出しておく
         _updateBalloonConnector(el);
     }
@@ -1183,9 +1221,13 @@ function _updateH2ShapePath(el) {
 // _h2RefreshChainAfterDeleteへ渡すこと）、無ければnull
 function _h2CleanupBalloonChainBeforeDelete(el) {
     const linkedToId = el.dataset.linkedToId || null;
-    document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(el.id)}"]`).forEach(ext => {
+    // 直接の延長だけでなく孫・ひ孫まで道連れ削除する（途中のフキダシを削除した際に
+    // その先の延長が孤立して残ってしまうのを防ぐ）
+    _h2ChainAllDescendants(el).forEach(ext => {
         document.querySelector(`.balloon-connector-fill[data-connector-for="${CSS.escape(ext.id)}"]`)?.remove();
         document.querySelector(`.balloon-connector-border[data-connector-for="${CSS.escape(ext.id)}"]`)?.remove();
+        document.getElementById(`chain-ring-${ext.id}`)?.remove();
+        document.getElementById(`chain-mask-${ext.id}`)?.remove();
         if (state.selectedShapeId === ext.id) { state.selectedShapeId = null; clearHandles(); }
         state.checkedLayerEls.delete(ext);
         ext.remove();
@@ -1219,7 +1261,7 @@ function _updateChainUnionRing(baseEl) {
     if (!svgEl) return;
     const ringId = `chain-ring-${baseEl.id}`;
     const maskId = `chain-mask-${baseEl.id}`;
-    const exts = Array.from(document.querySelectorAll(`.balloon-shape[data-linked-to-id="${CSS.escape(baseEl.id)}"]`));
+    const exts = _h2ChainAllDescendants(baseEl);
 
     if (exts.length === 0) {
         // 延長が無くなった場合、共有リングは不要（ベースは通常の個別枠線に戻る）

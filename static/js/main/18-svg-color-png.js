@@ -229,7 +229,10 @@ function _svgColorApply() {
 
     const newHref = _svgTextToDataUrl(svgText);
     el.setAttribute('href', newHref);
-    el.setAttribute('xlink:href', newHref);
+    // xlink:href は setAttribute だと名前空間未束縛の生属性になり、保存後にXMLSerializer/
+    // DOMParser(image/svg+xml)の再パースで名前空間エラー(parsererror)となって画像ごと消える
+    // 原因になっていたため削除。他の画像挿入経路もhrefのみをセットしている。
+    if (el.hasAttribute('xlink:href')) el.removeAttribute('xlink:href');
 
     // panelSvgContent / overlaySvgContent を更新
     const svgEl = getPanelLayerSvg(getActiveContainer());
