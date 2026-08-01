@@ -1,10 +1,24 @@
 // ============================================================
 // フキダシ管理 分割ファイル (4/5): フキダシツール初期化・テキストハンドル・フォント選択
 // 元 09-balloons.js（分割前）の行 1872-2354 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G4）。09a〜09fは相互に密結合しており
+// 循環importが多数発生するが、循環先シンボルの参照はすべて関数内部に閉じているため安全。
 // 主なトップレベル定義: _loadFavoriteFontsToSelect,_loadGoogleFontsToSelect,_syncFontFavCatSelect,clearTextHandles,initBalloonTools,loadSystemFontsToSelect,renderTextHandles,syncFontFamilyUI
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, clearDrawShapeHandles（17c-layer-draw-handles.js）,
+//   _fontMgrGoogleList/_fontMgrCatNames/_fontMgrCatLabel/_fontMgr（19-font-manager.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { _isObjectLocked } from './03-layers-panel.js';
+import { renderLayerPanel } from './04b-layer-panel-render.js';
+import { savePanelSvg } from './07-pages.js';
+import { updateShapePath, _h2TailBoundaryPoint, _updateH2ShapePath } from './09b-balloon-shapes.js';
+import { _updateH2HandlePositions, _h2CalcCurveHandlePos, renderHandles, clearHandles } from './09c-balloon-handles.js';
+import { state } from './01-state.js';
+import { clearDrawShapeHandles } from './17c-layer-draw-handles.js';
+import { _fontMgr, _fontMgrCatLabel, _fontMgrCatNames, _fontMgrGoogleList } from './19-font-manager.js';
 
 // document登録リスナー参照（renderLayoutTab()経由の再初期化で積み上がらないよう保持）
 let _balloonToolsDocMouseMove = null;
@@ -466,6 +480,15 @@ function syncFontFamilyUI(textEl) {
         if (presetValues.includes(fill)) colorPreset.value = fill;
     }
 }
+
+export {
+    _loadFavoriteFontsToSelect, _loadGoogleFontsToSelect, _syncFontFavCatSelect,
+    clearTextHandles, initBalloonTools, loadSystemFontsToSelect, renderTextHandles, syncFontFamilyUI,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
 
 // ------------------------------------------------------------
 // テキスト編集ツール

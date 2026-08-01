@@ -1,10 +1,35 @@
 // ============================================================
 // main.js 分割ファイル (9/24): パネル操作+画像操作+画像挿入
 // 元 main.js の行 5898-6844 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _clearObjectSelection,_isSvgImageEl,applySvgImageColors,clearImageHandles,getBoundingBoxFromPoints,getStrokeWidthFromElement,getSvgImageColors,handleInsertImageFromLocal,highlightOverlay,initDragAndDrop,initImageManipulation,initPanelsOnSvg,insertImage,insertImageFromUrl,insertImageToOverlay,renderImageHandles,selectPanel,updateImageHandlePositions,updatePanelSelectDropdown
+// type="module" として読み込まれる（ESモジュール化 G3）。07-pages.js とは相互import（循環）。
+// 循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため安全。
+// 主なトップレベル定義: _clearObjectSelection,_isSvgImageEl,applySvgImageColors,clearImageHandles,getBoundingBoxFromPoints,getOrCreateDraftGroup,getStrokeWidthFromElement,getSvgImageColors,handleInsertImageFromLocal,highlightOverlay,initDragAndDrop,initImageManipulation,initPanelsOnSvg,insertImage,insertImageFromUrl,insertImageToDraft,insertImageToOverlay,renderImageHandles,saveDraftSvg,selectDraft,selectPanel,updateImageHandlePositions,updatePanelSelectDropdown
+// （getOrCreateDraftGroup/saveDraftSvg/selectDraftは機械抽出で追加確認したシンボル。ヘッダコメントは元main.js分割時のもので非網羅）
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, selectOverlay（09b-balloon-shapes.js）, _subPanelSyncBorderWidthUI（24-sub-panels.js）,
+//   updateBalloonUI/renderHandles（09c-balloon-handles.js）, getPanelLayerSvg（04b-layer-panel-render.js）,
+//   clearHandles（09c-balloon-handles.js）, clearTextHandles（09d-balloon-tools.js）,
+//   clearDrawShapeHandles（17c-layer-draw-handles.js）, clearGroupHandles（06a-polygon-geometry.js）,
+//   switchTab（01-state.js）, _svgBase64ToText（16-processing-edit-tabs.js）, _isObjectLocked（03-layers-panel.js）,
+//   syncPanelSelectionToObject（03-layers-panel.js）, renderLayerPanel（04b-layer-panel-render.js）,
+//   applyImageTransform（09c-balloon-handles.js）, _h2ChainAllDescendants/_updateH2ShapePath/_updateH2HandlePositions（09b-balloon-shapes.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbPut, _enqueueActivePageSave, readFileAsDataURL } from './00-db.js';
+import { savePanelSvg, pushHistory, renderLayoutTab } from './07-pages.js';
+import { state, switchTab } from './01-state.js';
+import { _layerDrawFlushPendingSave } from './17a-layer-draw-input.js';
+import { getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
+import { _h2ChainAllDescendants, _updateH2ShapePath, selectOverlay, updateBalloonUI } from './09b-balloon-shapes.js';
+import { _updateH2HandlePositions, applyImageTransform, clearHandles, renderHandles } from './09c-balloon-handles.js';
+import { clearTextHandles } from './09d-balloon-tools.js';
+import { clearDrawShapeHandles } from './17c-layer-draw-handles.js';
+import { clearGroupHandles } from './06a-polygon-geometry.js';
+import { _subPanelSyncBorderWidthUI } from './24-sub-panels.js';
+import { updateBalloonPanelSelect } from './09e-text-tool.js';
+import { _isObjectLocked, syncPanelSelectionToObject } from './03-layers-panel.js';
 
 // ==============================
 // パネル操作（変更なし）
@@ -181,7 +206,7 @@ function selectPanel(panelId) {
     } else {
         renderLayoutTab();
     }
-    if (typeof _subPanelSyncBorderWidthUI === 'function') _subPanelSyncBorderWidthUI();
+    _subPanelSyncBorderWidthUI();
 }
 
 // 下書きレイヤーを選択（編集モードON）。編集モード中のみ下書き内の画像をクリック・操作できる
@@ -198,7 +223,7 @@ function selectDraft() {
         highlightOverlay(svgEl, null);
         _syncDraftInteractivity(svgEl);
     }
-    if (typeof _subPanelSyncBorderWidthUI === 'function') _subPanelSyncBorderWidthUI();
+    _subPanelSyncBorderWidthUI();
 }
 
 function updatePanelSelectDropdown() {
@@ -1305,7 +1330,7 @@ function initImageManipulation(svgEl, balloonSvgEl) {
             // ベースは動かずネックだけが伸縮する）。直接の子だけを見ると、親→子→孫のように
             // 多段連結された場合に孫が置き去りになる（09b-balloon-shapes.jsの
             // _h2ChainAllDescendantsと同じ理由）
-            balloonLinkedExts = (typeof _h2ChainAllDescendants === 'function' ? _h2ChainAllDescendants(shape) : [])
+            balloonLinkedExts = _h2ChainAllDescendants(shape)
                 .map(ext => ({ el: ext, cx0: parseFloat(ext.dataset.cx), cy0: parseFloat(ext.dataset.cy) }));
 
             // 編集モードをONにしてハンドルを表示
@@ -1442,4 +1467,27 @@ function initDragAndDrop() {
         });
     });
 }
+
+export {
+    _clearObjectSelection, _isSvgImageEl, _syncDraftInteractivity, applySvgImageColors,
+    clearImageHandles, getBoundingBoxFromPoints, getOrCreateDraftGroup, getStrokeWidthFromElement,
+    getSvgImageColors, handleInsertImageFromLocal, highlightOverlay, initDragAndDrop,
+    initImageManipulation, initPanelsOnSvg, insertImage, insertImageFromUrl, insertImageToDraft,
+    insertImageToOverlay, renderImageHandles, saveDraftSvg, selectDraft, selectPanel,
+    updateImageHandlePositions, updatePanelSelectDropdown,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window._isSvgImageEl = _isSvgImageEl;
+window.applySvgImageColors = applySvgImageColors;
+window.getStrokeWidthFromElement = getStrokeWidthFromElement;
+window.getSvgImageColors = getSvgImageColors;
+window.handleInsertImageFromLocal = handleInsertImageFromLocal;
+window.initDragAndDrop = initDragAndDrop;
+window.initImageManipulation = initImageManipulation;
+window.insertImageFromUrl = insertImageFromUrl;
+window.insertImageToOverlay = insertImageToOverlay;
+window.updateImageHandlePositions = updateImageHandlePositions;
 

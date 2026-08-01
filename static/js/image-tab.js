@@ -17,6 +17,15 @@ import { FillTool }            from "./image-tab/FillTool.js";
 import { MaskTool }            from "./image-tab/MaskTool.js";
 import { MaskColorTool, MaskAlphaTool, MaskTextTool, MaskVectorTool, MaskShapeTool, MASK_TEXT_FONTS }
                                 from "./image-tab/MaskEditorOneTools.js";
+import { state, switchTab } from './main/01-state.js';
+import { _fontMgrCatLabel, _fontMgrEnsureFontLoaded, _fontMgrGoogleList } from './main/19-font-manager.js';
+import { getI2ISettingsState, saveI2ISettingsState, saveToEagle, sendI2IRunToWorkflowStudio, sendImageToWorkflowStudioI2I, sendInpaintToWorkflowStudio } from './main/14-integrations.js';
+import { pixiFxOpen } from './pixifx.js';
+import { loadAssets } from './main/02-assets.js';
+import { pushHistory, savePanelSvg } from './main/07-pages.js';
+import { saveOverlaySvg } from './main/09b-balloon-shapes.js';
+import { insertImage, selectPanel } from './main/08-panels-images.js';
+import { resolveBackendError } from './i18n.js';
 
 const TOOL_DEFS = [
     { id: "select",   icon: "▲",  label: "Select",    ready: true },
@@ -484,7 +493,7 @@ class ImageTab {
 
     /** カテゴリ名の表示ラベル（予約カテゴリ「お気に入り」はmain.js側のi18nラベルへ変換、それ以外はそのまま） */
     _fontCatLabel(cat) {
-        return typeof window._fontMgrCatLabel === "function" ? window._fontMgrCatLabel(cat) : cat;
+        return _fontMgrCatLabel(cat);
     }
 
     /** カテゴリ（空文字なら全カテゴリ）に属するフォント一覧 */
@@ -515,8 +524,8 @@ class ImageTab {
     /** 現在の _textFontSource に応じたフォント一覧を返す */
     async _getTextFontFamilies() {
         if (this._textFontSource === "google") {
-            // main.js（レイアウトタブ）の _fontMgrGoogleList() を再利用（function宣言なので window 経由で呼べる）
-            return typeof window._fontMgrGoogleList === "function" ? window._fontMgrGoogleList() : [];
+            // main.js（レイアウトタブ）の _fontMgrGoogleList() を再利用
+            return _fontMgrGoogleList();
         }
         if (this._textFontSource === "favorites") {
             return this._getFavoriteFontFamilies(this._textFontFavCat);
@@ -1540,14 +1549,14 @@ class ImageTab {
         const nameInput = document.getElementById("ie-i2i-default-wf-name");
         const saveBtn   = document.getElementById("ie-i2i-settings-save-btn");
         const statusEl  = document.getElementById("ie-i2i-settings-status");
-        if (!enabledCb || typeof window.getI2ISettingsState !== "function") return;
+        if (!enabledCb) return;
 
-        const cur = window.getI2ISettingsState();
+        const cur = getI2ISettingsState();
         enabledCb.checked = cur.enabled;
         if (nameInput) nameInput.value = cur.file;
 
         saveBtn?.addEventListener("click", () => {
-            window.saveI2ISettingsState(enabledCb.checked, nameInput?.value);
+            saveI2ISettingsState(enabledCb.checked, nameInput?.value);
             if (statusEl) {
                 statusEl.textContent = "Saved";
                 setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 2000);
@@ -1559,10 +1568,6 @@ class ImageTab {
     async _runSelectI2I() {
         if (this._selectI2IRunning) return;
         if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
-        if (typeof window.sendI2IRunToWorkflowStudio !== "function") {
-            this._toast("Workflow Studio integration not available", "error");
-            return;
-        }
 
         let sourceCanvas, targetLayer = null;
         if (this._selectI2IMode === "layer") {
@@ -1584,7 +1589,7 @@ class ImageTab {
         try {
             const imageBlob = await new Promise(resolve => sourceCanvas.toBlob(resolve, "image/png"));
             setStatus("Generating...");
-            const result = await window.sendI2IRunToWorkflowStudio(imageBlob, {
+            const result = await sendI2IRunToWorkflowStudio(imageBlob, {
                 positive: this._selectI2IPositive,
                 negative: this._selectI2INegative,
                 denoise:  this._selectI2IDenoise,
@@ -2581,11 +2586,6 @@ class ImageTab {
             : this._layerMgr.layers.find(l => l.type === "mask" && l.visible);
         if (!maskLayer) { this._toast("Create or show a mask layer first (Mask tool)", "info"); return; }
 
-        if (typeof window.sendInpaintToWorkflowStudio !== "function") {
-            this._toast("Workflow Studio integration not available", "error");
-            return;
-        }
-
         const runBtn   = document.getElementById("ie-inpaint-run-btn");
         const statusEl = document.getElementById("ie-inpaint-status");
         const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
@@ -2601,7 +2601,7 @@ class ImageTab {
             const maskBlob   = await new Promise((resolve) => maskCanvas.toBlob(resolve, "image/png"));
 
             setStatus("Generating...");
-            const result = await window.sendInpaintToWorkflowStudio(imageBlob, maskBlob, {
+            const result = await sendInpaintToWorkflowStudio(imageBlob, maskBlob, {
                 positive:   this._inpaintPositive,
                 negative:   this._inpaintNegative,
                 growMaskBy: this._inpaintGrowMaskBy,
@@ -3246,7 +3246,7 @@ class ImageTab {
      * 下書きはラフスケッチ用途で高解像度が不要なため、印刷解像度ではなく画面表示相当のサイズにする。
      */
     _newDraftFromActiveWork() {
-        const work = window._ccGetActiveWork?.();
+        const work = state.activeWork;
         if (!work || !work.width || !work.height) {
             this._toast("No active work is open. Open or create a work in the Page tab first.", "error");
             return;
@@ -3859,17 +3859,13 @@ class ImageTab {
 
     // アクティブレイヤーにPixiJSパーティクル/フィルタ効果を適用する（imgeditタブのPixiJS FX連携を移植）
     _openPixiFx() {
-        if (typeof window.pixiFxOpen !== "function") {
-            this._toast(t("image.pixifxNotLoaded"), "error");
-            return;
-        }
         if (!this._layerMgr) { this._toast(t("image.noImageLoaded"), "error"); return; }
         const layer = this._layerMgr.activeLayer;
         if (!layer) { this._toast(t("image.noActiveLayer"), "error"); return; }
         this._syncActiveLayerFromCanvas();
         const dataUrl = layer.canvas.toDataURL("image/png");
 
-        window.pixiFxOpen({
+        pixiFxOpen({
             imageDataUrl: dataUrl,
             onApply: async (resultDataUrl) => {
                 try {
@@ -4178,7 +4174,7 @@ class ImageTab {
             const data = await r.json();
             if (data.status !== "ok") throw new Error(data.message || "unknown error");
             this._toast(`Project saved: ${safeName}`, "success");
-            if (typeof window.loadAssets === "function") window.loadAssets(true);
+            loadAssets(true);
             return true;
         } catch (err) {
             this._toast("Save Project failed: " + err.message, "error");
@@ -4186,14 +4182,10 @@ class ImageTab {
         }
     }
 
-    // comic-creator既存のEagle連携（main.js の window.saveToEagle）を使って保存する。
+    // comic-creator既存のEagle連携（main.js の saveToEagle）を使って保存する。
     // workflow studio側の「Save to Gallery」に相当（wfmギャラリーが無いためEagleに差し替え）。
     async _saveToEagle() {
         if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
-        if (typeof window.saveToEagle !== "function") {
-            this._toast("Eagle integration not available", "error");
-            return;
-        }
 
         const now = new Date();
         const pad = n => String(n).padStart(2, "0");
@@ -4208,7 +4200,7 @@ class ImageTab {
         const dataUrl = canvas.toDataURL("image/png");
 
         try {
-            const { ok, message } = await window.saveToEagle(dataUrl, safeName, ["comfyui-comic-creator", "image-tab"]);
+            const { ok, message } = await saveToEagle(dataUrl, safeName, ["comfyui-comic-creator", "image-tab"]);
             if (ok) this._toast(`Saved to Eagle: ${safeName}.png`, "success");
             else this._toast(message ? `Eagle save failed: ${message}` : "Eagle save failed", "error");
         } catch (err) {
@@ -4260,13 +4252,9 @@ class ImageTab {
     // 合成結果をWorkflow StudioのGenerate UI Image入力スロットへ送信する（I2I連携）
     async _sendToI2I() {
         if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
-        if (typeof window.sendImageToWorkflowStudioI2I !== "function") {
-            this._toast("Workflow Studio integration not available", "error");
-            return;
-        }
         const canvas = this._buildCompositeCanvas();
         const blob   = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-        await window.sendImageToWorkflowStudioI2I(blob, this._baseName || "cc-image", "image");
+        await sendImageToWorkflowStudioI2I(blob, this._baseName || "cc-image", "image");
     }
 
     /** 外部（アセットパネル等）から画像URLをロードするための公開API */
@@ -4339,22 +4327,14 @@ class ImageTab {
      */
     async _saveToLayout() {
         if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
-        if (typeof window.switchTab !== "function") {
-            this._toast("Layout integration functions not available", "error");
-            return;
-        }
 
         this._syncActiveLayerFromCanvas();
         const canvas  = this._buildCompositeCanvas();
         const dataUrl = canvas.toDataURL("image/png");
 
         if (this._sourceImageEl) {
-            if (typeof window.pushHistory !== "function") {
-                this._toast("Layout integration functions not available", "error");
-                return;
-            }
             try {
-                window.pushHistory();
+                pushHistory();
                 this._sourceImageEl.setAttribute("href", dataUrl);
                 if (this._sourceImageEl.hasAttribute("xlink:href")) this._sourceImageEl.setAttribute("xlink:href", dataUrl);
 
@@ -4363,14 +4343,14 @@ class ImageTab {
                     const panelId = this._sourceImageEl.getAttribute("data-panel-id") ||
                                     this._sourceImageEl.closest("[data-clip-panel]")?.getAttribute("data-clip-panel");
                     const isOverlay = svgEl.querySelector("g[data-overlay-layer]")?.contains(this._sourceImageEl) ?? false;
-                    if (isOverlay && typeof window.saveOverlaySvg === "function") {
-                        await window.saveOverlaySvg(svgEl);
-                    } else if (panelId && typeof window.savePanelSvg === "function") {
-                        await window.savePanelSvg(panelId, svgEl);
+                    if (isOverlay) {
+                        await saveOverlaySvg(svgEl);
+                    } else if (panelId) {
+                        await savePanelSvg(panelId, svgEl);
                     }
                 }
                 this._toast("Saved to layout", "success");
-                await window.switchTab("layout");
+                await switchTab("layout");
             } catch (err) {
                 this._toast("Failed to save to layout: " + err.message, "error");
             }
@@ -4378,10 +4358,6 @@ class ImageTab {
         }
 
         // 新規ドキュメント: レイアウトの選択中コマ/オーバーレイへ新規画像として挿入
-        if (typeof window.insertImage !== "function") {
-            this._toast("Layout integration functions not available", "error");
-            return;
-        }
         try {
             // 「下書き」ボタンで作成したキャンバス（作品と同じ縦横比の72dpi換算サイズ）は、
             // 現在レイアウト側で何が選択されていても常に下書きレイヤーへページ全面サイズで挿入する。
@@ -4389,16 +4365,16 @@ class ImageTab {
             // 通常の40%センター配置の既定値による縮小表示を避けられる
             let placement = null;
             if (this._baseName === "draft") {
-                if (typeof window.selectPanel === "function") window.selectPanel("__draft__");
-                const work = window._ccGetActiveWork?.();
+                selectPanel("__draft__");
+                const work = state.activeWork;
                 if (work && work.width && work.height) {
                     placement = { x: 0, y: 0, width: work.width, height: work.height };
                 }
             }
-            const inserted = await window.insertImage(dataUrl, canvas.width, canvas.height, {}, placement);
+            const inserted = await insertImage(dataUrl, canvas.width, canvas.height, {}, placement);
             if (!inserted) return; // insertImage側でコマ未選択等のalertを表示済み
             this._toast("Sent to layout", "success");
-            await window.switchTab("layout");
+            await switchTab("layout");
         } catch (err) {
             this._toast("Failed to send to layout: " + err.message, "error");
         }
@@ -4744,9 +4720,7 @@ class ImageTab {
         const p = layer.textProps;
         if (!p) return;
         const family = p.fontFamily;
-        if (typeof window._fontMgrEnsureFontLoaded === "function") {
-            window._fontMgrEnsureFontLoaded(family);
-        }
+        _fontMgrEnsureFontLoaded(family);
         const fontSpec = `${p.italic ? "italic " : ""}${p.bold ? "bold " : ""}16px "${family}"`;
         if (document.fonts.check(fontSpec)) return;
         document.fonts.load(fontSpec).then(() => {
@@ -5350,9 +5324,9 @@ class ImageTab {
             this._toast("G'MIC filter applied successfully", "success");
 
             // 設定タブの「G'MIC結果を自動保存」がONならEagleへも自動保存する（imgeditタブの挙動を移植）
-            if (this._isEagleAutoSaveGmicEnabled() && typeof window.saveToEagle === "function") {
+            if (this._isEagleAutoSaveGmicEnabled()) {
                 const gname = `gmic_image_tab_${Date.now()}.png`;
-                window.saveToEagle(layer.canvas.toDataURL("image/png"), gname, ["comfyui-comic-creator", "gmic"]);
+                saveToEagle(layer.canvas.toDataURL("image/png"), gname, ["comfyui-comic-creator", "gmic"]);
             }
 
             this._gmicState.lastResultJobId = null;
@@ -5761,4 +5735,9 @@ class ImageTab {
 
 export const imageTab = new ImageTab();
 window._ccImageTab = imageTab;
-window.initImageTab = () => imageTab.init();
+
+function initImageTab() {
+    return imageTab.init();
+}
+
+export { initImageTab };

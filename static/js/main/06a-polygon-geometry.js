@@ -1,10 +1,19 @@
 // ============================================================
 // テンプレート作成ウィザード 分割ファイル (1/3): 多角形分割ジオメトリ+グループ操作(移動含む)
 // 元 06-template-wizard.js（分割前）の行 1-797 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _applyCenterTranslate,_applyOffset,_clipPolygonByLine,_cloneWithNewIds,_dupCounter,_lineIntersect,_offsetLinePerpendicular,_pointInPolygon,_polygonArea,_polygonCentroid,_selectClone,_sideOfLine,_splitPolygonByLine,calcGroupHandleR,clearGroupHandles,initGroupManipulation,layerMove,renderGroupHandles,updateGroupHandlePositions
+// type="module" として読み込まれる（ESモジュール化 G2）。G2外への依存・呼び出しは無い（t()も未使用）。
+// 主なトップレベル定義: _applyCenterTranslate,_applyOffset,_clipPolygonByLine,_cloneWithNewIds,_dupCounter,_groupManipWinMouseUp,_lineIntersect,_offsetLinePerpendicular,_pointInPolygon,_polygonArea,_polygonCentroid,_selectClone,_sideOfLine,_splitPolygonByLine,calcGroupHandleR,clearGroupHandles,initGroupManipulation,layerMove,renderGroupHandles,updateGroupHandlePositions
 // ============================================================
+
+import { state } from './01-state.js';
+import { _updateH2ShapePath } from './09b-balloon-shapes.js';
+import { _drawShapeApplyRotation, _drawUpdateTransformForPathG, _polygonGetPoints, _polygonSetPoints, clearDrawShapeHandles, renderDrawShapeHandles } from './17c-layer-draw-handles.js';
+import { clearHandles, renderHandles } from './09c-balloon-handles.js';
+import { clearImageHandles, renderImageHandles } from './08-panels-images.js';
+import { clearTextHandles, renderTextHandles } from './09d-balloon-tools.js';
+import { syncPanelSelectionToObject } from './03-layers-panel.js';
+import { getActiveContainer, getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
+import { pushHistory, savePanelSvg } from './07-pages.js';
 
 // ==============================
 // 多角形分割ジオメトリ（テンプレート作成ウィザード用）
@@ -201,14 +210,14 @@ function _applyCenterTranslate(el, srcCx, srcCy, dstCx, dstCy) {
         // 回転transformが付いている場合、そのpivot(cx,cy)は移動前の位置のまま焼き込まれているため、
         // 新しい位置を基準に回転transformを引き直す（回転していなければno-op同然）
         const angle = parseFloat(el.dataset.angle || 0);
-        if (typeof _drawShapeApplyRotation === 'function') _drawShapeApplyRotation(el, angle);
+        _drawShapeApplyRotation(el, angle);
     } else if (isDrawShape && (tag === 'path' || tag === 'g')) {
         // ドロー図形の曲線・鎖・ロープ・My曲線・多角形ペン等（path/g）は data-x/data-y が
         // 論理座標の基準で、transformはそこから_drawUpdateTransformForPathGが都度再構築するため、
         // 直接transformへtranslateを足し込んでも次回の再構築で失われる。data-x/yを直接動かす。
         el.setAttribute('data-x', (parseFloat(el.getAttribute('data-x') || 0) + dx).toFixed(2));
         el.setAttribute('data-y', (parseFloat(el.getAttribute('data-y') || 0) + dy).toFixed(2));
-        if (typeof _drawUpdateTransformForPathG === 'function') _drawUpdateTransformForPathG(el);
+        _drawUpdateTransformForPathG(el);
     } else {
         // その他（未分類の図形）: 既存transformの前にtranslateを追加
         const existing = el.getAttribute('transform') || '';
@@ -295,11 +304,11 @@ function _applyOffset(clone, OFFSET) {
             _polygonSetPoints(clone, _polygonGetPoints(clone).map(p => ({ x: p.x + OFFSET, y: p.y + OFFSET })));
         }
         const angle = parseFloat(clone.dataset.angle || 0);
-        if (typeof _drawShapeApplyRotation === 'function') _drawShapeApplyRotation(clone, angle);
+        _drawShapeApplyRotation(clone, angle);
     } else if (isDrawShape && (tag === 'path' || tag === 'g')) {
         clone.setAttribute('data-x', (parseFloat(clone.getAttribute('data-x') || 0) + OFFSET).toFixed(2));
         clone.setAttribute('data-y', (parseFloat(clone.getAttribute('data-y') || 0) + OFFSET).toFixed(2));
-        if (typeof _drawUpdateTransformForPathG === 'function') _drawUpdateTransformForPathG(clone);
+        _drawUpdateTransformForPathG(clone);
     } else if (clone.hasAttribute('transform')) {
         const existing = clone.getAttribute('transform');
         clone.setAttribute('transform', `translate(${OFFSET},${OFFSET}) ${existing}`);
@@ -872,4 +881,18 @@ async function layerMove(direction) {
         return;
     }
 }
+
+export {
+    _applyCenterTranslate, _applyOffset, _clipPolygonByLine, _cloneWithNewIds,
+    _lineIntersect, _offsetLinePerpendicular, _pointInPolygon, _polygonArea, _polygonCentroid,
+    _selectClone, _sideOfLine, _splitPolygonByLine, calcGroupHandleR, clearGroupHandles,
+    initGroupManipulation, layerMove, renderGroupHandles, updateGroupHandlePositions,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window._cloneWithNewIds = _cloneWithNewIds;
+window._selectClone = _selectClone;
+window.updateGroupHandlePositions = updateGroupHandlePositions;
 

@@ -1,10 +1,15 @@
 // ============================================================
 // main.js 分割ファイル (24/24): 3Dポーズエディタ
 // 元 main.js の行 17767-18313 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G9）。
 // 主なトップレベル定義: _arrayBufferToBase64,_base64ToArrayBuffer,_pose3dRebuildMorphSliders,_pose3dSyncPosition,commitPose3D,hidePose3DCanvas,initPose3DTab,showPose3DCanvas
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { getBoundingBoxFromPoints, insertImage } from './08-panels-images.js';
+import { state } from './01-state.js';
 
 // ============================================================
 // 3D ポーズエディタ（方針B: canvasオーバーレイ + 確定時画像化）
@@ -573,3 +578,10 @@ function _base64ToArrayBuffer(b64) {
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return bytes.buffer;
 }
+
+export { initPose3DTab, hidePose3DCanvas, _pose3dSyncPosition };
+
+// まだESM化されていない main/以下の classic <script> や、既存ESMファイルの一部が
+// window経由で呼んでいるためのブリッジ（ESモジュール化移行中の一時措置。
+// 全分割ファイルのESM化が完了したら、各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initPose3DTab = initPose3DTab;

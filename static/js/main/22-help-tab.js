@@ -1,10 +1,15 @@
 // ============================================================
 // main.js 分割ファイル (23/24): ヘルプタブ
 // 元 main.js の行 17306-17766 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G9）。
 // 主なトップレベル定義: _HELP_DATA,_HELP_ORDER,_helpBuildNav,_helpCurrentId,_helpFilterNav,_helpInitialized,_helpShowItem,_helpSorted,initHelpTab
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: switchTab（01-state.js）
 // ============================================================
+
+import { t, getLang } from '../i18n.js';
+import { _escHtml } from './21-script-tab.js';
+import { state, switchTab } from './01-state.js';
 
 // ==============================
 // ヘルプタブ
@@ -858,7 +863,7 @@ const _HELP_I18N = {
 
 // 現在言語のヘルプデータを返す（未翻訳idはja版にフォールバック）
 function _getHelpData() {
-    const lang = (typeof getLang === 'function') ? getLang() : 'ja';
+    const lang = getLang();
     const tr = _HELP_I18N[lang];
     if (!tr) return _HELP_DATA;
     return _HELP_DATA.map(entry => {
@@ -993,4 +998,11 @@ function _helpShowItem(id) {
 
     main.scrollTop = 0;
 }
+
+export { initHelpTab };
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initHelpTab = initHelpTab;
 

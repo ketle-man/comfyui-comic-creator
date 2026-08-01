@@ -1,10 +1,24 @@
 // ============================================================
 // main.js 分割ファイル (21/24): プリセット
 // 元 main.js の行 16241-16746 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G8）。
 // 主なトップレベル定義: _fontMgrApplyPresetToUI,_fontMgrEditingPresetId,_fontMgrGetPresetFromUI,_fontMgrInitPresetTab,_fontMgrInited,_fontMgrLoadPresets,_fontMgrLoadSystemFonts,_fontMgrPresetList,_fontMgrRenderFavCatTabs,_fontMgrRenderPresetSelect,_fontMgrRenderPresetStyleSelect,_fontMgrResetPresetUI,_fontMgrSavePresets,_fontMgrSearch,_fontMgrSwitchPreviewTab,_fontMgrSwitchSource,_fontMgrSyncCatSelects,_fontMgrSyncCustomFontSelects,_fontMgrUpdatePresetPreview,initFontMgrTab
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { getPanelLayerSvg } from './04b-layer-panel-render.js';
+import { savePanelSvg } from './07-pages.js';
+import {
+    _fontMgr, _FONTMGR_LS_PRESETS, FONTMGR_FAV_CAT, FONTMGR_RESERVED_CAT_NAMES,
+    _fontMgrCatLabel, _fontMgrCatNames, _fontMgrLoad, _fontMgrSaveTags, _fontMgrSaveFavs,
+    _fontMgrSavePrefs, _fontMgrGoogleList, _fontMgrCurrentList, _fontMgrRenderList,
+    _fontMgrEnsureFontLoaded, _fontMgrUpdatePreview, _fontMgrApplySentDir, _fontMgrUpdateCustomPreview,
+    _esc, _fontMgrRenderFavList, _fontMgrRenderTagChips, _fontMgrRenderAllTagsChips,
+    _fontMgrLoadStyles, _fontMgrRenderStylePreviewSvg, _fontMgrUpdateStylePreview, _fontMgrInitStyleTab,
+} from './19-font-manager.js';
+import { state } from './01-state.js';
 
 // ==============================
 // プリセット（フォント＋サイズ＋スタイル参照）
@@ -508,4 +522,11 @@ async function initFontMgrTab() {
         await _fontMgrLoadSystemFonts();
     }
 }
+
+export { _fontMgrLoadPresets, _fontMgrRenderPresetStyleSelect, initFontMgrTab };
+
+// まだESM化されていない main/以下の classic <script> や、既存ESMファイルの一部が
+// window経由で呼んでいるためのブリッジ（ESモジュール化移行中の一時措置。
+// 全分割ファイルのESM化が完了したら、各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initFontMgrTab = initFontMgrTab;
 

@@ -1,10 +1,26 @@
 // ============================================================
 // main.js 分割ファイル (11/24): 出力管理+出力タブページ一覧管理+外部ファイル取込+サブタブ切替
 // 元 main.js の行 9956-10548 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G5）。11a-work-manager.js/11b-page-manager-tab.js/
+// 12-text-png-export.js とは相互import（循環）。循環先シンボルの参照はすべて関数内部（呼び出し時点で
+// 評価）に閉じているため安全。
+// _outputFilterGroup/_outputSelectedPage はモジュールスコープに閉じており、他ファイル（11a/11b）から
+// 更新するための _setOutputFilterGroup()/_setOutputSelectedPage() セッターを新設した（00-db.jsの
+// _setDb() と同じパターン。importされたバインディングへの直接代入はできないため）。
 // 主なトップレベル定義: _EXPORT_MAX_SIZE,_activateOutputSubtab,_applyExportDpi,_getExportBaseWorkSize,_getExportDpiValue,_getExportMetaValues,_initExportDpiControls,_initExportMetaControls,_initOutputSubtabs,_outputActiveSubtab,_outputFilterGroup,_outputSelectedPage,_outputSortCriterion,_outputSubtabsInited,_pageOrder,_pageOrderInput,_showOutputPreview,_sortPageOrder,_updateExportPageRange,_updateOutputFilterBar,importImageAsPage,initOutputManager,onSwitchToOutputTab,renderOutputPageList
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, renderWorkList/renderPageMgrGrid（呼び出し先は11a/11bだがinit系のみ01-state.js経由でも呼ばれる）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbGet, dbPut, dbGetAll, dbGetAllPagesMeta, readFileAsDataURL, svgTextToDataUrl } from './00-db.js';
+import { buildMergedSvg, renderPageSelector } from './07-pages.js';
+import { renderTemplateList } from './06c-template-wizard.js';
+import { _workMeta, renderWorkList } from './11a-work-manager.js';
+import { _pageMgrGroups, renderPageMgrGrid } from './11b-page-manager-tab.js';
+import { handleExport } from './12-text-png-export.js';
+import { state } from './01-state.js';
 
 // ==============================
 // 出力管理
@@ -267,6 +283,8 @@ function _initExportMetaControls() {
 
 /** 出力タブで選択中のページ名 */
 let _outputSelectedPage = null;
+/** 11b-page-manager-tab.js から _outputSelectedPage を更新するためのセッター */
+function _setOutputSelectedPage(name) { _outputSelectedPage = name; }
 
 /** 出力タブの現在のソート基準 */
 let _outputSortCriterion = localStorage.getItem('output_sort_criterion') || 'name';
@@ -291,6 +309,8 @@ let _pageOrderInput = {};
  */
 /** 出力サブタブの作品/グループフィルタ（null なら全ページ表示） */
 let _outputFilterGroup = null;
+/** 11a-work-manager.js から _outputFilterGroup を更新するためのセッター */
+function _setOutputFilterGroup(group) { _outputFilterGroup = group; }
 
 /** フィルタ表示バーの更新 */
 function _updateOutputFilterBar() {
@@ -741,4 +761,22 @@ async function _activateOutputSubtab(target) {
         await renderPageMgrGrid();
     }
 }
+
+export {
+    _EXPORT_DPI_LS_KEY, _EXPORT_MAX_SIZE, _EXPORT_META_FIELDS, _EXPORT_META_LS_KEY,
+    _activateOutputSubtab, _applyExportDpi, _getExportBaseWorkSize, _getExportDpiValue,
+    _getExportMetaValues, _initExportDpiControls, _initExportMetaControls, _initOutputSubtabs,
+    _outputActiveSubtab, _outputFilterGroup, _outputSelectedPage, _outputSortCriterion,
+    _outputSubtabsInited, _pageOrder, _pageOrderInput, _setOutputFilterGroup, _setOutputSelectedPage,
+    _showOutputPreview, _sortPageOrder, _updateExportPageRange, _updateOutputFilterBar,
+    importImageAsPage, initOutputManager, onSwitchToOutputTab, renderOutputPageList,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるよう、windowにも公開する
+// （ESモジュール化移行中の一時ブリッジ）。
+window._EXPORT_MAX_SIZE = _EXPORT_MAX_SIZE;
+window._activateOutputSubtab = _activateOutputSubtab;
+window._initOutputSubtabs = _initOutputSubtabs;
+window.initOutputManager = initOutputManager;
+window.onSwitchToOutputTab = onSwitchToOutputTab;
 

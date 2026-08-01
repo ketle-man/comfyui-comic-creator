@@ -1,10 +1,23 @@
 // ============================================================
 // SVGレイヤーへの描画機能 分割ファイル (3/3): draw-shapeハンドル・操作
 // 元 17-layer-draw.js（分割前）の行 1015-1574 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G7）。
 // 主なトップレベル定義: _drawShapeApplyRotation,_drawShapeExtractFillState,_drawShapeGetBounds,_drawShapeSetBounds,_drawShapeSyncProps,_drawShapeSyncTexturePatternTransform,_drawUpdateTransformForPathG,_initEditTabTrigger,_layerDrawSelectShape,_polygonBakeRotation,_polygonDisplayPoints,_polygonGetPoints,_polygonPointsBounds,_polygonSetPoints,_renderPolygonVertexHandles,clearDrawShapeHandles,initDrawShapeManipulation,renderDrawShapeHandles,updateDrawShapeHandles
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { _layerDrawState, _layerDrawDetachOverlay, _layerDrawLoadFillStateFromShape, _layerDrawUpdateToggle } from './17a-layer-draw-input.js';
+import { _svgColorToHex6 } from './18-svg-color-png.js';
+import { _isObjectLocked, syncPanelSelectionToObject } from './03-layers-panel.js';
+import { clearGroupHandles } from './06a-polygon-geometry.js';
+import { clearHandles } from './09c-balloon-handles.js';
+import { clearImageHandles } from './08-panels-images.js';
+import { clearTextHandles } from './09d-balloon-tools.js';
+import { getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
+import { saveOverlaySvg } from './09b-balloon-shapes.js';
+import { savePanelSvg } from './07-pages.js';
+import { state } from './01-state.js';
 
 // ─────────────────────────────────────────────
 //  draw-shape ハンドル・操作
@@ -746,4 +759,21 @@ function _initEditTabTrigger() {
         });
     });
 }
+
+export {
+    clearDrawShapeHandles, _layerDrawSelectShape, _drawShapeSyncProps,
+    _polygonGetPoints, _polygonSetPoints, _polygonPointsBounds, _polygonBakeRotation,
+    _drawShapeGetBounds, _drawShapeGetRotatedHandlePositions, _drawShapeGetRotateHandlePos,
+    renderDrawShapeHandles, updateDrawShapeHandles, _drawUpdateTransformForPathG,
+    _drawShapeApplyRotation, initDrawShapeManipulation, _drawShapeSetBounds,
+    _drawShapeSyncTexturePatternTransform, _initEditTabTrigger,
+};
+
+// まだESM化されていない main/以下の classic <script> や、既存ESMファイルの一部が
+// window経由で呼んでいるためのブリッジ（ESモジュール化移行中の一時措置。
+// 全分割ファイルのESM化が完了したら、各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window._polygonBakeRotation = _polygonBakeRotation;
+window._drawShapeGetRotatedHandlePositions = _drawShapeGetRotatedHandlePositions;
+window._drawShapeGetRotateHandlePos = _drawShapeGetRotateHandlePos;
+window._initEditTabTrigger = _initEditTabTrigger;
 

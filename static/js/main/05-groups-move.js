@@ -1,10 +1,41 @@
 // ============================================================
 // main.js 分割ファイル (6/24): グループ機能+移動
 // 元 main.js の行 2625-3347 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _insetPolygonPoints,_parsePointsStr,_pointsToStr,_polygonCenter,_round2,duplicateSelectedObject,groupSelectedLayers,moveSelectedObject,saveGroupAsAsset,ungroupLayer
+// type="module" として読み込まれる（ESモジュール化 G2）。
+// 主なトップレベル定義: _insetPolygonPoints,_parsePointsStr,_pointsToStr,_polygonCenter,_round2,deleteSelectedObject,duplicateSelectedObject,groupSelectedLayers,initLayoutDeleteShortcut,moveSelectedObject,saveGroupAsAsset,ungroupLayer
+// （ヘッダコメントは元main.js分割時のもので非網羅。deleteSelectedObject/initLayoutDeleteShortcutは
+//  機械抽出で追加確認したシンボルで、01-state.js/07-pages.jsから外部参照される）
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, getPanelLayerSvg/renderLayerPanel（04b-layer-panel-render.js）,
+//   pushHistory/savePanelSvg/_collectReferencedFilters/renderLayoutTab（07-pages.js）,
+//   clearHandles/renderHandles（09c-balloon-handles.js）, clearImageHandles/updatePanelSelectDropdown/
+//   highlightOverlay/_syncDraftInteractivity/saveDraftSvg/getOrCreateDraftGroup/renderImageHandles（08-panels-images.js）,
+//   clearTextHandles/renderTextHandles（09d-balloon-tools.js）, _isObjectLocked（03-layers-panel.js）,
+//   _h2CleanupBalloonChainBeforeDelete/_h2RefreshChainAfterDelete/saveOverlaySvg/getOrCreateOverlayGroup（09b-balloon-shapes.js）,
+//   _drawShapeSyncProps/clearDrawShapeHandles（17c-layer-draw-handles.js）,
+//   _subPanelCurrentSelected/duplicateSubPanel/moveSubPanel（24-sub-panels.js）,
+//   updateBalloonPanelSelect（09e-text-tool.js）, loadAssets（02-assets.js、既ESM化・windowブリッジ経由）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbPut, _enqueueActivePageSave } from './00-db.js';
+import {
+    _applyOffset, _cloneWithNewIds, _selectClone, _applyCenterTranslate,
+    renderGroupHandles, clearGroupHandles,
+} from './06a-polygon-geometry.js';
+import { state } from './01-state.js';
+import { getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
+import { _collectReferencedFilters, pushHistory, renderLayoutTab, savePanelSvg } from './07-pages.js';
+import { clearHandles } from './09c-balloon-handles.js';
+import { _syncDraftInteractivity, clearImageHandles, getOrCreateDraftGroup, highlightOverlay, saveDraftSvg, updatePanelSelectDropdown } from './08-panels-images.js';
+import { clearTextHandles } from './09d-balloon-tools.js';
+import { _drawShapeSyncProps, clearDrawShapeHandles } from './17c-layer-draw-handles.js';
+import { loadAssets } from './02-assets.js';
+import { _subPanelCurrentSelected, duplicateSubPanel, moveSubPanel } from './24-sub-panels.js';
+import { _h2CleanupBalloonChainBeforeDelete, _h2RefreshChainAfterDelete, getOrCreateOverlayGroup, saveOverlaySvg } from './09b-balloon-shapes.js';
+import { updateBalloonPanelSelect } from './09e-text-tool.js';
+import { _isObjectLocked } from './03-layers-panel.js';
 
 // ==============================
 // グループ機能
@@ -153,7 +184,7 @@ async function saveGroupAsAsset(groupEl, groupName) {
             if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
             statusEl.textContent = t('layer.saveAssetDone', data.path);
             // アセットパネルを更新（サーバー側で再生成済みのassets.jsonを確実に反映するためtrueで再取得）
-            if (typeof loadAssets === 'function') await loadAssets(true);
+            await loadAssets(true);
             setTimeout(() => dlg.remove(), 1200);
         } catch (err) {
             statusEl.textContent = t('common.errorPrefix', err.message);
@@ -263,7 +294,7 @@ async function duplicateSelectedObject(targetPanelId) {
 
     if (!srcEl || !srcEl.parentNode) {
         // 選択中がサブコマ（コマ扱いのpanelsエントリ）の場合は専用の複製処理に委譲する
-        const subPanel = (typeof _subPanelCurrentSelected === 'function') ? _subPanelCurrentSelected() : null;
+        const subPanel = _subPanelCurrentSelected();
         if (subPanel) { await duplicateSubPanel(subPanel.id, targetPanelId); return; }
         alert(t('layer.confirmSelectDuplicateTarget'));
         return;
@@ -607,7 +638,7 @@ async function moveSelectedObject(targetPanelId) {
 
     if (!srcEl || !srcEl.parentNode) {
         // 選択中がサブコマ（コマ扱いのpanelsエントリ）の場合は専用の移動処理（親コマ付け替え）に委譲する
-        const subPanel = (typeof _subPanelCurrentSelected === 'function') ? _subPanelCurrentSelected() : null;
+        const subPanel = _subPanelCurrentSelected();
         if (subPanel) { await moveSubPanel(subPanel.id, targetPanelId); return; }
         alert(t('layer.confirmSelectMoveTarget'));
         return;
@@ -976,4 +1007,16 @@ function _insetPolygonPoints(pointsStr, d) {
     }
     return _pointsToStr(newPts);
 }
+
+export {
+    _insetPolygonPoints, _parsePointsStr, _pointsToStr, _polygonCenter, _round2,
+    deleteSelectedObject, duplicateSelectedObject, groupSelectedLayers,
+    initLayoutDeleteShortcut, moveSelectedObject, saveGroupAsAsset, ungroupLayer,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window._polygonCenter = _polygonCenter;
+window.initLayoutDeleteShortcut = initLayoutDeleteShortcut;
 

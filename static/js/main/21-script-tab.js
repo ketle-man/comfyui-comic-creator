@@ -1,10 +1,12 @@
 // ============================================================
 // main.js 分割ファイル (22/24): スクリプトタブ
 // 元 main.js の行 16747-17305 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G9）。
 // 主なトップレベル定義: _SCRIPT_CURRENT_KEY,_SCRIPT_WORKS_KEY,_escHtml,_script,_scriptApplyData,_scriptBlankData,_scriptBlankDialogue,_scriptBlankElement,_scriptBlankPage,_scriptGetSelectedDialogue,_scriptGetWorks,_scriptInitAssetPanelSectionToggle,_scriptLoadCurrent,_scriptNormalizeData,_scriptRenderAssetPanelLists,_scriptRenderElements,_scriptRenderElementsDatalist,_scriptRenderPage,_scriptRenderPageWorkList,_scriptRenderPreviewH,_scriptRenderPreviewV,_scriptRenderWorkList,_scriptSaveCurrent,_scriptSetWorks,initProjectTab
 // ============================================================
+
+import { t } from '../i18n.js';
+import { _workMeta } from './11a-work-manager.js';
 
 // ==============================
 // スクリプトタブ（作品名 > あらすじ > プロット[ページ > コマワリ]）
@@ -564,4 +566,14 @@ function initProjectTab() {
 function _escHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+export { _scriptGetSelectedDialogue, _scriptRenderAssetPanelLists, _scriptInitAssetPanelSectionToggle, initProjectTab, _escHtml };
+
+// まだESM化されていない main/以下の classic <script> や、既存ESMファイルの一部が
+// window経由で呼んでいるためのブリッジ（ESモジュール化移行中の一時措置。
+// 全分割ファイルのESM化が完了したら、各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window._scriptRenderAssetPanelLists = _scriptRenderAssetPanelLists;
+window._scriptInitAssetPanelSectionToggle = _scriptInitAssetPanelSectionToggle;
+window.initProjectTab = initProjectTab;
+window._escHtml = _escHtml;
 

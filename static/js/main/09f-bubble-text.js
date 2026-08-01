@@ -6,11 +6,23 @@
 // フキダシの形状作成は09a/09b/09c/09d側（h2挿入ボタン・ハンドル操作）に任せ、
 // 本ファイルは「選択中のフキダシにテキストを内包・編集する」モーダルUIとレンダリングのみを担う
 // （導線は「フキダシ形状の作成・調整」と「テキストの詳細設定」の2つに分離する方針）。
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する
-// （09a〜09eの後、balloon-shape系の共通ヘルパーに依存するため）。
+// type="module" として読み込まれる（ESモジュール化 G4）。09a〜09fは相互に密結合しており
+// 循環importが多数発生するが、循環先シンボルの参照はすべて関数内部に閉じているため安全。
 // 主なトップレベル定義: _isBubbleTextType,_bubbleTextUpdateShape,_bubbleTextSyncH2Text,applyBubbleTextToShape,openBubbleTextModal,initBubbleTextTools
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, _fontMgrGoogleList/_fontMgr/_fontMgrCatNames/_fontMgrCatLabel/_fontMgrLoad（19-font-manager.js）,
+//   _scriptGetSelectedDialogue（21-script-tab.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { _isObjectLocked } from './03-layers-panel.js';
+import { pushHistory, savePanelSvg } from './07-pages.js';
+import { saveOverlaySvg, updateShapePath } from './09b-balloon-shapes.js';
+import { renderHandles } from './09c-balloon-handles.js';
+import { state } from './01-state.js';
+import { _fontMgr, _fontMgrCatLabel, _fontMgrCatNames, _fontMgrGoogleList, _fontMgrLoad } from './19-font-manager.js';
+import { _scriptGetSelectedDialogue } from './21-script-tab.js';
 
 const BUBBLE_TEXT_PT_TO_SVG = 3.528; // 09a-balloon-init.js のフォントサイズ変換係数を踏襲
 
@@ -318,7 +330,7 @@ function _bubbleTextInitFontTabs(dialog, preferredFont) {
     };
 
     const loadGoogle = () => {
-        setOptions(typeof _fontMgrGoogleList === 'function' ? _fontMgrGoogleList() : [], 'fontsel.noCategoryFonts');
+        setOptions(_fontMgrGoogleList(), 'fontsel.noCategoryFonts');
     };
 
     const loadSystem = async () => {
@@ -343,12 +355,12 @@ function _bubbleTextInitFontTabs(dialog, preferredFont) {
     };
 
     const syncFavCatSelect = () => {
-        const cats = typeof _fontMgrCatNames === 'function' ? _fontMgrCatNames() : [];
+        const cats = _fontMgrCatNames();
         favCatSel.innerHTML = `<option value="">${t('layout.fontCatAll')}</option>`;
         cats.forEach(cat => {
             const opt = document.createElement('option');
             opt.value = cat;
-            opt.textContent = typeof _fontMgrCatLabel === 'function' ? _fontMgrCatLabel(cat) : cat;
+            opt.textContent = _fontMgrCatLabel(cat);
             favCatSel.appendChild(opt);
         });
     };
@@ -367,7 +379,7 @@ function _bubbleTextInitFontTabs(dialog, preferredFont) {
             if (src === 'google') loadGoogle();
             else if (src === 'system') await loadSystem();
             else {
-                if (typeof _fontMgrLoad === 'function') _fontMgrLoad();
+                _fontMgrLoad();
                 syncFavCatSelect();
                 loadFavorites(favCatSel.value);
             }
@@ -591,4 +603,13 @@ function initBubbleTextTools(svgEl) {
     svgEl.addEventListener('dblclick', _bubbleTextDblClickHandler, true);
 }
 
-window.openBubbleTextModal = openBubbleTextModal;
+export {
+    BUBBLE_TEXT_PT_TO_SVG, _bubbleTextAreaFor, _bubbleTextCanHoldText, _bubbleTextInitFontTabs,
+    _bubbleTextRenderText, _bubbleTextSaveFor, _bubbleTextShapeKind, _bubbleTextSyncH2Text,
+    _bubbleTextUpdateShape, _bubbleTextWrapLines, _isBubbleTextType, _isH2BalloonType,
+    applyBubbleTextToShape, initBubbleTextTools, openBubbleTextModal,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。

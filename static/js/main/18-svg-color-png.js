@@ -1,10 +1,18 @@
 // ============================================================
 // main.js 分割ファイル (19/24): SVG色変更機能+SVGtoPNG変換機能
 // 元 main.js の行 15195-15502 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G7）。
 // 主なトップレベル定義: _svgColorApply,_svgColorLoad,_svgColorState,_svgColorToHex6,_svgExtractColors,_svgGetSelectedSvgText,_svgReplaceColor,_svgTextToDataUrl,_svgToPngConvert
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { getPanelLayerSvg, getActiveContainer } from './04b-layer-panel-render.js';
+import { insertImage } from './08-panels-images.js';
+import { saveOverlaySvg } from './09b-balloon-shapes.js';
+import { savePanelSvg } from './07-pages.js';
+import { state } from './01-state.js';
 
 // ─────────────────────────────────────────────
 //  SVG色変更機能
@@ -324,4 +332,10 @@ async function _svgToPngConvert() {
         statusEl.textContent = t('common.errorPrefix', e.message);
     }
 }
+
+export { _svgColorState, _svgTextToDataUrl, _svgColorLoad, _svgColorToHex6, _svgColorApply, _svgToPngConvert };
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
 

@@ -15,10 +15,12 @@
 //
 //  前提: ComfyUI に comfyUI-particle-pixijs がインストールされており、
 //        /extensions/comfyUI-particle-pixijs/ 以下から JS が配信されること。
+//
+//  type="module" として読み込まれる（ESモジュール化 G6）。まだESM化されていない
+//  main/以下の classic <script> から呼べるよう、末尾で window.pixiFxOpen としても公開している。
 // ============================================================
 
-(function () {
-    'use strict';
+import { t } from './i18n.js';
 
     const EXT_BASE = '/extensions/comfyUI-particle-pixijs';
     const LS_KEY   = 'cccPixiFxSettings';
@@ -106,7 +108,7 @@
     // ============================================================
     //  モーダル本体（フィルタライブラリモーダルに統合）
     // ============================================================
-    window.pixiFxOpen = async function ({ imageDataUrl, onApply }) {
+    async function pixiFxOpen({ imageDataUrl, onApply }) {
         if (document.getElementById('filter-lib-modal')) return;
         if (!imageDataUrl || !imageDataUrl.startsWith('data:image/')) {
             alert(t('pixifx.noTargetImage'));
@@ -934,5 +936,9 @@
         requestAnimationFrame(() => { fitCanvas(); });
         // 自動再生でプレビュー開始
         playBtn.click();
-    };
-})();
+    }
+
+export { pixiFxOpen };
+
+// まだESM化されていない main/以下の classic <script> や、既存ESMファイルの
+// 一部（image-tab.js）が window.pixiFxOpen(...) 経由で呼んでいるためのブリッジ。

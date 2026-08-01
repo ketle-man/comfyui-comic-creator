@@ -1,10 +1,22 @@
 // ============================================================
 // マスクレイヤー機能 分割ファイル (1/2): マスク機能ロジック(_mask*ヘルパー群・初期化)
 // 元 04-mask-layers.js（分割前）の行 1-829 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G1）。
 // 主なトップレベル定義: MASK_MAX_DIM,_maskAddLayerAndEdit,_maskAddLayerImg,_maskAttachOverlay,_maskBakeAndSave,_maskBrushCanvasPx,_maskBuildComposite,_maskClientToCanvas,_maskCreateLayerCanvas,_maskCurrentTarget,_maskDeleteLayer,_maskDetachOverlay,_maskEnsureDefShell,_maskEnsureElId,_maskFillAll,_maskGetDef,_maskIdFor,_maskIsObjectTarget,_maskLayerImgs,_maskLayerInfo,_maskLayerList,_maskLoadLayerCanvas,_maskOpenEditorFor,_maskPointerDown,_maskPointerLeave,_maskPointerMove,_maskPointerUp,_maskReassignObject,_maskRegionFor,_maskRenderOverlay,_maskSaveFor,_maskSelectedObjectEl,_maskSetEditing,_maskSetEnabled,_maskStamp,_maskStampLine,_maskStartEdit,_maskState,_maskSvgToOverlay,_maskSyncBase,_maskTargetGroup,_maskTargetLabel,_maskToggleLayerVisible,_maskTypeLabel,_maskUpdateCursor,_maskUpdateUI,initMaskTool
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, getBoundingBoxFromPoints/selectPanel（08-panels-images.js）,
+//   pushHistory/savePanelSvg（07-pages.js）, saveOverlaySvg/selectOverlay（09b-balloon-shapes.js）,
+//   _layerDrawClientToSvg（17a-layer-draw-input.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
+import { state } from './01-state.js';
+import { saveOverlaySvg, selectOverlay } from './09b-balloon-shapes.js';
+import { pushHistory, savePanelSvg } from './07-pages.js';
+import { getBoundingBoxFromPoints, selectPanel } from './08-panels-images.js';
+import { _layerDrawClientToSvg } from './17a-layer-draw-input.js';
 
 // ============================================================
 // マスクレイヤー機能（レイアウトタブ: コマ / オーバーレイ、複数レイヤー対応）
@@ -826,4 +838,35 @@ function initMaskTool() {
         });
     });
 }
+
+export {
+    MASK_MAX_DIM, _maskState, _maskIdFor, _maskIsObjectTarget, _maskSelectedObjectEl, _maskEnsureElId,
+    _maskCurrentTarget, _maskTargetLabel, _maskTypeLabel, _maskTargetGroup, _maskSaveFor, _maskGetDef,
+    _maskLayerImgs, _maskLayerInfo, _maskLayerList, _maskRegionFor, _maskCreateLayerCanvas, _maskLoadLayerCanvas,
+    _maskEnsureDefShell, _maskSyncBase, _maskAddLayerImg, _maskBuildComposite, _maskBakeAndSave, _maskBrushCanvasPx,
+    _maskStamp, _maskStampLine, _maskClientToCanvas, _maskSvgToOverlay, _maskAttachOverlay, _maskDetachOverlay,
+    _maskRenderOverlay, _maskPointerDown, _maskPointerMove, _maskPointerUp, _maskPointerLeave, _maskUpdateCursor,
+    _maskStartEdit, _maskSetEditing, _maskAddLayerAndEdit, _maskToggleLayerVisible, _maskDeleteLayer,
+    _maskReassignObject, _maskSetEnabled, _maskFillAll, _maskUpdateUI, _maskOpenEditorFor, initMaskTool,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window._maskEnsureElId = _maskEnsureElId;
+window._maskCurrentTarget = _maskCurrentTarget;
+window._maskIsObjectTarget = _maskIsObjectTarget;
+window._maskGetDef = _maskGetDef;
+window._maskLayerList = _maskLayerList;
+window._maskTargetGroup = _maskTargetGroup;
+window._maskTypeLabel = _maskTypeLabel;
+window._maskStartEdit = _maskStartEdit;
+window._maskAddLayerAndEdit = _maskAddLayerAndEdit;
+window._maskToggleLayerVisible = _maskToggleLayerVisible;
+window._maskDeleteLayer = _maskDeleteLayer;
+window._maskReassignObject = _maskReassignObject;
+window._maskSetEnabled = _maskSetEnabled;
+window._maskFillAll = _maskFillAll;
+window._maskOpenEditorFor = _maskOpenEditorFor;
+window.initMaskTool = initMaskTool;
 

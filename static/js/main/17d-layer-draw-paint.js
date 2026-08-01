@@ -4,13 +4,28 @@
 // コマ/オーバーレイ/下書きレイヤーに透過画像（ペイントオブジェクト）を追加し、
 // 専用の「描画ON」中にフリーハンドのブラシで直接ラスター編集できるようにする。
 // 目的: Imageタブでの描画・編集の下書き、およびI2I用途。
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する（17a〜17cの後）。
+// type="module" として読み込まれる（ESモジュール化 G7）。
 // 主なトップレベル定義: _paintAddObject,_paintAttachOverlay,_paintDetachOverlay,
 //   _paintLoadBitmap,_paintMouseDown,_paintMouseMove,_paintMouseUp,_paintMouseUpGlobal,
 //   _paintReset,_paintSetStatus,_paintStrokeAt,_paintSvgPtToLocal,_paintToolState,
 //   _paintUpdateToggle,initPaintTool
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { _layerDrawClientToSvg, _layerDrawResizeCanvas, _layerDrawSaveSelected } from './17a-layer-draw-input.js';
+import { _layerDrawTargetLabel } from './17b-layer-draw-commit.js';
+import { _svgTextToDataUrl } from './18-svg-color-png.js';
+import { _isObjectLocked } from './03-layers-panel.js';
+import { _selectClone } from './06a-polygon-geometry.js';
+import { clearImageHandles, getBoundingBoxFromPoints, insertImage, saveDraftSvg } from './08-panels-images.js';
+import { embedFontsInSvg } from './12-text-png-export.js';
+import { getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
+import { pushHistory, savePanelSvg, renderLayoutTab } from './07-pages.js';
+import { saveOverlaySvg } from './09b-balloon-shapes.js';
+import { convertShapeToImage } from './09c-balloon-handles.js';
+import { state } from './01-state.js';
 
 const _paintToolState = {
     active:        false, // 描画ON/OFF（ペイント専用。ドローの_layerDrawState.activeとは独立）
@@ -220,7 +235,7 @@ async function _paintMergeSelected() {
     outSvg.appendChild(wrapG);
 
     let svgText = new XMLSerializer().serializeToString(outSvg);
-    if (typeof embedFontsInSvg === 'function') svgText = await embedFontsInSvg(svgText);
+    svgText = await embedFontsInSvg(svgText);
 
     let img;
     try {
@@ -460,3 +475,5 @@ function _paintStrokeAt(clientX, clientY) {
     _paintToolState.lastLocal = local;
     el.setAttribute('href', canvas.toDataURL('image/png'));
 }
+
+export { _paintToolState, initPaintTool, _paintUpdateToggle, _paintDetachOverlay };

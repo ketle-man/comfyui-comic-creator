@@ -1,8 +1,9 @@
 // ============================================================
 // 多言語化（i18n）基盤
-// classic <script> として他の分割ファイルより前に読み込まれ、
-// t()/getLang()/setLang()/getLanguageOptions()/applyI18nToHtml() を
-// トップレベル関数宣言としてグローバルに公開する（window経由でも参照可）。
+// type="module" として他の分割ファイルより前に読み込まれる。
+// t()/getLang()/setLang()/getLanguageOptions()/applyI18nToHtml() はexportに加え、
+// まだESM化されていないmain/以下のclassic <script>から呼べるようwindowにも公開する
+// （ESモジュール化移行中の一時ブリッジ。末尾のexport文の直後を参照）。
 //
 // キー命名: タブ/機能単位のドット区切り名前空間（例: nav.layout, settings.eagleUrl）。
 // 値は文字列、または変数埋め込みが必要な場合は関数 (arg1, arg2) => `...` にする
@@ -3605,3 +3606,15 @@ function applyI18nToHtml(root) {
         el.setAttribute('alt', t(el.dataset.i18nAlt));
     });
 }
+
+export { t, resolveBackendError, getLang, setLang, getLanguageOptions, applyI18nToHtml };
+
+// ESモジュール化移行中: main/以下の非moduleスクリプト（グローバルスコープ共有）から
+// 直接 t(...) 等を呼べるよう、windowプロパティとして公開するブリッジ。
+// 全分割ファイルのESM化が完了したら、このブリッジと各呼び出し元の暗黙グローバル参照を
+// import文に置き換えて削除する。
+window.t = t;
+window.getLang = getLang;
+window.setLang = setLang;
+window.getLanguageOptions = getLanguageOptions;
+window.applyI18nToHtml = applyI18nToHtml;

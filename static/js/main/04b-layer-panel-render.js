@@ -1,10 +1,44 @@
 // ============================================================
 // マスクレイヤー機能 分割ファイル (2/2): renderLayerPanel本体+不透明度/コンテナ取得ヘルパー
 // 元 04-mask-layers.js（分割前）の行 830-1553 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G1）。
+// 04a-mask-core.js とは相互import（循環）。両ファイルとも、循環先のシンボル参照は
+// すべて関数内部（呼び出し時点で評価）に閉じており、モジュールのトップレベルでは参照していないため安全。
 // 主なトップレベル定義: _layerOpacityGetSelected,_layerOpacitySync,getActiveContainer,getPanelLayerSvg,renderLayerPanel
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, _escHtml（21-script-tab.js）,
+//   clearImageHandles/renderImageHandles/selectPanel/savePanelSvg代わりに使用箇所あり（08-panels-images.js）,
+//   clearTextHandles/renderTextHandles/syncFontFamilyUI（09d-balloon-tools.js）,
+//   clearDrawShapeHandles/_drawShapeSyncProps/_layerDrawSelectShape（17c-layer-draw-handles.js）,
+//   clearGroupHandles/renderGroupHandles（06a-polygon-geometry.js）,
+//   updateBalloonUI/_h2CleanupBalloonChainBeforeDelete/_h2RefreshChainAfterDelete/saveOverlaySvg/selectOverlay（09b-balloon-shapes.js）,
+//   clearHandles/renderHandles（09c-balloon-handles.js）, pushHistory/savePanelSvg（07-pages.js）,
+//   saveGroupAsAsset/ungroupLayer（05-groups-move.js）,
+//   toggleSubPanelFrameMode/deleteSubPanel/renderSubPanelHandles/_isSubPanelFrameMode（24-sub-panels.js）,
+//   selectDraft（08-panels-images.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import {
+    syncPanelSelectionToObject, togglePanelBorderVisibility, togglePanelLock,
+    _isPanelBorderHidden, _isPanelLocked, updateDuplicatePanelSelect,
+} from './03-layers-panel.js';
+import {
+    _maskState, _maskIsObjectTarget, _maskTypeLabel, _maskOpenEditorFor, _maskReassignObject,
+    _maskToggleLayerVisible, _maskDeleteLayer, _maskLayerList, _maskTargetGroup,
+    _maskEnsureElId, _maskAddLayerAndEdit,
+} from './04a-mask-core.js';
+import { state } from './01-state.js';
+import { clearImageHandles, renderImageHandles, selectDraft, selectPanel } from './08-panels-images.js';
+import { clearTextHandles, renderTextHandles, syncFontFamilyUI } from './09d-balloon-tools.js';
+import { _drawShapeSyncProps, _layerDrawSelectShape, clearDrawShapeHandles } from './17c-layer-draw-handles.js';
+import { clearGroupHandles, renderGroupHandles } from './06a-polygon-geometry.js';
+import { _h2CleanupBalloonChainBeforeDelete, _h2RefreshChainAfterDelete, saveOverlaySvg, selectOverlay, updateBalloonUI } from './09b-balloon-shapes.js';
+import { clearHandles, renderHandles } from './09c-balloon-handles.js';
+import { pushHistory, savePanelSvg } from './07-pages.js';
+import { saveGroupAsAsset, ungroupLayer } from './05-groups-move.js';
+import { _isSubPanelFrameMode, deleteSubPanel, renderSubPanelHandles, toggleSubPanelFrameMode } from './24-sub-panels.js';
 
 function renderLayerPanel() {
     const listEl = document.getElementById('layer-list');
@@ -824,4 +858,12 @@ function getPanelLayerSvg(container) {
     if (!container) container = getActiveContainer();
     return container?.querySelector('#image-layer svg') || null;
 }
+
+export { _layerOpacityGetSelected, _layerOpacitySync, getActiveContainer, getPanelLayerSvg, renderLayerPanel };
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window._layerOpacityGetSelected = _layerOpacityGetSelected;
+window._layerOpacitySync = _layerOpacitySync;
 

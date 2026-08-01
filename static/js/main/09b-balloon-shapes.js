@@ -1,10 +1,26 @@
 // ============================================================
 // フキダシ管理 分割ファイル (2/5): フキダシ図形・パス生成(H2タイプ/爆発/思考雲/変形/PNG変換)
 // 元 09-balloons.js（分割前）の行 600-1294 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _h2_getBoundaryPoint,_h2_mulberry32,_showH2TypeParams,_updateH2ShapePath,circleToPath,generateBombPath,generateThoughtPath,getOrCreateClipGroup,getOrCreateOverlayGroup,renderPanelOverlays,saveOverlaySvg,selectOverlay,updateBalloonUI,updateShapePath
+// type="module" として読み込まれる（ESモジュール化 G4）。09a〜09fは相互に密結合しており
+// 循環importが多数発生するが、循環先シンボルの参照はすべて関数内部に閉じているため安全。
+// 主なトップレベル定義: _h2ChainAllDescendants,_h2CleanupBalloonChainBeforeDelete,_h2RefreshChainAfterDelete,_h2_getBoundaryPoint,_h2_mulberry32,_showH2TypeParams,_updateH2ShapePath,circleToPath,generateBombPath,generateThoughtPath,getOrCreateClipGroup,getOrCreateOverlayGroup,renderPanelOverlays,saveOverlaySvg,selectOverlay,updateBalloonUI,updateShapePath
+// （_h2ChainAllDescendants/_h2CleanupBalloonChainBeforeDelete/_h2RefreshChainAfterDeleteは機械抽出で
+//  追加確認したシンボル。ヘッダコメントは元main.js分割時のもので非網羅）
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbPut, _enqueueActivePageSave } from './00-db.js';
+import { _collectReferencedFilters } from './07-pages.js';
+import { updatePanelSelectDropdown, highlightOverlay, _syncDraftInteractivity } from './08-panels-images.js';
+import { clearHandles } from './09c-balloon-handles.js';
+import { updateBalloonPanelSelect } from './09e-text-tool.js';
+import { _isBubbleTextType, _bubbleTextUpdateShape, _bubbleTextSyncH2Text } from './09f-bubble-text.js';
+import { state } from './01-state.js';
+import { renderLayerPanel } from './04b-layer-panel-render.js';
+import { _clearObjectSelection } from './08-panels-images.js';
+import { _subPanelSyncBorderWidthUI } from './24-sub-panels.js';
 
 function _showH2TypeParams(type) {
     const panel = document.getElementById('h2-params-panel');
@@ -273,7 +289,7 @@ function selectOverlay() {
         highlightOverlay(svgEl, null);
         _syncDraftInteractivity(svgEl);
     }
-    if (typeof _subPanelSyncBorderWidthUI === 'function') _subPanelSyncBorderWidthUI();
+    _subPanelSyncBorderWidthUI();
 }
 
 function getOrCreateClipGroup(overlaySvgEl) {
@@ -1350,3 +1366,17 @@ function _updateChainUnionRing(baseEl) {
 
 // フキダシ or 図形要素をPNG画像に変換して同位置に複製挿入する
 // 実装は convertShapeToImage（09c-balloon-handles.js、読み込み順が後のため実際に有効になる定義）を参照
+
+export {
+    _cloudPuffyPointAt, _cloudWavyPointAt, _h2BoundaryPointFor, _h2ChainAllDescendants,
+    _h2ChainAnchorNode, _h2ChainRootEl, _h2CleanupBalloonChainBeforeDelete, _h2RayExitDistance,
+    _h2RefreshChainAfterDelete, _h2TailBoundaryPoint, _h2_getBoundaryPoint, _h2_mulberry32,
+    _showH2TypeParams, _updateBalloonConnector, _updateChainUnionRing, _updateH2ShapePath,
+    circleToPath, generateBombPath, generateCloudPuffyPath, generateCloudWavyPath, generateThoughtPath,
+    getOrCreateClipGroup, getOrCreateOverlayGroup, renderPanelOverlays, saveOverlaySvg, selectOverlay,
+    updateBalloonUI, updateShapePath,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。

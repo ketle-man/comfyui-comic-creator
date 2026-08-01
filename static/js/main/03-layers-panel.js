@@ -1,10 +1,33 @@
 // ============================================================
 // main.js 分割ファイル (4/24): レイヤー管理パネル
 // 元 main.js の行 836-1079 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G1）。
 // 主なトップレベル定義: _getPanelBorderPolyDom,_getPanelGroupDom,_isObjectLocked,_isPanelBorderHidden,_isPanelLocked,_setPolyBorderHidden,initLayerPanel,syncPanelSelectionToObject,togglePanelBorderVisibility,togglePanelLock,updateDuplicatePanelSelect
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, layerMove（06a-polygon-geometry.js）,
+//   groupSelectedLayers/ungroupLayer/duplicateSelectedObject/moveSelectedObject（05-groups-move.js）,
+//   saveOverlaySvg（09b-balloon-shapes.js）,
+//   saveDraftSvg/updatePanelSelectDropdown/highlightOverlay/_syncDraftInteractivity/clearImageHandles（08-panels-images.js）,
+//   updateBalloonPanelSelect（09e-text-tool.js）, clearHandles（09c-balloon-handles.js）,
+//   clearGroupHandles（06a-polygon-geometry.js）, clearTextHandles（09d-balloon-tools.js）,
+//   clearDrawShapeHandles（17c-layer-draw-handles.js）, savePanelSvg（07-pages.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbPut } from './00-db.js';
+import { getPanelLayerSvg, renderLayerPanel, _layerOpacityGetSelected } from './04b-layer-panel-render.js';
+import { initLayoutPreviewSizeSlider } from './02-assets.js';
+import { state } from './01-state.js';
+import { clearGroupHandles, layerMove } from './06a-polygon-geometry.js';
+import { duplicateSelectedObject, groupSelectedLayers, moveSelectedObject, ungroupLayer } from './05-groups-move.js';
+import { saveOverlaySvg } from './09b-balloon-shapes.js';
+import { _syncDraftInteractivity, clearImageHandles, highlightOverlay, saveDraftSvg, updatePanelSelectDropdown } from './08-panels-images.js';
+import { savePanelSvg } from './07-pages.js';
+import { updateBalloonPanelSelect } from './09e-text-tool.js';
+import { clearHandles } from './09c-balloon-handles.js';
+import { clearTextHandles } from './09d-balloon-tools.js';
+import { clearDrawShapeHandles } from './17c-layer-draw-handles.js';
 
 // ==============================
 // レイヤー管理パネル
@@ -271,4 +294,21 @@ async function togglePanelLock(panelId) {
     if (curSvg) await savePanelSvg(panelId, curSvg);
     renderLayerPanel();
 }
+
+export {
+    initLayerPanel, updateDuplicatePanelSelect, syncPanelSelectionToObject,
+    _setPolyBorderHidden, _getPanelBorderPolyDom, _isPanelBorderHidden, togglePanelBorderVisibility,
+    _getPanelGroupDom, _isPanelLocked, _isObjectLocked, togglePanelLock,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initLayerPanel = initLayerPanel;
+window.updateDuplicatePanelSelect = updateDuplicatePanelSelect;
+window._isPanelBorderHidden = _isPanelBorderHidden;
+window.togglePanelBorderVisibility = togglePanelBorderVisibility;
+window._isPanelLocked = _isPanelLocked;
+window.togglePanelLock = togglePanelLock;
+window._getPanelGroupDom = _getPanelGroupDom;
 

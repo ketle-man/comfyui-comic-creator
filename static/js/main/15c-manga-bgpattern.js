@@ -1,11 +1,18 @@
 // ============================================================
 // マンガツール: 背景パターン（ストライプ / ドット / チェック / 和柄 / カスタムSVG）
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G6）。
 // 対象領域の決定・キャンバスサイズ計算・プレビュー背景ガイド・挿入処理は
-// 15b-manga-tone.js の共通ヘルパー（_mangaGetTargetRegion 等）をそのまま再利用する。
+// 15b-manga-tone.js の共通ヘルパー（_mangaGetTargetRegion 等）をimportして再利用する。
 // 主なトップレベル定義: initMangaBgPatternButton, mangaBgPatternOpen
 // ============================================================
+
+import { t } from '../i18n.js';
+import {
+    _mangaGetTargetRegion, _mangaTargetRegionLabel, _mangaCanvasSizeForRegion,
+    _mangaInsertGeneratedToRegion, _mangaDrawCheckerboard, _mangaHexToRgb,
+    _mangaGetRegionBackdropImage, _mangaDrawBackdropCover,
+    _MANGA_SIZE_REFERENCE_DIM, _MANGA_HALFTONE_MAX_DIM, _MANGA_PREVIEW_MAX_DIM,
+} from './15b-manga-tone.js';
 
 // ── パターン定義 ──
 // 参考: ComfyUI-Workflow-Studio の設定タブ「テーマのカスタマイズ」の背景パターン
@@ -563,3 +570,10 @@ async function mangaBgPatternOpen() {
     updatePreviewBgButtons();
     renderPreview();
 }
+
+export { initMangaBgPatternButton };
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initMangaBgPatternButton = initMangaBgPatternButton;

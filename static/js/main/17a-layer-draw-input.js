@@ -1,10 +1,22 @@
 // ============================================================
 // SVGレイヤーへの描画機能 分割ファイル (1/3): 初期化+オーバーレイ管理+座標変換+マウスイベント+多角形ペンツール+ベクター曲線ツール
 // 元 17-layer-draw.js（分割前）の行 1-715 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G7）。
 // 主なトップレベル定義: _POLY_CLOSE_THRESHOLD,_drawChainPreview,_drawRopePreview,_layerDrawApplyPropsToSelected,_layerDrawAttachOverlay,_layerDrawClientToSvg,_layerDrawDetachOverlay,_layerDrawFillRampColorAt,_layerDrawFillState,_layerDrawFillSyncUI,_layerDrawDrawGradRamp,_layerDrawGetFillStyleObj,_layerDrawLoadFillStateFromShape,_layerDrawKeyDown,_layerDrawMouseDown,_layerDrawMouseMove,_layerDrawMouseUp,_layerDrawMouseUpGlobal,_layerDrawPolyClick,_layerDrawPolyCommit,_layerDrawPolyCommitInner,_layerDrawPolyIsNearStart,_layerDrawPolyPreview,_layerDrawPolyReset,_layerDrawResizeCanvas,_layerDrawState,_layerDrawSvgToCanvas,_layerDrawUpdateStatusForShape,_layerDrawUpdateToggle,_loadDefaultOriginalImg,initLayerDraw,_layerDrawVecClick,_layerDrawVecCommit,_layerDrawVecCommitInner,_layerDrawVecIsNearStart,_layerDrawVecPreview,_layerDrawVecReset,_vecBuildSplineCtx,_vecBuildSplinePathD
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { _layerDrawCommit, _layerDrawUndo, _layerDrawSetStatus, _layerDrawTargetLabel } from './17b-layer-draw-commit.js';
+import { _layerDrawSelectShape, _polygonPointsBounds, _drawShapeSyncProps, _drawShapeSyncTexturePatternTransform } from './17c-layer-draw-handles.js';
+import { _layerDrawOriginalUnit } from './16-processing-edit-tabs.js';
+import { getOrCreateClipGroup, saveOverlaySvg } from './09b-balloon-shapes.js';
+import { getPanelLayerSvg } from './04b-layer-panel-render.js';
+import { saveDraftSvg } from './08-panels-images.js';
+import { savePanelSvg } from './07-pages.js';
+import { _fontMgrApplyFillPaintToEl } from './09e-text-tool.js';
+import { state } from './01-state.js';
 
 // ─────────────────────────────────────────────
 //  SVGレイヤーへの描画機能
@@ -1287,4 +1299,14 @@ async function _layerDrawVecCommitInner(closed) {
     _layerDrawSelectShape(el, svgEl);
     return true;
 }
+
+export {
+    _layerDrawState, _layerDrawGetFillStyleObj, _layerDrawLoadFillStateFromShape,
+    initLayerDraw, _layerDrawUpdateToggle, _layerDrawFlushPendingSave, _layerDrawSaveSelected,
+    _layerDrawAttachOverlay, _layerDrawDetachOverlay, _layerDrawResizeCanvas, _layerDrawClientToSvg,
+};
+
+// まだESM化されていない main/以下の classic <script> や、既存ESMファイルの一部が
+// window経由で呼んでいるためのブリッジ（ESモジュール化移行中の一時措置。
+// 全分割ファイルのESM化が完了したら、各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
 

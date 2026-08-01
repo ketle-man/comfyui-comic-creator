@@ -1,9 +1,18 @@
 // ============================================================
 // マンガツール: ハーフトーン変換/生成 + マンガ効果（ヴィネット / スクリーントーンノイズ / 集中線）
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G6）。
+// 15c-manga-bgpattern.js が対象領域決定・キャンバスサイズ計算・プレビュー背景ガイド・挿入処理の
+// 共通ヘルパー（_manga*）をこのファイルからimportして再利用する。
 // 主なトップレベル定義: initMangaHalftoneButton, mangaHalftoneOpen, initMangaEffectsButton, mangaEffectsOpen
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { pushHistory, savePanelSvg } from './07-pages.js';
+import { saveOverlaySvg } from './09b-balloon-shapes.js';
+import { insertImage, getBoundingBoxFromPoints } from './08-panels-images.js';
+import { state } from './01-state.js';
 
 // ── 共通: 対象領域（コマ/オーバーレイ）の決定とサイズ取得 ──
 // マンガ効果・ハーフトーンの「パターンを作成」モードは、選択中の画像ではなく
@@ -1167,3 +1176,17 @@ async function mangaEffectsOpen() {
     updatePreviewBgButtons();
     renderPreview();
 }
+
+export {
+    _mangaGetTargetRegion, _mangaTargetRegionLabel, _mangaCanvasSizeForRegion,
+    _mangaInsertGeneratedToRegion, _mangaDrawCheckerboard, _mangaHexToRgb,
+    _mangaGetRegionBackdropImage, _mangaDrawBackdropCover,
+    _MANGA_SIZE_REFERENCE_DIM, _MANGA_HALFTONE_MAX_DIM, _MANGA_PREVIEW_MAX_DIM,
+    initMangaHalftoneButton, initMangaEffectsButton,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initMangaHalftoneButton = initMangaHalftoneButton;
+window.initMangaEffectsButton = initMangaEffectsButton;

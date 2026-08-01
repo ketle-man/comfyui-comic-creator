@@ -1,10 +1,22 @@
 // ============================================================
 // main.js 分割ファイル (3/24): アセット管理+テンプレートサイドパネル+レイアウトプレビュー表示サイズ
 // 元 main.js の行 447-835 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G1）。
 // 主なトップレベル定義: _applyLayoutPreviewSize,_layoutPreviewSizePct,_renderAssetFolders,deleteAssetItem,handleInsertAsset,initAssetManager,initLayoutPreviewSizeSlider,insertGroupAsset,loadAssets,renderAssetTree,sanitizeSvgTree,selectAsset,updateTemplateSidePanel
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない。ESM化済みなのは import 元のみ）:
+//   state（01-state.js）, pushHistory/savePanelSvg（07-pages.js）,
+//   getBoundingBoxFromPoints/insertImage（08-panels-images.js）, getOrCreateClipGroup（09b-balloon-shapes.js）,
+//   renderGroupHandles（06a-polygon-geometry.js）, window._ccImageTab（image-tab.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
+import { state } from './01-state.js';
+import { getBoundingBoxFromPoints, insertImage } from './08-panels-images.js';
+import { pushHistory, savePanelSvg } from './07-pages.js';
+import { getOrCreateClipGroup } from './09b-balloon-shapes.js';
+import { renderGroupHandles } from './06a-polygon-geometry.js';
 
 // ==============================
 // アセット管理
@@ -394,4 +406,21 @@ function initLayoutPreviewSizeSlider() {
         _applyLayoutPreviewSize(pct);
     });
 }
+
+export {
+    _renderAssetFolders, loadAssets, initAssetManager, renderAssetTree, deleteAssetItem,
+    selectAsset, sanitizeSvgTree, handleInsertAsset, insertGroupAsset, updateTemplateSidePanel,
+    _layoutPreviewSizePct, _applyLayoutPreviewSize, initLayoutPreviewSizeSlider,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initAssetManager = initAssetManager;
+window.renderAssetTree = renderAssetTree;
+window.deleteAssetItem = deleteAssetItem;
+window.selectAsset = selectAsset;
+window.handleInsertAsset = handleInsertAsset;
+window.insertGroupAsset = insertGroupAsset;
+window.initLayoutPreviewSizeSlider = initLayoutPreviewSizeSlider;
 

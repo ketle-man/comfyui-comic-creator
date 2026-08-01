@@ -11,7 +11,13 @@
 //    fontFamily  : プレビューに使うフォント名（省略時 'Zen Antique'）
 //    previewText : プレビュー初期文字列（省略時 'あ亜Aa1'）
 //    onApply     : (styleObj) => void  適用ボタン押下時に呼ばれる
+//
+//  type="module" として読み込まれる（ESモジュール化 G4）。元々IIFEで完全にカプセル化され
+//  window.openTextStyleModal のみを公開する設計だったため、変更は import 追加のみで済む。
+//  未ESM化の外部依存: window._fontMgrApplyStyleAttrsToTextEl（09e-text-tool.js、既存のwindow参照のまま）
 // ============================================================
+
+import { t } from './i18n.js';
 
 (function () {
     'use strict';

@@ -1,10 +1,17 @@
 // ============================================================
 // main.js 分割ファイル (1/24): IndexedDB初期化・操作レイヤー+FileReaderユーティリティ
 // 元 main.js の行 1-153 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化第1弾）。07-pages.js とは相互import（循環）。
+// 循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため安全。
+// 内部の `db` はモジュールスコープに閉じており、他ファイルからは _setDb() 経由でのみ更新できる。
 // 主なトップレベル定義: DB_NAME,DB_VERSION,db,dbDelete,dbGet,dbGetAll,dbGetAllPagesMeta,dbPut,openDB,readFileAsDataURL,readFileAsText,svgTextToDataUrl
+// まだESM化されていない main/以下の classic <script> から呼べるよう、export一覧はwindowにも公開する
+// （ESモジュール化移行中の一時ブリッジ。末尾のexport文の直後を参照）。
 // ============================================================
+
+import { t } from '../i18n.js';
+import { buildMergedSvg } from './07-pages.js';
+import { state } from './01-state.js';
 
 // ==============================
 // IndexedDB 初期化・操作レイヤー
@@ -236,4 +243,28 @@ function svgTextToDataUrl(svgText) {
     const encoded = encodeURIComponent(svgText);
     return `data:image/svg+xml;charset=utf-8,${encoded}`;
 }
+
+// モジュールスコープの `db` を外部（01-state.jsの初期化処理）から更新するためのsetter。
+// db自体はexportできない（再代入されるため、export後も呼び出し元にnullのままの参照が渡ってしまう）。
+function _setDb(d) { db = d; }
+
+export {
+    DB_NAME, DB_VERSION, openDB, _setDb,
+    dbGet, dbPut, dbDelete, dbGetAll, dbGetAllPagesMeta,
+    readFileAsText, readFileAsDataURL, svgTextToDataUrl, _enqueueActivePageSave, _dbPutRaw,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.dbGet = dbGet;
+window.dbPut = dbPut;
+window.dbDelete = dbDelete;
+window.dbGetAll = dbGetAll;
+window.dbGetAllPagesMeta = dbGetAllPagesMeta;
+window.readFileAsText = readFileAsText;
+window.readFileAsDataURL = readFileAsDataURL;
+window.svgTextToDataUrl = svgTextToDataUrl;
+window._enqueueActivePageSave = _enqueueActivePageSave;
+window._dbPutRaw = _dbPutRaw;
 

@@ -1,6 +1,12 @@
 /**
  * Nanobanana API 連携ロジック
+ * type="module" として読み込まれる（ESモジュール化 G6）。
  */
+
+import { t, resolveBackendError } from './i18n.js';
+import { insertImage } from './main/08-panels-images.js';
+import { saveToEagle, _eagleSettings } from './main/14-integrations.js';
+import { state } from './main/01-state.js';
 
 class NanobananaManager {
     constructor() {
@@ -280,7 +286,7 @@ class NanobananaManager {
                 await this.saveToServer(b64, filename);
                 this.generatedImages.push({ url: `/ccc_nanobanana_output/${filename}`, b64: b64 });
                 // Eagle 自動保存
-                if (typeof saveToEagle === 'function' && typeof _eagleSettings !== 'undefined' && _eagleSettings.autoSaveNanobanana) {
+                if (_eagleSettings.autoSaveNanobanana) {
                     saveToEagle(`/ccc_nanobanana_output/${filename}`, filename, ['comfyui-comic-creator', 'nanobanana']);
                 }
             }
@@ -356,3 +362,10 @@ function initNanobananaTab() {
         nanobananaManager = new NanobananaManager();
     }
 }
+
+export { initNanobananaTab };
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initNanobananaTab = initNanobananaTab;

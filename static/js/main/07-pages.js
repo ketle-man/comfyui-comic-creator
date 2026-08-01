@@ -1,10 +1,48 @@
 // ============================================================
 // main.js 分割ファイル (8/24): ページ管理+ページナビゲーション+ページプレビューSVG操作+コマ単位SVG統合保存
 // 元 main.js の行 5053-5897 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G3）。08-panels-images.js とは相互import（循環）。
+// 循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため安全。
+// buildMergedSvg は 00-db.js から window ブリッジ経由で呼ばれていたが、00-db.js 側でも import に置き換え済み。
 // 主なトップレベル定義: _collectReferencedFilters,_layoutPageDelete,_layoutPageList,_layoutPageNav,_updatePageThumbGridActive,buildMergedSvg,createPageFromTemplate,initPageManager,loadPages,pushHistory,renderLayoutTab,renderPageSelector,renderPageThumbGrid,saveCurrentSvg,savePanelSvg,saveShapeSvg,saveTextSvg,switchActivePage,undo,updateLayoutPageNav
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, _round2/_insetPolygonPoints/deleteSelectedObject（05-groups-move.js）,
+//   _prepareTemplateSvgDocForPage（06c-template-wizard.js）, updateTemplateSidePanel/sanitizeSvgTree（02-assets.js）,
+//   flipSelected（09c-balloon-handles.js）, _pageMgrGroups/_movePageToTrashSilent/_getOrBuildPageThumb（11a-work-manager.js）,
+//   switchTab（01-state.js）, _layerDrawFlushPendingSave/_layerDrawState/_layerDrawDetachOverlay/_layerDrawAttachOverlay（17a/17b）,
+//   initBalloonTools（09a-balloon-init.js）, initTextTools（09e-text-tool.js）, initBubbleTextTools（09f-bubble-text.js）,
+//   initGroupManipulation（06a-polygon-geometry.js）, initDrawShapeManipulation（17c-layer-draw-handles.js）,
+//   initSubPanelManipulation（24-sub-panels.js）, updateBalloonPanelSelect（09e-text-tool.js）,
+//   renderLayerPanel（04b-layer-panel-render.js）, _maskState/_maskSetEditing/_maskAttachOverlay/_maskUpdateUI（04a-mask-core.js）,
+//   _pose3dSyncPosition（23-pose3d-bridge.js）, saveOverlaySvg（09b-balloon-shapes.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbPut, dbGet, dbGetAllPagesMeta, _enqueueActivePageSave } from './00-db.js';
+import {
+    selectPanel, handleInsertImageFromLocal, initDragAndDrop, updatePanelSelectDropdown,
+    initImageManipulation, getStrokeWidthFromElement, saveDraftSvg, _syncDraftInteractivity,
+} from './08-panels-images.js';
+import { state, switchTab } from './01-state.js';
+import { _movePageToTrashSilent, _pageMgrGroups } from './11b-page-manager-tab.js';
+import { _insetPolygonPoints, _round2, deleteSelectedObject } from './05-groups-move.js';
+import { flipSelected } from './09c-balloon-handles.js';
+import { _getOrBuildPageThumb } from './11a-work-manager.js';
+import { _applyLayoutPreviewSize, _layoutPreviewSizePct, sanitizeSvgTree, updateTemplateSidePanel } from './02-assets.js';
+import { _prepareTemplateSvgDocForPage } from './06c-template-wizard.js';
+import { _layerDrawAttachOverlay, _layerDrawDetachOverlay, _layerDrawFlushPendingSave, _layerDrawState } from './17a-layer-draw-input.js';
+import { initPanelsOnSvg } from './08-panels-images.js';
+import { initBalloonTools } from './09d-balloon-tools.js';
+import { initTextTools, updateBalloonPanelSelect } from './09e-text-tool.js';
+import { initBubbleTextTools } from './09f-bubble-text.js';
+import { initGroupManipulation } from './06a-polygon-geometry.js';
+import { initDrawShapeManipulation } from './17c-layer-draw-handles.js';
+import { initSubPanelManipulation } from './24-sub-panels.js';
+import { renderLayerPanel } from './04b-layer-panel-render.js';
+import { _maskAttachOverlay, _maskSetEditing, _maskState, _maskUpdateUI } from './04a-mask-core.js';
+import { _pose3dSyncPosition } from './23-pose3d-bridge.js';
+import { saveOverlaySvg } from './09b-balloon-shapes.js';
 
 // ==============================
 // ページ管理
@@ -939,4 +977,27 @@ async function undo() {
         }
     }
 }
+
+export {
+    _collectReferencedFilters, _layoutPageDelete, _layoutPageList, _layoutPageNav,
+    _updatePageThumbGridActive, buildMergedSvg, createPageFromTemplate, initPageManager,
+    loadPages, pushHistory, renderLayoutTab, renderPageSelector, renderPageThumbGrid,
+    saveCurrentSvg, savePanelSvg, saveShapeSvg, saveTextSvg, switchActivePage, undo,
+    updateLayoutPageNav,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window._layoutPageDelete = _layoutPageDelete;
+window.createPageFromTemplate = createPageFromTemplate;
+window.initPageManager = initPageManager;
+window.loadPages = loadPages;
+window.renderPageSelector = renderPageSelector;
+window.renderPageThumbGrid = renderPageThumbGrid;
+window.saveCurrentSvg = saveCurrentSvg;
+window.saveShapeSvg = saveShapeSvg;
+window.saveTextSvg = saveTextSvg;
+window.switchActivePage = switchActivePage;
+window.updateLayoutPageNav = updateLayoutPageNav;
 

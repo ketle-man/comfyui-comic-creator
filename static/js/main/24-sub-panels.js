@@ -5,11 +5,28 @@
 // highlightOverlay/initPanelsOnSvgのクリック選択/パネルロック・マスク機能から
 // 汎用的に扱われているため、サブコマも parentPanelId 付きの通常エントリとして
 // 追加するだけでこれらを無改造のまま利用できる。
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 17c-layer-draw-handles.js のポリゴン用ジオメトリ関数（_polygonGetPoints等）と
-// draw-shape用の回転対応リサイズ関数（_drawShapeGetBounds等）をそのまま流用するため、
-// 読み込み順は17c以降（templates/index.htmlのscriptタグ順）にする必要がある。
+// type="module" として読み込まれる（ESモジュール化 G9）。
+// 17c-layer-draw-handles.js のポリゴン用ジオメトリ関数・draw-shape用の回転対応
+// リサイズ関数はimportして再利用する。
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { _cloneWithNewIds } from './06a-polygon-geometry.js';
+import { _polygonCenter, _round2 } from './05-groups-move.js';
+import {
+    _drawShapeApplyRotation, _drawShapeGetBounds, _drawShapeGetRotateHandlePos,
+    _drawShapeGetRotatedHandlePositions, _drawShapeSetBounds, _polygonBakeRotation,
+} from './17c-layer-draw-handles.js';
+import { _getPanelGroupDom, _isObjectLocked, _isPanelLocked } from './03-layers-panel.js';
+import { _updateH2ShapePath } from './09b-balloon-shapes.js';
+import { applyImageTransform } from './09c-balloon-handles.js';
+import { dbPut } from './00-db.js';
+import { getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
+import { pushHistory, renderLayoutTab, savePanelSvg } from './07-pages.js';
+import { selectPanel } from './08-panels-images.js';
+import { state } from './01-state.js';
 
 const _subPanelToolState = {
     armed: false,     // ドラッグで新規作成する準備ができているか
@@ -529,7 +546,7 @@ function _subPanelApplyContentTranslate(snapshot, dx, dy) {
         } else if (kind === 'balloon-shape') {
             el.dataset.cx = snap.cx0 + dx;
             el.dataset.cy = snap.cy0 + dy;
-            if (typeof _updateH2ShapePath === 'function') _updateH2ShapePath(el);
+            _updateH2ShapePath(el);
         }
         // kind === 'unknown' は種別不明のため位置を動かさない（何もしない）
     });
@@ -934,3 +951,14 @@ function initSubPanelManipulation(svgEl) {
         if (selPanel && selPanel.parentPanelId) renderSubPanelHandles(selPanel, svgEl);
     }
 }
+
+export {
+    _isSubPanelFrameMode, toggleSubPanelFrameMode, deleteSubPanel, renderSubPanelHandles,
+    _subPanelCurrentSelected, _subPanelSyncBorderWidthUI, initSubPanelTool,
+    duplicateSubPanel, moveSubPanel, initSubPanelManipulation,
+};
+
+// まだESM化されていない main/以下の classic <script> や、既存ESMファイルの一部が
+// window経由で呼んでいるためのブリッジ（ESモジュール化移行中の一時措置。
+// 全分割ファイルのESM化が完了したら、各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initSubPanelTool = initSubPanelTool;

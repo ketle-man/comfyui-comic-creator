@@ -1,10 +1,15 @@
 // ============================================================
 // main.js 分割ファイル (15/24): Eagle連携+WorkflowStudioギャラリー+GMIC連携
 // 元 main.js の行 12796-13097 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _eagleApiUrl,_eagleSettings,_eagleSettingsInited,_gmicSettingsInited,_saveEagleSettings,_wfmGalleryLoaded,gmicAbort,gmicInsertResult,gmicOpenGui,gmicState,gmicWaitForJob,initEagleSettings,initGmicSettings,initGmicTab,initWfmGalleryTab,loadWfmGalleryTab,saveToEagle
+// type="module" として読み込まれる（ESモジュール化 G6）。
+// 主なトップレベル定義: _eagleApiUrl,_eagleSettings,_eagleSettingsInited,_gmicSettingsInited,_i2iSettings,_inpaintSettings,_inpaintSettingsInited,_saveEagleSettings,_saveI2ISettings,_saveInpaintSettings,_wfmGalleryLoaded,gmicAbort,gmicInsertResult,gmicOpenGui,gmicState,gmicWaitForJob,getI2ISettingsState,initEagleSettings,initGmicSettings,initGmicTab,initInpaintSettings,initWfmGalleryTab,loadWfmGalleryTab,saveI2ISettingsState,saveToEagle,sendI2IRunToWorkflowStudio,sendImageToWorkflowStudioI2I,sendInpaintToWorkflowStudio
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state/switchTab（01-state.js）
 // ============================================================
+
+import { t, resolveBackendError } from '../i18n.js';
+import { insertImage } from './08-panels-images.js';
+import { state, switchTab } from './01-state.js';
 
 // ==============================
 // Eagle 連携
@@ -584,4 +589,22 @@ async function gmicInsertResult() {
         alert(t('layout.gmicInsertError', e.message));
     }
 }
+
+export {
+    _eagleSettings, saveToEagle, initEagleSettings, initGmicSettings,
+    getI2ISettingsState, saveI2ISettingsState, initInpaintSettings,
+    initWfmGalleryTab, loadWfmGalleryTab,
+    sendImageToWorkflowStudioI2I, sendInpaintToWorkflowStudio, sendI2IRunToWorkflowStudio,
+    initGmicTab,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initEagleSettings = initEagleSettings;
+window.initGmicSettings = initGmicSettings;
+window.initInpaintSettings = initInpaintSettings;
+window.initWfmGalleryTab = initWfmGalleryTab;
+window.loadWfmGalleryTab = loadWfmGalleryTab;
+window.initGmicTab = initGmicTab;
 

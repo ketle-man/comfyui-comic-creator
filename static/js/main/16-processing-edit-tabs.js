@@ -1,10 +1,20 @@
 // ============================================================
 // main.js 分割ファイル (17/24): Processingタブ+Editタブ
 // 元 main.js の行 13258-13628 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G7）。
 // 主なトップレベル定義: _getSvgSize,_layerDrawOriginalUnit,_procApplyDenoise,_procApplySharpen,_procRemoveBackground,_procRemoveBackgroundBiRefNet,_procRemoveBackgroundImgly,_procRemoveBackgroundSvg,_procRun,_procState,_procUpscale,_svgBase64ToText,initEditTab,initProcessingTab
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { insertImage } from './08-panels-images.js';
+import { _layerDrawState, initLayerDraw, _layerDrawUpdateToggle, _layerDrawDetachOverlay } from './17a-layer-draw-input.js';
+import { _paintToolState, initPaintTool, _paintUpdateToggle, _paintDetachOverlay } from './17d-layer-draw-paint.js';
+import { _layerDrawShapeToPng } from './17b-layer-draw-commit.js';
+import { _svgColorState, _svgColorLoad, _svgColorApply, _svgToPngConvert } from './18-svg-color-png.js';
+import { openImageTabWithSelected, openLayoutI2IModal, moveSelectedObjectToCenter } from './15-pixifx-bridge.js';
+import { state } from './01-state.js';
 
 // ============================================================
 // Processing タブ（アップスケール・背景除去）
@@ -341,12 +351,12 @@ function initEditTab() {
             document.getElementById('edit-panel-svg-color').style.display = mode === 'svg-color' ? '' : 'none';
             document.getElementById('edit-panel-svg-png').style.display   = mode === 'svg-png'   ? '' : 'none';
             // ドロータブから離れたら描画ONを解除。ペイントタブから離れてもペイントONを解除
-            if (mode !== 'box' && typeof _layerDrawState !== 'undefined' && _layerDrawState.active) {
+            if (mode !== 'box' && _layerDrawState.active) {
                 _layerDrawState.active = false;
                 _layerDrawUpdateToggle();
                 _layerDrawDetachOverlay();
             }
-            if (mode !== 'paint' && typeof _paintToolState !== 'undefined' && _paintToolState.active) {
+            if (mode !== 'paint' && _paintToolState.active) {
                 _paintToolState.active = false;
                 _paintUpdateToggle();
                 _paintDetachOverlay();
@@ -405,4 +415,12 @@ function _layerDrawOriginalUnit(ctx, x, y, angle, scale, img) {
     ctx.drawImage(img, -w / 2, -h / 2, w, h);
     ctx.restore();
 }
+
+export { initProcessingTab, initEditTab, _layerDrawOriginalUnit };
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initProcessingTab = initProcessingTab;
+window.initEditTab = initEditTab;
 

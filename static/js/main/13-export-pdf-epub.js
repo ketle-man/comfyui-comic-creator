@@ -1,10 +1,17 @@
 // ============================================================
 // main.js 分割ファイル (14/24): PDF出力+EPUB出力+ファイル保存共通ヘルパー
 // 元 main.js の行 12575-12795 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _encodePdfInfoText,_saveBlob,exportToEpub,exportToPdf
+// type="module" として読み込まれる（ESモジュール化 G5）。12-text-png-export.js とは相互import（循環）。
+// 循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため安全。
+// 主なトップレベル定義: _encodePdfInfoText,_pickSaveTarget,_saveBlob,exportToEpub,exportToPdf
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbGet } from './00-db.js';
+import { buildMergedSvg } from './07-pages.js';
+import { _getExportDpiValue, _getExportMetaValues } from './10-output-pages.js';
+import { drawSvgOnCanvas, embedFontsInSvg } from './12-text-png-export.js';
+import { _APP_CREATOR_NAME, _splitMetaKeywords, _xmlEscape } from './13a-export-metadata.js';
 
 // ==============================
 // PDF出力
@@ -309,4 +316,6 @@ async function _saveBlob(blob, fileName, mimeType, ext, description, target) {
         alert(t('page.msgSaveFailed', err.message));
     }
 }
+
+export { _encodePdfInfoText, _pickSaveTarget, _saveBlob, exportToEpub, exportToPdf };
 

@@ -1,10 +1,42 @@
 // ============================================================
 // main.js 分割ファイル (2/24): 状態管理+初期化+タブ管理
 // 元 main.js の行 154-446 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _FONTMGR_LS_ASSET_THUMB_BG,initAssetFontBgPicker,initAssetPanelTabs,initSubtabs,initTabs,state,switchTab
+// type="module" として読み込まれる（ESモジュール化 最終ステップ）。
+// 全ファイルの init*() を呼ぶ初期化オーケストレーターのため、他の全グループが完了した最後に移行した。
+// 主なトップレベル定義: _FONTMGR_LS_ASSET_THUMB_BG,initAssetFontBgPicker,initAssetPanelTabs,initI18nSettings,initSubtabs,initTabs,state,switchTab
 // ============================================================
+
+import { applyI18nToHtml, t, setLang, getLang } from '../i18n.js';
+import { _setDb, openDB } from './00-db.js';
+import { initAssetManager, updateTemplateSidePanel } from './02-assets.js';
+import { initLayerPanel } from './03-layers-panel.js';
+import { getPanelLayerSvg } from './04b-layer-panel-render.js';
+import { initLayoutDeleteShortcut } from './05-groups-move.js';
+import { initTemplateManager } from './06b-template-manager.js';
+import { initPageManager, renderPageThumbGrid, renderLayoutTab } from './07-pages.js';
+import { initBalloonManager } from './09a-balloon-init.js';
+import { renderAssetFontGrid } from './09e-text-tool.js';
+import {
+    initOutputManager, _initOutputSubtabs, _activateOutputSubtab, onSwitchToOutputTab,
+} from './10-output-pages.js';
+import { _initWorkMgr, renderAssetTemplateGrid } from './11a-work-manager.js';
+import {
+    initWfmGalleryTab, initGmicTab, loadWfmGalleryTab,
+    initEagleSettings, initGmicSettings, initInpaintSettings,
+} from './14-integrations.js';
+import { initPixiFxButtons } from './15-pixifx-bridge.js';
+import { initMangaHalftoneButton, initMangaEffectsButton } from './15b-manga-tone.js';
+import { initMangaBgPatternButton } from './15c-manga-bgpattern.js';
+import { initMaskTool } from './04a-mask-core.js';
+import { initProcessingTab, initEditTab } from './16-processing-edit-tabs.js';
+import { _initEditTabTrigger } from './17c-layer-draw-handles.js';
+import { initFontMgrTab } from './20-font-presets.js';
+import { _scriptRenderAssetPanelLists, _scriptInitAssetPanelSectionToggle, initProjectTab } from './21-script-tab.js';
+import { initHelpTab } from './22-help-tab.js';
+import { initPose3DTab, hidePose3DCanvas } from './23-pose3d-bridge.js';
+import { initSubPanelTool } from './24-sub-panels.js';
+import { initNanobananaTab } from '../nanobanana.js';
+import { initImageTab } from '../image-tab.js';
 
 // ==============================
 // 状態管理
@@ -63,10 +95,6 @@ const state = {
     }
 };
 
-// image-tab.js は type="module" で読み込まれ、classic scriptの `const state` を直接参照する
-// 前例が無いため、window経由のブリッジ関数として作業中の作品（{ name, width, height }, 単位は1/100mm）を公開する
-window._ccGetActiveWork = () => state.activeWork;
-
 // ==============================
 // 初期化
 // ==============================
@@ -76,7 +104,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('Plugin Initializing...');
         applyI18nToHtml();
         initI18nSettings();
-        db = await openDB();
+        // db はモジュールスコープに閉じているため、_setDb() 経由でのみ更新できる（このファイルからの直接再代入は不可）
+        _setDb(await openDB());
         console.log('DB connected');
         initTabs();
         await initTemplateManager();
@@ -96,7 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initProcessingTab();
         initEditTab();
         initSubPanelTool();
-        if (typeof initNanobananaTab === 'function') initNanobananaTab();
+        initNanobananaTab();
         _initEditTabTrigger();
         console.log('Plugin Initialized');
     } catch (e) {
@@ -317,7 +346,7 @@ async function switchTab(tabId) {
         await renderLayoutTab();
         renderAssetFontGrid();
     } else if (tabId === 'image') {
-        if (typeof window.initImageTab === 'function') await window.initImageTab();
+        await initImageTab();
         renderAssetFontGrid();
     } else if (tabId === 'output') {
         await onSwitchToOutputTab();
@@ -335,4 +364,6 @@ async function switchTab(tabId) {
         initHelpTab();
     }
 }
+
+export { state, switchTab };
 

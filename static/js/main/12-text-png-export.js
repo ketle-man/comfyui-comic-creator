@@ -1,10 +1,21 @@
 // ============================================================
 // main.js 分割ファイル (13/24): テキスト透過PNG変換
 // 元 main.js の行 12003-12574 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G5）。10-output-pages.js/13-export-pdf-epub.js
+// とは相互import（循環）。循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため安全。
 // 主なトップレベル定義: buildGoogleFontFaceCSS,buildSystemFontFaceCSS,convertTextToPng,drawSvgOnCanvas,embedFontsInSvg,handleExport
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbGet, dbPut, dbGetAll } from './00-db.js';
+import { getPanelLayerSvg } from './04b-layer-panel-render.js';
+import { buildMergedSvg, renderLayoutTab } from './07-pages.js';
+import { clearTextHandles } from './09d-balloon-tools.js';
+import { _EXPORT_MAX_SIZE, _outputFilterGroup, _pageOrder } from './10-output-pages.js';
+import { GOOGLE_FONT_FAMILIES, _pageMgrGroups, arrayBufferToBase64, collectFontFamiliesFromSvg } from './11b-page-manager-tab.js';
+import { _pickSaveTarget, exportToEpub, exportToPdf } from './13-export-pdf-epub.js';
+import { _embedImageMetadata } from './13a-export-metadata.js';
+import { state } from './01-state.js';
 
 // ============================================================
 // テキスト → 透過PNG変換
@@ -591,4 +602,12 @@ async function handleExport() {
         if (exportBtn) exportBtn.disabled = false;
     }
 }
+
+export { buildGoogleFontFaceCSS, buildSystemFontFaceCSS, convertTextToPng, drawSvgOnCanvas, embedFontsInSvg, handleExport };
+
+// まだESM化されていない main/以下の classic <script> から呼べるよう、windowにも公開する
+// （ESモジュール化移行中の一時ブリッジ）。
+window.convertTextToPng = convertTextToPng;
+window.drawSvgOnCanvas = drawSvgOnCanvas;
+window.embedFontsInSvg = embedFontsInSvg;
 

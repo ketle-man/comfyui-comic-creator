@@ -1,10 +1,16 @@
 // ============================================================
 // main.js 分割ファイル (20/24): フォントマネージャータブ+文字スタイル
 // 元 main.js の行 15503-16240 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G8）。
 // 主なトップレベル定義: FONTMGR_FAV_CAT,FONTMGR_RESERVED_CAT_NAMES,_FONTMGR_LS_FAVS,_FONTMGR_LS_PREFS,_FONTMGR_LS_PRESETS,_FONTMGR_LS_STYLES,_FONTMGR_LS_STYLE_BG,_FONTMGR_LS_TAGS,_FONTMGR_PREVIEW_TEXTS,_FONTMGR_SENT_H,_FONTMGR_SENT_V,_esc,_fontMgrCatLabel,_fontMgrCatNames,_fontMgr,_fontMgrApplySentDir,_fontMgrApplyStyleToUI,_fontMgrBuildMixedHtml,_fontMgrCurrentList,_fontMgrDrawGradRamp,_fontMgrEditingStyleId,_fontMgrEnsureFontLoaded,_fontMgrGetStyleFromUI,_fontMgrGoogleList,_fontMgrGroupOpen,_fontMgrInitStyleTab,_fontMgrIsCjk,_fontMgrLoad,_fontMgrLoadFillState,_fontMgrLoadStyles,_fontMgrRampColorAt,_fontMgrRenderAllTagsChips,_fontMgrRenderFavList,_fontMgrRenderList,_fontMgrRenderRightPanel,_fontMgrRenderStyleSelect,_fontMgrRenderTagChips,_fontMgrRenderTextStylePreview,_fontMgrResetStyleUI,_fontMgrSaveFavs,_fontMgrSavePrefs,_fontMgrSaveStyles,_fontMgrSaveTags,_fontMgrSelectFont,_fontMgrStyleList,_fontMgrSyncFillUI,_fontMgrToggleGroup,_fontMgrUpdateCustomPreview,_fontMgrUpdatePreview,_fontMgrUpdateStylePreview
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: なし
 // ============================================================
+
+import { t } from '../i18n.js';
+import { GOOGLE_FONT_FAMILIES } from './11b-page-manager-tab.js';
+import { _fontMgrApplyStyleAttrsToTextEl } from './09e-text-tool.js';
+import { _fontMgrRenderPresetStyleSelect } from './20-font-presets.js';
 
 // ============================================================
 // フォントマネージャータブ
@@ -101,13 +107,7 @@ function _fontMgrSavePrefs() {
 
 // Google Fontsリストを既存のGOOGLE_FONT_FAMILIES Setから取得
 function _fontMgrGoogleList() {
-    if (typeof GOOGLE_FONT_FAMILIES !== 'undefined') {
-        return [...GOOGLE_FONT_FAMILIES].sort((a, b) => a.localeCompare(b));
-    }
-    // フォールバック: index.htmlの#font-group-googleのoption要素から収集
-    const grp = document.getElementById('font-group-google');
-    if (grp) return [...grp.querySelectorAll('option')].map(o => o.value).sort((a, b) => a.localeCompare(b));
-    return [];
+    return [...GOOGLE_FONT_FAMILIES].sort((a, b) => a.localeCompare(b));
 }
 
 // 現在のソースに対応するフォントリストを返す
@@ -208,7 +208,6 @@ function _fontMgrSelectFont(family) {
 
 // Google Fontsをdynamicにロード
 function _fontMgrEnsureFontLoaded(family) {
-    if (typeof GOOGLE_FONT_FAMILIES === 'undefined') return;
     if (!GOOGLE_FONT_FAMILIES.has(family)) return;
     // 既にlinkタグがあれば不要
     const encoded = encodeURIComponent(family).replace(/%20/g, '+');
@@ -927,4 +926,20 @@ function _fontMgrInitStyleTab() {
     _fontMgrRenderStyleSelect();
     _fontMgrUpdateStylePreview();
 }
+
+export {
+    _fontMgr, _fontMgrCatLabel, _fontMgrCatNames, _fontMgrLoad, _fontMgrGoogleList,
+    _fontMgrGroupOpen, _fontMgrToggleGroup, _esc, _fontMgrLoadStyles, _fontMgrRenderTextStylePreview,
+    _fontMgrEnsureFontLoaded,
+    _FONTMGR_LS_PRESETS, FONTMGR_FAV_CAT, FONTMGR_RESERVED_CAT_NAMES,
+    _fontMgrSaveTags, _fontMgrSaveFavs, _fontMgrSavePrefs, _fontMgrCurrentList, _fontMgrRenderList,
+    _fontMgrUpdatePreview, _fontMgrApplySentDir, _fontMgrUpdateCustomPreview,
+    _fontMgrRenderFavList, _fontMgrRenderTagChips, _fontMgrRenderAllTagsChips,
+    _fontMgrRenderStylePreviewSvg, _fontMgrUpdateStylePreview, _fontMgrInitStyleTab,
+};
+
+// まだESM化されていない main/以下の classic <script> や、既存ESMファイルの一部が
+// window経由で呼んでいるためのブリッジ（ESモジュール化移行中の一時措置。
+// 全分割ファイルのESM化が完了したら、各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window._esc = _esc;
 

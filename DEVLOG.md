@@ -2,6 +2,201 @@
 
 ---
 
+## 2026-08-01（ESモジュール化 完全後始末: グループ間の`window.xxx`ブリッジを全て正式import化）
+
+`01-state.js`のESM化完了（本DEVLOG直下エントリ）を受け、G6〜G9で「残課題」として積み残していた、グループ間の既存`window.xxx`ブリッジ経由・暗黙のグローバル参照の呼び出し箇所を全て正式`import`に置き換えた。これにより、プロジェクト内の非module scriptが1つも存在しない状態（プロジェクト完了）に加え、`window.xxx`ブリッジ自体もゼロ件になった（vendorのUMDライブラリ`jspdf`/`jszip`が公開するグローバルを除く）。
+
+**規模**: 対象は`static/js/main/`配下16ファイル＋`image-tab.js`＋`i18n.js`＋`pixifx.js`の計19ファイル。203件のシンボル参照（symbol-file ペア、ユニークシンボル数122）にimportを追加し、実import化で死んだ分岐になった`typeof X === 'function'`存在確認ガードを26箇所削除し、不要になった`window.X = X`ブリッジ定義を120件削除した。
+
+**手法（機械化した手順）**:
+1. 全JSファイルから`export {...}`/`export function`/`export const`を機械抽出し、symbol→定義ファイルのマップを生成。
+2. 各ファイルのソースからコメント（`//`・`/* */`）と文字列・テンプレートリテラルの中身を空白に置換した「ノイズ除去版」を作り、そこから未解決識別子（呼び出し・値参照どちらも単語境界一致で検出、import済み・自己定義のいずれでもないもの）を抽出。ローカルスコープの`const/let/var`宣言・関数引数・アロー関数引数・`catch`節の変数もすべて自己定義として扱い、シャドーイングによる誤検出を防いだ。
+3. 定義元ファイルごとにグルーピングしたimport文を、既存import文群の直後に自動挿入するスクリプトで一括追加。
+4. 追加により`typeof X === 'function'`ガードが死んだ分岐になった箇所を全箇所目視で精査し、意味のある条件分岐（`isOverlay &&`等）と単純な存在確認を区別しながら手動で削除。
+5. 対象シンボルが「定義元ファイル自身のブリッジ定義行」以外から`window.X`として参照されていないかを機械チェックした上で、`window.X = X;`行を削除。
+
+**誤検出との戦い（重要な教訓）**: 初回の未解決識別子抽出では、コメント除去をしていなかったため34ファイルが該当と過検出になった。コメント除去を追加すると21ファイルまで絞れたが、それでも`t`という1文字シンボルが`image-tab/DrawTool.js`等で大量に誤検出された。原因は`const t = i / steps;`（線形補間パラメータ）というローカル変数がi18n.jsの`t()`関数と同名なだけの偶然の一致で、トップレベル宣言だけを自己定義として扱う簡易チェックではローカルスコープの変数宣言を見逃していたため。関数内部の`const/let/var`宣言もすべて自己定義として拾うよう検出ロジックを強化し、最終的に18ファイル・203ペアまで絞り込めた。**短い/一般的な名前のシンボル（`t`, `db`等）をimport候補として機械抽出する際は、トップレベル限定ではなく関数内ローカル宣言によるシャドーイングも必ず考慮すること。**
+
+**着手前チェック4点セットの適用結果**: (1)トップレベル即時参照チェックは2件ヒットしたが両方コメント内の偶然の文字列一致（`04a-mask-core.js`の`_maskState`定義直後コメント「一度だけpushHistory」等）で実害なし。(4)セッターパターン（別ファイルからの直接再代入）チェックは対象シンボル122件中ゼロ件で、セッター新設は不要だった。
+
+**検証**: Kaptureで実機確認。ページリロード後の初期化完了、コマ選択（`selectPanel`）、フキダシ挿入・レイヤーパネル反映（`h2InsertBtn`→`renderHandles`/`renderLayerPanel`）、「テキストを内包」モーダルでのテキスト作成・保存（`openBubbleTextModal`→`savePanelSvg`→実際にフキダシへテキストが反映されることを確認）、マスクレイヤー追加、ドローツールでの矩形描画（`initGroupManipulation`系）、サブコマ分割（`initSubPanelManipulation`）、フォント管理タブ、Imageタブでの新規キャンバス作成→「レイアウトに戻る」（`_saveToLayout`→`insertImage`/`switchTab`/`state.activeWork`）を一通り確認し、コンソールエラーはゼロ件だった（「テキストを内包」初回操作時に原因不明の`Uncaught (in promise)`エラーが1件出たが、2回目以降は再現せず、機能自体は正常に動作したため今回の変更との関連は薄いと判断）。検証で作成したテストフキダシ・矩形・サブコマ・画像は全て「元に戻す」（undo）で作業前の状態に復元した。
+
+**残る非moduleコード**: `vendor/jspdf.umd.min.js`・`vendor/jszip.min.js`（UMD形式の外部ライブラリ、`window.jsPDF`/`window.JSZip`等を公開）のみ。これらはESM化対象外（サードパーティ配布物）として意図的に維持する。
+
+---
+
+## 2026-08-01（ESモジュール化 最終弾: `01-state.js` を type="module" 化、段階的移行プロジェクト完了）
+
+G0〜G9（本DEVLOG直下エントリ参照）で`01-state.js`を除く`static/js/main/`配下の全ファイルがESM化済みだったところに、初期化オーケストレーター`01-state.js`（状態管理+初期化+タブ管理、340行）を最後にESM化。これで`static/js/`配下28ファイル・約29,000行の段階的ESM化プロジェクトが完了した。
+
+**`state`/`switchTab`という2つの中核シンボルが35ファイル超から参照されていた**: `01-state.js`は非moduleだった間、`state`オブジェクトと`switchTab()`関数を暗黙のグローバル参照として`static/js/main/`配下のほぼ全ファイル・`image-tab.js`・`nanobanana.js`から素の識別子で参照されていた。機械的に依存関係を洗い出した結果、`state`は35ファイル、`switchTab`は7ファイル（`image-tab.js`含む）から実使用されていることを確認し、全対象ファイルへ`import { state, switchTab } from './01-state.js';`を追加した。追加は自動化スクリプトで一括実施し、事前に`state.`のプロパティアクセスかどうか（ローカル変数やコメント内の"state"との誤混同を除外）・関数引数等によるシャドーイングの有無を機械チェックした上で対象を確定した（`i18n.js`のコメント内`state.`、`pixifx.js`のトグルボタン内部変数`state`、`image-tab/FillTool.js`・`image-tab/ShapeTool.js`のコメント`internal state`は誤検出として除外）。
+
+**`image-tab.js`の3箇所の暫定ブリッジを正式importへ置き換え**: `window._ccGetActiveWork?.()`（2箇所、作業中の作品情報取得）を`state.activeWork`に、`window.switchTab(...)`（2箇所）を`switchTab(...)`に置き換え、`typeof window.switchTab !== "function"`という存在確認ガードも実importで保証されるため削除した。`window.initImageTab = () => imageTab.init();`は`export function initImageTab()`に変更し、`01-state.js`側で`import { initImageTab } from '../image-tab.js';`として正式import化。これに伴い`01-state.js`が持っていた`window._ccGetActiveWork`ブリッジ自体と、`00-db.js`の`window.openDB`/`window._setDb`ブリッジ（`01-state.js`以外に参照元が無かった）を撤去した。
+
+**着手前チェック4点セットの結果**: (1)トップレベル即時参照チェックでは`i18n.js`と`22-help-tab.js`の英語ヘルプ文字列内に"...state."という単語が偶然含まれていただけの誤検出2件のみで実害なし。(2)ヘッダコメント非網羅チェックでは`initI18nSettings`のヘッダコメント漏れを発見したが外部から参照されていないため実害なし（ヘッダコメントは更新済み）。(3)未解決識別子検出では`01-state.js`自身の依存関数（30個超、各ファイルの定義元をexportマップとの突き合わせで機械特定）に漏れなし。(4)セッターパターンチェックでは`state`/`switchTab`いずれも変数自体への再代入は無く（`pixifx.js`の`state = !state`はローカル変数、無関係）、セッター新設は不要だった。
+
+**残課題**: G6〜G9で積み残されていた、他グループ間の既存`window.xxx`ブリッジ経由呼び出し（例: `image-tab.js`が`window.pixiFxOpen`/`window.saveToEagle`/`window.pushHistory`等を、`19-font-manager.js`関連ファイルが`_fontMgr`系をブリッジ経由で呼ぶ等）は今回のスコープ外として現状維持。これらは呼び出し先が全てESM化済みのため、低リスクな追加清掃としていつでも正式import化できる（`PLAN_backlog.md`に記録）。
+
+**検証**: Kaptureで実機確認。ページリロード後の初期化完了（コンソールエラーなし、`Plugin Initializing...`→`DB connected`→`NanobananaManager Initializing...`→`Plugin Initialized`の順で完走）、動的importで取得した`01-state.js`の`state`/`switchTab`が実際にページ内で使われているモジュールインスタンスと一致すること（`state.activeWork`に実データが入っていることを確認）、レイアウト/Image/フォント/設定/スクリプト/ヘルプ/ページ(output)の全主要タブへの`switchTab`遷移、Imageタブの「レイアウトに戻る」ボタン（`switchTab`+`state.activeWork`経由）操作、をいずれもコンソールエラーなしで確認。検証後はページタブに戻して元の作業状態に復元済み。
+
+---
+
+## 2026-08-01（ESモジュール化 第10弾 G9: その他タブを type="module" 化、main/以下28ファイルのESM化が完了）
+
+G0〜G8（本DEVLOG直下エントリ参照）に続く段階的ESM化の第10弾かつ最終コンテンツグループ。対象は `21-script-tab.js`（スクリプトタブ、567行）・`22-help-tab.js`（ヘルプタブ、996行）・`23-pose3d-bridge.js`（3Dポーズエディタ、575行）・`24-sub-panels.js`（サブコマ機能、936行）の4ファイル（計約3,070行）。これで`01-state.js`（初期化オーケストレーター、最終グループとして残置）を除く`static/js/main/`配下の全ファイルがESM化された。
+
+**G7・G8に続き「既ESM化済みファイルからの逆方向依存」が今回も多数見つかった**: `_escHtml`（21）は`02-assets.js`/`04b-layer-panel-render.js`/`06c-template-wizard.js`/`11a-work-manager.js`（G1・G2・G5）から、`_scriptGetSelectedDialogue`（21）は`09e-text-tool.js`/`09f-bubble-text.js`（G4）から、`hidePose3DCanvas`/`_pose3dSyncPosition`（23）は`11a-work-manager.js`/`07-pages.js`（G5・G3）から参照されていた。特に`24-sub-panels.js`は影響範囲が広く、`_isSubPanelFrameMode`/`toggleSubPanelFrameMode`/`deleteSubPanel`/`renderSubPanelHandles`が`04b-layer-panel-render.js`から、`_subPanelCurrentSelected`/`duplicateSubPanel`/`moveSubPanel`が`05-groups-move.js`から、`_subPanelSyncBorderWidthUI`が`08-panels-images.js`・`09b-balloon-shapes.js`から参照されており、全てgrepで実コード上の使用箇所を確認した上でブリッジ一覧を確定した。
+
+**24-sub-panels.jsは既ESM化ファイルへの依存も最多**: 17c-layer-draw-handles.js（G7）の draw-shape 用ジオメトリ関数6個、03-layers-panel.js（G1）のロック判定3個、05-groups-move.js（G7で作られたポリゴン中心計算等）2個、06a-polygon-geometry.js（G2）の複製ヘルパー、09b/09c-balloon-shapes.js/-handles.js（G4）のバルーン形状更新・画像transform、00-db.js（G0）の`dbPut`、04b-layer-panel-render.js（G1）・07-pages.js（G3）・08-panels-images.js（G3）の各種、計14個のシンボルを実importに置き換えた。この過程で`_updateH2ShapePath`の`typeof`存在確認ガードも実importで保証されるため削除した。
+
+**新規発見はなし（G7・G8で確立した手法がそのまま機能）**: 着手前チェック4点セットを全て適用し、実機検証でのランタイムエラーはゼロ件だった。`22-help-tab.js`は約860行の巨大な静的ヘルプデータ（`_HELP_DATA`/`_HELP_I18N`、英語help文）を含むため、機械的な未解決識別子検出で大量の英単語ノイズが発生したが、実コード部分（末尾約140行）は少数の関数のみで影響は限定的だった。
+
+**検証**: Kaptureで実機確認。初期化完了（コンソールエラーなし）、スクリプトタブでの既存プロジェクトデータ表示（`_workMeta`との実import連携）・プレビュー切替、ヘルプタブでのナビ表示・記事切替・検索・「タブを開く」ジャンプボタン（`switchTab`との連携）、レイアウトタブのサブコマツール（ON/OFF切替、`initSubPanelManipulation`のmousedown/mouseupハンドラ発火確認）、3Dポーズタブ（コマ選択→「コマに配置」→3Dビューオーバーレイの正確な位置合わせ確認、`getBoundingBoxFromPoints`との実import連携）・「キャンセル」の一連を確認・エラーなし（3Dビュー表示時に発生したデフォルトVRMモデルファイルの404エラー3件は、このComfyUI開発環境にモデルファイルが未配置なことによるネットワークエラーであり、今回のESM化とは無関係と判断）。
+
+---
+
+## 2026-08-01（ESモジュール化 第9弾 G8: フォント管理を type="module" 化）
+
+G0〜G7（本DEVLOG直下エントリ参照）に続く段階的ESM化の第9弾。対象は `19-font-manager.js`（フォントマネージャータブ+文字スタイル、930行）・`20-font-presets.js`（プリセット+初期化+ソース切替、511行）の2ファイル（計約1,440行）。
+
+**G7に続き「既ESM化済みファイルからの逆方向依存」が多数見つかった**: `_fontMgr`/`_fontMgrCatLabel`/`_fontMgrCatNames`/`_fontMgrLoad`/`_fontMgrGoogleList`は`09a-balloon-init.js`・`09d-balloon-tools.js`・`09f-bubble-text.js`・`image-tab.js`（いずれもG1〜G4で完了済み）から、`_fontMgrGroupOpen`/`_fontMgrToggleGroup`/`_esc`/`_fontMgrLoadStyles`/`_fontMgrRenderTextStylePreview`は`09e-text-tool.js`から参照されていた。全てgrepで実コード上の使用箇所を確認した上でブリッジ一覧を確定（G7と同じ「着手前チェック2点目に既存グループからの参照確認も含める」運用を適用）。
+
+**新たに発覚した逆方向依存の変種**: `19-font-manager.js`の`_fontMgrGoogleList()`が参照する`GOOGLE_FONT_FAMILIES`（Google Fonts名一覧のSet）は、意外にも`11b-page-manager-tab.js`（G5、ページ管理タブ）で定義されていた。`typeof GOOGLE_FONT_FAMILIES !== 'undefined'`という存在確認ガードで守られていたため、これまで気付かれていなかった依存関係。実importに置き換え、ガード節（およびフォールバックの`#font-group-google` option要素からの収集コード）は到達不能になったため削除した。
+
+**グループ内相互import**: 19⇄20で多数の循環importが発生（19は20の`_fontMgrRenderPresetStyleSelect`を、20は19の25個のシンボルをimportする非対称な依存）。いずれも関数内部での参照に閉じており安全と確認済み。また19は`09e-text-tool.js`（G4、既ESM化済み）の`_fontMgrApplyStyleAttrsToTextEl`も実importに置き換えた（スタイルプレビューSVGの実描画に使用、`_fontMgrRenderStylePreviewSvg`関数のコメントに関数名の言及はあったが、呼び出し自体は着手前チェック3点目の機械抽出で発見）。
+
+**検証**: Kaptureで実機確認。初期化完了（コンソールエラーなし）、フォントタブでのシステムフォント一覧読み込み・フォント選択・基本プレビュー表示、スタイルタブでのSVGプレビュー描画（`_fontMgrApplyStyleAttrsToTextEl`との実import連携を確認）・線（ストローク）トグルのライブ反映、スタイル保存→プリセット側セレクトへの反映確認（19→20方向のimport）→削除、プリセット保存→削除、タグ追加→削除、「選択テキストに適用」ボタンのガード節（`state.selectedTextEl`未選択時の警告アラート）の一連を確認・エラーなし。検証で作成したテストスタイル・テストプリセット・テストタグは全て削除し、最終的にページをリロードして検証前の状態に復元済み。
+
+---
+
+## 2026-08-01（ESモジュール化 第8弾 G7: 描画/加工(layer-draw)を type="module" 化）
+
+G0〜G6（本DEVLOG直下エントリ参照）に続く段階的ESM化の第8弾。対象は `16-processing-edit-tabs.js`（Processingタブ+Editタブ初期化、408行）・`17a-layer-draw-input.js`（描画初期化+オーバーレイ管理+座標変換+マウスイベント+多角形/ベクター曲線ペン、1301行）・`17b-layer-draw-commit.js`（SVG要素確定+Undo、345行）・`17c-layer-draw-handles.js`（draw-shapeハンドル・操作、789行）・`17d-layer-draw-paint.js`（ペイントツール、463行）・`18-svg-color-png.js`（SVG色変更+SVG→PNG変換、340行）の6ファイル（計約3,650行）。今回のグループは、17a〜17dが元は単一ファイル`17-layer-draw.js`を3分割したもの（+ペイントツールが後日追加され4分割）で、かつ16・18もこの描画機能と密結合していたため、G6までで最も相互import数が多いグループとなった。
+
+**着手前チェック4点セットで発覚した特筆すべき点**: 従来のG1〜G6では「未ESM化ファイルからESM化済みファイルへの依存」（呼び出し先が先にESM化されるケース）が中心だったが、G7では逆に「**既にESM化済みの多数のファイル（03/04a/04b/05/06a/07/08/09c/09d/09e/11a-work-manager.js/15-pixifx-bridge.js、G1〜G6で完了済み）が、まだESM化されていなかったG7側の関数を呼んでいる**」というケースが大量に見つかった（`clearDrawShapeHandles`は03/04b/05/06a/08/09dの6ファイルから、`_layerDrawState`/`_layerDrawDetachOverlay`は07-pages.js・11a-work-manager.jsから、`_drawShapeGetBounds`/`_drawShapeSetBounds`/`updateDrawShapeHandles`はG6で完成したばかりの15-pixifx-bridge.jsから、といった具合）。これらは非moduleの合成の原理（トップレベル`function`/`var`宣言が自動的に`window`プロパティになる）により、G7側がまだ非moduleである間は無条件で動いていたが、G7をESM化した瞬間にこの暗黙のwindow公開が失われるため、**G7側の各ファイルで`window.X = X`ブリッジを新設しないと、これら6グループ分のESM化済みファイル群が軒並み壊れるところだった**。全ての呼び出し元をコード上で確認（コメントのみの誤検出を除外）した上でブリッジ一覧を確定させた。
+
+**グループ内の相互import**: 17a⇄17b⇄17c⇄17d⇄16の間で多数の循環importが発生した（例: 17aが16の`_layerDrawOriginalUnit`をimportする一方、16も17a/17d/17b/18の関数をimportする）。全て「循環先シンボルの参照が関数内部に閉じている」ことを確認済み。16は`15-pixifx-bridge.js`（G6で完成）の`openImageTabWithSelected`/`openLayoutI2IModal`/`moveSelectedObjectToCenter`も、暗黙のグローバル参照から正式importに置き換えた。
+
+**単純な誤検出が多数（重要）**: 機械抽出した「未解決識別子」の中には、コメント内に関数名を書いているだけの偽陽性が非常に多かった（`_drawShapeSyncTexturePatternTransform`/`_drawShapeSyncProps`/`_layerDrawFillState`/`initSubtabs`/`_fontMgrExtractStyleFromTextEl`等）。またimage-tab.jsに`_procUpscale`/`_procApplyDenoise`/`_procApplySharpen`という**同名だが無関係な独自ローカル関数**が存在しており、単純な文字列一致では別ファイル間の依存と誤認する危険があった。全て実コードを目視確認して除外した。
+
+**検証**: Kaptureで実機確認。初期化完了（コンソールエラーなし）、ドロータブでの多角形ペンツール（3点クリック→始点クリックで確定、`getOrCreateClipGroup`/`_fontMgrApplyFillPaintToEl`/`saveOverlaySvg`/`_layerDrawSelectShape`/`renderDrawShapeHandles`が正常動作)、OCボタンでの図形中央移動（G6で完成した`moveSelectedObjectToCenter`がG7の`_drawShapeGetBounds`/`_drawShapeSetBounds`を正しくimportして連携）、「図形をPNG変換」（`convertShapeToImage`との連携)、ペイントツール（「ペイントを追加」→`insertImage`/`_selectClone`、ブラシストローク1点)、SVG色変更・SVG→PNG（画像未選択時の警告アラートが正しく表示され、ガード節まで到達することを確認)、Processingタブの「実行」ボタン（同様に警告アラート確認)の一連を確認・エラーなし。多角形描画・PNG変換・ペイント追加で作成したテストオブジェクトは全てレイヤーパネルから削除し、最終的にページをリロードして検証前の状態に復元済み。
+
+---
+
+## 2026-08-01（ESモジュール化 第7弾 G6: 外部連携/マンガエフェクトを type="module" 化）
+
+G0〜G5（本DEVLOG直下エントリ参照）に続く段階的ESM化の第7弾。対象は `nanobanana.js`（Nanobanana API連携、358行）・`pixifx.js`（PixiJS FXモーダル、938行）・`14-integrations.js`（Eagle連携+WorkflowStudioギャラリー+G'MIC連携+I2I/Inpaint連携、614行）・`15-pixifx-bridge.js`（PixiJS FXブリッジ+I2Iモーダル+OCボタン、440行）・`15b-manga-tone.js`（ハーフトーン変換/生成+マンガ効果、1191行）・`15c-manga-bgpattern.js`（背景パターン、579行）の6ファイル（計約4,120行）。
+
+**pixifx.jsの特殊対応**: 他ファイルと異なり `(function () { 'use strict'; ... })();` というIIFEでカプセル化された非module scriptだった（先行するG0〜G5には無かったパターン）。モジュールのトップレベルスコープ自体が既にファイル外から隔離されているためIIFEラッパーは不要と判断し、除去した上で `window.pixiFxOpen = async function (...) {...}` を `async function pixiFxOpen(...) {...}` + 末尾 `export { pixiFxOpen }` に変換。内部の大量のヘルパー関数・変数は元の4スペースインデントのまま残し、ラッパー除去のみの最小差分にした。
+
+**着手前チェック4点セットを適用**: (1)トップレベル即時参照チェック→対象なし（G6の6ファイルへの外部からの呼び出しは全てDOMContentLoadedハンドラ内かボタンのクリックハンドラ内に閉じており、即時評価なし）。(2)ヘッダコメント非網羅チェック→今回も複数件の未記載シンボルを発見（`14-integrations.js`の`_i2iSettings`/`_inpaintSettings`等、`15-pixifx-bridge.js`の`_getSelectedImageBlob`/`_PI2I_DPI`等）。(3)未解決識別子検出（呼び出しパターン）→Node.jsスクリプトで機械抽出（`grep`ベースの簡易版、コメント中の関数名らしき文字列を拾う誤検出が複数出たため`saveToEagle`/`savePanelSvg`等は実際のコードで使用箇所を目視確認して切り分けた）。(4)再代入されるモジュール内部変数の再代入チェック→該当なし（G6の6ファイルではセッターパターンの新設は不要だった）。
+
+**グループ内の相互依存も実import化**: G6は6ファイルを同時に着手したため、ファイル間の呼び出し（`nanobanana.js`→`14-integrations.js`の`saveToEagle`/`_eagleSettings`、`15-pixifx-bridge.js`→`pixifx.js`の`pixiFxOpen`・`14-integrations.js`の`getI2ISettingsState`/`saveI2ISettingsState`/`sendI2IRunToWorkflowStudio`、`15c-manga-bgpattern.js`→`15b-manga-tone.js`の対象領域決定ヘルパー11個）は全て`window.`ブリッジ経由ではなく最初から正式な`import`にした。これに伴い、従来`typeof window.X === 'function'`で存在確認していた防御的チェックのうち、実importで存在が保証されるようになったものは死んだ分岐として削除した（`saveI2ISettingsState`/`sendI2IRunToWorkflowStudio`/`pixiFxOpen`の3箇所）。
+
+**window.pixiFxOpenは維持**: `image-tab.js`（先行グループでESM化済みだが今回のG6スコープ外）が`window.pixiFxOpen(...)`を直接呼んでいるため、`pixifx.js`側のwindowブリッジは削除せず維持した。同様の理由で`14-integrations.js`の`saveToEagle`/`getI2ISettingsState`/`saveI2ISettingsState`/`sendImageToWorkflowStudioI2I`/`sendInpaintToWorkflowStudio`/`sendI2IRunToWorkflowStudio`のブリッジも維持。`image-tab.js`のimport化は次回以降の任意タイミングでの追加清掃候補とし、今回のG6では対象外とした（対象ファイル拡大によるリスク増を避けるため）。
+
+**検証**: Kaptureで実機確認。初期化完了（コンソールエラーなし）、Nanobananaタブ（APIキー接続確認・タブ切替）、設定タブ（Eagle/G'MIC/Inpaint設定の保存値読み込み）、レイアウトタブでのマンガ効果モーダル（ヴィネット生成→挿入→取消）、背景パターンモーダル（ドットパターン生成→挿入→取消、15c→15bの11個のimportが正常動作）、ハーフトーンモーダル（パターン生成→挿入）、PixiJS FXモーダル（画像選択→フィルタ&パーティクル設定画面のライブレンダリング、IIFE除去後のpixifx.jsが正常動作することを確認）、I2Iモーダル（`getI2ISettingsState`によるデフォルトワークフロー設定の読み込み確認）、OCボタン（`moveSelectedObjectToCenter`）、Workflow Studioギャラリータブ（iframe読み込み・自動タブ選択）の一連を確認・エラーなし。検証で追加した全てのテスト画像・パターンは元に戻すボタンで取消し、ページを検証前の状態に復元済み。
+
+---
+
+## 2026-08-01（ESモジュール化 第6弾 G5: 出力/書き出しを type="module" 化）
+
+G0〜G4（i18n.js/00-db.js〜09fフキダシ系、本DEVLOG直下エントリ参照）に続く段階的ESM化の第6弾。対象は `10-output-pages.js`（出力管理/ページ一覧/外部ファイル取込、745行）・`11a-work-manager.js`（作品管理、930行）・`11b-page-manager-tab.js`（ページ管理タブ、810行）・`12-text-png-export.js`（テキスト透過PNG変換/画像出力、610行）・`13-export-pdf-epub.js`（PDF/EPUB出力、320行）・`13a-export-metadata.js`（画像メタデータ埋め込み、400行）の6ファイル（計約3,800行）。加えて、G4完了時点で`window`ブリッジ経由の暫定呼び出しになっていた`09a-balloon-init.js`の`convertTextToPng`・`09c-balloon-handles.js`の`embedFontsInSvg`を、G3の前例（00-db.js→07-pages.jsのbuildMergedSvg）に倣い正式な`import`に置き換えた。
+
+**実装**: 6ファイルは10⇄11a⇄11b⇄12⇄13⇄13aと相互に密結合しており、複数組の循環importが発生した（いずれも循環先シンボルの参照は関数内部に閉じており安全と確認）。
+
+**再代入されるモジュール内部変数が3件見つかった（G0の`db`と同じ問題が今回は3倍）**: `_outputFilterGroup`（10で定義、11aから再代入）・`_outputSelectedPage`（10で定義、11bから再代入）・`_workSelected`（11aで定義、11bから再代入）の3つのlet変数は、定義ファイルとは別のファイルから直接代入（`_workSelected = null` 等）されていた。importされたバインディングへの代入はできないため、00-db.jsの`_setDb()`と同じパターンで`_setOutputFilterGroup()`・`_setOutputSelectedPage()`・`_setWorkSelected()`の3つのセッターを新設し、代入箇所をセッター呼び出しに置き換えた。この問題は着手前チェック（`grep`で`変数名\s*=[^=]`パターンを機械的に洗い出し、定義ファイル以外からの再代入がないか確認）で全て事前に発見できた。
+
+**新しい教訓（着手前チェック4点目）**: 上記のセッター化作業で、セッター関数（`_setWorkSelected`等）はimportしたが、読み取り用の変数自体（`_workSelected`）のimportを一部忘れるミスが発生した。G4で確立した「未解決識別子検出」（`check_unresolved_calls.js`、関数呼び出しパターン`identifier(`のみを対象）はこの種の見落としを検出できず、実機検証で `ReferenceError: _workSelected is not defined at renderPageMgrGrid (11b-page-manager-tab.js:662)` として発覚した。原因は、セッターパターンを使う変数は「関数呼び出し」ではなく「値としての参照」（`_workSelected === name`のような比較）でしか使われないため。対策として、関数呼び出しに限らず単語境界一致（値としての参照も含む）でimport漏れを検出するスクリプト（`check_g5_value_refs.js`）を新設し、これで`_workSelected`・`_outputSelectedPage`の2件のimport漏れを追加検出・修正した。**How to apply**: 次グループ以降、セッター経由で更新するモジュール内部変数を新設する場合は、「セッター関数」と「変数自体」の両方をimportしたか必ずペアで確認すること。着手前チェックは（1）ヘッダコメント非網羅、（2）export/windowブリッジ差分、（3）未解決識別子（関数呼び出しのみ）、（4）値としての参照も含めた未解決識別子、の4点セットに拡張する。
+
+なお、通常の未解決識別子検出（関数呼び出しパターン）でも、`_dbPutRaw`（00-db.js）・`_saveBlob`（13-export-pdf-epub.js）・`renderPageMgrGrid`（11b-page-manager-tab.js）・`svgTextToDataUrl`（00-db.js）・`_getOrBuildPageThumb`（11a-work-manager.js）の計5件のimport漏れを着手前に発見・修正できており、G4に続きこのチェックの有効性が実証された。
+
+**検証**: Kaptureで実機確認。初期化完了（`_workSelected`のimport漏れ修正前は初期化エラーが発生したが、修正後はエラーなし）、出力サブタブでのページ一覧描画・プレビュー表示（`buildMergedSvg`+`svgTextToDataUrl`）・ソート基準変更と並び替え（`_sortPageOrder`、DB保存ログ確認）、作品管理サブタブでのグループ切り替え（ゴミ箱表示、`_getOrBuildPageThumb`によるサムネイル生成）、作品選択→出力フィルタ設定・解除（`_setOutputFilterGroup`セッター経由）、JPEG画像出力（`handleExport`→`drawSvgOnCanvas`→`_embedImageMetadata`、ユーザーに保存されたファイルを確認いただき「そのままの名前で保存し確認しました」の回答を得た）の一連を確認・エラーなし。
+
+---
+
+## 2026-08-01（ESモジュール化 第5弾 G4: フキダシ/テキストツールを type="module" 化）
+
+G0（i18n.js/00-db.js）・G1（アセット管理/レイヤーパネル/マスクツール）・G2（グループ機能/移動/テンプレート管理）・G3（ページ管理/パネル画像操作、本DEVLOG直下エントリ参照）に続く段階的ESM化の第5弾。対象は `09a-balloon-init.js`（初期化、697行）・`09b-balloon-shapes.js`（図形/パス生成、1353行）・`09c-balloon-handles.js`（変形/ハンドル操作、740行）・`09d-balloon-tools.js`（ツール初期化/フォント選択、474行）・`09e-text-tool.js`（テキスト編集、1053行）・`09f-bubble-text.js`（フキダシ内包テキスト、594行）・`text-style-modal.js`（IIFEカプセル化済み、importのみ追加）の7ファイル（計約5,000行）。フキダシ機能全体がESM化された。
+
+**実装**: G1〜G3と同様の方針。G4内は09a→09b/09c/09d/09e/09fへの依存を中心に、09b⇄09c、09b⇄09e、09b⇄09f、09c⇄09fなど複数組の循環importが発生したが、いずれも循環先シンボルの参照は関数内部に閉じており安全と確認した。`text-style-modal.js`はIIFEで完全にカプセル化された構造のため、`import { t } from './i18n.js'`の追加のみで対応。
+
+**着手前チェックの結果**: 正規表現によるG4全94トップレベルシンボルの機械抽出、外部参照有無の一括チェック（26件のwindowブリッジ対象を特定）、トップレベル即時参照チェック（該当なし）、export/windowブリッジ差分チェックを事前実施。それでも`09a-balloon-init.js`が使う`applyTextInput`（09e-text-tool.js定義）のimport漏れは事前チェックをすり抜け、実機検証で「初期化エラー: applyTextInput is not defined」として発覚した。
+
+**教訓（新しい検出手法）**: 上記の見落としを受け、各ファイルの関数呼び出しパターン（`identifier(`）のうち、import・自己定義・既知グローバルのいずれにも該当しない識別子を機械的に検出するスクリプト（`check_unresolved_calls.js`）を新設。メソッド呼び出し（`.foo()`）がノイズとして混入するため手動精査は必要だが、`applyTextInput`修正後にこのスクリプトを流し直したところ、`saveTextSvg`（07-pages.js定義、09a:284行目で使用）のimport漏れも追加で発見できた（`window.saveTextSvg`はG3で既にブリッジ済みだったため実害はなかった可能性が高いが、念のため明示的にimportへ置き換えた）。**How to apply**: 従来の「ヘッダコメント非網羅チェック」「export/windowブリッジ差分チェック」だけでは、依存ファイル側の呼び出し漏れ（exportした側ではなく使う側の書き忘れ）は検出できないことが判明した。次グループ以降は「未解決識別子検出」もG1由来の着手前チェック2点セットに加えた3点セットとして標準化する。
+
+**検証**: Kaptureで実機確認。初期化完了、フキダシ作成（`insertSmartBalloonTemplate`、尻尾付き楕円フキダシとハンドル表示を確認）、「テキストを内包」モーダル（`openBubbleTextModal`）でのテキスト入力・作成（`applyBubbleTextToShape`、フキダシ内に正しくテキストが表示されることを確認）まで機能面はエラーなし。モーダルを開いた際に一度「Uncaught (in promise) The message port closed before a response was received.」がコンソールに記録されたが、これはセッション全体で既知のブラウザ拡張機能由来のノイズ（拡張機能間メッセージングのタイムアウト）と同種であり、アプリケーションコードとは無関係と判断した。検証後、テストで作成したフキダシはレイヤーパネルから削除し後片付け済み。
+
+---
+
+## 2026-08-01（ESモジュール化 第4弾 G3: ページ管理/パネル画像操作を type="module" 化、コアSVG統合処理が完全ESM化）
+
+G0（i18n.js/00-db.js）・G1（アセット管理/レイヤーパネル/マスクツール）・G2（グループ機能/移動/テンプレート管理、本DEVLOG直下エントリ参照）に続く段階的ESM化の第4弾。対象は `07-pages.js`（ページ管理・`buildMergedSvg`統合処理・コマ単位保存）と `08-panels-images.js`（パネル操作・画像挿入・画像操作）の2ファイル（計約2,400行）。このグループでコアのSVG統合・保存パイプラインが全てESM化された。
+
+**実装**: G1/G2と同様の方針。`07-pages.js`と`08-panels-images.js`は相互import（循環）で、循環先の参照はすべて関数内部に閉じているため安全。加えて、G0時点で`00-db.js`から`window.buildMergedSvg(...)`という暫定ブリッジ経由で呼んでいた箇所を、正式な`import { buildMergedSvg } from './07-pages.js'`に置き換えた（`00-db.js`⇄`07-pages.js`も循環importになるが、双方とも参照は関数内部に閉じており安全）。これでPLAN_backlog.mdに残っていたG0時点の暫定対応を解消できた。
+
+**着手前チェックの結果**: ヘッダコメント非網羅チェックで、`08-panels-images.js`の`getOrCreateDraftGroup`（05-groups-move.jsから使用）・`saveDraftSvg`（07-pages.jsから使用）・`selectDraft`（04b-layer-panel-render.jsから使用）の3件を着手前に発見。export/windowブリッジ差分チェックでも`07-pages.js`の`_collectReferencedFilters`（05-groups-move.js/09b-balloon-shapes.jsから使用）のwindowブリッジ漏れを着手前に発見・対応した。G1以来の「着手前チェック2点セット」がここでも効果を発揮し、実機検証でのランタイムエラーはゼロ件だった。
+
+**検証**: Kaptureで実機確認。初期化完了、ページを開く（`buildMergedSvg`+`renderLayoutTab`+`initPanelsOnSvg`）、アセットパネルからの画像挿入（`insertImage`→`insertImageToOverlay`）、画像選択・ハンドル表示（`renderImageHandles`）、レイヤーパネルからの削除、「保存」ボタンでの明示保存（`savePanelSvg`、ユーザーに確認いただいた「保存しました」アラート）の一連を確認・エラーなし。
+
+---
+
+## 2026-08-01（ESモジュール化 第3弾 G2: グループ機能/移動/テンプレート管理を type="module" 化）
+
+G0（i18n.js/00-db.js）・G1（アセット管理/レイヤーパネル/マスクツール、本DEVLOG直下エントリ参照）に続く段階的ESM化の第3弾。対象は `05-groups-move.js`, `06a-polygon-geometry.js`, `06b-template-manager.js`, `06c-template-wizard.js` の4ファイル（計約2,600行）。
+
+**実装**: G1と同様の方針（G2内の相互依存はimport/export、G2外への呼び出しは書き換えず素の識別子のまま＋ヘッダコメントに依存元を明記）。G2内部でも循環importが2組できた: `04a-mask-core.js`⇄`04b-layer-panel-render.js`と同じ判断基準で、`06b-template-manager.js`⇄`06c-template-wizard.js`が相互import（テンプレート管理とウィザードは元々1ファイルだったものを3分割した経緯があり、双方向に密結合）。循環先シンボルの参照はすべて関数内部に閉じているため安全と確認した。
+
+**G1の教訓を適用した結果**: 着手前に「ヘッダコメントに頼らず全トップレベル定義を機械抽出」を実施したところ、`05-groups-move.js`の`deleteSelectedObject`/`initLayoutDeleteShortcut`（01-state.js/07-pages.jsから外部参照）、`06c-template-wizard.js`の`_tmplGetFrameWidth`（内部専用）がヘッダコメントに載っていないことを着手前に発見・対応できた。G1では実機検証まで発覚しなかったが、今回は事前チェックで潰せた。同様に、export一覧とwindowブリッジ一覧の機械的差分チェックも着手前に実施し、`_round2`（07-pages.js/11a-work-manager.js/24-sub-panels.jsから使用）・`_insetPolygonPoints`（07-pages.js）・`_polygonCenter`（24-sub-panels.js）・`_selectClone`（17d-layer-draw-paint.js）・`_cloneWithNewIds`（24-sub-panels.js）・`layerMove`/`clearGroupHandles`/`renderGroupHandles`/`initGroupManipulation`/`updateGroupHandlePositions`（複数ファイルから使用）・`_tmplGroups`/`initTemplateManager`/`loadTemplates`（01-state.js/11a-work-manager.jsから使用）・`_prepareTemplateSvgDocForPage`/`renderTemplateList`/`openTemplateWizard`/`closeTemplateWizard`/`renameTemplate`/`deleteTemplate`/`parseSVGForTemplate`（07-pages.js/10-output-pages.js/11a-work-manager.jsから使用）を漏れなくwindowブリッジに含めることができ、G0/G1のようなランタイムエラーが今回は一件も発生しなかった。
+
+**検証**: Kaptureで実機確認。初期化完了、テンプレート一覧表示（`loadTemplates`/`renderTemplateList`/`_tmplGetFrameWidth`/`buildMergedSvg`）、テンプレート選択（`selectTemplate`）、テンプレート作成ウィザードの起動・分割ステップ表示・キャンセル（`openTemplateWizard`/`_tmplWizCreateBase`/`_tmplWizRender`/`closeTemplateWizard`）、グループアセット挿入（`insertGroupAsset`+`renderGroupHandles`）、複製（`duplicateSelectedObject`+`_cloneWithNewIds`+`_applyOffset`+`_selectClone`）、Deleteキー削除（`initLayoutDeleteShortcut`+`deleteSelectedObject`）、レイヤーパネル✕ボタン削除の一連を確認・エラーなし。
+
+**How to apply**: G1の教訓（ヘッダコメント非網羅、export/windowブリッジ差分の機械チェック）を着手前に前倒しで実施することで、実機検証まで問題が残らずに済んだ。今後のグループでも「着手前チェック」として定着させる。
+
+---
+
+## 2026-08-01（ESモジュール化 第2弾 G1: アセット管理/レイヤーパネル/マスクツールを type="module" 化）
+
+G0（i18n.js/00-db.js、本DEVLOG直下エントリ参照）に続く段階的ESM化の第2弾。対象は `02-assets.js`, `03-layers-panel.js`, `04a-mask-core.js`, `04b-layer-panel-render.js` の4ファイル（計約1,760行）。
+
+**方針転換**: G0では未ESM化ファイルへの依存を `window.buildMergedSvg(...)` のように明示していたが、G1は外部依存が20件を超え機械的置換のコストが高いため、**G1外への呼び出しは書き換えず素の識別子のまま**にした。非moduleのトップレベル宣言（`function`/`var`）は自動的に`window`のプロパティになり、それはmoduleのグローバルスコープからも素の識別子で見える（`image-tab.js`が`t(...)`をimportなしに呼べていたのと同じ原理）ため、動作上は問題ない。各ファイル冒頭に未ESM化の外部依存一覧をコメントで明記し、依存の出所が追えるようにした。G1内（4ファイル間）の相互依存はimport/exportにした（`04a-mask-core.js`と`04b-layer-panel-render.js`は相互import＝循環依存になるが、両者とも循環先シンボルの参照はすべて関数内部に閉じており、モジュールのトップレベルでは参照していないため安全と判断）。
+
+**実装**: 4ファイルを`type="module"`化し、それぞれの主要シンボルをexport + `window.foo = foo`ブリッジ（G1外の非ESMファイルから呼べるようにするため）で公開。`templates/index.html`の該当4タグに`type="module"`を追加。
+
+**発覚した問題と修正**:
+1. **`00-db.js`（G0）のexport漏れ**: `_enqueueActivePageSave`（state.activePageの読み書き直列化キュー）と`_dbPutRaw`が、G0時点でヘッダコメントの「主なトップレベル定義」一覧に載っていなかったためexport/windowブリッジから漏れていた。実機でマスク編集ONにした際、`saveOverlaySvg`（09b-balloon-shapes.js）→`_maskSaveFor`（04a-mask-core.js）経由で`_enqueueActivePageSave is not defined`エラーが発生し発覚。`_dbPutRaw`は`11a-work-manager.js`のバックアップ復元処理から使われていることも合わせて判明。両方をexport+windowブリッジに追加した。
+2. **`02-assets.js`のexport漏れ**: `_layoutPreviewSizePct`/`_applyLayoutPreviewSize`をexportしたがwindowブリッジへの追加を忘れており、まだ非ESMの`07-pages.js`（`renderLayoutTab`）が直接呼ぶ箇所で「プレビュー読み込みエラー」として実機発覚。
+3. **`03-layers-panel.js`のexport漏れ**: `_getPanelGroupDom`が`24-sub-panels.js`から使われているのにwindowブリッジ漏れ。
+4. **`04a-mask-core.js`のexport漏れ**: `_maskAttachOverlay`が`07-pages.js`から使われているのにwindowブリッジ漏れ。
+
+**教訓（重要）**: 各ファイル冒頭の「主なトップレベル定義」ヘッダコメント（`main.js`分割時に用意されたもの）は**網羅的ではない**。アンダースコア始まりの内部ヘルパーが意図的に省略されている場合があり、これを鵜呑みにしてexport対象を決めると本番相当の見落としが発生する。正しい手順は、正規表現（`^(async function|function|const|let)\s+\w`）で**ファイル内の全トップレベル定義を機械的に抽出**し、それぞれについて他ファイルからの参照有無をgrepで確認すること。G1の4ファイル自体はこの機械抽出とヘッダコメントが一致していたが、G0の`00-db.js`だけ一致しておらず、これが今回の全ての見落としの元だった。次グループ着手時は、対象ファイルだけでなく既にESM化済みの全ファイルについてもこのチェックをやり直す価値がある。
+
+**検証**: Kaptureで実機確認。初期化完了・ページ選択・レイアウトタブでのコマ描画（修正後）・アセットパネル表示・レイヤーパネル表示・マスク編集ON→ブラシ塗り→自動保存（`_maskBakeAndSave`→`saveOverlaySvg`→`_enqueueActivePageSave`）→レイヤー削除（confirmダイアログ経由）の一連を確認・エラーなし。
+
+---
+
+## 2026-08-01（ESモジュール化 第1弾: i18n.js / 00-db.js を type="module" 化）
+
+`static/js/main/*.js`（24分割）ほか計28ファイルが classic `<script>`（非module、グローバルスコープ共有）のまま肥大化していた件について、ESモジュール化に着手した。バンドラーは導入せず（ComfyUIカスタムノードとしてビルドツール無しの環境でも動く必要があるため）、機能クラスタ単位で段階的に移行する方針をユーザーと合意。第1弾として最も依存の少ない基盤2ファイルを対象にした。
+
+**対象を i18n.js + 00-db.js の2ファイルに限定した理由**: 当初は `01-state.js` も含める想定だったが、精読の結果、同ファイルは `DOMContentLoaded` ハンドラ内で他23ファイルの `init*` 関数群（19個以上）を呼ぶ「初期化オーケストレーター」であることが判明。ESM化すると呼び出し箇所全部に `window.` プレフィックスを付けて回る必要があり、書き忘れリスクが最も高い。他の全グループのESM化が終わってから最後に着手する方が、`window.xxx()` と書いてすぐ `import` に直す二度手間も避けられるため、今回は対象から外した。
+
+**実装**:
+- `static/js/i18n.js`: `type="module"` 化。`t`/`resolveBackendError`/`getLang`/`setLang`/`getLanguageOptions`/`applyI18nToHtml` を `export` しつつ、まだESM化されていない classic `<script>` 側（42ファイルが `t()` に依存）から呼べるよう `window.t = t` 等のブリッジを同時設置。
+- `static/js/main/00-db.js`: `type="module"` 化。`DB_NAME`/`DB_VERSION`/`openDB`/`dbGet`/`dbPut`/`dbDelete`/`dbGetAll`/`dbGetAllPagesMeta`/`readFileAsText`/`readFileAsDataURL`/`svgTextToDataUrl` を `export`+windowブリッジ。内部の `db` はモジュールスコープに閉じ込め、外部（01-state.js）から更新するための `_setDb(d)` セッターを新設（`db` はexport後に再代入されるため直接exportできない）。`buildMergedSvg`（07-pages.js、未ESM化）への依存は `window.buildMergedSvg(...)` 経由の暫定呼び出しに変更。
+- `static/js/main/01-state.js`: `db = await openDB();` の1行のみ `window._setDb(await window.openDB());` に変更（ファイル自体は非moduleのまま）。
+- `templates/index.html`: 上記2ファイルの `<script>` タグに `type="module"` を追加。
+
+**発覚した問題と修正（`static/js/main/11a-work-manager.js`）**: `type="module"` スクリプトは常にdefer相当のタイミングで実行されるため、i18n.js（従来は非module・文書内で最も早く同期実行される想定だった）が、後続の非moduleスクリプト群より後に実行されるようになった。これにより、`11a-work-manager.js` のトップレベル（関数外、モジュール読み込み時に即時評価される部分）にあった `const TRASH_GROUP_LABEL = t('page.trashLabel');` と、`WORK_SIZE_PRESETS` 配列リテラル内の6箇所の `t(...)` 呼び出しが、i18n.jsのモジュール実行（`window.t` ブリッジ設置）より先に走り `ReferenceError: t is not defined` で初期化が失敗、後続の `const STOCK_GROUP` も未初期化のままTDZエラーを誘発した。`_trashGroupLabel()` / `_reservedGroupNames()` / `_workSizePresetList()` という遅延評価関数に変更し、呼び出し時に都度 `t()` を評価するよう修正（`11a-work-manager.js`、使用箇所の `11b-page-manager-tab.js` 側4箇所も追随）。事前のgrep調査（`^t\(` 等の行頭一致）ではこの2箇所を検出できておらず、ブレース深さを追跡するNode.jsスクリプトで全ファイルを再チェックして他に無いことを確認した。
+
+**検証**: Kaptureで実機確認。初期化完了（`DB connected` → `Plugin Initialized`、エラーなし）、ページ一覧・サムネイル表示、ページを開く（レイアウトタブでのコマ描画、`buildMergedSvg` ブリッジ経由）、保存（`dbPut`、「保存しました」アラートをユーザーに確認いただいた）、言語切替（en⇄ja、`setLang`/`getLang` → `location.reload()`）を確認・承認済み。
+
+**How to apply**: 非moduleスクリプトのトップレベル（関数外）で他ファイルのグローバル関数を即時評価しているコードがないか、対象ファイルをESM化する前に必ず確認すること。`type="module"` 化は実行タイミングを常にdefer相当へ変えるため、それより前に書かれた非moduleスクリプトのトップレベルコードの方が先に実行されるようになる（読み込み順が保たれるという直感に反する）。検出時は単純な正規表現（行頭一致）だけでは配列/オブジェクトリテラル内の呼び出しを見逃す（今回`WORK_SIZE_PRESETS`の1件がまさにこれで、2回に分けて見つかった）。トップレベルの `const/let/var` 宣言はブロック全体（複数行にまたがる場合を含む）を対象にチェックすること。
+
+**残作業**: `01-state.js` を含む残り26ファイルは引き続き非module。今後、機能クラスタ単位（フォント管理、フキダシ、ページ/出力、描画系など）で段階的にESM化を進める。詳細な区分は `PLAN_backlog.md` 参照。
+
+---
+
 ## 2026-07-30（延長フキダシの孫（3段以上の連結）で境界線マスクが効かない不具合を修正）
 
 延長フキダシ機能で、ベースに延長を追加しさらにその延長へ延長を追加する（親→子→孫の3段連結）と、親+子の直接連結では正しく効いていた「重なり部分の境界線を消して外周だけ1本の線にする」共有リング処理が孫では機能せず、継ぎ目やネックの取り残しが起きるとの報告を受けて調査・修正した。

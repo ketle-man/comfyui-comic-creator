@@ -1,10 +1,42 @@
 // ============================================================
 // フキダシ管理 分割ファイル (1/5): フキダシ管理初期化(initBalloonManager)
 // 元 09-balloons.js（分割前）の行 1-599 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G4）。09a〜09fは相互に密結合しており
+// 循環importが多数発生するが、循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に
+// 閉じているため安全（G1以降と同じ判断基準）。
 // 主なトップレベル定義: initBalloonManager
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, _fontMgrLoad（19-font-manager.js）,
+//   window.openTextStyleModal（text-style-modal.js）, window._ccImageTab（image-tab.js）,
+//   openBubbleTextModal（09f-bubble-text.js、既存のwindowブリッジパターン）,
+//   renderLayoutTab/undo（07-pages.js、ESM化済みだが暫定的にwindowブリッジ経由のまま）
+// convertTextToPng は12-text-png-export.js（G5でESM化）の正式importに置き換え済み。
 // ============================================================
+
+import { t } from '../i18n.js';
+import { getPanelLayerSvg } from './04b-layer-panel-render.js';
+import { savePanelSvg, saveShapeSvg, saveTextSvg } from './07-pages.js';
+import { applySvgImageColors, _isSvgImageEl } from './08-panels-images.js';
+import { updateBalloonUI, selectOverlay, _updateH2ShapePath, _showH2TypeParams } from './09b-balloon-shapes.js';
+import {
+    flipSelected, insertSmartBalloonTemplate, addExtensionBalloon, convertShapeToImage,
+    _updateH2HandlePositions, _syncH2UI,
+} from './09c-balloon-handles.js';
+import {
+    renderTextHandles, _loadGoogleFontsToSelect, _syncFontFavCatSelect,
+    loadSystemFontsToSelect, _loadFavoriteFontsToSelect,
+} from './09d-balloon-tools.js';
+import {
+    _setTextElVertical, _fontMgrExtractStyleFromTextEl, _fontMgrApplyStyleAttrsToTextEl,
+    applyStyleToSelectedText, insertStylePlaceholderText, insertScriptDialogueText, applyTextInput,
+} from './09e-text-tool.js';
+import { _bubbleTextCanHoldText } from './09f-bubble-text.js';
+import { convertTextToPng } from './12-text-png-export.js';
+import { state } from './01-state.js';
+import { _fontMgrLoad } from './19-font-manager.js';
+import { renderLayoutTab, undo } from './07-pages.js';
+import { openBubbleTextModal } from './09f-bubble-text.js';
 
 // ==============================
 // フキダシ管理
@@ -482,11 +514,10 @@ function initBalloonManager() {
     const bubbleTextModalBtn = document.getElementById('bubble-text-modal-btn');
     if (bubbleTextModalBtn) {
         bubbleTextModalBtn.addEventListener('click', () => {
-            if (typeof window.openBubbleTextModal !== 'function') return;
             const selectedEl = state.selectedShapeId ? document.getElementById(state.selectedShapeId) : null;
             const canHoldText = selectedEl && typeof _bubbleTextCanHoldText === 'function' && _bubbleTextCanHoldText(selectedEl.dataset.shapeType);
             if (!canHoldText) { alert(t('bubbleText.selectShapeFirst')); return; }
-            window.openBubbleTextModal(selectedEl);
+            openBubbleTextModal(selectedEl);
         });
     }
 
@@ -694,4 +725,9 @@ function initBalloonManager() {
     });
 }
 
-// h2タイプ専用パラメータパネルの表示切替
+export { initBalloonManager };
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initBalloonManager = initBalloonManager;

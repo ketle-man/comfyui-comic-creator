@@ -1866,53 +1866,53 @@
     <!-- ローカル同梱ライブラリ（static/js/vendor/。オフラインでもPDF/EPUB出力・zip保存・バックアップが動作） -->
     <script src="/ccc_static/js/vendor/jspdf.umd.min.js"></script>
     <script src="/ccc_static/js/vendor/jszip.min.js"></script>
-    <!-- i18n基盤: t()/getLang()/setLang()等を他の全スクリプトより前にグローバル公開する -->
-    <script src="/ccc_static/js/i18n.js"></script>
-    <script src="/ccc_static/js/nanobanana.js"></script>
-    <script src="/ccc_static/js/pixifx.js"></script>
-    <script src="/ccc_static/js/text-style-modal.js"></script>
+    <!-- i18n基盤: t()/getLang()/setLang()等をexportしつつ、windowにも公開する（ESモジュール化第1弾） -->
+    <script type="module" src="/ccc_static/js/i18n.js"></script>
+    <script type="module" src="/ccc_static/js/nanobanana.js"></script>
+    <script type="module" src="/ccc_static/js/pixifx.js"></script>
+    <script type="module" src="/ccc_static/js/text-style-modal.js"></script>
     <script type="module" src="/ccc_static/js/pose3d.js"></script>
     <script type="module" src="/ccc_static/js/image-tab.js"></script>
-    <!-- main.js 分割ファイル群（旧 main.js を責務ごとに34分割。非moduleでグローバルスコープ共有のため読み込み順が重要） -->
-    <script src="/ccc_static/js/main/00-db.js"></script>
-    <script src="/ccc_static/js/main/01-state.js"></script>
-    <script src="/ccc_static/js/main/02-assets.js"></script>
-    <script src="/ccc_static/js/main/03-layers-panel.js"></script>
-    <script src="/ccc_static/js/main/04a-mask-core.js"></script>
-    <script src="/ccc_static/js/main/04b-layer-panel-render.js"></script>
-    <script src="/ccc_static/js/main/05-groups-move.js"></script>
-    <script src="/ccc_static/js/main/06a-polygon-geometry.js"></script>
-    <script src="/ccc_static/js/main/06b-template-manager.js"></script>
-    <script src="/ccc_static/js/main/06c-template-wizard.js"></script>
-    <script src="/ccc_static/js/main/07-pages.js"></script>
-    <script src="/ccc_static/js/main/08-panels-images.js"></script>
-    <script src="/ccc_static/js/main/09a-balloon-init.js"></script>
-    <script src="/ccc_static/js/main/09b-balloon-shapes.js"></script>
-    <script src="/ccc_static/js/main/09c-balloon-handles.js"></script>
-    <script src="/ccc_static/js/main/09d-balloon-tools.js"></script>
-    <script src="/ccc_static/js/main/09e-text-tool.js"></script>
-    <script src="/ccc_static/js/main/09f-bubble-text.js"></script>
-    <script src="/ccc_static/js/main/10-output-pages.js"></script>
-    <script src="/ccc_static/js/main/11a-work-manager.js"></script>
-    <script src="/ccc_static/js/main/11b-page-manager-tab.js"></script>
-    <script src="/ccc_static/js/main/12-text-png-export.js"></script>
-    <script src="/ccc_static/js/main/13-export-pdf-epub.js"></script>
-    <script src="/ccc_static/js/main/13a-export-metadata.js"></script>
-    <script src="/ccc_static/js/main/14-integrations.js"></script>
-    <script src="/ccc_static/js/main/15-pixifx-bridge.js"></script>
-    <script src="/ccc_static/js/main/15b-manga-tone.js"></script>
-    <script src="/ccc_static/js/main/15c-manga-bgpattern.js"></script>
-    <script src="/ccc_static/js/main/16-processing-edit-tabs.js"></script>
-    <script src="/ccc_static/js/main/17a-layer-draw-input.js"></script>
-    <script src="/ccc_static/js/main/17b-layer-draw-commit.js"></script>
-    <script src="/ccc_static/js/main/17c-layer-draw-handles.js"></script>
-    <script src="/ccc_static/js/main/17d-layer-draw-paint.js"></script>
-    <script src="/ccc_static/js/main/18-svg-color-png.js"></script>
-    <script src="/ccc_static/js/main/19-font-manager.js"></script>
-    <script src="/ccc_static/js/main/20-font-presets.js"></script>
-    <script src="/ccc_static/js/main/21-script-tab.js"></script>
-    <script src="/ccc_static/js/main/22-help-tab.js"></script>
-    <script src="/ccc_static/js/main/23-pose3d-bridge.js"></script>
-    <script src="/ccc_static/js/main/24-sub-panels.js"></script>
+    <!-- main.js 分割ファイル群（旧 main.js を責務ごとに34分割。00-db/02〜09f/10〜13aはESM化済み、それ以外は非moduleでグローバルスコープ共有のため読み込み順が重要） -->
+    <script type="module" src="/ccc_static/js/main/00-db.js"></script>
+    <script type="module" src="/ccc_static/js/main/01-state.js"></script>
+    <script type="module" src="/ccc_static/js/main/02-assets.js"></script>
+    <script type="module" src="/ccc_static/js/main/03-layers-panel.js"></script>
+    <script type="module" src="/ccc_static/js/main/04a-mask-core.js"></script>
+    <script type="module" src="/ccc_static/js/main/04b-layer-panel-render.js"></script>
+    <script type="module" src="/ccc_static/js/main/05-groups-move.js"></script>
+    <script type="module" src="/ccc_static/js/main/06a-polygon-geometry.js"></script>
+    <script type="module" src="/ccc_static/js/main/06b-template-manager.js"></script>
+    <script type="module" src="/ccc_static/js/main/06c-template-wizard.js"></script>
+    <script type="module" src="/ccc_static/js/main/07-pages.js"></script>
+    <script type="module" src="/ccc_static/js/main/08-panels-images.js"></script>
+    <script type="module" src="/ccc_static/js/main/09a-balloon-init.js"></script>
+    <script type="module" src="/ccc_static/js/main/09b-balloon-shapes.js"></script>
+    <script type="module" src="/ccc_static/js/main/09c-balloon-handles.js"></script>
+    <script type="module" src="/ccc_static/js/main/09d-balloon-tools.js"></script>
+    <script type="module" src="/ccc_static/js/main/09e-text-tool.js"></script>
+    <script type="module" src="/ccc_static/js/main/09f-bubble-text.js"></script>
+    <script type="module" src="/ccc_static/js/main/10-output-pages.js"></script>
+    <script type="module" src="/ccc_static/js/main/11a-work-manager.js"></script>
+    <script type="module" src="/ccc_static/js/main/11b-page-manager-tab.js"></script>
+    <script type="module" src="/ccc_static/js/main/12-text-png-export.js"></script>
+    <script type="module" src="/ccc_static/js/main/13-export-pdf-epub.js"></script>
+    <script type="module" src="/ccc_static/js/main/13a-export-metadata.js"></script>
+    <script type="module" src="/ccc_static/js/main/14-integrations.js"></script>
+    <script type="module" src="/ccc_static/js/main/15-pixifx-bridge.js"></script>
+    <script type="module" src="/ccc_static/js/main/15b-manga-tone.js"></script>
+    <script type="module" src="/ccc_static/js/main/15c-manga-bgpattern.js"></script>
+    <script type="module" src="/ccc_static/js/main/16-processing-edit-tabs.js"></script>
+    <script type="module" src="/ccc_static/js/main/17a-layer-draw-input.js"></script>
+    <script type="module" src="/ccc_static/js/main/17b-layer-draw-commit.js"></script>
+    <script type="module" src="/ccc_static/js/main/17c-layer-draw-handles.js"></script>
+    <script type="module" src="/ccc_static/js/main/17d-layer-draw-paint.js"></script>
+    <script type="module" src="/ccc_static/js/main/18-svg-color-png.js"></script>
+    <script type="module" src="/ccc_static/js/main/19-font-manager.js"></script>
+    <script type="module" src="/ccc_static/js/main/20-font-presets.js"></script>
+    <script type="module" src="/ccc_static/js/main/21-script-tab.js"></script>
+    <script type="module" src="/ccc_static/js/main/22-help-tab.js"></script>
+    <script type="module" src="/ccc_static/js/main/23-pose3d-bridge.js"></script>
+    <script type="module" src="/ccc_static/js/main/24-sub-panels.js"></script>
   </body>
 </html>

@@ -1,10 +1,28 @@
 // ============================================================
 // main.js 分割ファイル (16/24): PixiJS_FX
 // 元 main.js の行 13098-13257 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: initPixiFxButtons,moveSelectedObjectToCenter,openImageTabWithSelected,openLayoutI2IModal,pixiFxOpenForLayout
+// type="module" として読み込まれる（ESモジュール化 G6）。
+// 主なトップレベル定義: initPixiFxButtons,moveSelectedObjectToCenter,openImageTabWithSelected,openLayoutI2IModal,pixiFxOpenForLayout,_getSelectedImageBlob,_getPageBlob,_pi2iResolvePagePixelSize,_PI2I_DPI,_layoutI2ITarget,_layoutI2IPositive,_layoutI2INegative,_layoutI2IDenoise
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state/switchTab（01-state.js）,
+//   _drawShapeGetBounds/_drawShapeSetBounds/updateDrawShapeHandles（17c-layer-draw-handles.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { pushHistory, buildMergedSvg, savePanelSvg } from './07-pages.js';
+import { dbGet } from './00-db.js';
+import { embedFontsInSvg, drawSvgOnCanvas } from './12-text-png-export.js';
+import { _EXPORT_MAX_SIZE } from './10-output-pages.js';
+import { saveOverlaySvg, _updateH2ShapePath } from './09b-balloon-shapes.js';
+import { insertImage, insertImageFromUrl, updateImageHandlePositions } from './08-panels-images.js';
+import { applyImageTransform, _updateH2HandlePositions } from './09c-balloon-handles.js';
+import { _layerOpacityGetSelected, getPanelLayerSvg } from './04b-layer-panel-render.js';
+import { renderTextHandles } from './09d-balloon-tools.js';
+import { updateGroupHandlePositions } from './06a-polygon-geometry.js';
+import { getI2ISettingsState, saveI2ISettingsState, sendI2IRunToWorkflowStudio } from './14-integrations.js';
+import { pixiFxOpen } from '../pixifx.js';
+import { state, switchTab } from './01-state.js';
+import { _drawShapeGetBounds, _drawShapeSetBounds, updateDrawShapeHandles } from './17c-layer-draw-handles.js';
 
 // ============================================================
 // PixiJS FX（comfyUI-particle-pixijs カスタムノード連携）
@@ -17,10 +35,6 @@ function initPixiFxButtons() {
 
 // レイアウトタブ「画像」サブタブ: 選択中の画像を加工して現在のコマに挿入
 function pixiFxOpenForLayout() {
-    if (typeof window.pixiFxOpen !== 'function') {
-        alert(t('image.pixifxNotLoaded'));
-        return;
-    }
     const imgEl = state.selectedImageEl;
     if (!imgEl) {
         alert(t('layout.msgSelectImageFirst'));
@@ -31,7 +45,7 @@ function pixiFxOpenForLayout() {
         alert(t('layout.msgNotImageOrNotBase64'));
         return;
     }
-    window.pixiFxOpen({
+    pixiFxOpen({
         imageDataUrl: href,
         onApply: async (dataUrl, meta) => {
             // 背景画像を非表示（透過出力）にした場合はパーティクルのみのオーバーレイ素材
@@ -263,14 +277,11 @@ function openLayoutI2IModal() {
     });
 
     // I2I設定（Imageタブの Select I2I パネルと共有データ、14-integrations.js）
-    if (typeof window.getI2ISettingsState === 'function') {
-        const cur = window.getI2ISettingsState();
-        $('li2i-default-wf-enabled').checked = cur.enabled;
-        $('li2i-default-wf-name').value = cur.file;
-    }
+    const cur = getI2ISettingsState();
+    $('li2i-default-wf-enabled').checked = cur.enabled;
+    $('li2i-default-wf-name').value = cur.file;
     $('li2i-settings-save-btn').addEventListener('click', () => {
-        if (typeof window.saveI2ISettingsState !== 'function') return;
-        window.saveI2ISettingsState($('li2i-default-wf-enabled').checked, $('li2i-default-wf-name').value);
+        saveI2ISettingsState($('li2i-default-wf-enabled').checked, $('li2i-default-wf-name').value);
         const statusEl = $('li2i-settings-status');
         statusEl.textContent = t('layout.i2iSettingsSaved');
         setTimeout(() => { statusEl.textContent = ''; }, 2000);
@@ -289,11 +300,6 @@ function openLayoutI2IModal() {
         const statusEl = $('li2i-status');
         const setStatus = (msg) => { statusEl.textContent = msg; };
 
-        if (typeof window.sendI2IRunToWorkflowStudio !== 'function') {
-            alert(t('layout.msgWfmI2INotReady'));
-            return;
-        }
-
         runBtn.disabled = true;
         runBtn.textContent = t('layout.i2iRunningBtn');
         setStatus(t('layout.i2iStatusUploading'));
@@ -309,7 +315,7 @@ function openLayoutI2IModal() {
             if (!blob) { setStatus(''); return; }
 
             setStatus(t('layout.i2iStatusGenerating'));
-            const result = await window.sendI2IRunToWorkflowStudio(blob, {
+            const result = await sendI2IRunToWorkflowStudio(blob, {
                 positive: _layoutI2IPositive,
                 negative: _layoutI2INegative,
                 denoise:  _layoutI2IDenoise,
@@ -424,4 +430,14 @@ async function moveSelectedObjectToCenter() {
     const panelId = clipG ? clipG.getAttribute('data-clip-panel') : (overlayG ? '__overlay__' : (state.selectedPanelId || 'panel-0'));
     await savePanelSvg(panelId, svgEl);
 }
+
+export { initPixiFxButtons, openImageTabWithSelected, openLayoutI2IModal, moveSelectedObjectToCenter };
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initPixiFxButtons = initPixiFxButtons;
+window.openImageTabWithSelected = openImageTabWithSelected;
+window.openLayoutI2IModal = openLayoutI2IModal;
+window.moveSelectedObjectToCenter = moveSelectedObjectToCenter;
 

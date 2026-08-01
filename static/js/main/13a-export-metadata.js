@@ -1,9 +1,10 @@
 // ============================================================
 // main.js 分割ファイル (14b): 画像出力メタデータ埋め込み（PNG/JPEG/WebP）+ XMP生成
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _APP_CREATOR_NAME,_buildXmpPacket,_embedImageMetadata,_xmlEscape
+// type="module" として読み込まれる（ESモジュール化 G5）。
+// 主なトップレベル定義: _APP_CREATOR_NAME,_buildXmpPacket,_embedImageMetadata,_splitMetaKeywords,_xmlEscape
 // ============================================================
+
+import { _getExportDpiValue, _getExportMetaValues } from './10-output-pages.js';
 
 // ==============================
 // 画像出力メタデータ埋め込み
@@ -392,3 +393,10 @@ async function _embedImageMetadata(blob, mimeType, width, height) {
         return blob;
     }
 }
+
+export {
+    _APP_CREATOR_NAME, _PNG_CRC_TABLE, _WEBP_ALPHA_FLAG, _WEBP_EXIF_FLAG, _WEBP_XMP_FLAG,
+    _buildXmpPacket, _embedImageMetadata, _jpegEmbedMeta, _jpegPatchJfifDensity, _pngBuildItxtChunk,
+    _pngBuildPhysChunk, _pngCrc32, _pngEmbedMeta, _splitMetaKeywords, _webpBuildChunk,
+    _webpBuildExifTiff, _webpEmbedMeta, _xmlEscape,
+};

@@ -1,10 +1,27 @@
 // ============================================================
 // フキダシ管理 分割ファイル (3/5): フキダシ変形・ハンドル操作
 // 元 09-balloons.js（分割前）の行 1295-1871 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: _h2CalcCurveHandlePos,_syncH2UI,_updateH2HandlePositions,applyImageTransform,calcHandleR,clearHandles,convertShapeToImage,createHandle,flipSelected,flipSelectedImage,flipSelectedShape,insertSmartBalloonTemplate,renderHandles
+// type="module" として読み込まれる（ESモジュール化 G4）。09a〜09fは相互に密結合しており
+// 循環importが多数発生するが、循環先シンボルの参照はすべて関数内部に閉じているため安全。
+// 主なトップレベル定義: _balloonGetRotateHandlePos,_balloonGetRotatedHandlePositions,_h2CalcCurveHandlePos,_syncH2UI,_updateH2HandlePositions,addExtensionBalloon,applyImageTransform,calcHandleR,clearHandles,convertShapeToImage,createHandle,flipSelected,flipSelectedImage,flipSelectedShape,insertSmartBalloonTemplate,renderHandles
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, _svgTextToDataUrl（18-svg-color-png.js）
+// embedFontsInSvg は12-text-png-export.js（G5でESM化）の正式importに置き換え済み。
 // ============================================================
+
+import { t } from '../i18n.js';
+import { getActiveContainer, getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
+import { pushHistory, savePanelSvg, saveShapeSvg } from './07-pages.js';
+import { insertImage, renderImageHandles, getBoundingBoxFromPoints } from './08-panels-images.js';
+import {
+    getOrCreateClipGroup, updateBalloonUI, _updateH2ShapePath, _showH2TypeParams,
+    updateShapePath, _h2TailBoundaryPoint,
+} from './09b-balloon-shapes.js';
+import { _isBubbleTextType } from './09f-bubble-text.js';
+import { embedFontsInSvg } from './12-text-png-export.js';
+import { state } from './01-state.js';
+import { _svgTextToDataUrl } from './18-svg-color-png.js';
 
 // フキダシ or 図形要素をPNG画像に変換し、元の位置・表示サイズで複製挿入する（元要素は残す）
 async function convertShapeToImage(el, svgEl) {
@@ -737,4 +754,16 @@ function createHandle(svg, type, x, y, className) {
     circle.dataset.handleType = type;
     svg.appendChild(circle);
 }
+
+export {
+    _balloonGetRotateHandlePos, _balloonGetRotatedHandlePositions, _h2CalcCurveHandlePos,
+    _syncH2UI, _updateH2HandlePositions, addExtensionBalloon, applyImageTransform, calcHandleR,
+    clearHandles, convertShapeToImage, createHandle, flipSelected, flipSelectedImage,
+    flipSelectedShape, insertSmartBalloonTemplate, renderHandles,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.convertShapeToImage = convertShapeToImage;
 

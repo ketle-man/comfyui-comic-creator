@@ -1,10 +1,34 @@
 // ============================================================
 // 作品/ページ管理 分割ファイル (1/2): 作品管理(ページグループ単位の作品)
 // 元 11-works.js（分割前）の行 1-691 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: RESERVED_GROUP_NAMES,STOCK_GROUP,TRASH_GROUP,TRASH_GROUP_LABEL,WORK_SIZE_PRESETS,_BACKUP_DB_STORES,_BACKUP_FORMAT,_BACKUP_LS_KEYS,_adoptOrphanPagesToStock,_assetTmplExpandedGroups,_assetTmplSelected,_closeWorkCreateDialog,_getOrBuildPageThumb,_initWorkCreateDialog,_initWorkMgr,_openWorkCreateDialog,_renderGroupList,_scalePointsStr,_scaleSvgContentByWrap,_scaleSvgElementTree,_workBackupExport,_workBackupImport,_workCreate,_workDlgApplyPreset,_workDlgGetPreset,_workDlgRebuildPresetSelect,_workListTab,_workMeta,_workSelected,_workSetActive,_workSetListTab,_workSizePresets,_workTimestampStr,_workUpdateActiveLabel,_workUpdateOpenBtn,insertTemplatePageToWork,openWork,renderAssetTemplateGrid,renderWorkList
+// type="module" として読み込まれる（ESモジュール化 G5）。10-output-pages.js/11b-page-manager-tab.js
+// とは相互import（循環）。循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため安全。
+// _workSelected はモジュールスコープに閉じており、11b-page-manager-tab.js から更新するための
+// _setWorkSelected() セッターを新設した（00-db.jsの _setDb() と同じパターン）。
+// 主なトップレベル定義: STOCK_GROUP,TRASH_GROUP,_BACKUP_DB_STORES,_BACKUP_FORMAT,_BACKUP_LS_KEYS,_adoptOrphanPagesToStock,_assetTmplExpandedGroups,_assetTmplSelected,_closeWorkCreateDialog,_getOrBuildPageThumb,_initWorkCreateDialog,_initWorkMgr,_openWorkCreateDialog,_renderGroupList,_reservedGroupNames,_scalePointsStr,_scaleSvgContentByWrap,_scaleSvgElementTree,_trashGroupLabel,_workBackupExport,_workBackupImport,_workCreate,_workDlgApplyPreset,_workDlgGetPreset,_workDlgRebuildPresetSelect,_workListTab,_workMeta,_workSelected,_workSetActive,_workSetListTab,_workSizePresetList,_workSizePresets,_workTimestampStr,_workUpdateActiveLabel,_workUpdateOpenBtn,closeActiveWork,insertTemplatePageToWork,openWork,renderAssetTemplateGrid,renderWorkList
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state/switchTab/hidePose3DCanvas（01-state.js）, _escHtml（21-script-tab.js）,
+//   _layerDrawState/_layerDrawDetachOverlay/_layerDrawUpdateToggle（17a-layer-draw-input.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbGet, dbPut, dbGetAll, dbGetAllPagesMeta, _dbPutRaw, svgTextToDataUrl } from './00-db.js';
+import { updateTemplateSidePanel } from './02-assets.js';
+import { _maskState, _maskSetEditing } from './04a-mask-core.js';
+import { renderLayerPanel } from './04b-layer-panel-render.js';
+import { _round2 } from './05-groups-move.js';
+import { _prepareTemplateSvgDocForPage } from './06c-template-wizard.js';
+import { loadPages, renderLayoutTab, renderPageSelector, renderPageThumbGrid, switchActivePage, updateLayoutPageNav } from './07-pages.js';
+import { _clearObjectSelection, updatePanelSelectDropdown } from './08-panels-images.js';
+import { updateBalloonPanelSelect } from './09e-text-tool.js';
+import { _activateOutputSubtab, _setOutputFilterGroup, renderOutputPageList } from './10-output-pages.js';
+import { _pageMgrGroups, renderPageMgrGrid } from './11b-page-manager-tab.js';
+import { _saveBlob } from './13-export-pdf-epub.js';
+import { state, switchTab } from './01-state.js';
+import { hidePose3DCanvas } from './23-pose3d-bridge.js';
+import { _layerDrawDetachOverlay, _layerDrawState, _layerDrawUpdateToggle } from './17a-layer-draw-input.js';
+import { _tmplGroups } from './06b-template-manager.js';
 
 // ==============================
 // 作品管理（ページグループ単位の作品）
@@ -33,14 +57,21 @@ const _workMeta = {
 
 /** 予約済みグループ: ゴミ箱（trashストアの内容を表示する仮想グループ。実グループとしては存在しない） */
 const TRASH_GROUP = '__trash__';
-const TRASH_GROUP_LABEL = t('page.trashLabel');
+// i18n.js（ESM化済み）の t() はモジュールの実行完了後にしか使えないため、
+// このファイル（非module）の読み込み時点で即時評価すると実行順序次第でReferenceErrorになる。
+// 呼び出し時に都度評価する関数にして、実行タイミングへの依存を無くす。
+function _trashGroupLabel() { return t('page.trashLabel'); }
 /** 予約済みグループ: stock（未整理ページの置き場。起動時に自動作成される実グループ。削除・リネーム不可） */
 const STOCK_GROUP = 'stock';
 /** グループ名として新規作成・リネームで使用禁止の予約名 */
-const RESERVED_GROUP_NAMES = new Set([TRASH_GROUP, TRASH_GROUP_LABEL, 'ゴミ箱', 'Trash', '回收站', STOCK_GROUP]);
+function _reservedGroupNames() {
+    return new Set([TRASH_GROUP, _trashGroupLabel(), 'ゴミ箱', 'Trash', '回收站', STOCK_GROUP]);
+}
 
 /** 作品一覧ペインで選択中の作品/グループ名（中央ペインのフィルタ） */
 let _workSelected = null;
+/** 11b-page-manager-tab.js から _workSelected を更新するためのセッター */
+function _setWorkSelected(name) { _workSelected = name; }
 /** 作品一覧ペインのアクティブタブ（'works' | 'groups'） */
 let _workListTab = 'works';
 /** アセットパネルのテンプレートタブで選択中のテンプレート名 */
@@ -58,14 +89,17 @@ function _workTimestampStr(d = new Date()) {
 // ------------------------------
 
 /** 標準サイズプリセット（SVG座標単位 = mm×100 相当） */
-const WORK_SIZE_PRESETS = [
-    { name: t('page.presetA4Portrait'), width: 21000, height: 29700 },
-    { name: t('page.presetA4Landscape'), width: 29700, height: 21000 },
-    { name: t('page.presetB5Portrait'), width: 18200, height: 25700 },
-    { name: t('page.presetB4Portrait'), width: 25700, height: 36400 },
-    { name: t('page.presetA5Portrait'), width: 14800, height: 21000 },
-    { name: t('page.presetSquare'), width: 21000, height: 21000 },
-];
+// t() はモジュールの実行完了後にしか使えないため、読み込み時点で即時評価せず呼び出し時に都度構築する
+function _workSizePresetList() {
+    return [
+        { name: t('page.presetA4Portrait'), width: 21000, height: 29700 },
+        { name: t('page.presetA4Landscape'), width: 29700, height: 21000 },
+        { name: t('page.presetB5Portrait'), width: 18200, height: 25700 },
+        { name: t('page.presetB4Portrait'), width: 25700, height: 36400 },
+        { name: t('page.presetA5Portrait'), width: 14800, height: 21000 },
+        { name: t('page.presetSquare'), width: 21000, height: 21000 },
+    ];
+}
 
 /** カスタムサイズプリセット（localStorage永続化） */
 const _workSizePresets = {
@@ -78,7 +112,7 @@ const _workSizePresets = {
 
 /** プリセットselectのvalue（std:n / custom:n）からプリセットを取得 */
 function _workDlgGetPreset(value) {
-    if (value?.startsWith('std:')) return WORK_SIZE_PRESETS[parseInt(value.slice(4), 10)] || null;
+    if (value?.startsWith('std:')) return _workSizePresetList()[parseInt(value.slice(4), 10)] || null;
     if (value?.startsWith('custom:')) return _workSizePresets.load()[parseInt(value.slice(7), 10)] || null;
     return null;
 }
@@ -88,7 +122,7 @@ function _workDlgRebuildPresetSelect(selectedValue) {
     const sel = document.getElementById('work-dlg-preset');
     if (!sel) return;
     sel.innerHTML = '';
-    WORK_SIZE_PRESETS.forEach((p, i) => {
+    _workSizePresetList().forEach((p, i) => {
         const opt = document.createElement('option');
         opt.value = `std:${i}`;
         opt.textContent = p.name;
@@ -228,12 +262,12 @@ function _initWorkMgr() {
     // 出力: 選択中の作品/グループのページを出力サブタブで表示
     document.getElementById('work-export-btn')?.addEventListener('click', async () => {
         if (!_workSelected) return;
-        _outputFilterGroup = _workSelected;
+        _setOutputFilterGroup(_workSelected);
         await _activateOutputSubtab('export');
     });
     // 出力サブタブのフィルタ解除
     document.getElementById('output-filter-clear-btn')?.addEventListener('click', async () => {
-        _outputFilterGroup = null;
+        _setOutputFilterGroup(null);
         await renderOutputPageList();
     });
     document.getElementById('asset-template-insert-btn')?.addEventListener('click', () => insertTemplatePageToWork());
@@ -425,7 +459,7 @@ async function _renderGroupList(grid) {
     let trashCount = 0;
     try { trashCount = (await dbGetAll('trash')).length; } catch (_) { /* 取得失敗時は0件表示 */ }
     grid.appendChild(makeItem(TRASH_GROUP,
-        `🗑 ${TRASH_GROUP_LABEL} <span style="color:var(--text-secondary); font-size:11px;">${t('page.pageCountSuffix', trashCount)}</span>`));
+        `🗑 ${_trashGroupLabel()} <span style="color:var(--text-secondary); font-size:11px;">${t('page.pageCountSuffix', trashCount)}</span>`));
 }
 
 /**
@@ -892,4 +926,22 @@ function _scaleSvgContentByWrap(svgText, sx, sy, targetW, targetH) {
     svgEl.removeAttribute('height');
     return new XMLSerializer().serializeToString(svgEl);
 }
+
+export {
+    STOCK_GROUP, TRASH_GROUP, _BACKUP_DB_STORES, _BACKUP_FORMAT, _BACKUP_LS_KEYS,
+    _adoptOrphanPagesToStock, _assetTmplExpandedGroups, _assetTmplSelected, _closeWorkCreateDialog,
+    _getOrBuildPageThumb, _initWorkCreateDialog, _initWorkMgr, _openWorkCreateDialog, _renderGroupList,
+    _reservedGroupNames, _scalePointsStr, _scaleSvgContentByWrap, _scaleSvgElementTree, _setWorkSelected,
+    _trashGroupLabel, _workBackupExport, _workBackupImport, _workCreate, _workDlgApplyPreset,
+    _workDlgGetPreset, _workDlgRebuildPresetSelect, _workListTab, _workMeta, _workSelected,
+    _workSetActive, _workSetListTab, _workSizePresetList, _workSizePresets, _workTimestampStr,
+    _workUpdateActiveLabel, _workUpdateOpenBtn, closeActiveWork, insertTemplatePageToWork, openWork,
+    renderAssetTemplateGrid, renderWorkList,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるよう、windowにも公開する
+// （ESモジュール化移行中の一時ブリッジ）。
+window._initWorkMgr = _initWorkMgr;
+window._workMeta = _workMeta;
+window.renderAssetTemplateGrid = renderAssetTemplateGrid;
 

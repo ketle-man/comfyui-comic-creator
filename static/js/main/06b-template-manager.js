@@ -1,10 +1,22 @@
 // ============================================================
 // テンプレート作成ウィザード 分割ファイル (2/3): テンプレートグループ管理+テンプレート管理
 // 元 06-template-wizard.js（分割前）の行 798-1011 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G2）。06c-template-wizard.js とは相互import（循環）。
+// 循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため安全（詳細はG1と同じ判断基準）。
 // 主なトップレベル定義: _tmplGroups,initTemplateManager,loadTemplates,saveTemplate
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbGetAll, dbPut, readFileAsText } from './00-db.js';
+import {
+    parseSVGForTemplate, openTemplateWizard, closeTemplateWizard, _tmplWizCreateBase,
+    _tmplWizSave, _tmplWizUndo, _tmplWizReset, _tmplWizSetOrientation, _tmplWizSetCutMode,
+    _tmplWiz, _tmplWizSaveGridSettings, _tmplWizRender, renameTemplate, deleteTemplate,
+    renderTemplateList, _tmplGroupsRefreshUI, _tmplSidePanelUpdate,
+} from './06c-template-wizard.js';
+import { state } from './01-state.js';
 
 // ==============================
 // テンプレート グループ管理
@@ -219,4 +231,12 @@ async function saveTemplate(template, svgContent) {
     const record = { ...template, svgContent };
     await dbPut('templates', record);
 }
+
+export { _tmplGroups, initTemplateManager, loadTemplates, saveTemplate };
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.initTemplateManager = initTemplateManager;
+window.loadTemplates = loadTemplates;
 

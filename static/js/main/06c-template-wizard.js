@@ -1,10 +1,22 @@
 // ============================================================
 // テンプレート作成ウィザード 分割ファイル (3/3): テンプレート作成ウィザード(ライン分割方式)
 // 元 06-template-wizard.js（分割前）の行 1012-1713 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
-// 主なトップレベル定義: TMPLWIZ_DEFAULT,_TMPLWIZ_LS_GRID,_prepareTemplateSvgDocForPage,_tmplGroupsRefreshUI,_tmplSidePanelUpdate,_tmplWiz,_tmplWizAttachCanvasEvents,_tmplWizBuildSvgString,_tmplWizCanvasMouseDown,_tmplWizCanvasMouseMove,_tmplWizCanvasMouseUp,_tmplWizClientToSvg,_tmplWizCommitCut,_tmplWizComputeInitialPanels,_tmplWizCreateBase,_tmplWizDetachCanvasEvents,_tmplWizFindPanelIndexForCut,_tmplWizLoadGridSettings,_tmplWizOrderPanels,_tmplWizRender,_tmplWizRenderGrid,_tmplWizReset,_tmplWizSave,_tmplWizSaveGridSettings,_tmplWizSetCutMode,_tmplWizSetOrientation,_tmplWizSetOrientationButtons,_tmplWizShowStep,_tmplWizSnapPoint,_tmplWizSyncGridControls,_tmplWizUndo,closeTemplateWizard,deleteTemplate,openTemplateWizard,parseSVGForTemplate,renameTemplate,renderTemplateList,selectTemplate
+// type="module" として読み込まれる（ESモジュール化 G2）。06b-template-manager.js とは相互import（循環）。
+// 循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため安全。
+// 主なトップレベル定義: TMPLWIZ_DEFAULT,_TMPLWIZ_LS_GRID,_prepareTemplateSvgDocForPage,_tmplGetFrameWidth,_tmplGroupsRefreshUI,_tmplSidePanelUpdate,_tmplWiz,_tmplWizAttachCanvasEvents,_tmplWizBuildSvgString,_tmplWizCanvasMouseDown,_tmplWizCanvasMouseMove,_tmplWizCanvasMouseUp,_tmplWizClientToSvg,_tmplWizCommitCut,_tmplWizComputeInitialPanels,_tmplWizCreateBase,_tmplWizDetachCanvasEvents,_tmplWizFindPanelIndexForCut,_tmplWizLoadGridSettings,_tmplWizOrderPanels,_tmplWizRender,_tmplWizRenderGrid,_tmplWizReset,_tmplWizSave,_tmplWizSaveGridSettings,_tmplWizSetCutMode,_tmplWizSetOrientation,_tmplWizSetOrientationButtons,_tmplWizShowStep,_tmplWizSnapPoint,_tmplWizSyncGridControls,_tmplWizUndo,closeTemplateWizard,deleteTemplate,openTemplateWizard,parseSVGForTemplate,renameTemplate,renderTemplateList,selectTemplate
+// （_tmplGetFrameWidthは機械抽出で追加確認したシンボル。ヘッダコメントは元main.js分割時のもので非網羅）
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）:
+//   state（01-state.js）, buildMergedSvg（07-pages.js）, _escHtml（21-script-tab.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbGet, dbPut, dbDelete, svgTextToDataUrl } from './00-db.js';
+import { _pointsToStr } from './05-groups-move.js';
+import { _polygonCentroid, _pointInPolygon, _splitPolygonByLine } from './06a-polygon-geometry.js';
+import { saveTemplate, loadTemplates, _tmplGroups } from './06b-template-manager.js';
+import { state } from './01-state.js';
+import { buildMergedSvg } from './07-pages.js';
 
 // ==============================
 // テンプレート作成ウィザード（ライン分割方式）
@@ -730,4 +742,27 @@ function _prepareTemplateSvgDocForPage(svgContent) {
     }
     return { svgDoc, polygons };
 }
+
+export {
+    TMPLWIZ_DEFAULT, _TMPLWIZ_LS_GRID, _prepareTemplateSvgDocForPage, _tmplGetFrameWidth,
+    _tmplGroupsRefreshUI, _tmplSidePanelUpdate, _tmplWiz, _tmplWizAttachCanvasEvents,
+    _tmplWizBuildSvgString, _tmplWizCanvasMouseDown, _tmplWizCanvasMouseMove, _tmplWizCanvasMouseUp,
+    _tmplWizClientToSvg, _tmplWizCommitCut, _tmplWizComputeInitialPanels, _tmplWizCreateBase,
+    _tmplWizDetachCanvasEvents, _tmplWizFindPanelIndexForCut, _tmplWizLoadGridSettings,
+    _tmplWizOrderPanels, _tmplWizRender, _tmplWizRenderGrid, _tmplWizReset, _tmplWizSave,
+    _tmplWizSaveGridSettings, _tmplWizSetCutMode, _tmplWizSetOrientation, _tmplWizSetOrientationButtons,
+    _tmplWizShowStep, _tmplWizSnapPoint, _tmplWizSyncGridControls, _tmplWizUndo,
+    closeTemplateWizard, deleteTemplate, openTemplateWizard, parseSVGForTemplate,
+    renameTemplate, renderTemplateList, selectTemplate,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
+// （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
+//  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+window.renderTemplateList = renderTemplateList;
+window.openTemplateWizard = openTemplateWizard;
+window.closeTemplateWizard = closeTemplateWizard;
+window.renameTemplate = renameTemplate;
+window.deleteTemplate = deleteTemplate;
+window.parseSVGForTemplate = parseSVGForTemplate;
 

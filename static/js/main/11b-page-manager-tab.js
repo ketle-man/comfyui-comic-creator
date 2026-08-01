@@ -1,10 +1,22 @@
 // ============================================================
 // 作品/ページ管理 分割ファイル (2/2): ページ管理タブ
 // 元 11-works.js（分割前）の行 692-1462 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G5）。10-output-pages.js/11a-work-manager.js
+// とは相互import（循環）。循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため安全。
+// _outputSelectedPage（10-output-pages.js）/_workSelected（11a-work-manager.js）はそれぞれ定義元の
+// モジュールスコープに閉じているため、更新には _setOutputSelectedPage()/_setWorkSelected() セッターを使う。
 // 主なトップレベル定義: GOOGLE_FONT_FAMILIES,_applyPageRename,_initPageMgrTab,_movePageToTrashSilent,_pageMgrGroups,_pageMgrGroupsRefreshUI,_pageMgrInited,_pageMgrMoveSelected,_pageMgrSelected,_pageMgrSidePanelUpdate,_pageMgrUpdateGridSelection,arrayBufferToBase64,collectFontFamiliesFromSvg,duplicatePagesInMgr,renamePageInMgr,renameSequentialPagesInMgr,renderPageMgrGrid
 // ============================================================
+
+import { t } from '../i18n.js';
+import { dbGet, dbPut, dbGetAll, dbDelete, dbGetAllPagesMeta } from './00-db.js';
+import { loadPages, renderPageSelector, updateLayoutPageNav } from './07-pages.js';
+import {
+    STOCK_GROUP, TRASH_GROUP, _getOrBuildPageThumb, _reservedGroupNames, _setWorkSelected,
+    _trashGroupLabel, _workMeta, _workSelected, _workSetActive, renderWorkList,
+} from './11a-work-manager.js';
+import { _outputSelectedPage, _pageOrder, _pageOrderInput, _setOutputSelectedPage, renderOutputPageList } from './10-output-pages.js';
+import { state } from './01-state.js';
 
 // ==============================
 // ページ管理タブ
@@ -103,7 +115,7 @@ function _initPageMgrTab() {
         const input = document.getElementById('pagemgr-group-name-input');
         const name = input?.value.trim();
         if (!name) return;
-        if (RESERVED_GROUP_NAMES.has(name)) { alert(t('page.msgReservedGroupName', name)); return; }
+        if (_reservedGroupNames().has(name)) { alert(t('page.msgReservedGroupName', name)); return; }
         if (!_pageMgrGroups.createGroup(name)) { alert(t('tmpl.alreadyExists', name)); return; }
         input.value = '';
         _pageMgrGroupsRefreshUI();
@@ -115,12 +127,12 @@ function _initPageMgrTab() {
         const sel = document.getElementById('pagemgr-group-select');
         const oldName = sel?.value;
         if (!oldName) { alert(t('tmpl.selectGroup')); return; }
-        if (RESERVED_GROUP_NAMES.has(oldName)) { alert(t('page.msgReservedGroupRename', oldName)); return; }
+        if (_reservedGroupNames().has(oldName)) { alert(t('page.msgReservedGroupRename', oldName)); return; }
         const newName = prompt(t('tmpl.newGroupNamePrompt'), oldName)?.trim();
         if (!newName) return;
-        if (RESERVED_GROUP_NAMES.has(newName)) { alert(t('page.msgReservedGroupName', newName)); return; }
+        if (_reservedGroupNames().has(newName)) { alert(t('page.msgReservedGroupName', newName)); return; }
         if (!_pageMgrGroups.renameGroup(oldName, newName)) { alert(t('tmpl.alreadyExists', newName)); return; }
-        if (_workSelected === oldName) _workSelected = newName;
+        if (_workSelected === oldName) _setWorkSelected(newName);
         const meta = _workMeta.get(oldName);
         if (meta) {
             _workMeta.set(newName, meta);
@@ -139,13 +151,13 @@ function _initPageMgrTab() {
         const sel = document.getElementById('pagemgr-group-select');
         const name = sel?.value;
         if (!name) { alert(t('tmpl.selectGroup')); return; }
-        if (RESERVED_GROUP_NAMES.has(name)) { alert(t('page.msgReservedGroupDelete', name)); return; }
+        if (_reservedGroupNames().has(name)) { alert(t('page.msgReservedGroupDelete', name)); return; }
         const pages = (_pageMgrGroups.data[name] || []).slice();
         if (!confirm(t('page.confirmDeleteGroup', name, pages.length))) return;
         for (const p of pages) await _movePageToTrashSilent(p);
         _pageMgrGroups.deleteGroup(name);
         if (_workMeta.get(name)) _workMeta.remove(name);
-        if (_workSelected === name) _workSelected = null;
+        if (_workSelected === name) _setWorkSelected(null);
         if (state.activeWork?.name === name) _workSetActive(null);
         _pageMgrGroupsRefreshUI();
         await renderOutputPageList();
@@ -163,7 +175,7 @@ function _initPageMgrTab() {
         for (const p of pages) await _movePageToTrashSilent(p);
         _pageMgrGroups.deleteGroup(name);
         _workMeta.remove(name);
-        _workSelected = null;
+        _setWorkSelected(null);
         if (state.activeWork?.name === name) _workSetActive(null);
         _pageMgrGroupsRefreshUI();
         await renderOutputPageList();
@@ -446,7 +458,7 @@ async function _applyPageRename(oldName, newName) {
     _pageMgrGroups.renamePage(oldName, newName);
     state.pages = state.pages.map(p => p.name === oldName ? { ...p, name: newName } : p);
     if (state.activePage?.name === oldName) state.activePage = { ...state.activePage, name: newName };
-    if (_outputSelectedPage === oldName) _outputSelectedPage = newName;
+    if (_outputSelectedPage === oldName) _setOutputSelectedPage(newName);
     const orderIdx = _pageOrder.indexOf(oldName);
     if (orderIdx !== -1) _pageOrder[orderIdx] = newName;
     if (_pageOrderInput[oldName] != null) {
@@ -520,7 +532,7 @@ async function _movePageToTrashSilent(pageName) {
         await dbDelete('pages', pageName);
         state.pages = state.pages.filter(p => p.name !== pageName);
         if (_outputSelectedPage === pageName) {
-            _outputSelectedPage = null;
+            _setOutputSelectedPage(null);
             const previewContainer = document.getElementById('export-preview');
             if (previewContainer) previewContainer.innerHTML = `<p class="empty-message">${t('page.exportEmptyMessage')}</p>`;
         }
@@ -613,7 +625,7 @@ function _pageMgrSidePanelUpdate() {
         if (sizeEl) sizeEl.textContent = page ? `${page.width || '?'} × ${page.height || '?'}` : '';
         const group = _pageMgrGroups.groupOf(pageName);
         if (groupEl) {
-            groupEl.textContent = isTrash ? t('tmpl.groupLabel', TRASH_GROUP_LABEL)
+            groupEl.textContent = isTrash ? t('tmpl.groupLabel', _trashGroupLabel())
                 : group ? t('tmpl.groupLabel', group) : t('tmpl.groupNone');
         }
     } else {
@@ -653,7 +665,7 @@ async function renderPageMgrGrid() {
     const label = document.getElementById('pagemgr-work-label');
     if (label) {
         label.textContent = isTrash
-            ? t('tmpl.groupLabel', TRASH_GROUP_LABEL)
+            ? t('tmpl.groupLabel', _trashGroupLabel())
             : filterGroup
                 ? (_workMeta.get(filterGroup) ? t('page.workLabel', filterGroup) : t('tmpl.groupLabel', filterGroup))
                 : t('layout.notSelected');
@@ -782,4 +794,16 @@ function arrayBufferToBase64(buffer) {
     for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
     return btoa(binary);
 }
+
+export {
+    GOOGLE_FONT_FAMILIES, _applyPageRename, _initPageMgrTab, _movePageToTrashSilent, _pageMgrGroups,
+    _pageMgrGroupsRefreshUI, _pageMgrInited, _pageMgrMoveSelected, _pageMgrSelected,
+    _pageMgrSidePanelUpdate, _pageMgrUpdateGridSelection, arrayBufferToBase64,
+    collectFontFamiliesFromSvg, duplicatePagesInMgr, renamePageInMgr, renameSequentialPagesInMgr,
+    renderPageMgrGrid,
+};
+
+// まだESM化されていない main/以下の classic <script> から呼べるよう、windowにも公開する
+// （ESモジュール化移行中の一時ブリッジ）。
+window.GOOGLE_FONT_FAMILIES = GOOGLE_FONT_FAMILIES;
 

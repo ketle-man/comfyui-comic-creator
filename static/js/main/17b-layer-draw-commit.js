@@ -1,10 +1,21 @@
 // ============================================================
 // SVGレイヤーへの描画機能 分割ファイル (2/3): SVG要素の確定・追加+Undo+ユーティリティ
 // 元 17-layer-draw.js（分割前）の行 716-1014 に相当
-// <script>(非module)として読み込まれ、他の分割ファイルとグローバルスコープを共有する。
-// 読み込み順は templates/index.html の <script> タグ順に依存する。
+// type="module" として読み込まれる（ESモジュール化 G7）。
 // 主なトップレベル定義: _createChainElementNS,_createOriginalElementNS,_createRopeElementNS,_layerDrawCommit,_layerDrawCommitInner,_layerDrawSetStatus,_layerDrawTargetLabel,_layerDrawUndo
+// 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
+// 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
+
+import { t } from '../i18n.js';
+import { _layerDrawState, _layerDrawDetachOverlay, _layerDrawGetFillStyleObj, _layerDrawUpdateToggle } from './17a-layer-draw-input.js';
+import { _layerDrawSelectShape, _drawShapeGetBounds } from './17c-layer-draw-handles.js';
+import { _fontMgrApplyFillPaintToEl } from './09e-text-tool.js';
+import { convertShapeToImage } from './09c-balloon-handles.js';
+import { getOrCreateClipGroup, saveOverlaySvg } from './09b-balloon-shapes.js';
+import { getPanelLayerSvg, getActiveContainer } from './04b-layer-panel-render.js';
+import { savePanelSvg } from './07-pages.js';
+import { state } from './01-state.js';
 
 // ──────────────────────
 // SVG要素の確定・追加
@@ -337,9 +348,11 @@ async function _layerDrawShapeToPng() {
     }
     const svgEl = getPanelLayerSvg();
     if (!svgEl) return;
-    // 実処理は convertShapeToImage（09b-balloon-shapes.js）に共通化。フキダシの「画像に変換」
+    // 実処理は convertShapeToImage（09c-balloon-handles.js）に共通化。フキダシの「画像に変換」
     // ボタンと同じロジックで、元の図形は残したまま同じ位置・サイズにPNGを複製挿入する。
     const result = await convertShapeToImage(el, svgEl);
     if (result) _layerDrawSetStatus(t('draw.shapeToPngDone', result.width, result.height));
 }
+
+export { _layerDrawCommit, _layerDrawUndo, _layerDrawSetStatus, _layerDrawTargetLabel, _layerDrawShapeToPng };
 
