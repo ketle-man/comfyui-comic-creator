@@ -333,6 +333,11 @@ async function switchTab(tabId) {
         });
         document.querySelector('.asset-panel-tab-btn[data-panel-tab="script"]')?.click();
     } else {
+        // スクリプトタブで隠した「A」「F」を再表示する（「P」「T」「I」は上のロジックが個別に制御する）
+        ['assets', 'fonts'].forEach(key => {
+            const btn = document.querySelector(`.asset-panel-tab-btn[data-panel-tab="${key}"]`);
+            if (btn) btn.style.display = '';
+        });
         const activeBtn = document.querySelector('.asset-panel-tab-btn.active');
         if (activeBtn && activeBtn.dataset.panelTab === 'script') {
             document.querySelector('.asset-panel-tab-btn[data-panel-tab="assets"]')?.click();

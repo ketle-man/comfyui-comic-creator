@@ -103,16 +103,25 @@ function _bubbleTextAreaFor(el) {
 }
 
 // フキダシ(g要素)内の内包テキスト(<text>)を、現在のdataset(bubbleText/fontFamily/fontSizeSvg/
-// textAlign/bubbleTextVertical)とareaに合わせて再構築する。textbox-*・h2タイプ共通で使う。
+// textAlign/textValign/bubbleTextVertical)とareaに合わせて再構築する。textbox-*・h2タイプ共通で使う。
 function _bubbleTextRenderText(el, area) {
     const fontFamily = el.dataset.fontFamily || 'BIZ UDPGothic';
     const fontSizeSvg = parseFloat(el.dataset.fontSizeSvg) || 40;
     const padding = fontSizeSvg * 0.5;
     const text = el.dataset.bubbleText || '';
     const vertical = el.dataset.bubbleTextVertical === '1';
+    // align=主軸（横書き=水平、縦書き=垂直）、valign=副軸（横書き=垂直、縦書き=水平）。
+    // valignの値は常に'top'/'center'/'bottom'で保持し、縦書き時は'top'=左端寄せ・'bottom'=右端寄せとして読み替える
+    // （画面上の物理的な位置に寄せる。延長フキダシを重ねて配置した際、テキストを隅に寄せて衝突を避けるための機能）。
     const align = el.dataset.textAlign || 'center';
+    const valign = el.dataset.textValign || 'center';
     const lineHeight = fontSizeSvg * 1.4;
     const k = area.kind === 'oval' ? Math.SQRT2 : 1;
+    // 楕円形状は対角線方向の実効半径がrx/ryそのものより小さい（内接矩形相当のrx/k, ry/k）ため、
+    // 折り返し判定だけでなく寄せ位置の計算にも同じkを反映し、どの方向に寄せてもpadding分の
+    // 見た目マージンを確保する（端に寄せすぎて輪郭に接触しないようにするため）
+    const hRange = area.rx / k;
+    const vRange = area.ry / k;
 
     const ns = 'http://www.w3.org/2000/svg';
     let textEl = el.querySelector('.bubbletext-text');
@@ -147,7 +156,7 @@ function _bubbleTextRenderText(el, area) {
         // 日本語の字形を回転させず正立のまま縦に並べる
         textEl.style.writingMode = 'vertical-rl';
         textEl.style.textOrientation = 'upright';
-        const availHeight = Math.max(fontSizeSvg, ((area.ry - padding) / k) * 2);
+        const availHeight = Math.max(fontSizeSvg, (vRange - padding) * 2);
         const { lines } = _bubbleTextWrapLines(text, fontFamily, fontSizeSvg, availHeight, true);
         textEl.setAttribute('text-anchor', anchor);
         // 列は右→左に配置。textAlignは各列内での縦位置(上/中央/下)として流用する。
@@ -155,9 +164,12 @@ function _bubbleTextRenderText(el, area) {
         // 横書きのtextX計算と対称に、上寄せ/下寄せではエリアの上端/下端を基準点にする
         // （中心cy固定のままanchorだけ切り替えると、テキストが中心からずれた側に伸びるだけで
         // 上下が逆に見えてしまう）
+        // valign(副軸=横方向): 'top'=列群の左端をエリア左端に、'bottom'=列群の右端をエリア右端に合わせる
         const totalW = lines.length * lineHeight;
-        const startX = area.cx + totalW / 2 - lineHeight * 0.5;
-        const textY = align === 'left' ? (area.cy - area.ry + padding) : align === 'right' ? (area.cy + area.ry - padding) : area.cy;
+        const startX = valign === 'top' ? (area.cx - hRange + padding + totalW - lineHeight * 0.5)
+            : valign === 'bottom' ? (area.cx + hRange - padding - lineHeight * 0.5)
+            : (area.cx + totalW / 2 - lineHeight * 0.5);
+        const textY = align === 'left' ? (area.cy - vRange + padding) : align === 'right' ? (area.cy + vRange - padding) : area.cy;
         lines.forEach((line, i) => {
             const tspan = document.createElementNS(ns, 'tspan');
             tspan.setAttribute('x', startX - i * lineHeight);
@@ -168,12 +180,15 @@ function _bubbleTextRenderText(el, area) {
     } else {
         textEl.style.writingMode = '';
         textEl.style.textOrientation = '';
-        const availWidth = Math.max(fontSizeSvg, ((area.rx - padding) / k) * 2);
+        const availWidth = Math.max(fontSizeSvg, (hRange - padding) * 2);
         const { lines } = _bubbleTextWrapLines(text, fontFamily, fontSizeSvg, availWidth, false);
-        const textX = align === 'left' ? (area.cx - area.rx + padding) : align === 'right' ? (area.cx + area.rx - padding) : area.cx;
+        const textX = align === 'left' ? (area.cx - hRange + padding) : align === 'right' ? (area.cx + hRange - padding) : area.cx;
         textEl.setAttribute('text-anchor', anchor);
         const totalH = lines.length * lineHeight;
-        const startY = area.cy - totalH / 2 + lineHeight * 0.8;
+        // valign(副軸=縦方向): 'top'=テキストブロック上端をエリア上端に、'bottom'=下端をエリア下端に合わせる
+        const startY = valign === 'top' ? (area.cy - vRange + padding + lineHeight * 0.8)
+            : valign === 'bottom' ? (area.cy + vRange - padding - totalH + lineHeight * 0.8)
+            : (area.cy - totalH / 2 + lineHeight * 0.8);
         lines.forEach((line, i) => {
             const tspan = document.createElementNS(ns, 'tspan');
             tspan.setAttribute('x', textX);
@@ -261,7 +276,7 @@ async function _bubbleTextSaveFor(el, overlaySvgEl) {
 
 // モーダルで指定した内容を、選択中のフキダシ(el)へ適用する（textbox-*・h2タイプ共通の入口）。
 // rx/ryは変更しない（箱のサイズはハンドル操作、またはtextbox-*の既存サイズをそのまま使う）。
-async function applyBubbleTextToShape(el, { text, fontSizePt, textAlign, fontFamily, vertical, textColor, fillColor, borderEnabled }) {
+async function applyBubbleTextToShape(el, { text, fontSizePt, textAlign, textValign, fontFamily, vertical, textColor, fillColor, borderEnabled }) {
     const overlaySvgEl = el.ownerSVGElement || el.closest('svg');
     if (!overlaySvgEl) return null;
 
@@ -274,6 +289,7 @@ async function applyBubbleTextToShape(el, { text, fontSizePt, textAlign, fontFam
     el.dataset.fontFamily = ff;
     el.dataset.fontSizeSvg = fontSizeSvg;
     el.dataset.textAlign = textAlign || 'center';
+    el.dataset.textValign = textValign || 'center';
     el.dataset.bubbleTextVertical = vertical ? '1' : '0';
     el.dataset.textColor = textColor || '#000000';
 
@@ -415,6 +431,7 @@ function openBubbleTextModal(existingEl) {
     const isTextboxKind = !!_bubbleTextShapeKind(existingEl.dataset.shapeType);
     const hasText = !!(existingEl.dataset.bubbleText && existingEl.dataset.bubbleText.trim());
     let textAlign = existingEl.dataset.textAlign || 'center';
+    let textValign = existingEl.dataset.textValign || 'center';
     let isVertical = existingEl.dataset.bubbleTextVertical === '1';
 
     const overlay = document.createElement('div');
@@ -464,6 +481,14 @@ function openBubbleTextModal(existingEl) {
                         <button type="button" class="btn small secondary btm-align-btn" data-align="left"></button>
                         <button type="button" class="btn small secondary btm-align-btn" data-align="center">${t('font.alignCenter')}</button>
                         <button type="button" class="btn small secondary btm-align-btn" data-align="right"></button>
+                    </div>
+                </div>
+                <div class="fontmgr-style-group">
+                    <label class="fontmgr-style-group-label" id="btm-valign-label">${t('bubbleText.valignLabelH')}</label>
+                    <div class="btm-shape-btns">
+                        <button type="button" class="btn small secondary btm-valign-btn" data-valign="top"></button>
+                        <button type="button" class="btn small secondary btm-valign-btn" data-valign="center">${t('font.alignCenter')}</button>
+                        <button type="button" class="btn small secondary btm-valign-btn" data-valign="bottom"></button>
                     </div>
                 </div>
                 <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
@@ -516,11 +541,40 @@ function openBubbleTextModal(existingEl) {
         });
     });
 
+    // 副軸（横書き=上下、縦書き=左右）の整列ラベル・ボタン。延長フキダシを重ねて配置した際に
+    // テキストを隅へ寄せられるよう、主軸整列とは独立した2軸目として提供する
+    const syncValignLabels = () => {
+        const valignLabel = $('btm-valign-label');
+        const topBtn = dialog.querySelector('.btm-valign-btn[data-valign="top"]');
+        const bottomBtn = dialog.querySelector('.btm-valign-btn[data-valign="bottom"]');
+        valignLabel.textContent = isVertical ? t('bubbleText.valignLabelV') : t('bubbleText.valignLabelH');
+        topBtn.textContent = isVertical ? t('font.alignLeft') : t('bubbleText.alignTop');
+        bottomBtn.textContent = isVertical ? t('font.alignRight') : t('bubbleText.alignBottom');
+    };
+    syncValignLabels();
+
+    const syncValignButtons = () => {
+        dialog.querySelectorAll('.btm-valign-btn').forEach(b => {
+            const active = b.dataset.valign === textValign;
+            b.classList.toggle('active', active);
+            b.classList.toggle('secondary', !active);
+        });
+    };
+    syncValignButtons();
+
+    dialog.querySelectorAll('.btm-valign-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            textValign = btn.dataset.valign;
+            syncValignButtons();
+        });
+    });
+
     const vertCheck = $('btm-vertical');
     vertCheck.checked = isVertical;
     vertCheck.addEventListener('change', () => {
         isVertical = vertCheck.checked;
         syncAlignLabels();
+        syncValignLabels();
     });
 
     // フォント選択（Google/システム/カテゴリのタブ切替。レイアウトタブのテキストツールと同じ構成）
@@ -570,6 +624,7 @@ function openBubbleTextModal(existingEl) {
             text,
             fontSizePt: parseInt($('btm-font-size').value, 10) || 150,
             textAlign,
+            textValign,
             fontFamily: $('btm-font-family').value || undefined,
             vertical: isVertical,
             textColor: $('btm-text-color').value,
