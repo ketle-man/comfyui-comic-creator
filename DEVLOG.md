@@ -2,6 +2,24 @@
 
 ---
 
+## 2026-08-03（半自動マンガ作成 Phase 3: Workflow Studio連携によるLLMプロンプト下書き＋コマ単位バッチ画像生成を追加、v1.24.0）
+
+Phase 1（対応付け基盤）・Phase 2（フキダシ自動生成）に続き、3フェーズ計画の最終フェーズを実装した。別リポジトリ`ComfyUI-Workflow-Studio`（`C:\Users\statsu-11\Desktop\now_work\comfyUI-wf-maneger\ComfyUI-Workflow-Studio`）側にも変更が及ぶ機能追加。
+
+**Workflow Studio側の調査・実装**: `ai-tab.js`の翻訳タブが既に持つLLM接続ロジック（`callLLM(url, backend, model, prompt)`、`loadAiSettings()`＝localStorage `wfm_ai_settings`からOllama/LM Studio設定を読む、`isValidBackendUrl()`）を`export`に追加して`gallery-tab.js`から再利用できるようにした（新規実装は最小限）。画像生成については、AIチャットタブの`generateImageFromChat`が既に`window._wfmGenerateTab.generate(workflow)`（Generate UIの実行エントリポイント、`generate-tab.js`で公開済み）を使っていたため、これをそのまま踏襲。解像度指定は`comfyui-editor.js`の設定タブ「Latent Image」パネルが`analysis.latent_nodes[0]`（`EmptyLatentImage`/`EmptySD3LatentImage`ノードを検出、`{id, width, height}`を返す）を使って`workflow[id].inputs.width/height`を直接書き換えているのと同じ手法を採用した。
+
+`gallery-tab.js`に、既存の`_wfmReceiveImageForI2I`等と同じ配置パターンで新規ブリッジ2つを追加: `_wfmReceiveLLMPromptRequest(context)`（シーン・要素・セリフ・現在のプロンプトから画像生成プロンプト案をLLMで下書き）、`_wfmReceiveGenerateRequest(prompt, width, height)`（現在ロード中のワークフローでtxt2img生成を実行、`document.getElementById("wfm-gen-result-img")?.src`から結果URLを取得——既存の`runInpaintExternal`/`runI2IExternal`と同じ「resultImgのsrcを読む」パターンを踏襲）。
+
+**Comic Creator側の実装**: `14-integrations.js`に`requestLLMPromptFromWorkflowStudio(context)`・`requestPanelImageFromWorkflowStudio(prompt, width, height)`を追加（既存の`sendInpaintToWorkflowStudio`等と同じ`loadWfmGalleryTab()`→iframe越し呼び出しパターン）。`21a-script-manga.js`の「L」ボタンに、シーン・要素・セリフ・現在の画像プロンプトをコンテキストとして渡すハンドラを配線（実行中は「...」表示、成功時は画像プロンプト欄を上書き）。`auto-comic-core.js`に`pickSdxlResolution(aspectRatio)`を追加——sloppy-comicの`sdxl_ratio_to_res`と同じ考え方で、コマのbboxアスペクト比に対数スケールで最も近いSDXL標準解像度（横長/やや横長/正方形/やや縦長/縦長の5段階）を選ぶ。`26-auto-comic-bridge.js`に「画像を一括生成」ボタンを追加。対応付け済みの各コマ（画像プロンプトが空でないもの）について、コマのbboxから解像度を決定→Workflow Studioへ生成リクエスト→結果を`new Image()`で読み込んで実寸を取得→`state.selectedPanelId`を対象コマへ切り替えて`insertImage`で挿入、を順次実行する（sloppy-comicの逐次forループと同じ設計）。一部のコマが失敗しても成功分は反映し、完了後はレイアウトタブへ自動切替。
+
+**回帰バグ発見: `node --check`では検出できないESM構文エラー**: 実装完了後にKaptureで実機確認したところ、ページ全体が`SyntaxError: Unexpected identifier 'shape'`という謎のエラーで機能停止する事態が発生。`node --check`は全ファイルで問題なしと報告していたため原因特定に時間を要したが、`node --experimental-vm-modules`の`vm.SourceTextModule`（実際のESMパーサー）で全ファイルを検査したところ、`22-help-tab.js`のPhase 2で追加した英語ヘルプ文言内に`balloons' shape`という**エスケープし忘れたアポストロフィ**（文字列全体がシングルクォート`'...'`で囲まれているため、`balloons'`の`'`がそこで文字列を閉じてしまい、直後の`shape`が裸のJS識別子としてパースされて構文エラーになっていた）を発見・修正した。`22-help-tab.js`は`01-state.js`から`initHelpTab`としてimportされており、ほぼ全モジュールがimportグラフ経由でこの1ファイルの構文エラーに巻き込まれ、アプリ全体が起動不能になっていた。**教訓**: `node --check`は大きなESMファイルの構文エラーを見逃すことがある（今回のケースでは誤ってOKと報告し続けた）。今後、特に長い文字列リテラルを含むファイル（`22-help-tab.js`等のヘルプ文言）を編集した際は、`node --experimental-vm-modules -e "new (require('vm').SourceTextModule)(src)"`のような実際のESMパーサーでの検証か、必ずブラウザでの実機確認を行うこと。
+
+**検証**: Kaptureで実機E2E確認済み。「L」ボタン: Workflow Studio未接続時は`Failed to fetch`、Ollama接続済みだが応答が空の場合は専用エラーメッセージを表示することを確認（後者はモデル自体が複雑なプロンプトに対して空応答を返す品質上の問題であり、ブリッジ実装は正しく機能している）。「画像を一括生成」ボタン: Workflow StudioのGenerate UIにt2iワークフローを読み込んだ状態で実行し、「1件の画像を生成しました」の成功メッセージ、レイアウトタブへの自動切替、対象コマへの正しい画像挿入（コマのアスペクト比に応じた小さいタイトルコマにも適切なサイズで挿入）を確認。全操作を通じて新規コードに起因するコンソールエラーは発生しなかった（前述の22-help-tab.js修正後）。
+
+**ドキュメント**: ヘルプ（`22-help-tab.js`、日英中3言語）・README（3言語）・PLAN_backlog.md（半自動マンガ作成の未着手項目を削除、3フェーズ全完了）を更新済み。
+
+---
+
 ## 2026-08-03（半自動マンガ作成 Phase 2: スクリプトのセリフからフキダシを自動生成する機能を追加、v1.23.0）
 
 Phase 1（スクリプト⇄コマ対応付け基盤）に続き、対応付け結果をもとに各コマへフキダシを自動生成する機能を実装した。3フェーズ構成の第二弾（Phase 3: Workflow Studio連携バッチ画像生成は未着手）。

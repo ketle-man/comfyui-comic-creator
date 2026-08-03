@@ -45,4 +45,32 @@ function mapScriptPageToPanels(scriptPage, panels) {
     return { mapped, warning };
 }
 
-export { mapScriptPageToPanels };
+// SDXL標準解像度（横長/やや横長/正方形/やや縦長/縦長の5段階）。
+// 参考実装ComfyUI_sloppy-comicのsdxl_ratio_to_resと同じ考え方で、コマのbboxアスペクト比に
+// 最も近い段階を選ぶ（画像生成をコマのサイズに応じて行いたいというユーザー要望への対応）。
+const SDXL_RESOLUTIONS = [
+    { key: 'horizontal_wide', width: 1344, height: 768 },
+    { key: 'horizontal',      width: 1216, height: 832 },
+    { key: 'square',          width: 1024, height: 1024 },
+    { key: 'vertical',        width: 832,  height: 1216 },
+    { key: 'vertical_tall',   width: 768,  height: 1344 },
+];
+
+/**
+ * コマのbboxアスペクト比（width/height）に最も近いSDXL標準解像度を選ぶ。
+ * 対数スケールで比較する（例: 2倍横長 と 0.5倍(=2倍縦長) を対称に扱うため）。
+ * @param {number} aspectRatio コマのwidth/height
+ * @returns {{width: number, height: number}}
+ */
+function pickSdxlResolution(aspectRatio) {
+    const targetLogRatio = Math.log(aspectRatio > 0 ? aspectRatio : 1);
+    let best = SDXL_RESOLUTIONS[2];
+    let bestDiff = Infinity;
+    for (const r of SDXL_RESOLUTIONS) {
+        const diff = Math.abs(targetLogRatio - Math.log(r.width / r.height));
+        if (diff < bestDiff) { bestDiff = diff; best = r; }
+    }
+    return { width: best.width, height: best.height };
+}
+
+export { mapScriptPageToPanels, pickSdxlResolution };

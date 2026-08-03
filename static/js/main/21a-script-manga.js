@@ -15,6 +15,7 @@
 
 import { t } from '../i18n.js';
 import { _script, _escHtml, _scriptSaveCurrent, _scriptIsMangaLikeType } from './21-script-tab.js';
+import { requestLLMPromptFromWorkflowStudio } from './14-integrations.js';
 
 // プロットサブタブ内での表示中ページ・選択中セリフ行（漫画/半自動マンガ共通の一時状態）
 const _scriptManga = {
@@ -176,12 +177,37 @@ function _scriptMangaRenderPage() {
                     _scriptSaveCurrent();
                 });
             }
-            // LLMでの下書きボタン: ハンドラの配線はPhase 3（Workflow Studio連携）で行う。
-            // 現時点ではUI枠のみ用意し、押下すると未実装であることを案内する。
+            // LLMでの下書きボタン（Phase 3, Workflow Studio連携）: シーン・要素・セリフ・
+            // 現在の画像プロンプトをコンテキストとして渡し、下書き結果で画像プロンプト欄を上書きする
             const llmBtnEl = tr.querySelector('.script-image-prompt-llm-btn');
             if (llmBtnEl) {
-                llmBtnEl.addEventListener('click', () => {
-                    alert(t('script.imagePromptLlmNotYetAvailable'));
+                llmBtnEl.addEventListener('click', async () => {
+                    llmBtnEl.disabled = true;
+                    const originalLabel = llmBtnEl.textContent;
+                    llmBtnEl.textContent = '...';
+                    try {
+                        const context = {
+                            scene: page.scene || '',
+                            elements: (_script.data.elements || [])
+                                .map(el => (el.name || el.detail) ? `${el.name}: ${el.detail}` : '').filter(Boolean).join('\n'),
+                            dialogues: panel.dialogues
+                                .map(dg => (dg.character || dg.text) ? `${dg.character || ''}: ${dg.text || ''}` : '').filter(Boolean).join('\n'),
+                            existingPrompt: panel.imagePrompt || '',
+                        };
+                        const result = await requestLLMPromptFromWorkflowStudio(context);
+                        if (!result?.ok) {
+                            alert(t('script.imagePromptLlmFailed', result?.message || ''));
+                            return;
+                        }
+                        panel.imagePrompt = result.text;
+                        if (imagePromptEl) imagePromptEl.value = result.text;
+                        _scriptSaveCurrent();
+                    } catch (e) {
+                        alert(t('script.imagePromptLlmFailed', e.message));
+                    } finally {
+                        llmBtnEl.disabled = false;
+                        llmBtnEl.textContent = originalLabel;
+                    }
                 });
             }
             tr.querySelector('.script-character-input').addEventListener('input', e => {

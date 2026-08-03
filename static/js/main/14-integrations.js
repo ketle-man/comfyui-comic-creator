@@ -2,7 +2,7 @@
 // main.js 分割ファイル (15/24): Eagle連携+WorkflowStudioギャラリー+GMIC連携
 // 元 main.js の行 12796-13097 に相当
 // type="module" として読み込まれる（ESモジュール化 G6）。
-// 主なトップレベル定義: _eagleApiUrl,_eagleSettings,_eagleSettingsInited,_gmicSettingsInited,_i2iSettings,_inpaintSettings,_inpaintSettingsInited,_saveEagleSettings,_saveI2ISettings,_saveInpaintSettings,_wfmGalleryLoaded,gmicAbort,gmicInsertResult,gmicOpenGui,gmicState,gmicWaitForJob,getI2ISettingsState,initEagleSettings,initGmicSettings,initGmicTab,initInpaintSettings,initWfmGalleryTab,loadWfmGalleryTab,saveI2ISettingsState,saveToEagle,sendI2IRunToWorkflowStudio,sendImageToWorkflowStudioI2I,sendInpaintToWorkflowStudio
+// 主なトップレベル定義: _eagleApiUrl,_eagleSettings,_eagleSettingsInited,_gmicSettingsInited,_i2iSettings,_inpaintSettings,_inpaintSettingsInited,_saveEagleSettings,_saveI2ISettings,_saveInpaintSettings,_wfmGalleryLoaded,gmicAbort,gmicInsertResult,gmicOpenGui,gmicState,gmicWaitForJob,getI2ISettingsState,initEagleSettings,initGmicSettings,initGmicTab,initInpaintSettings,initWfmGalleryTab,loadWfmGalleryTab,requestLLMPromptFromWorkflowStudio,requestPanelImageFromWorkflowStudio,saveI2ISettingsState,saveToEagle,sendI2IRunToWorkflowStudio,sendImageToWorkflowStudioI2I,sendInpaintToWorkflowStudio
 // 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
 // 呼び出し箇所は書き換えていない）: state/switchTab（01-state.js）
 // ============================================================
@@ -436,6 +436,67 @@ async function sendI2IRunToWorkflowStudio(imageBlob, params) {
 }
 
 // ==============================
+// 半自動マンガ作成連携（Workflow Studio、Phase 3）
+// ==============================
+
+/**
+ * スクリプトタブのコマ設定（シーン・要素・セリフ・現在の画像プロンプト）から、
+ * Workflow Studio(iframe)側のAI設定（Ollama/LM Studio）を使って画像生成プロンプトの
+ * 下書きを生成する（「L」ボタン連携）。I2I/Inpaintと異なりタブ切替はしない
+ * （loadWfmGalleryTab()でiframeロードのみ保証）。
+ * @param {{scene?:string, elements?:string, dialogues?:string, existingPrompt?:string}} context
+ * @returns {Promise<{ok:boolean, text?:string, message?:string}>}
+ */
+async function requestLLMPromptFromWorkflowStudio(context) {
+    const loaded = await loadWfmGalleryTab();
+    if (!loaded) {
+        return { ok: false, message: t('settings.wfmNotFound') };
+    }
+
+    const iframe = document.getElementById('wfmgallery-iframe');
+    const fn = iframe?.contentWindow?._wfmReceiveLLMPromptRequest;
+    if (typeof fn !== 'function') {
+        return { ok: false, message: 'Workflow Studio LLM bridge is not ready' };
+    }
+
+    try {
+        return await fn(context);
+    } catch (e) {
+        console.error('[AutoComic] requestLLMPromptFromWorkflowStudio error:', e);
+        return { ok: false, message: e.message };
+    }
+}
+
+/**
+ * 画像生成プロンプトとサイズ（コマのbboxアスペクト比に応じて算出）から、Workflow Studio
+ * (iframe)のGenerate UIで現在ロード中のワークフローを使ってtxt2img生成を実行し、結果URLを
+ * 受け取る（半自動マンガ作成のコマ単位バッチ画像生成用）。タブ切替はしない。
+ * @param {string} prompt
+ * @param {number} width
+ * @param {number} height
+ * @returns {Promise<{ok:boolean, url?:string, message?:string}>}
+ */
+async function requestPanelImageFromWorkflowStudio(prompt, width, height) {
+    const loaded = await loadWfmGalleryTab();
+    if (!loaded) {
+        return { ok: false, message: t('settings.wfmNotFound') };
+    }
+
+    const iframe = document.getElementById('wfmgallery-iframe');
+    const fn = iframe?.contentWindow?._wfmReceiveGenerateRequest;
+    if (typeof fn !== 'function') {
+        return { ok: false, message: 'Workflow Studio generate bridge is not ready' };
+    }
+
+    try {
+        return await fn(prompt, width, height);
+    } catch (e) {
+        console.error('[AutoComic] requestPanelImageFromWorkflowStudio error:', e);
+        return { ok: false, message: e.message };
+    }
+}
+
+// ==============================
 // G'MIC連携
 // ==============================
 
@@ -595,6 +656,7 @@ export {
     getI2ISettingsState, saveI2ISettingsState, initInpaintSettings,
     initWfmGalleryTab, loadWfmGalleryTab,
     sendImageToWorkflowStudioI2I, sendInpaintToWorkflowStudio, sendI2IRunToWorkflowStudio,
+    requestLLMPromptFromWorkflowStudio, requestPanelImageFromWorkflowStudio,
     initGmicTab,
 };
 

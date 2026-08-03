@@ -1,13 +1,17 @@
 // ============================================================
-// 半自動マンガ作成 Phase 1/2: スクリプト⇄コマ対応付け・フキダシ自動生成ブリッジ
-// スクリプトタブ「プロット」に設置した2つのボタンから、レイアウトタブで選択中の
+// 半自動マンガ作成 Phase 1/2/3: スクリプト⇄コマ対応付け・フキダシ自動生成・
+// Workflow Studio連携バッチ画像生成ブリッジ
+// スクリプトタブ「プロット」に設置した3つのボタンから、レイアウトタブで選択中の
 // ページ（テンプレート適用済み）のパネルと、表示中のスクリプトページのコマ・セリフ・
 // 画像プロンプトを auto-comic-core.js の mapScriptPageToPanels() でパネル番号順に
 // 対応付ける。
 // - 「このページをレイアウトに流し込む」(Phase 1): 対応付け結果を一覧表示するのみ。
 // - 「フキダシを自動生成」(Phase 2): 対応付け結果をもとに、各コマへセリフ件数分の
 //   フキダシ（角丸矩形固定・コマ内で上から均等配置）を自動生成しテキストを流し込む。
-// 画像のバッチ生成（Workflow Studio連携）はPhase 3で追加する。
+// - 「画像を一括生成」(Phase 3): 対応付け結果のうち画像プロンプトが入力されている
+//   各コマについて、コマのbboxアスペクト比に応じたSDXL標準解像度でWorkflow Studio
+//   経由の画像生成を順次リクエストし、結果を該当コマへ挿入する（sloppy-comicの
+//   逐次forループと同じ設計）。
 // type="module" として読み込まれる。initProjectTab()と同様、'project'タブへの
 // 切替時に01-state.jsから初期化される。
 // ============================================================
@@ -16,12 +20,13 @@ import { t } from '../i18n.js';
 import { state, switchTab } from './01-state.js';
 import { _script, _scriptIsMangaLikeType } from './21-script-tab.js';
 import { _scriptManga, _scriptMangaData } from './21a-script-manga.js';
-import { mapScriptPageToPanels } from '../auto-comic-core.js';
-import { getBoundingBoxFromPoints } from './08-panels-images.js';
+import { mapScriptPageToPanels, pickSdxlResolution } from '../auto-comic-core.js';
+import { getBoundingBoxFromPoints, insertImage } from './08-panels-images.js';
 import { getPanelLayerSvg } from './04b-layer-panel-render.js';
 import { pushHistory } from './07-pages.js';
 import { createBalloonAtPosition } from './09c-balloon-handles.js';
 import { applyBubbleTextToShape, BUBBLE_TEXT_PT_TO_SVG } from './09f-bubble-text.js';
+import { requestPanelImageFromWorkflowStudio } from './14-integrations.js';
 
 // Phase 2 v1のフキダシ形状は角丸矩形に固定する（スクリプト側での形状指定は将来検討事項として保留）
 const AUTO_BALLOON_TYPE = 'rect';
@@ -139,12 +144,78 @@ async function _handleAutoBalloonGenerateClick() {
     alert(t('script.autoComicBalloonSuccess', createdCount));
 }
 
+// 対応付け済みのコマのうち、画像プロンプトが入力されている各コマについて、コマのbboxアスペクト比に
+// 応じたSDXL標準解像度でWorkflow Studio経由の画像生成を順次リクエストし、結果を該当コマへ挿入する。
+async function _handleAutoImageGenerateClick() {
+    const mapping = _computeMapping();
+    if (!mapping) return;
+    if (mapping.error === 'noActivePage') { alert(t('script.autoComicMapNoActivePage')); return; }
+
+    const { mapped, warning } = mapping;
+    _autoComicRenderResult(mapped, warning);
+
+    const targets = mapped.filter(item => item.imagePrompt && item.imagePrompt.trim());
+    if (targets.length === 0) { alert(t('script.autoComicGenerateNoPrompt')); return; }
+
+    const statusEl = document.getElementById('script-autocomic-map-status');
+
+    pushHistory();
+
+    let successCount = 0;
+    let failCount = 0;
+    for (let i = 0; i < targets.length; i++) {
+        const item = targets[i];
+        if (statusEl) statusEl.textContent = t('script.autoComicGenerateProgress', i + 1, targets.length);
+
+        const panel = state.activePage.panels.find(p => p.id === item.panelId);
+        const bbox = panel?.points ? getBoundingBoxFromPoints(panel.points) : null;
+        if (!bbox || !bbox.width || !bbox.height) { failCount++; continue; }
+
+        const { width, height } = pickSdxlResolution(bbox.width / bbox.height);
+        const genResult = await requestPanelImageFromWorkflowStudio(item.imagePrompt, width, height);
+        if (!genResult?.ok || !genResult.url) {
+            console.warn('[AutoComic] generate failed for panel', item.panelId, genResult?.message);
+            failCount++;
+            continue;
+        }
+
+        try {
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = genResult.url;
+            });
+            state.selectedPanelId = item.panelId;
+            state.selectedOverlay = false;
+            await insertImage(genResult.url, img.width, img.height);
+            successCount++;
+        } catch (e) {
+            console.error('[AutoComic] image insert error:', e);
+            failCount++;
+        }
+    }
+
+    if (statusEl) statusEl.textContent = '';
+
+    if (successCount === 0) {
+        alert(t('script.autoComicGenerateAllFailed'));
+        return;
+    }
+
+    await switchTab('layout');
+    alert(failCount > 0
+        ? t('script.autoComicGenerateFailedSome', successCount, failCount)
+        : t('script.autoComicGenerateSuccess', successCount));
+}
+
 let _autoComicBridgeInited = false;
 function initAutoComicBridge() {
     if (_autoComicBridgeInited) return;
     _autoComicBridgeInited = true;
     document.getElementById('script-autocomic-map-btn')?.addEventListener('click', _handleAutoComicMapClick);
     document.getElementById('script-autocomic-balloon-btn')?.addEventListener('click', _handleAutoBalloonGenerateClick);
+    document.getElementById('script-autocomic-generate-btn')?.addEventListener('click', _handleAutoImageGenerateClick);
 }
 
 export { initAutoComicBridge };
