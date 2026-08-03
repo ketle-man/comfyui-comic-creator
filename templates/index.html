@@ -131,6 +131,7 @@
             <button class="subtab-btn tool-panel-btn" data-subtab="gmic" data-i18n="layout.toolImage">画像</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="mask" data-i18n="layout.toolMask">マスク</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="pose3d" data-i18n="layout.toolPose3d">3Dポーズ</button>
+            <button class="subtab-btn tool-panel-btn" data-subtab="text3d" data-i18n="layout.toolText3d">3Dテキスト</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="manga" data-i18n="layout.toolManga">マンガ</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="subpanel" data-i18n="layout.toolSubpanel">サブコマ</button>
           </div>
@@ -702,6 +703,39 @@
                 <div id="pose3d-morph-panel" style="margin-top:4px;"></div>
               </div>
 
+              <!-- 3Dテキストサブタブ -->
+              <div id="subtab-text3d" class="subtab-content" style="display:none; flex:1; padding:0; margin:0;">
+                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                  <textarea id="text3d-text-input" rows="1" style="width:140px; resize:vertical; font-size:12px;" data-i18n-placeholder="layout.text3dTextPlaceholder" placeholder="テキストを入力"></textarea>
+                  <!-- フォントソース切替 -->
+                  <button id="text3d-fsrc-google" class="btn small active" style="white-space:nowrap;" data-i18n="layout.text3dFontSourceGoogle" title="Google Fontsから選択">Google</button>
+                  <button id="text3d-fsrc-system" class="btn small" style="white-space:nowrap;" data-i18n="layout.text3dFontSourceSystem" title="このPCにインストール済みのフォントから選択">システム</button>
+                  <select id="text3d-font-family" style="max-width:140px; font-size:12px;"></select>
+                  <!-- 区切り -->
+                  <div style="border-left:1px solid var(--border-color); height:20px;"></div>
+                  <!-- 押し出し・ベベル -->
+                  <label style="font-size:11px; white-space:nowrap;" data-i18n="layout.text3dDepthLabel" title="押し出し厚み">厚み:</label>
+                  <input type="range" id="text3d-depth" min="0.02" max="1.0" step="0.01" value="0.15" style="width:60px;" />
+                  <label style="font-size:11px; white-space:nowrap; display:flex; align-items:center; gap:2px;"><input type="checkbox" id="text3d-bevel" /><span data-i18n="layout.text3dBevelLabel">面取り</span></label>
+                  <!-- ライト・マテリアル設定モーダル -->
+                  <button id="text3d-settings-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.text3dSettingsBtn" data-i18n-title="layout.text3dSettingsBtnTitle" title="ライト・マテリアル（色/質感）・ズーム操作方式を設定します">⚙ 設定</button>
+                  <!-- 整列 -->
+                  <button id="text3d-align-left" class="btn small" style="white-space:nowrap;" data-i18n="layout.text3dAlignLeft" title="左揃え">左</button>
+                  <button id="text3d-align-center" class="btn small active" style="white-space:nowrap;" data-i18n="layout.text3dAlignCenter" title="中央揃え">中央</button>
+                  <button id="text3d-align-right" class="btn small" style="white-space:nowrap;" data-i18n="layout.text3dAlignRight" title="右揃え">右</button>
+                  <!-- 区切り -->
+                  <div style="border-left:1px solid var(--border-color); height:20px;"></div>
+                  <!-- 配置・確定・キャンセル・再編集 -->
+                  <button id="text3d-place-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.text3dPlace" data-i18n-title="layout.text3dPlaceTitle" title="選択中のコマに 3D ビューを配置します">コマに配置</button>
+                  <button id="text3d-commit-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.text3dCommit" data-i18n-title="layout.text3dCommitTitle" title="現在のビューをキャプチャしてコマに確定します" disabled>コマに確定</button>
+                  <button id="text3d-refresh-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.text3dRefresh" data-i18n-title="layout.text3dRefreshTitle" title="3Dビューが表示されない場合に再描画します">再描画</button>
+                  <button id="text3d-reset-camera-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n-title="layout.text3dResetCameraTitle" title="カメラの位置をテキストが見える位置にリセットします">RC</button>
+                  <button id="text3d-cancel-btn" class="btn small danger" style="white-space:nowrap; display:none;" data-i18n="common.cancel" data-i18n-title="layout.text3dCancelTitle" title="3D ビューをキャンセルします">キャンセル</button>
+                  <button id="text3d-reedit-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.text3dReedit" data-i18n-title="layout.text3dReeditTitle" title="選択中の3Dテキスト画像を再編集します" disabled>再編集</button>
+                  <span id="text3d-status" style="font-size:11px; color:var(--text-secondary);"></span>
+                </div>
+              </div>
+
               <!-- マンガサブタブ（マンガ関連ツールのメニュー。各ボタンはモーダルを開く。今後ここにツールを追加していく） -->
               <div id="subtab-manga" class="subtab-content" style="display:none; flex:1; padding:0; margin:0;">
                 <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
@@ -749,6 +783,7 @@
                 <button class="ie-tool-btn active" data-tool="select" title="Select (V)">▲</button>
                 <button class="ie-tool-btn"        data-tool="draw"   title="Draw (B)">✏</button>
                 <button class="ie-tool-btn"        data-tool="text"   title="Text (T)">T</button>
+                <button class="ie-tool-btn"        data-tool="text3d" title="3D Text">◪</button>
                 <button class="ie-tool-btn"        data-tool="shape"  title="Shape (S)">□</button>
                 <button class="ie-tool-btn"        data-tool="fill"   title="Fill (G)">🪣</button>
                 <button class="ie-tool-btn"        data-tool="mask"   title="Mask">🎭</button>
@@ -1872,6 +1907,7 @@
     <script type="module" src="/ccc_static/js/pixifx.js"></script>
     <script type="module" src="/ccc_static/js/text-style-modal.js"></script>
     <script type="module" src="/ccc_static/js/pose3d.js"></script>
+    <script type="module" src="/ccc_static/js/text3d.js"></script>
     <script type="module" src="/ccc_static/js/image-tab.js"></script>
     <!-- main.js 分割ファイル群（旧 main.js を責務ごとに34分割。00-db/02〜09f/10〜13aはESM化済み、それ以外は非moduleでグローバルスコープ共有のため読み込み順が重要） -->
     <script type="module" src="/ccc_static/js/main/00-db.js"></script>
@@ -1914,5 +1950,6 @@
     <script type="module" src="/ccc_static/js/main/22-help-tab.js"></script>
     <script type="module" src="/ccc_static/js/main/23-pose3d-bridge.js"></script>
     <script type="module" src="/ccc_static/js/main/24-sub-panels.js"></script>
+    <script type="module" src="/ccc_static/js/main/25-text3d-bridge.js"></script>
   </body>
 </html>

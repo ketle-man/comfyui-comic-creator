@@ -34,6 +34,7 @@ import { initFontMgrTab } from './20-font-presets.js';
 import { _scriptRenderAssetPanelLists, _scriptInitAssetPanelSectionToggle, initProjectTab } from './21-script-tab.js';
 import { initHelpTab } from './22-help-tab.js';
 import { initPose3DTab, hidePose3DCanvas } from './23-pose3d-bridge.js';
+import { initText3DTab, hideText3DCanvas } from './25-text3d-bridge.js';
 import { initSubPanelTool } from './24-sub-panels.js';
 import { initNanobananaTab } from '../nanobanana.js';
 import { initImageTab } from '../image-tab.js';
@@ -92,6 +93,23 @@ const state = {
         modelIsDefault: true,   // デフォルトモデルかどうか
         ccOn: false,            // カラー補正の現在値
         resizeObserver: null,   // SVGリサイズ監視
+    },
+    text3d: {
+        editor: null,           // initText3DEditor() の戻り値
+        activePanelId: null,    // 現在オーバーレイ表示中のpanelId（nullなら非表示）
+        wrapper: null,          // DIVラッパー要素
+        canvas: null,           // Three.js メインcanvas（3Dポーズと異なりギズモcanvasは持たない）
+        fontSource: 'google',   // 'google' | 'system'
+        fontFamily: 'BIZ UDPGothic',
+        resizeObserver: null,   // SVGリサイズ監視
+        reeditImageEl: null,    // 再編集対象の既存<image>要素（nullなら新規配置モード）
+        // マテリアル設定（⚙設定モーダルへツールバーから移動したため、UI要素ではなくここで保持する。
+        // 既定値はtext3d-core.jsのparams初期値と一致させる）
+        materialParams: {
+            color: '#ffffff', materialType: 'standard',
+            metalness: 0.1, roughness: 0.6,
+            shadeColor: '#999999', toony: 0.9,
+        },
     }
 };
 
@@ -163,6 +181,7 @@ function initTabs() {
 
     initSubtabs();
     initPose3DTab();
+    initText3DTab();
     initAssetPanelTabs();
     // ページタブ（旧・出力タブ）は初期表示タブのため、サブタブも起動時に初期化する
     _initOutputSubtabs();
@@ -247,6 +266,10 @@ function initSubtabs() {
             if (subtab !== 'pose3d' && state.pose3d.activePanelId !== null) {
                 hidePose3DCanvas();
             }
+            // 3Dテキスト以外のサブタブに切り替えた場合はビューを隠す
+            if (subtab !== 'text3d' && state.text3d.activePanelId !== null) {
+                hideText3DCanvas();
+            }
 
             if (subtab !== 'text') {
                 // フキダシサブタブに切り替え: テキストモードをOFF
@@ -279,6 +302,9 @@ async function switchTab(tabId) {
     // していないため、ここで明示的に止めないと他タブ作業中もGPU描画が回り続ける。
     if (tabId !== 'layout' && state.pose3d.activePanelId !== null) {
         hidePose3DCanvas();
+    }
+    if (tabId !== 'layout' && state.text3d.activePanelId !== null) {
+        hideText3DCanvas();
     }
 
     document.querySelectorAll('.tab-btn').forEach(btn => {

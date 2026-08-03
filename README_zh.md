@@ -25,6 +25,7 @@
 - **形状绘制（绘制）** — 直接在SVG图层上绘制矩形、椭圆、直线、曲线、多边形、矢量曲线、锁链、绳索、My Curve。多边形：点击添加顶点，点击起点附近闭合；矢量曲线：点击添加节点，以平滑曲线（样条）连接，点击起点附近闭合为填充形状，或按Enter键确定为开放曲线。填充（矩形・椭圆・多边形・矢量曲线等）除纯色外还支持渐变、纹理（可指定X/Y位置偏移，会随形状的移动/缩放一起跟随）和无填充。图形转换为PNG时这些填充也会一并保留
 - **绘画工具** — 与矢量图形绘制完全独立的光栅画笔功能。点击"添加绘画"会按所选分格/覆盖层/草稿层的尺寸创建图像，自动选中并开启绘制ON，可立即用画笔绘制（开启左侧的"背景色"复选框可改为创建指定颜色填充的不透明图像，避免发送到I2I时背景变黑）。画笔不仅可用于新添加的绘画对象，也可直接在当前选中的任意普通图像上绘制。支持画笔颜色、不透明度、大小（滑块），以及x5（5倍画笔大小）和橡皮擦的ON/OFF切换按钮（通过颜色明确显示状态）。绘画对象在图层面板中以🖌图标和"绘画"名称显示，与普通图像区分开。"统合选中图像"按钮可将图层面板中勾选的2个以上图像/绘画对象合成为一张PNG（保留叠放顺序和旋转），便于将多个图层合并后发送到I2I。可用于Image标签中绘制・编辑的草图，或制作I2I参考图像
 - **3D姿势** — 在分格内放置 VRM/GLB/GLTF 模型并摆姿势后烘焙到图像中，支持可拖动的视线目标追踪与摇动骨骼（头发/裙子）物理效果（通过 [comfyui-vrm-pose-editor](#可选依赖) 联动）
+- **3D文字** — 使用Three.js将包含日文在内的文字立体挤出后烘焙到图像中，支持TrueType Collection（.ttc，游黑体・Meiryo等Windows标准CJK字体常见格式）。材质可从标准（金属度・粗糙度）或卡通（兼容MToon的着色）中选择。**⚙ 设置**弹窗汇集了材质、灯光（环境光／主光源／补光的颜色・强度・位置）、相机（缩放操作模式・增强抗锯齿）设置，并将实际渲染中的预览直接嵌入弹窗内即时确认。缩放操作模式与增强抗锯齿与3D姿势的灯光编辑器共用设置（通过 [comfyui-vrm-pose-editor](#可选依赖) 联动）
 - **分组功能与图层面板** — 对象分组、层叠顺序管理、显示切换、锁定，以及**通过 Delete / Backspace 键删除**
 - **草稿图层** — 位于覆盖层更前面、覆盖整个页面的草稿专用图层（仅支持图像）。只有在选中（编辑模式）时才能在预览中点击・拖动操作，其他时候点击会直接穿透到下方的覆盖层／分格／对象。不会包含在任何输出格式（JPEG/PNG/WebP/PDF/EPUB）中。Image标签的"草稿"按钮可创建与当前作品相同宽高比、72dpi换算尺寸的画布，通过"发送到排版"会自动以整页尺寸插入到该图层
 - **I2I联动** — "I2I"按钮会打开一个弹窗，可切换对象为选中图像或当前整页，设置Positive/Negative提示词和Denoise后就地执行Workflow Studio生成（结果作为新图像插入：选中图像对象插入到选中的分格/覆盖层/草稿图层，整页对象则始终以整页尺寸插入到覆盖层）。自动加载的默认工作流可在弹窗内以及 Image 标签 Select 工具的 I2I 面板中配置（共用设置，通过 [ComfyUI-Workflow-Studio](#可选依赖) 联动）
@@ -32,7 +33,7 @@
 - **漫画工具** — 「半调网点」（"转换图像"模式将选中图像转换为网点，"创建图案"模式仅生成分格/浮层尺寸的网点图案）、「漫画效果」（生成暗角、网点噪点、集中线（放射状／海胆闪／海胆（环）／线性 4 种）并作为分格尺寸的透明对象插入）、「背景图案」（生成条纹、圆点、格纹、日式传统纹样（麻叶纹／市松纹／七宝纹／鳞纹）或自定义SVG，作为分格尺寸的透明对象；可指定颜色、不透明度、尺寸、旋转角度，自定义SVG还可分别指定宽・高）三个弹窗。三者均可在选中图像／默认／白色之间切换预览背景，边确认效果边调整
 
 ### Image标签（基于图层的Canvas 2D编辑器）
-- **Select / Text / Draw / Shape / Fill / Mask / Blur / Filter / BG Remove / Upscale** 各工具
+- **Select / Text / 3D Text / Draw / Shape / Fill / Mask / Blur / Filter / BG Remove / Upscale** 各工具（3D Text 与排版标签共用同一引擎和设置弹窗，通过 [comfyui-vrm-pose-editor](#可选依赖) 联动）
 - **Select工具的裁剪** — 通过可拖动的裁剪范围浮层（8个手柄）或直接输入X/Y/宽/高数值指定裁剪范围后执行。会调整整个画布尺寸，并保持各图层内容不变、仅平移位置（可撤销）
 - **Select I2I** — 选中Select工具时会始终显示I2I面板，设置Positive/Negative提示词和Denoise后点击Run即可就地执行Workflow Studio联动的I2I生成。可切换目标为"All"（合成所有图层）或"Layer"（仅选中图层），结果会作为继承原图层位置・尺寸・旋转的新图层添加（通过 [ComfyUI-Workflow-Studio](#可选依赖) 联动）
 - **创建草稿画布** — "草稿"按钮（New 右侧）无需输入尺寸对话框，直接创建与当前作品相同宽高比、72dpi换算尺寸的画布（用于粗略草图）。"发送到排版"会以整页尺寸插入到排版标签的草稿图层
@@ -123,7 +124,7 @@ NANOBANANA_API_KEY=你的API密钥
 
 | 联动节点 | 启用的功能 |
 |---|---|
-| **comfyui-vrm-pose-editor** | 排版标签的 3D姿势 子标签 |
+| **comfyui-vrm-pose-editor** | 排版标签・Image标签的 3D姿势／3D文字 |
 | **ComfyUI-Workflow-Studio** | I2I联动、Image标签的Inpaint、workflow studio标签的嵌入式图库 |
 | **comfyUI-particle-pixijs** | 排版标签"图像"子标签及Image标签的 PixiJS FX（粒子・滤镜效果弹窗） |
 
@@ -210,7 +211,7 @@ MIT License — 详见 [LICENSE](LICENSE)。
 
 ## 致谢
 
-- **[comfyui-vrm-pose-editor](https://github.com/ketle-man/comfyui-vrm-pose-editor)** — 提供3D姿势编辑功能的配套节点
+- **[comfyui-vrm-pose-editor](https://github.com/ketle-man/comfyui-vrm-pose-editor)** — 提供3D姿势编辑功能，以及3D文字功能所使用的Three.js相关资源（渲染器・MToon材质等）的配套节点
 - **[ComfyUI-Workflow-Studio](https://github.com/ketle-man/ComfyUI-Workflow-Studio)** — 提供I2I联动和嵌入式图库功能的配套节点
 - **[comfyUI-particle-pixijs](https://github.com/ketle-man/comfyUI-particle-pixijs)** — 提供PixiJS FX（粒子・滤镜效果）功能的配套节点
 - **[comfyui-mask-editor-one](https://github.com/ketle-man/comfyui-mask-editor-one)** — 实现Image标签Mask工具及图层机制时参考的节点

@@ -1084,6 +1084,8 @@ function initImageManipulation(svgEl, balloonSvgEl) {
         renderImageHandles(el, svgEl);
         syncPanelSelectionToObject(el);
         renderLayerPanel();
+        const reeditBtn = document.getElementById('text3d-reedit-btn');
+        if (reeditBtn) reeditBtn.disabled = !el.dataset.text3dParams;
     };
 
     svgEl.addEventListener('click', (e) => {
@@ -1094,6 +1096,8 @@ function initImageManipulation(svgEl, balloonSvgEl) {
             state.selectedImageId = null;
             state.selectedImageEl = null;
             state.selectedShapeId = null;
+            const reeditBtn = document.getElementById('text3d-reedit-btn');
+            if (reeditBtn) reeditBtn.disabled = true;
         }
     });
 

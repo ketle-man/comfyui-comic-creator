@@ -16,6 +16,7 @@ from server import PromptServer
 
 from pathlib import Path as _Path
 from urllib.parse import urlparse as _urlparse
+from urllib.parse import quote as _urlquote
 
 from .config import (
     PLUGIN_DIR,
@@ -461,6 +462,50 @@ async def handle_nanobanana_list_models(request):
     except Exception as e:
         return _error_response(e, status=500)
 
+async def handle_google_font_ttf(request):
+    """Google Fonts の指定ファミリーのフォントバイナリを取得してそのまま返す。
+    Google Fonts CSS2 API はリクエストの User-Agent によって返す形式を切り替えており、
+    ブラウザ標準UAには woff2、非ブラウザ的なUA（本サーバーのように明示しない/独自UA）には
+    ttf を返す。ブラウザの fetch() は User-Agent を偽装できないため、3Dテキスト機能で
+    opentype.js が直接パースできる ttf を得るにはサーバー側で取得する必要がある。"""
+    family = request.query.get('family', '').strip()
+    if not family:
+        return _error_response(CCCError('font_family_required', 'family パラメータが必要です'), status=400)
+    weight = request.query.get('weight', '400')
+    italic = request.query.get('italic', '0') == '1'
+
+    try:
+        loop = asyncio.get_event_loop()
+        def _fetch():
+            family_param = _urlquote(family)
+            spec = f"{family_param}:ital,wght@{1 if italic else 0},{weight}"
+            css_url = f"https://fonts.googleapis.com/css2?family={spec}&display=swap"
+            req = urllib.request.Request(css_url, headers={'User-Agent': 'ComicCreator-FontFetch/1.0'})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                css_text = resp.read().decode('utf-8')
+            m = re.search(r'url\((https://fonts\.gstatic\.com/[^)]+)\)', css_text)
+            if not m:
+                raise CCCError('font_not_found', f'フォントが見つかりません: {family}', family=family)
+            font_url = m.group(1)
+            req2 = urllib.request.Request(font_url, headers={'User-Agent': 'ComicCreator-FontFetch/1.0'})
+            with urllib.request.urlopen(req2, timeout=15) as resp2:
+                return resp2.read(), font_url
+
+        font_bytes, font_url = await loop.run_in_executor(None, _fetch)
+        if font_url.endswith('.woff2'):
+            content_type = 'font/woff2'
+        elif font_url.endswith('.ttf'):
+            content_type = 'font/ttf'
+        else:
+            content_type = 'application/octet-stream'
+        return web.Response(body=font_bytes, content_type=content_type)
+    except CCCError as e:
+        return _error_response(e, status=404)
+    except urllib.error.HTTPError as e:
+        return _error_response(Exception(f'Google Fonts取得エラー ({e.code})'), status=502)
+    except Exception as e:
+        return _error_response(e, status=500)
+
 async def handle_eagle_add(request):
     try:
         data = await request.json()
@@ -725,6 +770,7 @@ class ComicCreator:
         app.router.add_get("/api/ccc/refresh-assets",         handle_refresh_assets)
         app.router.add_get("/api/ccc/nanobanana/key",         handle_nanobanana_key)
         app.router.add_get("/api/ccc/nanobanana/models",      handle_nanobanana_list_models)
+        app.router.add_get("/api/ccc/google-font-ttf",        handle_google_font_ttf)
         app.router.add_get("/api/ccc/app-server/settings",    handle_get_app_server_settings)
         app.router.add_get("/api/ccc/local-gmic/settings",    handle_get_local_gmic_settings)
         app.router.add_get("/api/ccc/local-gmic/status/{job_id}", handle_local_gmic_status)

@@ -26,6 +26,7 @@ export class Layer {
         this.flipX     = false;
         this.flipY     = false;
         this.textProps  = null;        // テキストレイヤー用プロパティ（再編集・再描画に使用）
+        this.text3dProps = null;       // 3Dテキストレイヤー用プロパティ（type==="image"のレイヤーに付与、再編集に使用）
         this.locked     = false;       // ロック中は SelectTool の変形を禁止
         this.maskApply  = false;       // マスクレイヤー: true=クリッピングマスクとして機能
         this.operation  = "add";       // マスクレイヤー合成モード: "add" | "subtract"
@@ -80,6 +81,7 @@ export class Layer {
             x: this.x, y: this.y, displayW: this.displayW, displayH: this.displayH,
             rotation: this.rotation, flipX: this.flipX, flipY: this.flipY,
             textProps:  this.textProps  ?? null,
+            text3dProps: this.text3dProps ?? null,
             locked:     this.locked     ?? false,
             maskApply:  this.maskApply  ?? false,
             operation:  this.operation  ?? "add",
@@ -105,6 +107,7 @@ export class Layer {
         layer.flipX     = json.flipX     ?? false;
         layer.flipY     = json.flipY     ?? false;
         layer.textProps  = json.textProps  ?? null;
+        layer.text3dProps = json.text3dProps ?? null;
         layer.locked     = json.locked     ?? false;
         layer.maskApply  = json.maskApply  ?? false;
         layer.operation  = json.operation  ?? "add";

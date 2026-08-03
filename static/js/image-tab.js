@@ -11,6 +11,7 @@
 import { LayerManager, Layer } from "./image-tab/LayerManager.js";
 import { DrawTool }            from "./image-tab/DrawTool.js";
 import { TextTool, layoutVerticalText, drawVerticalCells } from "./image-tab/TextTool.js";
+import { Text3DTool }          from "./image-tab/Text3DTool.js";
 import { SelectTool }          from "./image-tab/SelectTool.js";
 import { ShapeTool }           from "./image-tab/ShapeTool.js";
 import { FillTool }            from "./image-tab/FillTool.js";
@@ -31,6 +32,7 @@ const TOOL_DEFS = [
     { id: "select",   icon: "▲",  label: "Select",    ready: true },
     { id: "draw",     icon: "✏",  label: "Draw",      ready: true },
     { id: "text",     icon: "T",   label: "Text",      ready: true },
+    { id: "text3d",   icon: "◪",  label: "3D Text",   ready: true },
     { id: "shape",    icon: "□",   label: "Shape",     ready: true },
     { id: "fill",     icon: "🪣",  label: "Fill",      ready: true },
     { id: "mask",     icon: "🎭",  label: "Mask",      ready: true },
@@ -384,6 +386,7 @@ class ImageTab {
         this._spaceDown     = false;
         this._compositeMode    = false;
         this._editingTextLayer = null;
+        this._editing3DTextLayer = null;
         this._initialized      = false;
         this._shapeTool        = new ShapeTool();
         this._shapeSameLayer   = true; // true: 描画済みのシェイプレイヤーに追記し続ける（デフォルト） / false: 描画のたびに新規レイヤー
@@ -540,6 +543,24 @@ class ImageTab {
         if (!sel) return; // 取得中にツールが切り替わっていた場合
         const selLayer = this.hasSelectedTextLayer() ? this._selectTool.getSelectedLayer() : null;
         const current = selLayer ? selLayer.textProps.fontFamily : this._textTool.fontFamily;
+        if (families.length === 0) {
+            sel.innerHTML = `<option value="${current}">${t("image.fontListEmpty", current)}</option>`;
+            return;
+        }
+        const list = families.includes(current) ? families : [current, ...families];
+        sel.innerHTML = list.map(f => `<option value="${f}" ${f === current ? "selected" : ""}>${f}</option>`).join("");
+    }
+
+    /** #ie-text3d-font の options を _text3dTool.fontSource（Google/System）で再構築する */
+    async _populateText3DFontSelect() {
+        const t3 = this._text3dTool;
+        if (!t3) return;
+        const families = t3.fontSource === "system"
+            ? await this._getSystemFontFamiliesCached()
+            : _fontMgrGoogleList();
+        const sel = document.getElementById("ie-text3d-font");
+        if (!sel) return; // 取得中にツールが切り替わっていた場合
+        const current = t3.fontFamily;
         if (families.length === 0) {
             sel.innerHTML = `<option value="${current}">${t("image.fontListEmpty", current)}</option>`;
             return;
@@ -711,6 +732,7 @@ class ImageTab {
         if (this._eyedropperActive) this._setEyedropperActive(false);
         if (this._activeTool === "draw")   this._drawTool?.deactivate();
         if (this._activeTool === "text")   this._textTool?.deactivate();
+        if (this._activeTool === "text3d") this._text3dTool?.deactivate();
         if (this._activeTool === "select") {
             this._selectTool?.deactivate();
             if (this._cropMode) this._exitCropMode();
@@ -768,6 +790,9 @@ class ImageTab {
             } else {
                 this._selectTool?.clearSelection();
             }
+        } else if (this._activeTool === "text3d" && this._text3dTool) {
+            this._text3dTool.setCanvas(drawCanvas);
+            this._text3dTool.activate();
         } else if (this._activeTool === "select" && this._selectTool) {
             this._selectTool.setCanvas(overlayCanvas);
             this._selectTool.activate();
@@ -808,6 +833,7 @@ class ImageTab {
                 </div>
                 <div class="ie-opt-group" style="margin-left:8px;">
                     <button class="it-btn it-btn-sm" id="ie-select-style-btn" title="${t("image.selectStyleBtnTitle")}">${t("layout.styleBtn")}</button>
+                    ${this.hasSelected3DTextLayer() ? `<button class="it-btn it-btn-sm" id="ie-select-text3d-edit-btn" title="${t("image.text3dEditLayerBtnTitle")}">${t("image.text3dEditLayerBtn")}</button>` : ""}
                 </div>
                 <div style="width:1px;height:22px;background:var(--it-border);margin:0 6px;flex-shrink:0;"></div>
                 <div class="ie-opt-group">
@@ -865,6 +891,15 @@ class ImageTab {
                     initialStyle: info.style,
                     onApply: (style) => { this.applyFontStyleToSelection(style); },
                 });
+            });
+            document.getElementById("ie-select-text3d-edit-btn")?.addEventListener("click", () => {
+                const layer = this._selectTool.getSelectedLayer();
+                if (!layer || !layer.text3dProps) return;
+                this._editing3DTextLayer = layer;
+                this._setActiveTool("text3d");
+                const cx = Math.round(layer.x + layer.displayW / 2);
+                const cy = Math.round(layer.y + layer.displayH / 2);
+                this._text3dTool.open(cx, cy, layer.text3dProps);
             });
             document.getElementById("ie-flip-h-btn")?.addEventListener("click", () => {
                 this._selectTool.flipH();
@@ -982,6 +1017,70 @@ class ImageTab {
                     },
                 });
             });
+        } else if (toolId === "text3d" && this._text3dTool) {
+            const t3 = this._text3dTool;
+            el.innerHTML = `
+                <div class="ie-opt-group">
+                    <textarea id="ie-text3d-input" rows="1" style="width:120px;font-size:12px;resize:vertical;" placeholder="${t("layout.text3dTextPlaceholder")}">${t3.text}</textarea>
+                </div>
+                <div class="ie-opt-group" style="gap:2px;">
+                    <button class="it-btn it-btn-sm ${t3.fontSource === "google" ? "ie-opt-active" : ""}" id="ie-text3d-fsrc-google">${t("layout.text3dFontSourceGoogle")}</button>
+                    <button class="it-btn it-btn-sm ${t3.fontSource === "system" ? "ie-opt-active" : ""}" id="ie-text3d-fsrc-system">${t("layout.text3dFontSourceSystem")}</button>
+                    <select id="ie-text3d-font" class="ie-opt-select" style="min-width:100px;">
+                        <option value="${t3.fontFamily}">${t3.fontFamily}</option>
+                    </select>
+                </div>
+                <div class="ie-opt-group">
+                    <label style="font-size:11px;">${t("layout.text3dDepthLabel")}</label>
+                    <input type="range" id="ie-text3d-depth" min="0.02" max="1.0" step="0.01" value="${t3.depth}" style="width:60px;">
+                </div>
+                <div class="ie-opt-group" style="gap:4px;">
+                    <input type="checkbox" id="ie-text3d-bevel" ${t3.bevelEnabled ? "checked" : ""}>
+                    <label for="ie-text3d-bevel">${t("layout.text3dBevelLabel")}</label>
+                </div>
+                <div class="ie-opt-group" style="gap:2px;">
+                    <button class="it-btn it-btn-sm ${t3.align === "left" ? "ie-opt-active" : ""}" id="ie-text3d-align-left">${t("layout.text3dAlignLeft")}</button>
+                    <button class="it-btn it-btn-sm ${t3.align === "center" ? "ie-opt-active" : ""}" id="ie-text3d-align-center">${t("layout.text3dAlignCenter")}</button>
+                    <button class="it-btn it-btn-sm ${t3.align === "right" ? "ie-opt-active" : ""}" id="ie-text3d-align-right">${t("layout.text3dAlignRight")}</button>
+                </div>
+                <div class="ie-opt-group">
+                    <button class="it-btn it-btn-sm" id="ie-text3d-reset-camera-btn" title="${t("layout.text3dResetCameraTitle")}">RC</button>
+                    <button class="it-btn it-btn-sm" id="ie-text3d-settings-btn" title="${t("layout.text3dSettingsBtnTitle")}">${t("layout.text3dSettingsBtn")}</button>
+                </div>
+                <div class="ie-opt-group">
+                    <button class="it-btn it-btn-sm it-btn-primary" id="ie-text3d-commit-btn">${t("image.text3dCommit")}</button>
+                    <button class="it-btn it-btn-sm" id="ie-text3d-cancel-btn">${t("image.text3dCancel")}</button>
+                </div>
+            `;
+            document.getElementById("ie-text3d-input")?.addEventListener("input", e => t3.setText(e.target.value));
+            ["google", "system"].forEach(src => {
+                document.getElementById(`ie-text3d-fsrc-${src}`)?.addEventListener("click", async () => {
+                    if (t3.fontSource === src) return;
+                    t3.fontSource = src;
+                    await this._populateText3DFontSelect();
+                    this._renderToolOptions("text3d");
+                });
+            });
+            document.getElementById("ie-text3d-font")?.addEventListener("change", async e => {
+                try { await t3.setFont(e.target.value, t3.fontSource); } catch { /* エラーはreloadFont内でconsole出力済み */ }
+            });
+            this._populateText3DFontSelect();
+            document.getElementById("ie-text3d-depth")?.addEventListener("input", e => t3.setDepth(parseFloat(e.target.value)));
+            document.getElementById("ie-text3d-bevel")?.addEventListener("change", e => t3.setBevel(e.target.checked));
+            ["left", "center", "right"].forEach(al => {
+                document.getElementById(`ie-text3d-align-${al}`)?.addEventListener("click", () => {
+                    t3.setAlign(al);
+                    this._renderToolOptions("text3d");
+                });
+            });
+            document.getElementById("ie-text3d-reset-camera-btn")?.addEventListener("click", () => t3.resetCamera());
+            document.getElementById("ie-text3d-settings-btn")?.addEventListener("click", () => t3.openSettingsModal());
+            document.getElementById("ie-text3d-commit-btn")?.addEventListener("click", () => {
+                if (!t3.isOpen) { this._toast(t("image.text3dClickCanvasFirst"), "info"); return; }
+                t3.commit();
+            });
+            document.getElementById("ie-text3d-cancel-btn")?.addEventListener("click", () => t3.cancel());
+
         } else if (toolId === "shape" && this._shapeTool) {
             const t = this._shapeTool;
             const noFillKinds   = ["line", "freeline", "chain", "rope", "original"];
@@ -1464,7 +1563,14 @@ class ImageTab {
 
         } else {
             const def = TOOL_DEFS.find(d => d.id === toolId);
-            el.innerHTML = `<span style="font-size:12px;color:var(--it-text-secondary);">${def?.label ?? toolId}: coming soon</span>`;
+            const label = def?.label ?? toolId;
+            // ready:trueなツールでもこの分岐に来るのは、対応するツールインスタンス
+            // （this._drawTool等）が_initCanvases()未実行でまだ存在しないケース。
+            // 「coming soon」は未実装機能という誤解を招くため、キャンバス未作成時は
+            // 案内メッセージに差し替える（実装済み機能なのに「coming soon」のまま
+            // 見え続けるという報告への対応）。
+            const message = this._layerMgr ? `${label}: coming soon` : t("image.toolNeedsCanvas", label);
+            el.innerHTML = `<span style="font-size:12px;color:var(--it-text-secondary);">${message}</span>`;
         }
     }
 
@@ -2837,6 +2943,9 @@ class ImageTab {
             if (!this._textTool._overlay && this._findTextLayerAt(pos.x, pos.y)) return;
             this._textTool.onMouseDown(pos.x, pos.y);
 
+        } else if (this._activeTool === "text3d" && this._text3dTool) {
+            if (!this._text3dTool.isOpen) this._text3dTool.open(pos.x, pos.y);
+
         } else if (this._activeTool === "select" && this._selectTool) {
             if (this._cropMode) { this._onCropMouseDown(pos); return; }
             const result = this._selectTool.onMouseDown(pos.x, pos.y, this._layerMgr);
@@ -3379,6 +3488,45 @@ class ImageTab {
             ShapeTool.drawShape(layer.ctx, shapeObj);
             this._updateCompositeView();
             this._refreshLayerList();
+        });
+
+        this._text3dTool = new Text3DTool(drawCanvas);
+        this._text3dTool.onCommit(({ dataUrl, contentW, contentH, displayW, displayH, x, y, props }) => {
+            const label = (props.text.slice(0, 20).replace(/\n/g, " ").trim()) || "3D Text";
+            const img = new Image();
+            img.onload = () => {
+                if (this._editing3DTextLayer) {
+                    const layer = this._editing3DTextLayer;
+                    this._editing3DTextLayer = null;
+                    this._saveUndo();
+                    layer.canvas.width  = contentW;
+                    layer.canvas.height = contentH;
+                    layer.ctx = layer.canvas.getContext("2d");
+                    layer.ctx.drawImage(img, 0, 0);
+                    layer.x = x; layer.y = y;
+                    layer.displayW = displayW; layer.displayH = displayH;
+                    layer.name = label;
+                    layer.text3dProps = props;
+                    this._selectTool?.setLayer(layer);
+                } else {
+                    this._saveUndo();
+                    const layer = this._layerMgr.addLayer("image", label, {
+                        contentW, contentH, displayW, displayH, x, y,
+                    });
+                    layer.ctx.drawImage(img, 0, 0);
+                    layer.text3dProps = props;
+                    this._layerMgr.setActive(layer.id);
+                    this._selectTool?.setLayer(layer);
+                }
+                this._setActiveTool("select");
+                this._updateCompositeView();
+                this._refreshLayerList();
+            };
+            img.src = dataUrl;
+        });
+        this._text3dTool.onCancel(() => {
+            this._editing3DTextLayer = null;
+            this._setActiveTool("select");
         });
 
         this._fillTool = new FillTool();
@@ -4753,6 +4901,12 @@ class ImageTab {
     hasSelectedTextLayer() {
         const layer = this._selectTool?.getSelectedLayer();
         return !!(layer && layer.type === "text" && layer.textProps);
+    }
+
+    /** 選択中レイヤーが（text3dPropsを持つ）3Dテキストレイヤーかどうか */
+    hasSelected3DTextLayer() {
+        const layer = this._selectTool?.getSelectedLayer();
+        return !!(layer && layer.type === "image" && layer.text3dProps);
     }
 
     /** テキストツールのオプションバー（Color/Size/Font/Bold/Italic/Align/縦書き）の変更を、選択中のテキストレイヤーがあればそこにも反映する */
