@@ -338,7 +338,7 @@ function initScriptMangaEditor() {
 }
 
 export {
-    _scriptManga,
+    _scriptManga, _scriptMangaData,
     _scriptMangaBlankPage, _scriptMangaBlankData, _scriptMangaNormalize,
     _scriptMangaGetSelectedDialogue, _scriptMangaResetView,
     _scriptMangaRenderPage, _scriptMangaRenderPreviewH, _scriptMangaRenderPreviewV,

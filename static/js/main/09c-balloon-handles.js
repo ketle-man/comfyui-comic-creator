@@ -3,7 +3,7 @@
 // 元 09-balloons.js（分割前）の行 1295-1871 に相当
 // type="module" として読み込まれる（ESモジュール化 G4）。09a〜09fは相互に密結合しており
 // 循環importが多数発生するが、循環先シンボルの参照はすべて関数内部に閉じているため安全。
-// 主なトップレベル定義: _balloonGetRotateHandlePos,_balloonGetRotatedHandlePositions,_h2CalcCurveHandlePos,_syncH2UI,_updateH2HandlePositions,addExtensionBalloon,applyImageTransform,calcHandleR,clearHandles,convertShapeToImage,createHandle,flipSelected,flipSelectedImage,flipSelectedShape,insertSmartBalloonTemplate,renderHandles
+// 主なトップレベル定義: _balloonGetRotateHandlePos,_balloonGetRotatedHandlePositions,_buildBalloonShapeEl,_h2CalcCurveHandlePos,_syncH2UI,_updateH2HandlePositions,addExtensionBalloon,applyImageTransform,calcHandleR,clearHandles,convertShapeToImage,createBalloonAtPosition,createHandle,flipSelected,flipSelectedImage,flipSelectedShape,insertSmartBalloonTemplate,renderHandles
 // 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
 // 呼び出し箇所は書き換えていない）:
 //   state（01-state.js）, _svgTextToDataUrl（18-svg-color-png.js）
@@ -230,57 +230,21 @@ function flipSelectedShape(axis) {
     saveShapeSvg(el.ownerSVGElement);
 }
 
-async function insertSmartBalloonTemplate(type) {
-    if (!state.activePage) { console.error('[balloon] activePage is null'); return; }
-
-    const container = getActiveContainer();
-    if (!container) { console.error('[balloon] container not found'); return; }
-
-    const overlaySvgEl = getPanelLayerSvg(container);
-    if (!overlaySvgEl) {
-        console.error('[balloon] panel-layer SVG not found');
-        return;
-    }
-
-    const isTextTab = document.querySelector('.tab-btn.active')?.dataset.tab === 'text';
-
-    pushHistory();
-
-    const viewBox = overlaySvgEl.viewBox.baseVal;
-    const cx = viewBox.width / 2;
-    const cy = viewBox.height / 2;
-    
-    let startX = cx, startY = cy;
-    let initRx = viewBox.width * 0.15;
-    let initRy = viewBox.height * 0.12;
-    let tailDist = Math.max(initRx, initRy) * 1.5;
-
-    if (state.selectedPanelId) {
-        const panel = state.activePage.panels.find(p => p.id === state.selectedPanelId);
-        if (panel) {
-            const bbox = getBoundingBoxFromPoints(panel.points);
-            startX = bbox.x + bbox.width / 2;
-            startY = bbox.y + bbox.height / 2;
-            initRx = bbox.width * 0.40;
-            initRy = bbox.height * 0.35;
-            tailDist = Math.max(initRx, initRy) * 1.5;
-        }
-    }
-
-    const parent = getOrCreateClipGroup(overlaySvgEl);
-    const id = 'shape-' + Date.now();
-
+// フキダシ<g>要素を生成しdatasetを設定するだけの純粋なヘルパー（DOMには追加しない）。
+// insertSmartBalloonTemplate（手動挿入）とcreateBalloonAtPosition（半自動マンガ作成での
+// プログラム的挿入）で共有する。
+function _buildBalloonShapeEl(type, cx, cy, rx, ry) {
     const ns = 'http://www.w3.org/2000/svg';
     const shape = document.createElementNS(ns, 'g');
-    shape.id = id;
+    shape.id = 'shape-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
     shape.setAttribute('class', 'balloon-shape');
     shape.dataset.shapeType = type;
-    shape.dataset.cx = startX;
-    shape.dataset.cy = startY;
-    shape.dataset.rx = initRx;
-    shape.dataset.ry = initRy;
+    shape.dataset.cx = cx;
+    shape.dataset.cy = cy;
+    shape.dataset.rx = rx;
+    shape.dataset.ry = ry;
     shape.dataset.tailAngleDeg     = 45;
-    shape.dataset.tailLength       = Math.max(initRx, initRy) * 0.8;
+    shape.dataset.tailLength       = Math.max(rx, ry) * 0.8;
     shape.dataset.tailWidth        = 13;
     shape.dataset.tailCurve        = 0;
     shape.dataset.fillColor        = state.balloon.color;
@@ -304,11 +268,47 @@ async function insertSmartBalloonTemplate(type) {
         shape.dataset.shapeVariation = 0;
     }
     shape.style.pointerEvents = 'auto';
+    return shape;
+}
 
+async function insertSmartBalloonTemplate(type) {
+    if (!state.activePage) { console.error('[balloon] activePage is null'); return; }
+
+    const container = getActiveContainer();
+    if (!container) { console.error('[balloon] container not found'); return; }
+
+    const overlaySvgEl = getPanelLayerSvg(container);
+    if (!overlaySvgEl) {
+        console.error('[balloon] panel-layer SVG not found');
+        return;
+    }
+
+    const isTextTab = document.querySelector('.tab-btn.active')?.dataset.tab === 'text';
+
+    pushHistory();
+
+    const viewBox = overlaySvgEl.viewBox.baseVal;
+    let startX = viewBox.width / 2, startY = viewBox.height / 2;
+    let initRx = viewBox.width * 0.15;
+    let initRy = viewBox.height * 0.12;
+
+    if (state.selectedPanelId) {
+        const panel = state.activePage.panels.find(p => p.id === state.selectedPanelId);
+        if (panel) {
+            const bbox = getBoundingBoxFromPoints(panel.points);
+            startX = bbox.x + bbox.width / 2;
+            startY = bbox.y + bbox.height / 2;
+            initRx = bbox.width * 0.40;
+            initRy = bbox.height * 0.35;
+        }
+    }
+
+    const parent = getOrCreateClipGroup(overlaySvgEl);
+    const shape = _buildBalloonShapeEl(type, startX, startY, initRx, initRy);
     parent.appendChild(shape);
     updateShapePath(shape);
 
-    state.selectedShapeId = id;
+    state.selectedShapeId = shape.id;
 
     document.querySelectorAll('.balloon-shape').forEach(s => s.classList.remove('selected'));
     shape.classList.add('selected');
@@ -322,6 +322,20 @@ async function insertSmartBalloonTemplate(type) {
 
     const panelId = shape.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
     await savePanelSvg(panelId, overlaySvgEl);
+}
+
+// 半自動マンガ作成向け: 指定した位置・サイズにフキダシを1個生成して返す。
+// 呼び出し前に state.selectedPanelId を対象コマへ設定しておくこと（getOrCreateClipGroupが
+// これを参照して対象コマのクリップグループへ配置する。insertImage等と同じ規約）。
+// 選択状態の変更・ハンドル表示・保存は行わない（複数個まとめて生成してから呼び出し元が
+// 一括保存する想定）。テキストの流し込みは applyBubbleTextToShape（09f-bubble-text.js）を
+// 別途呼ぶこと。
+function createBalloonAtPosition(overlaySvgEl, type, cx, cy, rx, ry) {
+    const parent = getOrCreateClipGroup(overlaySvgEl);
+    const shape = _buildBalloonShapeEl(type, cx, cy, rx, ry);
+    parent.appendChild(shape);
+    updateShapePath(shape);
+    return shape;
 }
 
 // 選択中のフキダシ（ベース）と同じ形状・スタイルの延長フキダシを、ネック（コネクタ）で
@@ -758,8 +772,8 @@ function createHandle(svg, type, x, y, className) {
 export {
     _balloonGetRotateHandlePos, _balloonGetRotatedHandlePositions, _h2CalcCurveHandlePos,
     _syncH2UI, _updateH2HandlePositions, addExtensionBalloon, applyImageTransform, calcHandleR,
-    clearHandles, convertShapeToImage, createHandle, flipSelected, flipSelectedImage,
-    flipSelectedShape, insertSmartBalloonTemplate, renderHandles,
+    clearHandles, convertShapeToImage, createBalloonAtPosition, createHandle, flipSelected,
+    flipSelectedImage, flipSelectedShape, insertSmartBalloonTemplate, renderHandles,
 };
 
 // まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ

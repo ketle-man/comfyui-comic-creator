@@ -943,6 +943,9 @@ const LANGUAGES = {
         'script.autoComicMapResultHeader': '対応付け結果',
         'script.autoComicMapResultRow': (panelNumber, dialogueCount) => `コマ${panelNumber}: セリフ${dialogueCount}件`,
         'script.autoComicMapSuccess': (n) => `${n}コマを対応付けました`,
+        'script.autoComicBalloonBtn': 'フキダシを自動生成',
+        'script.autoComicBalloonNoDialogue': '生成できるセリフがありません（セリフが空、またはコマの対応付けができませんでした）',
+        'script.autoComicBalloonSuccess': (n) => `${n}個のフキダシを生成しました`,
 
         // -- ヘルプタブ --
         'help.searchPlaceholder': '機能を検索...',
@@ -2202,6 +2205,9 @@ const LANGUAGES = {
         'script.autoComicMapResultHeader': 'Mapping result',
         'script.autoComicMapResultRow': (panelNumber, dialogueCount) => `Panel ${panelNumber}: ${dialogueCount} dialogue line(s)`,
         'script.autoComicMapSuccess': (n) => `Mapped ${n} panel(s)`,
+        'script.autoComicBalloonBtn': 'Auto-generate balloons',
+        'script.autoComicBalloonNoDialogue': 'No dialogue to generate (dialogue is empty, or the panels could not be mapped)',
+        'script.autoComicBalloonSuccess': (n) => `Generated ${n} balloon(s)`,
 
         'help.searchPlaceholder': 'Search features...',
         'help.appendixDivider': 'Appendix',
@@ -3448,6 +3454,9 @@ const LANGUAGES = {
         'script.autoComicMapResultHeader': '对应结果',
         'script.autoComicMapResultRow': (panelNumber, dialogueCount) => `第${panelNumber}格：${dialogueCount}条台词`,
         'script.autoComicMapSuccess': (n) => `已对应${n}格`,
+        'script.autoComicBalloonBtn': '自动生成对话气泡',
+        'script.autoComicBalloonNoDialogue': '没有可生成的台词（台词为空，或未能完成分格对应）',
+        'script.autoComicBalloonSuccess': (n) => `已生成${n}个对话气泡`,
 
         'help.searchPlaceholder': '搜索功能...',
         'help.appendixDivider': '附录',
