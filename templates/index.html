@@ -1568,6 +1568,19 @@
               </div>
             </div>
 
+            <!-- メディア種別（作品ごとに固定。新規作成時のみ選択可能、既存作品読込後は変更不可） -->
+            <div class="project-plot-section">
+              <div class="project-plot-section-header">
+                <span class="project-section-label" data-i18n="script.mediaTypeLabel">メディア種別:</span>
+                <select id="script-media-type-select">
+                  <option value="manga" data-i18n="script.mediaTypeManga">漫画</option>
+                  <option value="semiAutoManga" data-i18n="script.mediaTypeSemiAutoManga">半自動マンガ</option>
+                  <option value="novel" data-i18n="script.mediaTypeNovel">小説</option>
+                  <option value="screenplay" data-i18n="script.mediaTypeScreenplay">脚本</option>
+                </select>
+              </div>
+            </div>
+
             <!-- あらすじ -->
             <div class="project-plot-section">
               <div class="project-plot-section-header">
@@ -1589,43 +1602,58 @@
             <!-- プロット「要素」列の入力可能ドロップダウン候補（要素タブで登録した名前一覧） -->
             <datalist id="script-elements-datalist"></datalist>
 
-            <!-- プロットサブタブ: ページ > コマワリ（シーン・コマ番・セリフ番・人物・セリフ） -->
+            <!-- プロットサブタブ: ページ > コマワリ（シーン・コマ番・画像プロンプト・セリフ番・人物・セリフ）。
+                 「漫画」メディア専用。他メディア選択時はscript-plot-placeholderに差し替わる。 -->
             <div id="project-subtab-plot" class="comfyui-subtab-content" style="display:block;">
-              <div class="script-page-toolbar">
-                <button id="script-page-prev" class="btn small secondary">◀</button>
-                <span id="script-page-indicator" class="project-section-label">ページ 1 / 1</span>
-                <button id="script-page-next" class="btn small secondary">▶</button>
-                <div class="project-panel-count-ctrl">
-                  <span class="script-panel-count-label" data-i18n="script.panelCountLabel">コマ数:</span>
-                  <input type="number" id="script-panel-count" class="project-panel-count-input" value="4" readonly />
-                  <button id="script-panel-up" class="btn small secondary project-count-btn">▲</button>
-                  <button id="script-panel-down" class="btn small secondary project-count-btn">▼</button>
+              <div id="script-manga-plot-editor">
+                <div class="script-page-toolbar">
+                  <button id="script-page-prev" class="btn small secondary">◀</button>
+                  <span id="script-page-indicator" class="project-section-label">ページ 1 / 1</span>
+                  <button id="script-page-next" class="btn small secondary">▶</button>
+                  <div class="project-panel-count-ctrl">
+                    <span class="script-panel-count-label" data-i18n="script.panelCountLabel">コマ数:</span>
+                    <input type="number" id="script-panel-count" class="project-panel-count-input" value="4" readonly />
+                    <button id="script-panel-up" class="btn small secondary project-count-btn">▲</button>
+                    <button id="script-panel-down" class="btn small secondary project-count-btn">▼</button>
+                  </div>
+                  <div class="project-panel-count-ctrl">
+                    <span class="script-panel-count-label" data-i18n="script.dialogueLabel">セリフ:</span>
+                    <button id="script-dialogue-add" class="btn small secondary project-count-btn">＋</button>
+                    <button id="script-dialogue-del" class="btn small secondary project-count-btn">−</button>
+                  </div>
+                  <button id="script-page-add-btn" class="btn small secondary" style="margin-left:auto;" data-i18n="script.addPage">＋ ページ追加</button>
+                  <button id="script-page-delete-btn" class="btn small danger" data-i18n="layout.pageDeleteBtn">ページ削除</button>
                 </div>
-                <div class="project-panel-count-ctrl">
-                  <span class="script-panel-count-label" data-i18n="script.dialogueLabel">セリフ:</span>
-                  <button id="script-dialogue-add" class="btn small secondary project-count-btn">＋</button>
-                  <button id="script-dialogue-del" class="btn small secondary project-count-btn">−</button>
+                <!-- 半自動マンガ作成: レイアウトタブで選択中のテンプレート適用済みページへ、
+                     このスクリプトページのコマ・セリフ・画像プロンプトをパネル番号順に対応付ける -->
+                <div class="script-page-toolbar" id="script-autocomic-toolbar">
+                  <button id="script-autocomic-map-btn" class="btn small primary" data-i18n="script.autoComicMapBtn">このページをレイアウトに流し込む</button>
+                  <span id="script-autocomic-map-status" class="project-section-label"></span>
                 </div>
-                <button id="script-page-add-btn" class="btn small secondary" style="margin-left:auto;" data-i18n="script.addPage">＋ ページ追加</button>
-                <button id="script-page-delete-btn" class="btn small danger" data-i18n="layout.pageDeleteBtn">ページ削除</button>
+                <div id="script-autocomic-map-result">
+                  <!-- JSで動的生成（対応付け結果一覧） -->
+                </div>
+                <div id="script-pages-container">
+                  <!-- JSで動的生成（表示中ページのコマワリテーブル） -->
+                </div>
               </div>
-              <div id="script-pages-container">
-                <!-- JSで動的生成（表示中ページのコマワリテーブル） -->
-              </div>
+              <div id="script-plot-placeholder" class="script-media-placeholder" style="display:none;" data-i18n="script.mediaComingSoon">この機能は開発中です</div>
             </div>
 
-            <!-- プレビュー 横サブタブ: プロットを横書きテキストでページ横断表示（シーン／人物：セリフ） -->
+            <!-- プレビュー 横サブタブ: プロットを横書きテキストでページ横断表示（シーン／人物：セリフ）。「漫画」メディア専用。 -->
             <div id="project-subtab-preview-h" class="comfyui-subtab-content" style="display:none;">
               <div id="script-preview-h-container" class="script-preview-h">
                 <!-- JSで動的生成 -->
               </div>
+              <div id="script-preview-h-placeholder" class="script-media-placeholder" style="display:none;" data-i18n="script.mediaComingSoon">この機能は開発中です</div>
             </div>
 
-            <!-- プレビュー縦サブタブ: プロットを縦書きテキストでページ横断表示（右から左、シーン／人物：セリフ） -->
+            <!-- プレビュー縦サブタブ: プロットを縦書きテキストでページ横断表示（右から左、シーン／人物：セリフ）。「漫画」メディア専用。 -->
             <div id="project-subtab-preview-v" class="comfyui-subtab-content" style="display:none;">
               <div id="script-preview-v-container" class="script-preview-v">
                 <!-- JSで動的生成 -->
               </div>
+              <div id="script-preview-v-placeholder" class="script-media-placeholder" style="display:none;" data-i18n="script.mediaComingSoon">この機能は開発中です</div>
             </div>
 
             <!-- 要素サブタブ: 登場人物・固有名詞などの要素名と詳細設定を登録（プロット「要素」列のドロップダウン候補にもなる） -->
@@ -1947,9 +1975,11 @@
     <script type="module" src="/ccc_static/js/main/19-font-manager.js"></script>
     <script type="module" src="/ccc_static/js/main/20-font-presets.js"></script>
     <script type="module" src="/ccc_static/js/main/21-script-tab.js"></script>
+    <script type="module" src="/ccc_static/js/main/21a-script-manga.js"></script>
     <script type="module" src="/ccc_static/js/main/22-help-tab.js"></script>
     <script type="module" src="/ccc_static/js/main/23-pose3d-bridge.js"></script>
     <script type="module" src="/ccc_static/js/main/24-sub-panels.js"></script>
     <script type="module" src="/ccc_static/js/main/25-text3d-bridge.js"></script>
+    <script type="module" src="/ccc_static/js/main/26-auto-comic-bridge.js"></script>
   </body>
 </html>

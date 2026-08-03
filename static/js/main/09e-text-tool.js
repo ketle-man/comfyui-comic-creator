@@ -6,7 +6,7 @@
 // 主なトップレベル定義: _fontAssetBuildCard,_fontAssetBuildGroup,_fontMgrApplyFillPaintToEl,_fontMgrApplyStyleAttrsToTextEl,_fontMgrExtractStyleFromTextEl,_fontMgrRenderMiniPreview,_getSelectedPanelCenter,_setTextElVertical,_textSyncTexturePatternScale,_textSyncTexturePatternTransform,applyPresetToSelectedText,applyStyleToSelectedText,applyTextInput,initTextTools,insertPresetPlaceholderText,insertScriptDialogueText,insertStylePlaceholderText,openTextInputDialog,renderAssetFontGrid,updateBalloonPanelSelect
 // 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
 // 呼び出し箇所は書き換えていない）:
-//   state（01-state.js）, _scriptGetSelectedDialogue（21-script-tab.js）,
+//   state（01-state.js）,
 //   _fontMgrLoadStyles/_esc/_fontMgrGroupOpen/_fontMgrToggleGroup（19-font-manager.js）
 // ============================================================
 
@@ -18,7 +18,7 @@ import { saveOverlaySvg, getOrCreateOverlayGroup } from './09b-balloon-shapes.js
 import { syncFontFamilyUI, renderTextHandles, clearTextHandles } from './09d-balloon-tools.js';
 import { state } from './01-state.js';
 import { _clearObjectSelection } from './08-panels-images.js';
-import { _scriptGetSelectedDialogue } from './21-script-tab.js';
+import { _scriptMangaGetSelectedDialogue } from './21a-script-manga.js';
 import { _fontMgrGroupOpen, _fontMgrLoadStyles, _fontMgrRenderTextStylePreview, _fontMgrToggleGroup } from './19-font-manager.js';
 import { _fontMgrLoadPresets } from './20-font-presets.js';
 
@@ -453,7 +453,7 @@ function _getSelectedPanelCenter(overlaySvgEl) {
 // スクリプトタブのプロットで選択中のセル（シーン／要素／セリフ・説明等）の内容を、選択中のコマ中心にテキストとして挿入する
 // （applyTextInput を再利用するため、現在のフォント・縦書き・色設定がそのまま適用される）
 async function insertScriptDialogueText() {
-    const text = _scriptGetSelectedDialogue();
+    const text = _scriptMangaGetSelectedDialogue();
     if (text == null) { alert(t('textTool.selectScriptCell')); return; }
     if (!text.trim()) { alert(t('textTool.emptyCell')); return; }
 

@@ -11,8 +11,7 @@
 // 主なトップレベル定義: _isBubbleTextType,_bubbleTextUpdateShape,_bubbleTextSyncH2Text,applyBubbleTextToShape,openBubbleTextModal,initBubbleTextTools
 // 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
 // 呼び出し箇所は書き換えていない）:
-//   state（01-state.js）, _fontMgrGoogleList/_fontMgr/_fontMgrCatNames/_fontMgrCatLabel/_fontMgrLoad（19-font-manager.js）,
-//   _scriptGetSelectedDialogue（21-script-tab.js）
+//   state（01-state.js）, _fontMgrGoogleList/_fontMgr/_fontMgrCatNames/_fontMgrCatLabel/_fontMgrLoad（19-font-manager.js）
 // ============================================================
 
 import { t } from '../i18n.js';
@@ -22,7 +21,7 @@ import { saveOverlaySvg, updateShapePath } from './09b-balloon-shapes.js';
 import { renderHandles } from './09c-balloon-handles.js';
 import { state } from './01-state.js';
 import { _fontMgr, _fontMgrCatLabel, _fontMgrCatNames, _fontMgrGoogleList, _fontMgrLoad } from './19-font-manager.js';
-import { _scriptGetSelectedDialogue } from './21-script-tab.js';
+import { _scriptMangaGetSelectedDialogue } from './21a-script-manga.js';
 
 const BUBBLE_TEXT_PT_TO_SVG = 3.528; // 09a-balloon-init.js のフォントサイズ変換係数を踏襲
 
@@ -601,7 +600,7 @@ function openBubbleTextModal(existingEl) {
     // スクリプトタブのプロットで選択中のセル（シーン／要素／セリフ・説明等）を、
     // テキストエリアのカーソル位置に挿入する（09e-text-tool.js の insertScriptDialogueText と同じ取得元）
     $('btm-script-insert-btn').addEventListener('click', () => {
-        const text = _scriptGetSelectedDialogue();
+        const text = _scriptMangaGetSelectedDialogue();
         if (text == null) { alert(t('textTool.selectScriptCell')); return; }
         if (!text.trim()) { alert(t('textTool.emptyCell')); return; }
         const textarea = $('btm-text-input');

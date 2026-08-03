@@ -1,28 +1,41 @@
 // ============================================================
-// main.js 分割ファイル (22/24): スクリプトタブ
+// main.js 分割ファイル (22/24): スクリプトタブ（共通層）
 // 元 main.js の行 16747-17305 に相当
 // type="module" として読み込まれる（ESモジュール化 G9）。
-// 主なトップレベル定義: _SCRIPT_CURRENT_KEY,_SCRIPT_WORKS_KEY,_escHtml,_script,_scriptApplyData,_scriptBlankData,_scriptBlankDialogue,_scriptBlankElement,_scriptBlankPage,_scriptGetSelectedDialogue,_scriptGetWorks,_scriptInitAssetPanelSectionToggle,_scriptLoadCurrent,_scriptNormalizeData,_scriptRenderAssetPanelLists,_scriptRenderElements,_scriptRenderElementsDatalist,_scriptRenderPage,_scriptRenderPageWorkList,_scriptRenderPreviewH,_scriptRenderPreviewV,_scriptRenderWorkList,_scriptSaveCurrent,_scriptSetWorks,initProjectTab
+// 作品名・あらすじ・要素・保存/読込/新規作成・メディア種別（漫画/小説/脚本…）の
+// 切替のみを担当する共通層。メディア種別ごとの編集画面（コマ割り等）は
+// 21a-script-manga.js（漫画）のような分離ファイルへ切り出す。21a-script-manga.js
+// とは相互import（循環）。循環先シンボルの参照はすべて関数内部（呼び出し時点で
+// 評価）に閉じているため安全（08-panels-images.js ⇄ 07-pages.js と同じパターン）。
+// 主なトップレベル定義: _SCRIPT_CURRENT_KEY,_SCRIPT_WORKS_KEY,_escHtml,_script,_scriptApplyData,_scriptBlankData,_scriptBlankElement,_scriptGetWorks,_scriptInitAssetPanelSectionToggle,_scriptIsMangaLikeType,_scriptLoadCurrent,_scriptNormalizeData,_scriptRenderAssetPanelLists,_scriptRenderElements,_scriptRenderElementsDatalist,_scriptRenderPageWorkList,_scriptRenderWorkList,_scriptSaveCurrent,_scriptSetWorks,_scriptUpdateMediaTypeSelectUI,initProjectTab
 // ============================================================
 
 import { t } from '../i18n.js';
 import { _workMeta } from './11a-work-manager.js';
+import {
+    _scriptMangaBlankData, _scriptMangaNormalize, _scriptMangaResetView,
+    _scriptMangaRenderPage, _scriptMangaRenderPreviewH, _scriptMangaRenderPreviewV,
+    initScriptMangaEditor,
+} from './21a-script-manga.js';
 
 // ==============================
-// スクリプトタブ（作品名 > あらすじ > プロット[ページ > コマワリ]）
+// スクリプトタブ（作品名 > あらすじ > メディア種別 > プロット[ページ > コマワリ]）
 // ==============================
 
 const _SCRIPT_CURRENT_KEY = 'cccScriptCurrent';   // 作業中データ（オートセーブ）
 const _SCRIPT_WORKS_KEY = 'cccScriptWorks';       // 作品名別の保存リスト
+const _SCRIPT_MEDIA_TYPES = ['manga', 'semiAutoManga', 'novel', 'screenplay'];
+
+// 「漫画」「半自動マンガ」は編集画面（コマ割り表）を共有する（21a-script-manga.js）。
+// データは data.manga / data.semiAutoManga に別々に保持し、画面構成のみ共通化する。
+function _scriptIsMangaLikeType(mediaType) {
+    return mediaType === 'manga' || mediaType === 'semiAutoManga';
+}
 
 const _script = {
     initialized: false,
-    // 作業中データ（source of truth）。ページ/コマの編集はすべてこれを更新して保存する
+    // 作業中データ（source of truth）。編集はすべてこれを更新して保存する
     data: null,
-    // プロットサブタブの表示中ページindex
-    pageIdx: 0,
-    // 選択中のセリフ行 { panelIdx, dlgIdx } または null
-    sel: null,
     // アセットパネル「S」タブでの選択状態（読込/削除/新規作成ボタンが参照する）
     selectedWorkName: null,      // 保存済みスクリプト作品名
     selectedPageWorkName: null,  // ページタブの作品名（新規作成時の名前初期値に使用）
@@ -31,71 +44,54 @@ const _script = {
     pageWorkListCollapsed: false,
 };
 
-function _scriptBlankDialogue() {
-    return { character: '', text: '' };
-}
-
-function _scriptBlankPage(panelCount = 4) {
-    return { scene: '', panels: Array.from({ length: panelCount }, () => ({ dialogues: [_scriptBlankDialogue()] })) };
-}
-
 function _scriptBlankElement() {
     return { name: '', detail: '' };
 }
 
-function _scriptBlankData() {
-    return { name: '', synopsis: '', pages: [_scriptBlankPage()], elements: [] };
+// メディア種別は作品ごとに固定（新規作成時に選択、以後は読込済み作品では変更不可）。
+// 現時点で編集画面を実装しているのは「漫画」「半自動マンガ」のみ（両者は同じコマ割り表画面を
+// 共有する）。「小説」「脚本」は将来実装のための予約。
+function _scriptBlankData(mediaType = 'manga') {
+    const mt = _SCRIPT_MEDIA_TYPES.includes(mediaType) ? mediaType : 'manga';
+    return {
+        name: '',
+        synopsis: '',
+        mediaType: mt,
+        elements: [],
+        manga: mt === 'manga' ? _scriptMangaBlankData() : null,
+        semiAutoManga: mt === 'semiAutoManga' ? _scriptMangaBlankData() : null,
+        novel: null,
+        screenplay: null,
+    };
 }
 
-// データ構造の正規化（欠損補完・旧 dialogue 単数形/文字列配列からの変換）
+// データ構造の正規化（欠損補完・メディア種別付き新形式への移行）
 function _scriptNormalizeData(data) {
     if (!data || typeof data !== 'object') return _scriptBlankData();
     if (typeof data.name !== 'string') data.name = '';
     if (typeof data.synopsis !== 'string') data.synopsis = '';
-    if (!Array.isArray(data.pages) || data.pages.length === 0) data.pages = [_scriptBlankPage()];
     if (!Array.isArray(data.elements)) data.elements = [];
     data.elements.forEach(el => {
         if (typeof el.name !== 'string') el.name = '';
         if (typeof el.detail !== 'string') el.detail = '';
     });
-    data.pages.forEach(page => {
-        if (typeof page.scene !== 'string') page.scene = '';
-        if (!Array.isArray(page.panels) || page.panels.length === 0) {
-            page.panels = _scriptBlankPage().panels;
-        }
-        page.panels.forEach(panel => {
-            if (!Array.isArray(panel.dialogues)) {
-                panel.dialogues = [typeof panel.dialogue === 'string' ? panel.dialogue : ''];
-            }
-            if (panel.dialogues.length === 0) panel.dialogues = [_scriptBlankDialogue()];
-            // 旧形式（文字列のみ）を { character, text } 形式へ変換
-            panel.dialogues = panel.dialogues.map(dlg => {
-                if (typeof dlg === 'string') return { character: '', text: dlg };
-                if (!dlg || typeof dlg !== 'object') return _scriptBlankDialogue();
-                if (typeof dlg.character !== 'string') dlg.character = '';
-                if (typeof dlg.text !== 'string') dlg.text = '';
-                return dlg;
-            });
-            delete panel.dialogue;
-        });
-    });
-    return data;
-}
 
-// プロットで選択中のセル文字列を返す（シーン／要素／セリフ・説明等。未選択・データなしは null）
-function _scriptGetSelectedDialogue() {
-    if (!_script.data || !_script.sel) return null;
-    const page = _script.data.pages[_script.pageIdx];
-    if (!page) return null;
-    if (_script.sel.field === 'scene') {
-        return typeof page.scene === 'string' ? page.scene : null;
+    // 旧形式（mediaTypeが無く、pages が直下にある）を検出したら漫画データとして移行する
+    if (!_SCRIPT_MEDIA_TYPES.includes(data.mediaType)) {
+        const legacyPages = Array.isArray(data.pages) ? data.pages : null;
+        data.mediaType = 'manga';
+        data.manga = legacyPages ? { pages: legacyPages } : (data.manga || null);
+        delete data.pages;
     }
-    const dlg = page.panels?.[_script.sel.panelIdx]?.dialogues?.[_script.sel.dlgIdx];
-    if (!dlg) return null;
-    if (_script.sel.field === 'character') {
-        return typeof dlg.character === 'string' ? dlg.character : null;
+    if (typeof data.semiAutoManga === 'undefined') data.semiAutoManga = null;
+    if (typeof data.novel === 'undefined') data.novel = null;
+    if (typeof data.screenplay === 'undefined') data.screenplay = null;
+
+    if (_scriptIsMangaLikeType(data.mediaType)) {
+        data[data.mediaType] = _scriptMangaNormalize(data[data.mediaType]);
     }
-    return typeof dlg.text === 'string' ? dlg.text : null;
+
+    return data;
 }
 
 // 作業中データを localStorage にオートセーブ
@@ -199,155 +195,56 @@ function _scriptRenderPageWorkList() {
     });
 }
 
+// メディア種別セレクトの表示を同期する。作品ごとに固定のため、保存済み作品名と
+// 一致する（＝既存作品を読込・保存済み）場合は変更不可にする。
+function _scriptUpdateMediaTypeSelectUI() {
+    const sel = document.getElementById('script-media-type-select');
+    if (!sel || !_script.data) return;
+    sel.value = _script.data.mediaType || 'manga';
+    const isExistingWork = !!_script.data.name && _scriptGetWorks().some(w => w.name === _script.data.name);
+    sel.disabled = isExistingWork;
+}
+
+// 現在アクティブなプロット系サブタブ（プロット/プレビュー横/プレビュー縦）を、
+// メディア種別に応じて実編集画面またはプレースホルダーに出し分けて描画する。
+// 「要素」サブタブはメディア種別に依存しない共通機能のため対象外（呼び出し元で個別処理）。
+function _scriptRenderActiveMediaTab() {
+    if (!_script.data) return;
+    const isMangaLike = _scriptIsMangaLikeType(_script.data.mediaType);
+
+    const pairs = [
+        ['script-manga-plot-editor', 'script-plot-placeholder'],
+        ['script-preview-h-container', 'script-preview-h-placeholder'],
+        ['script-preview-v-container', 'script-preview-v-placeholder'],
+    ];
+    pairs.forEach(([editorId, placeholderId]) => {
+        const editorEl = document.getElementById(editorId);
+        const placeholderEl = document.getElementById(placeholderId);
+        if (editorEl) editorEl.style.display = isMangaLike ? '' : 'none';
+        if (placeholderEl) placeholderEl.style.display = isMangaLike ? 'none' : '';
+    });
+
+    if (!isMangaLike) return;
+
+    const activeBtn = document.querySelector('[data-project-subtab].active');
+    const subtab = activeBtn ? activeBtn.dataset.projectSubtab : 'plot';
+    if (subtab === 'plot') _scriptMangaRenderPage();
+    else if (subtab === 'preview-h') _scriptMangaRenderPreviewH();
+    else if (subtab === 'preview-v') _scriptMangaRenderPreviewV();
+}
+
 // 作業中データを画面全体に反映
 function _scriptApplyData(data) {
     _script.data = data;
-    _script.pageIdx = 0;
-    _script.sel = null;
+    _scriptMangaResetView();
     const nameEl = document.getElementById('script-work-name');
     if (nameEl) nameEl.value = data.name || '';
     const synEl = document.getElementById('script-synopsis');
     if (synEl) synEl.value = data.synopsis || '';
-    _scriptRenderPage();
+    _scriptUpdateMediaTypeSelectUI();
+    _scriptRenderActiveMediaTab();
     _scriptRenderElements();
     _scriptRenderElementsDatalist();
-}
-
-// 表示中ページのコマワリテーブルを再描画
-function _scriptRenderPage() {
-    const container = document.getElementById('script-pages-container');
-    if (!container) return;
-
-    const pages = _script.data.pages;
-    if (_script.pageIdx > pages.length - 1) _script.pageIdx = pages.length - 1;
-    if (_script.pageIdx < 0) _script.pageIdx = 0;
-    const page = pages[_script.pageIdx];
-
-    // ツールバー表示更新
-    const indicator = document.getElementById('script-page-indicator');
-    if (indicator) indicator.textContent = t('script.pageIndicator', _script.pageIdx + 1, pages.length);
-    const countEl = document.getElementById('script-panel-count');
-    if (countEl) countEl.value = page.panels.length;
-
-    container.innerHTML = '';
-    const block = document.createElement('div');
-    block.className = 'script-page-block';
-
-    // コマワリテーブル（シーン・コマ番・セリフ番・要素・セリフ/説明等）
-    const table = document.createElement('table');
-    table.className = 'project-panel-table';
-    table.innerHTML = `
-        <thead>
-            <tr>
-                <th class="project-panel-th-scene">${t('script.thScene')}</th>
-                <th class="project-panel-th-num">${t('script.thPanelNum')}</th>
-                <th class="project-panel-th-num">${t('script.thDialogueNum')}</th>
-                <th class="project-panel-th-char">${t('script.subtabElements')}</th>
-                <th>${t('script.thDialogueDetail')}</th>
-            </tr>
-        </thead>
-    `;
-    const totalRows = page.panels.reduce((sum, panel) => sum + panel.dialogues.length, 0);
-    const tbody = document.createElement('tbody');
-    let firstRow = true;
-    page.panels.forEach((panel, panelIdx) => {
-        panel.dialogues.forEach((dlg, dlgIdx) => {
-            const tr = document.createElement('tr');
-            // シーンセルはページ内の先頭行のみ（rowspanで全行結合）
-            const sceneTd = firstRow
-                ? `<td class="project-panel-td-scene" rowspan="${totalRows}"><textarea rows="2" class="project-cell-textarea script-scene-textarea">${_escHtml(page.scene || '')}</textarea></td>`
-                : '';
-            firstRow = false;
-            // コマ番セルは各コマの先頭行のみ（rowspanでセリフ行数分結合）
-            const numTd = dlgIdx === 0
-                ? `<td class="project-panel-td-num" rowspan="${panel.dialogues.length}">${panelIdx + 1}</td>`
-                : '';
-            tr.innerHTML = `
-                ${sceneTd}
-                ${numTd}
-                <td class="project-panel-td-num">${dlgIdx + 1}</td>
-                <td><input type="text" class="project-input script-character-input" list="script-elements-datalist" value="${_escHtml(dlg.character || '')}" /></td>
-                <td><textarea rows="2" class="project-cell-textarea">${_escHtml(dlg.text || '')}</textarea></td>
-            `;
-            const sceneEl = tr.querySelector('.script-scene-textarea');
-            if (sceneEl) {
-                sceneEl.addEventListener('input', e => {
-                    page.scene = e.target.value;
-                    _scriptSaveCurrent();
-                });
-            }
-            tr.querySelector('.script-character-input').addEventListener('input', e => {
-                dlg.character = e.target.value;
-                _scriptSaveCurrent();
-            });
-            tr.querySelector('textarea:not(.script-scene-textarea)').addEventListener('input', e => {
-                dlg.text = e.target.value;
-                _scriptSaveCurrent();
-            });
-            tr.addEventListener('click', e => {
-                tbody.querySelectorAll('tr').forEach(r => r.classList.remove('project-row-selected'));
-                tr.classList.add('project-row-selected');
-                let field = 'text';
-                if (e.target.closest('.script-scene-textarea')) field = 'scene';
-                else if (e.target.closest('.script-character-input')) field = 'character';
-                _script.sel = { panelIdx, dlgIdx, field };
-            });
-            // 再レンダー後の選択復元
-            if (_script.sel && _script.sel.panelIdx === panelIdx && _script.sel.dlgIdx === dlgIdx) {
-                tr.classList.add('project-row-selected');
-            }
-            tbody.appendChild(tr);
-        });
-    });
-    table.appendChild(tbody);
-    block.appendChild(table);
-    container.appendChild(block);
-}
-
-// プロット全ページを横書きテキストでページ横断表示（ページ番号・コマ番・セリフ番は表示しない）
-function _scriptRenderPreviewH() {
-    const container = document.getElementById('script-preview-h-container');
-    if (!container || !_script.data) return;
-
-    container.innerHTML = '';
-    _script.data.pages.forEach(page => {
-        const sceneLine = document.createElement('div');
-        sceneLine.className = 'script-preview-h-line script-preview-h-scene';
-        sceneLine.textContent = t('script.sceneLinePrefix', page.scene || '');
-        container.appendChild(sceneLine);
-
-        page.panels.forEach(panel => {
-            panel.dialogues.forEach(dlg => {
-                const line = document.createElement('div');
-                line.className = 'script-preview-h-line script-preview-h-dialogue';
-                line.textContent = `${dlg.character || ''}：${dlg.text || ''}`;
-                container.appendChild(line);
-            });
-        });
-    });
-}
-
-// プロット全ページを縦書きテキスト（右から左）でページ横断表示（ページ番号・コマ番・セリフ番は表示しない）
-function _scriptRenderPreviewV() {
-    const container = document.getElementById('script-preview-v-container');
-    if (!container || !_script.data) return;
-
-    container.innerHTML = '';
-    _script.data.pages.forEach(page => {
-        const sceneLine = document.createElement('div');
-        sceneLine.className = 'script-preview-v-line script-preview-v-scene';
-        sceneLine.textContent = t('script.sceneLinePrefix', page.scene || '');
-        container.appendChild(sceneLine);
-
-        page.panels.forEach(panel => {
-            panel.dialogues.forEach(dlg => {
-                const line = document.createElement('div');
-                line.className = 'script-preview-v-line script-preview-v-dialogue';
-                line.textContent = `${dlg.character || ''}：${dlg.text || ''}`;
-                container.appendChild(line);
-            });
-        });
-    });
 }
 
 // 要素タブ: 登場人物・固有名詞などの一覧テーブルを再描画
@@ -398,6 +295,9 @@ function initProjectTab() {
     localStorage.removeItem('eagleComicProjectPlot');
     localStorage.removeItem('eagleComicProjectSaves');
 
+    // 漫画メディアのツールバー操作（ページ送り・コマ数増減・セリフ行追加削除等）を配線
+    initScriptMangaEditor();
+
     // 作業中データのロード（なければ空データ）
     _scriptApplyData(_scriptLoadCurrent() || _scriptBlankData());
 
@@ -415,6 +315,18 @@ function initProjectTab() {
         _scriptSaveCurrent();
     });
 
+    // メディア種別セレクト（作品ごとに固定。既存作品読込時は_scriptUpdateMediaTypeSelectUIでdisabledになる）
+    document.getElementById('script-media-type-select')?.addEventListener('change', e => {
+        if (!_script.data) return;
+        const mediaType = _SCRIPT_MEDIA_TYPES.includes(e.target.value) ? e.target.value : 'manga';
+        _script.data.mediaType = mediaType;
+        if (_scriptIsMangaLikeType(mediaType) && !_script.data[mediaType]) {
+            _script.data[mediaType] = _scriptMangaBlankData();
+        }
+        _scriptSaveCurrent();
+        _scriptRenderActiveMediaTab();
+    });
+
     // サブタブ切り替え
     document.querySelectorAll('[data-project-subtab]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -424,81 +336,9 @@ function initProjectTab() {
             document.querySelectorAll('#project-tab .comfyui-subtab-content').forEach(el => el.style.display = 'none');
             const target = document.getElementById('project-subtab-' + subtab);
             if (target) target.style.display = 'block';
-            if (subtab === 'preview-h') _scriptRenderPreviewH();
-            if (subtab === 'preview-v') _scriptRenderPreviewV();
             if (subtab === 'elements') _scriptRenderElements();
+            else _scriptRenderActiveMediaTab();
         });
-    });
-
-    // ページ送り
-    document.getElementById('script-page-prev')?.addEventListener('click', () => {
-        if (_script.pageIdx <= 0) return;
-        _script.pageIdx--;
-        _script.sel = null;
-        _scriptRenderPage();
-    });
-    document.getElementById('script-page-next')?.addEventListener('click', () => {
-        if (_script.pageIdx >= _script.data.pages.length - 1) return;
-        _script.pageIdx++;
-        _script.sel = null;
-        _scriptRenderPage();
-    });
-
-    // コマ数増減（表示中ページ）
-    document.getElementById('script-panel-up')?.addEventListener('click', () => {
-        _script.data.pages[_script.pageIdx].panels.push({ dialogues: [_scriptBlankDialogue()] });
-        _scriptSaveCurrent();
-        _scriptRenderPage();
-    });
-    document.getElementById('script-panel-down')?.addEventListener('click', () => {
-        const panels = _script.data.pages[_script.pageIdx].panels;
-        if (panels.length <= 1) return;
-        panels.pop();
-        if (_script.sel && _script.sel.panelIdx >= panels.length) _script.sel = null;
-        _scriptSaveCurrent();
-        _scriptRenderPage();
-    });
-
-    // セリフ行の追加（選択行と同一コマ番の直後に挿入）
-    document.getElementById('script-dialogue-add')?.addEventListener('click', () => {
-        if (!_script.sel) { alert(t('script.selectDialogueFirst')); return; }
-        const panel = _script.data.pages[_script.pageIdx].panels[_script.sel.panelIdx];
-        if (!panel) { _script.sel = null; return; }
-        panel.dialogues.splice(_script.sel.dlgIdx + 1, 0, _scriptBlankDialogue());
-        _script.sel = { panelIdx: _script.sel.panelIdx, dlgIdx: _script.sel.dlgIdx + 1 };
-        _scriptSaveCurrent();
-        _scriptRenderPage();
-    });
-
-    // セリフ行の削除（各コマ最低1行は残す）
-    document.getElementById('script-dialogue-del')?.addEventListener('click', () => {
-        if (!_script.sel) { alert(t('script.selectDialogueFirst')); return; }
-        const panel = _script.data.pages[_script.pageIdx].panels[_script.sel.panelIdx];
-        if (!panel) { _script.sel = null; return; }
-        if (panel.dialogues.length <= 1) { alert(t('script.dialogueMinRequired')); return; }
-        panel.dialogues.splice(_script.sel.dlgIdx, 1);
-        if (_script.sel.dlgIdx >= panel.dialogues.length) _script.sel.dlgIdx = panel.dialogues.length - 1;
-        _scriptSaveCurrent();
-        _scriptRenderPage();
-    });
-
-    // ページ追加（末尾に追加して表示）
-    document.getElementById('script-page-add-btn')?.addEventListener('click', () => {
-        _script.data.pages.push(_scriptBlankPage());
-        _script.pageIdx = _script.data.pages.length - 1;
-        _script.sel = null;
-        _scriptSaveCurrent();
-        _scriptRenderPage();
-    });
-
-    // ページ削除（表示中ページ・最後の1ページは不可）
-    document.getElementById('script-page-delete-btn')?.addEventListener('click', () => {
-        if (_script.data.pages.length <= 1) { alert(t('script.lastPageCannotDelete')); return; }
-        if (!confirm(t('script.confirmDeletePage', _script.pageIdx + 1))) return;
-        _script.data.pages.splice(_script.pageIdx, 1);
-        _script.sel = null;
-        _scriptSaveCurrent();
-        _scriptRenderPage();
     });
 
     // 作品の新規作成（現在の内容を破棄して空データに）
@@ -531,6 +371,7 @@ function initProjectTab() {
         _scriptSaveCurrent();
         _script.selectedWorkName = name;
         _scriptRenderWorkList();
+        _scriptUpdateMediaTypeSelectUI();
     });
 
     // 作品の読み込み
@@ -567,7 +408,10 @@ function _escHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-export { _scriptGetSelectedDialogue, _scriptRenderAssetPanelLists, _scriptInitAssetPanelSectionToggle, initProjectTab, _escHtml };
+export {
+    _script, _scriptSaveCurrent, _scriptGetWorks, _scriptIsMangaLikeType,
+    _scriptRenderAssetPanelLists, _scriptInitAssetPanelSectionToggle, initProjectTab, _escHtml,
+};
 
 // まだESM化されていない main/以下の classic <script> や、既存ESMファイルの一部が
 // window経由で呼んでいるためのブリッジ（ESモジュール化移行中の一時措置。
@@ -576,4 +420,3 @@ window._scriptRenderAssetPanelLists = _scriptRenderAssetPanelLists;
 window._scriptInitAssetPanelSectionToggle = _scriptInitAssetPanelSectionToggle;
 window.initProjectTab = initProjectTab;
 window._escHtml = _escHtml;
-

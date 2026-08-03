@@ -54,8 +54,10 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - Generated images are automatically saved to ComfyUI's own `output/cc_nanobanana` folder
 
 ### Script tab
-- Manage the screenplay in a hierarchy of Title → Synopsis → Plot [Pages → Panel breakdown (scene, elements, dialogue/description, etc.)]
+- Manage the screenplay in a hierarchy of Title → Synopsis → Plot [Pages → Panel breakdown (scene, image prompt, elements, dialogue/description, etc.)]
 - Insert any plot cell's content into the Layout tab as text with one click
+- **Media type (Manga / Semi-Auto Manga / Novel / Screenplay)** — a sub-tab foundation for switching the editing screen per work (fixed per work). "Manga" and "Semi-Auto Manga" share the same panel-breakdown editing screen while keeping each work's data separate (Novel and Screenplay are planned)
+- **Semi-automatic manga creation (in progress)** — the "Map this page to the layout" button maps each panel of a template-applied Layout-tab page to the script's panels in panel-number order. Automatic balloon generation and Workflow Studio-based batch image generation per panel are planned for future updates
 
 ### External integrations
 - **Workflow Studio** — Embedded gallery view, bidirectional I2I (image ↔ workflow) transfer

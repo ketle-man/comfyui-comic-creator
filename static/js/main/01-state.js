@@ -32,6 +32,7 @@ import { initProcessingTab, initEditTab } from './16-processing-edit-tabs.js';
 import { _initEditTabTrigger } from './17c-layer-draw-handles.js';
 import { initFontMgrTab } from './20-font-presets.js';
 import { _scriptRenderAssetPanelLists, _scriptInitAssetPanelSectionToggle, initProjectTab } from './21-script-tab.js';
+import { initAutoComicBridge } from './26-auto-comic-bridge.js';
 import { initHelpTab } from './22-help-tab.js';
 import { initPose3DTab, hidePose3DCanvas } from './23-pose3d-bridge.js';
 import { initText3DTab, hideText3DCanvas } from './25-text3d-bridge.js';
@@ -391,6 +392,7 @@ async function switchTab(tabId) {
         await initFontMgrTab();
     } else if (tabId === 'project') {
         initProjectTab();
+        initAutoComicBridge();
     } else if (tabId === 'help') {
         initHelpTab();
     }
