@@ -43,6 +43,12 @@ function _scriptMangaBlankPage(panelCount = 4) {
     return { scene: '', panels: Array.from({ length: panelCount }, () => _scriptMangaBlankPanel()) };
 }
 
+// コマにセリフ・画像プロンプトが1つでも入力済みかどうか（コマ数取得での誤削除確認用）
+function _scriptMangaPanelHasData(panel) {
+    if (panel.imagePrompt && panel.imagePrompt.trim()) return true;
+    return (panel.dialogues || []).some(d => (d.character && d.character.trim()) || (d.text && d.text.trim()));
+}
+
 function _scriptMangaBlankData() {
     return { pages: [_scriptMangaBlankPage()] };
 }
@@ -327,6 +333,14 @@ function initScriptMangaEditor() {
         const targetCount = state.activePage?.panels?.length;
         if (!targetCount) { alert(t('script.panelCountSyncNoActivePage')); return; }
         const panels = _scriptMangaData().pages[_scriptManga.pageIdx].panels;
+        // コマ数が減る場合、削除対象のコマにセリフ・画像プロンプトが入力済みなら誤削除防止の確認を挟む
+        if (targetCount < panels.length) {
+            const removed = panels.slice(targetCount);
+            if (removed.some(_scriptMangaPanelHasData) &&
+                !confirm(t('script.panelCountSyncConfirmDataLoss', panels.length, targetCount))) {
+                return;
+            }
+        }
         while (panels.length < targetCount) panels.push(_scriptMangaBlankPanel());
         while (panels.length > targetCount) panels.pop();
         if (_scriptManga.sel && _scriptManga.sel.panelIdx >= panels.length) _scriptManga.sel = null;
