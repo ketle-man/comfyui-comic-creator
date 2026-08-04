@@ -64,6 +64,11 @@ async function _getPanelImageBlob(panel, bbox, pxW, pxH) {
     const panelSvgEl = panelDoc.querySelector('svg');
     if (!panelSvgEl) return null;
     panelSvgEl.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
+    // デフォルトのpreserveAspectRatio="xMidYMid meet"だと、bboxとpxW/pxHのアスペクト比が
+    // 一致しない場合にラスタライズ時点で余白（レターボックス）ができてしまう。コマの内容を
+    // キャンバス全面に引き伸ばして描画するため"none"を明示する（insertImage側の挿入時も
+    // 同じくコマ全面へストレッチするため、送信画像との整合を取る）。
+    panelSvgEl.setAttribute('preserveAspectRatio', 'none');
 
     const serializer = new XMLSerializer();
     let svgStr = serializer.serializeToString(panelSvgEl);
@@ -244,7 +249,16 @@ async function _handleAutoImageGenerateClick() {
             });
             state.selectedPanelId = item.panelId;
             state.selectedOverlay = false;
-            await insertImage(dataUrl, img.width, img.height);
+            // アスペクト比を保ったまま幅だけ揃える既定挙動だと、SDXL標準解像度とコマの
+            // アスペクト比がズレた場合にコマ内に余白ができてしまうため、bboxへストレッチする
+            // 明示的なplacementを渡す（15-pixifx-bridge.jsのページ全体I2Iと同じ方式）。
+            // <image>要素自体もpreserveAspectRatio未指定だとplacementの箱の中でさらに
+            // アスペクト比維持フィットされてしまうため、'none'を明示してbbox全面に伸縮させる。
+            await insertImage(
+                dataUrl, img.width, img.height,
+                { preserveAspectRatio: 'none' },
+                { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height },
+            );
             successCount++;
         } catch (e) {
             console.error('[AutoComic] image insert error:', e);
@@ -337,7 +351,12 @@ async function _runAutoImageGenerateI2I({ positive, negative, denoise, skipEmpty
             });
             state.selectedPanelId = item.panelId;
             state.selectedOverlay = false;
-            await insertImage(dataUrl, img.width, img.height);
+            // T2Iバッチと同じ理由で、bboxへストレッチする明示的なplacement＋preserveAspectRatio="none"を渡す
+            await insertImage(
+                dataUrl, img.width, img.height,
+                { preserveAspectRatio: 'none' },
+                { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height },
+            );
             successCount++;
         } catch (e) {
             console.error('[AutoComic I2I] image insert error:', e);

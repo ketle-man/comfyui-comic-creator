@@ -2,6 +2,20 @@
 
 ---
 
+## 2026-08-04（半自動マンガ作成: 一括生成（T2I/I2I）の画像がコマより小さくなる不具合を修正、v1.25.1）
+
+ユーザー報告「生成した画像のサイズがコマよりも小さくなる」を調査し、2つの原因を特定・修正した。いずれも`26-auto-comic-bridge.js`が原因。
+
+**原因1（T2I/I2I共通）**: `auto-comic-core.js`の`pickSdxlResolution()`はSDXL標準解像度5段階（アスペクト比0.57〜1.75）しか選択肢がなく、コマの実際のbboxアスペクト比がこの範囲から外れるほどズレが大きくなる。`08-panels-images.js`の`insertImage()`はplacement未指定時「幅をコマ幅に合わせ、高さは画像のアスペクト比のまま」計算するため（アスペクト比を保つcontainフィット）、生成画像がコマより相対的に扁平だと高さがコマの高さに届かず、コマ内に空白帯が残っていた。
+
+**原因2（I2Iのみ、より深刻）**: 新設した`_getPanelImageBlob()`がコマのbboxをviewBoxに設定したSVGを`drawSvgOnCanvas()`でラスタライズする際、`preserveAspectRatio`を指定していなかったため、デフォルトの`xMidYMid meet`（アスペクト比保持の中央フィット）が適用され、**I2Iへ送信する時点で既にコマの絵が縮小され周囲に白余白ができた状態**になっていた。I2Iはこの構図をそのまま踏襲するため、結果画像も同様に小さくなりやすかった。
+
+**修正**: ①`_getPanelImageBlob()`のSVGへ`preserveAspectRatio="none"`を追加し、キャプチャ時点のレターボックスを解消。②T2I/I2Iとも、`insertImage()`呼び出し時にコマのbboxを明示的な`placement`として渡し、生成画像をコマへストレッチ挿入するよう変更（既存のレイアウトタブ「ページ全体I2I」と同じ設計）。③`insertImage()`の`<image>`要素自体もplacement指定時にpreserveAspectRatio未指定だと箱の中でさらにアスペクト比保持フィットされてしまうため、`extraAttrs`経由で`preserveAspectRatio: 'none'`を渡し箱全面へ伸縮させるようにした（`insertImage()`本体は変更せず、既存の`extraAttrs`→`setAttribute`の仕組みをそのまま利用）。
+
+**検証**: Kaptureで実機E2E確認済み。手書きイラスト2コマページに対しT2I・I2Iとも再実行し、両コマとも画像がコマ全面を隙間なく覆う（白余白なし）ことをスクリーンショットで確認。新規コードに起因するコンソールエラーは発生しなかった。
+
+---
+
 ## 2026-08-04（半自動マンガ作成 Phase 3拡張: 「画像を一括生成（I2I）」を追加、v1.25.0）
 
 T2Iのみだった「画像を一括生成」に加え、コマの現在の画像を入力にWorkflow Studio経由でI2Iバッチ生成できる「画像を一括生成（I2I）」ボタンを追加した。レイアウトタブの既存I2Iモーダル（`15-pixifx-bridge.js` `openLayoutI2IModal`）をベースにしたスクリプトタブ専用モーダルを新設し、`26-auto-comic-bridge.js`に実装。
