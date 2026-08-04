@@ -30,6 +30,8 @@ function initPose3DTab() {
     const lightBtn    = document.getElementById('pose3d-light-btn');
     const lookAtBtn   = document.getElementById('pose3d-lookat-btn');
     const springBoneBtn = document.getElementById('pose3d-springbone-btn');
+    const windBtn = document.getElementById('pose3d-wind-btn');
+    const windSourceBtn = document.getElementById('pose3d-windsource-btn');
     const mirrorBtn   = document.getElementById('pose3d-mirror-btn');
     const ccBtn       = document.getElementById('pose3d-cc-btn');
     const resetPBtn   = document.getElementById('pose3d-reset-pose-btn');
@@ -201,6 +203,24 @@ function initPose3DTab() {
         const on = editor.toggleSpringBoneEnabled();
         springBoneBtn.textContent = on ? '🎐 揺れ: ON' : '🎐 揺れ: OFF';
         springBoneBtn.style.background = on ? '' : 'var(--accent-primary, #0066cc)';
+    });
+
+    // 風エフェクト(Wind)トグル。強さ・向き・そよぎはライトエディタ内で調整する
+    if (windBtn) windBtn.addEventListener('click', () => {
+        const editor = state.pose3d.editor;
+        if (!editor) return;
+        const on = editor.toggleWindEnabled();
+        windBtn.textContent = on ? '🌬 風: ON' : '🌬 風: OFF';
+        windBtn.style.background = on ? 'var(--accent-primary, #0066cc)' : '';
+    });
+
+    // 風の発生源マーカー(視線と同様にドラッグ可能な3Dオブジェクトで向きを指定)トグル
+    if (windSourceBtn) windSourceBtn.addEventListener('click', () => {
+        const editor = state.pose3d.editor;
+        if (!editor) return;
+        const on = editor.toggleWindSourceEnabled();
+        windSourceBtn.textContent = on ? '🧭 発生源: ON' : '🧭 発生源: OFF';
+        windSourceBtn.style.background = on ? 'var(--accent-primary, #0066cc)' : '';
     });
 
     // カラー補正トグル

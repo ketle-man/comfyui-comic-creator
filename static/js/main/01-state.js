@@ -377,6 +377,13 @@ async function switchTab(tabId) {
     if (tabId === 'layout') {
         await renderLayoutTab();
         renderAssetFontGrid();
+        // アセットパネルの「P」タブを表示したまま他タブへ移動して戻った場合、
+        // その間にページタブ側で行われた変更（保存・並び替え・リネーム等）が
+        // 反映されず古い一覧のままになるため、レイアウトタブへ戻るたびに更新する
+        const activePanelTabBtn = document.querySelector('.asset-panel-tab-btn.active');
+        if (activePanelTabBtn && activePanelTabBtn.dataset.panelTab === 'pages') {
+            renderPageThumbGrid();
+        }
     } else if (tabId === 'image') {
         await initImageTab();
         renderAssetFontGrid();

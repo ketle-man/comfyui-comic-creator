@@ -379,13 +379,36 @@ function _layoutPreviewSizePct() {
     return (Number.isFinite(v) && v >= 25 && v <= 300) ? v : 30;
 }
 
+/** SVGのviewBox（無ければwidth/height属性）から本来の縦横比を求める */
+function _svgIntrinsicSize(svgEl) {
+    const vbAttr = svgEl.getAttribute('viewBox');
+    if (vbAttr) {
+        const parts = vbAttr.trim().split(/[\s,]+/).map(Number);
+        if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+            return { w: parts[2], h: parts[3] };
+        }
+    }
+    const w = parseFloat(svgEl.getAttribute('width'));
+    const h = parseFloat(svgEl.getAttribute('height'));
+    return (w > 0 && h > 0) ? { w, h } : null;
+}
+
 /** プレビューSVGに表示サイズ（%）を適用 */
 function _applyLayoutPreviewSize(pct) {
     const svgEl = document.querySelector('#layout-preview #image-layer svg');
     if (!svgEl) return;
-    svgEl.style.width = `${pct}%`;
-    // 100%以下では従来どおり縦を80vhに制限、拡大時は制限を外して横スクロールで閲覧
-    svgEl.style.maxHeight = pct <= 100 ? '80vh' : 'none';
+    const size = _svgIntrinsicSize(svgEl);
+    if (size) {
+        // 100%＝「コンテナ幅」と「高さ80vh」のうち小さい方に収まる基準サイズとし、
+        // pctはその基準サイズに対する倍率として一貫して適用する。
+        // （以前は101%を境にmax-height:80vhの制限を丸ごと外していたため、
+        //   100%→105%のようなわずかな変更で表示が急激に巨大化する不具合があった）
+        const factor = ((size.w / size.h) * pct / 100).toFixed(6);
+        svgEl.style.width = `min(${pct}%, calc(80vh * ${factor}))`;
+    } else {
+        svgEl.style.width = `${pct}%`;
+    }
+    svgEl.style.maxHeight = 'none';
     // 縮小表示時に左に寄らないよう中央寄せ（display:block のため margin auto が有効）
     svgEl.style.marginLeft = 'auto';
     svgEl.style.marginRight = 'auto';
