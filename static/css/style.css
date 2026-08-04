@@ -2848,6 +2848,18 @@ input[type="number"] {
 .project-panel-th-image-prompt {
   width: 220px;
 }
+.project-panel-th-balloon-shape {
+  width: 9em;
+}
+.script-balloon-shape-select {
+  width: 100%;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color, #555);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 13px;
+}
 .project-panel-td-scene {
   vertical-align: top;
   height: 1px; /* rowspanで結合したセルの高さを子要素のheight:100%に伝えるハック */

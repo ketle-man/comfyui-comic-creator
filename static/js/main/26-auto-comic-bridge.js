@@ -7,7 +7,8 @@
 // 対応付ける。
 // - 「このページをレイアウトに流し込む」(Phase 1): 対応付け結果を一覧表示するのみ。
 // - 「フキダシを自動生成」(Phase 2): 対応付け結果をもとに、各コマへセリフ件数分の
-//   フキダシ（角丸矩形固定・コマ内で上から均等配置）を自動生成しテキストを流し込む。
+//   フキダシ（コマ内で上から均等配置）を自動生成しテキストを流し込む。形状はセリフごとの
+//   「フキダシ形状」列指定を優先し、未指定（空）の場合は角丸矩形にフォールバックする。
 // - 「画像を一括生成」(Phase 3, T2I): 対応付け結果のうち画像プロンプトが入力されている
 //   各コマについて、コマのbboxアスペクト比に応じたSDXL標準解像度でWorkflow Studio
 //   経由の画像生成を順次リクエストし、結果を該当コマへ挿入する（sloppy-comicの
@@ -33,7 +34,7 @@ import { applyBubbleTextToShape, BUBBLE_TEXT_PT_TO_SVG } from './09f-bubble-text
 import { requestPanelImageFromWorkflowStudio, sendI2IRunToWorkflowStudio, getI2ISettingsState, saveI2ISettingsState } from './14-integrations.js';
 import { embedFontsInSvg, drawSvgOnCanvas } from './12-text-png-export.js';
 
-// Phase 2 v1のフキダシ形状は角丸矩形に固定する（スクリプト側での形状指定は将来検討事項として保留）
+// フキダシ形状が未指定（プロット「フキダシ形状」列が空）の場合のフォールバック値
 const AUTO_BALLOON_TYPE = 'rect';
 
 // Workflow Studioの生成結果URL（blob: URL等、ページリロード後は無効になる一時参照のことがある）を
@@ -184,7 +185,10 @@ async function _handleAutoBalloonGenerateClick() {
         for (let i = 0; i < dialogues.length; i++) {
             const cx = bbox.x + bbox.width / 2;
             const cy = bbox.y + slotHeight * (i + 0.5);
-            const shape = createBalloonAtPosition(overlaySvgEl, AUTO_BALLOON_TYPE, cx, cy, rx, ry);
+            // セリフごとのフキダシ形状指定（プロットの「フキダシ形状」列）を優先し、
+            // 未指定（空文字）の場合は既定の角丸矩形にフォールバックする
+            const balloonType = dialogues[i].shape || AUTO_BALLOON_TYPE;
+            const shape = createBalloonAtPosition(overlaySvgEl, balloonType, cx, cy, rx, ry);
             await applyBubbleTextToShape(shape, {
                 text: dialogues[i].text,
                 fontSizePt,

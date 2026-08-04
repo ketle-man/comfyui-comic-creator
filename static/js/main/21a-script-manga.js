@@ -31,8 +31,10 @@ function _scriptMangaData() {
     return _script.data[key];
 }
 
+// shape: フキダシ形状の指定（'' = 未指定＝自動生成時は角丸矩形、それ以外は09c-balloon-handles.jsの
+// h2-shape-typeと同じ値: normal/rect/thought/bomb/cloudpuffy/cloudwavy）
 function _scriptMangaBlankDialogue() {
-    return { character: '', text: '' };
+    return { character: '', text: '', shape: '' };
 }
 
 function _scriptMangaBlankPanel() {
@@ -72,10 +74,11 @@ function _scriptMangaNormalize(mangaData) {
             if (panel.dialogues.length === 0) panel.dialogues = [_scriptMangaBlankDialogue()];
             // 旧形式（文字列のみ）を { character, text } 形式へ変換
             panel.dialogues = panel.dialogues.map(dlg => {
-                if (typeof dlg === 'string') return { character: '', text: dlg };
+                if (typeof dlg === 'string') return { character: '', text: dlg, shape: '' };
                 if (!dlg || typeof dlg !== 'object') return _scriptMangaBlankDialogue();
                 if (typeof dlg.character !== 'string') dlg.character = '';
                 if (typeof dlg.text !== 'string') dlg.text = '';
+                if (typeof dlg.shape !== 'string') dlg.shape = '';
                 return dlg;
             });
             delete panel.dialogue;
@@ -138,6 +141,7 @@ function _scriptMangaRenderPage() {
                 <th class="project-panel-th-num">${t('script.thDialogueNum')}</th>
                 <th class="project-panel-th-char">${t('script.subtabElements')}</th>
                 <th>${t('script.thDialogueDetail')}</th>
+                <th class="project-panel-th-balloon-shape">${t('script.thBalloonShape')}</th>
             </tr>
         </thead>
     `;
@@ -169,6 +173,17 @@ function _scriptMangaRenderPage() {
                 <td class="project-panel-td-num">${dlgIdx + 1}</td>
                 <td><input type="text" class="project-input script-character-input" list="script-elements-datalist" value="${_escHtml(dlg.character || '')}" /></td>
                 <td><textarea rows="2" class="project-cell-textarea">${_escHtml(dlg.text || '')}</textarea></td>
+                <td>
+                    <select class="script-balloon-shape-select" title="${t('script.balloonShapeSelectTitle')}">
+                        <option value="">${t('script.balloonShapeDefault')}</option>
+                        <option value="normal">${t('layout.balloonNormal')}</option>
+                        <option value="rect">${t('layout.balloonRect')}</option>
+                        <option value="thought">${t('layout.balloonThought')}</option>
+                        <option value="bomb">${t('layout.balloonBomb')}</option>
+                        <option value="cloudpuffy">${t('layout.balloonCloudPuffy')}</option>
+                        <option value="cloudwavy">${t('layout.balloonCloudWavy')}</option>
+                    </select>
+                </td>
             `;
             const sceneEl = tr.querySelector('.script-scene-textarea');
             if (sceneEl) {
@@ -219,6 +234,12 @@ function _scriptMangaRenderPage() {
             }
             tr.querySelector('.script-character-input').addEventListener('input', e => {
                 dlg.character = e.target.value;
+                _scriptSaveCurrent();
+            });
+            const shapeSelectEl = tr.querySelector('.script-balloon-shape-select');
+            shapeSelectEl.value = dlg.shape || '';
+            shapeSelectEl.addEventListener('change', e => {
+                dlg.shape = e.target.value;
                 _scriptSaveCurrent();
             });
             tr.querySelector('textarea:not(.script-scene-textarea):not(.script-image-prompt-textarea)').addEventListener('input', e => {
