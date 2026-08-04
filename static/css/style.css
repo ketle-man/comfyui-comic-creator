@@ -2783,6 +2783,26 @@ input[type="number"] {
   align-items: center;
   gap: 2px;
 }
+/* 要素サブタブ: 左=要素テーブル、右=あらすじ（プロット編集エリアの縦スペース確保のため移設） */
+.script-elements-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.script-elements-col {
+  flex: 1;
+  min-width: 0;
+}
+.script-synopsis-col {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+.script-synopsis-col .project-textarea {
+  flex: 1;
+  min-height: 320px;
+}
 .project-panel-count-input {
   width: 40px;
   text-align: center;

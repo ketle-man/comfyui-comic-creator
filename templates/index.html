@@ -1560,17 +1560,13 @@
               <button id="script-work-save-btn" class="btn small primary" data-i18n="common.save">保存</button>
             </div>
 
-            <!-- 作品名 -->
+            <!-- 作品名・メディア種別（1行にまとめ、プロット編集エリアの縦スペースを確保）。
+                 メディア種別は作品ごとに固定。新規作成時のみ選択可能、既存作品読込後は変更不可。
+                 あらすじは「要素」サブタブへ移設（script.subtabElements参照） -->
             <div class="project-plot-section">
               <div class="project-plot-section-header">
                 <span class="project-section-label" data-i18n="script.workNameLabel">作品名:</span>
                 <input type="text" id="script-work-name" class="script-work-name-input" data-i18n-placeholder="script.workNamePlaceholder" placeholder="作品名を入力..." />
-              </div>
-            </div>
-
-            <!-- メディア種別（作品ごとに固定。新規作成時のみ選択可能、既存作品読込後は変更不可） -->
-            <div class="project-plot-section">
-              <div class="project-plot-section-header">
                 <span class="project-section-label" data-i18n="script.mediaTypeLabel">メディア種別:</span>
                 <select id="script-media-type-select">
                   <option value="manga" data-i18n="script.mediaTypeManga">漫画</option>
@@ -1578,16 +1574,6 @@
                   <option value="novel" data-i18n="script.mediaTypeNovel">小説</option>
                   <option value="screenplay" data-i18n="script.mediaTypeScreenplay">脚本</option>
                 </select>
-              </div>
-            </div>
-
-            <!-- あらすじ -->
-            <div class="project-plot-section">
-              <div class="project-plot-section-header">
-                <span class="project-section-label" data-i18n="script.synopsisLabel">あらすじ:</span>
-              </div>
-              <div class="project-plot-row">
-                <textarea id="script-synopsis" rows="4" class="project-textarea" data-i18n-placeholder="script.synopsisPlaceholder" placeholder="作品全体のあらすじ"></textarea>
               </div>
             </div>
 
@@ -1615,6 +1601,7 @@
                     <input type="number" id="script-panel-count" class="project-panel-count-input" value="4" readonly />
                     <button id="script-panel-up" class="btn small secondary project-count-btn">▲</button>
                     <button id="script-panel-down" class="btn small secondary project-count-btn">▼</button>
+                    <button id="script-panel-count-sync-btn" class="btn small secondary" data-i18n="script.panelCountSyncBtn" data-i18n-title="script.panelCountSyncBtnTitle" title="レイアウトタブで選択中のページのコマ数を取得します">コマ数取得</button>
                   </div>
                   <div class="project-panel-count-ctrl">
                     <span class="script-panel-count-label" data-i18n="script.dialogueLabel">セリフ:</span>
@@ -1659,23 +1646,34 @@
               <div id="script-preview-v-placeholder" class="script-media-placeholder" style="display:none;" data-i18n="script.mediaComingSoon">この機能は開発中です</div>
             </div>
 
-            <!-- 要素サブタブ: 登場人物・固有名詞などの要素名と詳細設定を登録（プロット「要素」列のドロップダウン候補にもなる） -->
+            <!-- 要素サブタブ: 登場人物・固有名詞などの要素名と詳細設定を登録（プロット「要素」列のドロップダウン候補にもなる）。
+                 プロット編集エリアの縦スペースを確保するため、あらすじ入力もここへ移設し右カラムに配置 -->
             <div id="project-subtab-elements" class="comfyui-subtab-content" style="display:none;">
-              <div class="script-page-toolbar">
-                <button id="script-element-add-btn" class="btn small secondary" data-i18n="script.addElement">＋ 要素追加</button>
+              <div class="script-elements-layout">
+                <div class="script-elements-col">
+                  <div class="script-page-toolbar">
+                    <button id="script-element-add-btn" class="btn small secondary" data-i18n="script.addElement">＋ 要素追加</button>
+                  </div>
+                  <table class="project-panel-table">
+                    <thead>
+                      <tr>
+                        <th class="project-panel-th-element" data-i18n="script.subtabElements">要素</th>
+                        <th data-i18n="script.thDetail">詳細</th>
+                        <th class="project-panel-th-num"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="script-elements-tbody">
+                      <!-- JSで動的生成 -->
+                    </tbody>
+                  </table>
+                </div>
+                <div class="script-synopsis-col">
+                  <div class="project-plot-section-header">
+                    <span class="project-section-label" data-i18n="script.synopsisLabel">あらすじ:</span>
+                  </div>
+                  <textarea id="script-synopsis" class="project-textarea" data-i18n-placeholder="script.synopsisPlaceholder" placeholder="作品全体のあらすじ"></textarea>
+                </div>
               </div>
-              <table class="project-panel-table">
-                <thead>
-                  <tr>
-                    <th class="project-panel-th-element" data-i18n="script.subtabElements">要素</th>
-                    <th data-i18n="script.thDetail">詳細</th>
-                    <th class="project-panel-th-num"></th>
-                  </tr>
-                </thead>
-                <tbody id="script-elements-tbody">
-                  <!-- JSで動的生成 -->
-                </tbody>
-              </table>
             </div>
           </section>
 

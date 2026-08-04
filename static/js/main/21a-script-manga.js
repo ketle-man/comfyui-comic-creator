@@ -16,6 +16,7 @@
 import { t } from '../i18n.js';
 import { _script, _escHtml, _scriptSaveCurrent, _scriptIsMangaLikeType } from './21-script-tab.js';
 import { requestLLMPromptFromWorkflowStudio } from './14-integrations.js';
+import { state } from './01-state.js';
 
 // プロットサブタブ内での表示中ページ・選択中セリフ行（漫画/半自動マンガ共通の一時状態）
 const _scriptManga = {
@@ -315,6 +316,19 @@ function initScriptMangaEditor() {
         const panels = _scriptMangaData().pages[_scriptManga.pageIdx].panels;
         if (panels.length <= 1) return;
         panels.pop();
+        if (_scriptManga.sel && _scriptManga.sel.panelIdx >= panels.length) _scriptManga.sel = null;
+        _scriptSaveCurrent();
+        _scriptMangaRenderPage();
+    });
+
+    // コマ数をレイアウトタブで選択中のページのコマ数に合わせる（半自動マンガ作成の
+    // 「流し込み」でコマ数を事前に一致させておきたい用途を想定。漫画メディアでも使用可）
+    document.getElementById('script-panel-count-sync-btn')?.addEventListener('click', () => {
+        const targetCount = state.activePage?.panels?.length;
+        if (!targetCount) { alert(t('script.panelCountSyncNoActivePage')); return; }
+        const panels = _scriptMangaData().pages[_scriptManga.pageIdx].panels;
+        while (panels.length < targetCount) panels.push(_scriptMangaBlankPanel());
+        while (panels.length > targetCount) panels.pop();
         if (_scriptManga.sel && _scriptManga.sel.panelIdx >= panels.length) _scriptManga.sel = null;
         _scriptSaveCurrent();
         _scriptMangaRenderPage();
