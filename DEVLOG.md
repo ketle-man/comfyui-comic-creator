@@ -2,6 +2,36 @@
 
 ---
 
+## 2026-08-04（半自動マンガ作成 Phase 3拡張: 「画像を一括生成（I2I）」を追加、v1.25.0）
+
+T2Iのみだった「画像を一括生成」に加え、コマの現在の画像を入力にWorkflow Studio経由でI2Iバッチ生成できる「画像を一括生成（I2I）」ボタンを追加した。レイアウトタブの既存I2Iモーダル（`15-pixifx-bridge.js` `openLayoutI2IModal`）をベースにしたスクリプトタブ専用モーダルを新設し、`26-auto-comic-bridge.js`に実装。
+
+**仕様**: 既存I2Iモーダルと異なり対象選択（選択画像/ページ全体）は無く、常に対応付け済みの全コマが対象。モーダルのPositiveプロンプト（全体指示）はコマごとの画像プロンプトと結合して送信され（`_composeI2IPositive()`、どちらか一方が空でも成立）、Negativeプロンプト（全体）・Denoiseも指定できる。「コマの画像プロンプトが空の場合はスルーする」チェックボックスで、T2Iと同じ絞り込み（画像プロンプトが空のコマをスキップ）と、チェックOFF時の「全コマ対象・モーダルの全体指示だけでも処理される」動作を切り替えられる。I2I設定（デフォルトワークフローの使用・ファイル名）はレイアウトタブのI2Iモーダル・ImageタブのSelect I2Iパネルと同じ`_i2iSettings`（`14-integrations.js`）を共有し、モーダル内に同じUIを追加した。
+
+**実装**: 各コマの現在の画像（`panel.panelSvgContent`）をコマのbbox範囲だけラスタライズしてBlob化する新規ヘルパー`_getPanelImageBlob()`を追加。`15-pixifx-bridge.js`の`_getPageBlob`（ページ全体対象）と同じ手法（`embedFontsInSvg`→`drawSvgOnCanvas`→`canvas.toBlob`）を使い、`panelSvgContent`のルートsvgのviewBoxをコマのbboxへ差し替えるだけで、そのコマの領域だけがクロップして描画される（`panelSvgContent`がページと同じ座標系で描かれているため）。生成リクエストは既存のレイアウトタブI2Iモーダルと同じ`sendI2IRunToWorkflowStudio()`をそのまま再利用したため、**Workflow Studio側の変更は一切不要**だった。結果画像は前回修正した`_urlToDataUrl()`（blob: URL→base64データURL変換）を経由してから`insertImage()`で挿入するため、保存→再読込後もリンク切れにならない。既存画像は削除せず新しい`<image>`として追加する仕様（T2Iバッチと同じ、ユーザー承認済み）。
+
+**検証**: Kaptureで実機E2E確認済み。手書きイラストが入った2コマページに対し、Positive「masterpiece, high quality, anime style, clean lineart」・Negative「low quality, blurry」・Denoise 0.5・スルーOFFで実行し、両コマの画像がアニメ調タッチへ変換されてレイアウトタブへ自動切替されることを確認（`href`はいずれも`data:image/png;base64,...`形式で永続化を確認）。I2I設定セクション（デフォルトワークフロー使用・ファイル名の共有読み込み・保存）も動作確認済み。新規コードに起因するコンソールエラーは発生しなかった。
+
+**検証中に判明した既知の注意点（新規バグではない）**: ページをリロードすると`state.activePage`（レイアウトタブのアクティブページ）がクリアされ、ページ管理タブでページカードを再度開き直す必要がある（テンプレート未選択エラーの原因になりやすい）。今回のHTML変更（新規ボタン追加）はページの完全リロードが必要だったため、検証中に踏んだ。
+
+**ドキュメント**: ヘルプ（`22-help-tab.js`、日英中3言語、「プロット」節に新規`<li>`追加）・README（3言語）を更新済み。
+
+---
+
+## 2026-08-04（半自動マンガ作成 Phase 3: 一括生成画像がリロード後に壊れるバグを修正、v1.24.1）
+
+Phase 3の「画像を一括生成」で挿入した画像が、作品を保存して閉じ、再度開くとリンク切れになる不具合を修正した。
+
+**原因**: `26-auto-comic-bridge.js`の`_handleAutoImageGenerateClick()`が、Workflow Studio側から返る生成結果URL（`genResult.url`、`_wfmReceiveGenerateRequest`が`document.getElementById("wfm-gen-result-img")?.src`から読む値）を変換せずそのまま`insertImage()`へ渡していた。Workflow Studio側`generate-tab.js`の通常のPNG/JPEG生成結果は`URL.createObjectURL(blob)`で作った`blob:`URLであり、ページ（ドキュメント）のセッション限りでしか有効でない一時参照。`insertImage()`は渡された文字列をそのままSVGの`<image href="...">`へ埋め込んで`panelSvgContent`としてIndexedDBへ永続化するため、`blob:`URLがそのまま保存され、次回ページ読込時（＝blob URLを発行した元ドキュメントが破棄された後）には解決不能になり画像が壊れて見える。
+
+**修正**: 既存の`insertImageFromUrl()`（08-panels-images.js）が使っている「fetch→blob→`FileReader.readAsDataURL()`でbase64データURL化」という変換パターンを踏襲し、`_urlToDataUrl(url)`ヘルパーを`26-auto-comic-bridge.js`に追加。`insertImage()`へ渡す前に`genResult.url`をこれで変換することで、常に永続化可能なbase64データURLがSVGへ埋め込まれるようにした（`fetch()`は`blob:`URLにも通常のURLにも使えるため、Workflow Studio側の戻り値の種類（PNG/JPEGはblob:、SVG出力は`/wfm/gallery/image/serve?path=...`という別オリジン依存の相対URL）に関わらず統一的に対応できる）。
+
+**Why**: [[comic-creator-workflow]]の「画像挿入は永続化可能な形式に変換してから行う」という既存の設計原則（`insertImage()`のパラメータ名`base64Data`が示す契約）が、Phase 3の新規コードパスでは守られていなかった。今後、外部（Workflow Studio等）から受け取った画像URLを`insertImage()`系関数に渡す新規コードを書く際は、必ず`insertImageFromUrl()`と同じfetch→blob→dataURL変換を経由すること。
+
+**検証**: `node --check`で構文確認（`vm.SourceTextModule`は今回の変更が単純な関数追加のみのため省略）。ロジックの妥当性は既存の`insertImageFromUrl()`と同一パターンであることで担保。
+
+---
+
 ## 2026-08-03（半自動マンガ作成 Phase 3: Workflow Studio連携によるLLMプロンプト下書き＋コマ単位バッチ画像生成を追加、v1.24.0）
 
 Phase 1（対応付け基盤）・Phase 2（フキダシ自動生成）に続き、3フェーズ計画の最終フェーズを実装した。別リポジトリ`ComfyUI-Workflow-Studio`（`C:\Users\statsu-11\Desktop\now_work\comfyUI-wf-maneger\ComfyUI-Workflow-Studio`）側にも変更が及ぶ機能追加。

@@ -952,6 +952,12 @@ const LANGUAGES = {
         'script.autoComicGenerateSuccess': (n) => `${n}件の画像を生成しました`,
         'script.autoComicGenerateFailedSome': (success, fail) => `${success}件成功、${fail}件失敗しました（詳細はブラウザのコンソールを確認してください）`,
         'script.autoComicGenerateAllFailed': '画像生成に失敗しました（Workflow Studioの接続・AI設定・ワークフローの読み込み状況を確認してください）',
+        'script.autoComicGenerateI2IBtn': '画像を一括生成（I2I）',
+        'script.autoI2IModalHeading': 'I2I一括生成',
+        'script.autoI2IPositiveLabel': 'Positiveプロンプト（全体指示）',
+        'script.autoI2IPositiveHint': '各コマの画像プロンプトと結合して送信されます',
+        'script.autoI2INegativeLabel': 'Negativeプロンプト（全体）',
+        'script.autoI2ISkipEmptyPromptLabel': 'コマの画像プロンプトが空の場合はスルーする',
 
         // -- ヘルプタブ --
         'help.searchPlaceholder': '機能を検索...',
@@ -2220,6 +2226,12 @@ const LANGUAGES = {
         'script.autoComicGenerateSuccess': (n) => `Generated ${n} image(s)`,
         'script.autoComicGenerateFailedSome': (success, fail) => `${success} succeeded, ${fail} failed (check the browser console for details)`,
         'script.autoComicGenerateAllFailed': 'Image generation failed (check the Workflow Studio connection, AI settings, and loaded workflow)',
+        'script.autoComicGenerateI2IBtn': 'Batch-generate images (I2I)',
+        'script.autoI2IModalHeading': 'Batch I2I Generation',
+        'script.autoI2IPositiveLabel': 'Positive Prompt (overall instruction)',
+        'script.autoI2IPositiveHint': 'Combined with each panel\'s image prompt when sent',
+        'script.autoI2INegativeLabel': 'Negative Prompt (overall)',
+        'script.autoI2ISkipEmptyPromptLabel': 'Skip panels with an empty image prompt',
 
         'help.searchPlaceholder': 'Search features...',
         'help.appendixDivider': 'Appendix',
@@ -3475,6 +3487,12 @@ const LANGUAGES = {
         'script.autoComicGenerateSuccess': (n) => `已生成${n}张图像`,
         'script.autoComicGenerateFailedSome': (success, fail) => `成功${success}张，失败${fail}张（详情请查看浏览器控制台）`,
         'script.autoComicGenerateAllFailed': '图像生成失败（请确认Workflow Studio的连接、AI设置及已加载的工作流）',
+        'script.autoComicGenerateI2IBtn': '批量生成图像（I2I）',
+        'script.autoI2IModalHeading': 'I2I批量生成',
+        'script.autoI2IPositiveLabel': 'Positive提示词（整体指令）',
+        'script.autoI2IPositiveHint': '发送时会与各格的图像提示词合并',
+        'script.autoI2INegativeLabel': 'Negative提示词（整体）',
+        'script.autoI2ISkipEmptyPromptLabel': '格的图像提示词为空时跳过该格',
 
         'help.searchPlaceholder': '搜索功能...',
         'help.appendixDivider': '附录',
