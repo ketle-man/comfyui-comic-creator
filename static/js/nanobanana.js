@@ -27,18 +27,8 @@ class NanobananaManager {
     }
 
     async refreshApiKey() {
-        try {
-            const response = await fetch('/api/ccc/nanobanana/key');
-            const data = await response.json();
-            if (data.status === 'ok') {
-                this.updateStatus('connected', t('nb.connected'));
-            } else {
-                this.updateStatus('disconnected', t('nb.noApiKey'));
-            }
-        } catch (e) {
-            console.error('Failed to fetch Nanobanana key:', e);
-            this.updateStatus('disconnected', t('nb.serverError'));
-        }
+        const { connected, text } = await checkNanobananaKeyStatus();
+        this.updateStatus(connected ? 'connected' : 'disconnected', text);
     }
 
     updateStatus(status, text) {
@@ -93,11 +83,6 @@ class NanobananaManager {
                 if (files.length) this.addI2IFiles(files);
             });
         }
-
-        // 強度スライダー
-        document.getElementById('nanobanana-i2i-strength')?.addEventListener('input', (e) => {
-            document.getElementById('nanobanana-i2i-strength-val').textContent = e.target.value;
-        });
 
         // 生成ボタン
         document.getElementById('nanobanana-generate-btn')?.addEventListener('click', () => this.generate());
@@ -216,6 +201,7 @@ class NanobananaManager {
         const negative = document.getElementById('nanobanana-negative').value;
         const resolution = document.getElementById('nanobanana-resolution').value;
         const [width, height] = resolution.split('x').map(Number);
+        const is2k = document.getElementById('nanobanana-2k')?.checked;
         const batchSize = parseInt(document.getElementById('nanobanana-batch-size').value) || 1;
         const seed = parseInt(document.getElementById('nanobanana-seed').value);
 
@@ -235,6 +221,7 @@ class NanobananaManager {
                 num_images: batchSize,
                 seed: seed === -1 ? Math.floor(Math.random() * 1000000) : seed
             };
+            if (is2k) payload.image_size = '2K';
 
             // I2I: 複数画像を配列で送る
             if (this.i2iImages.length > 0) {
@@ -242,53 +229,16 @@ class NanobananaManager {
                     data: img.b64,
                     mime: img.mime
                 }));
-                payload.strength = parseFloat(document.getElementById('nanobanana-i2i-strength').value);
             }
 
-            const response = await fetch(this.apiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-
-            const data = await response.json();
-            if (data.status !== 'ok') {
-                throw new Error(resolveBackendError(data.error_code, data.error_params) || data.message || t('nb.generateFailed'));
-            }
-
-            const images = data.images || [];
-            if (images.length === 0) {
-                throw new Error(t('nb.noImagesGenerated'));
-            }
+            const images = await requestNanobananaGenerate(payload);
 
             progress.textContent = t('nb.saving');
             this.generatedImages = [];
 
             for (let i = 0; i < images.length; i++) {
-                let b64 = images[i];
-                // Data URI 形式でない場合は付与する
-                // APIはPNGとは限らずJPEG等を返すため、base64先頭のマジックバイトで実形式を判定する
-                let ext = '.png';
-                if (!b64.startsWith('data:')) {
-                    let mime = 'image/png';
-                    if (b64.startsWith('/9j/'))        { mime = 'image/jpeg'; ext = '.jpg'; }
-                    else if (b64.startsWith('UklGR'))  { mime = 'image/webp'; ext = '.webp'; }
-                    else if (b64.startsWith('R0lGOD')) { mime = 'image/gif';  ext = '.gif'; }
-                    b64 = `data:${mime};base64,` + b64;
-                } else {
-                    const m = b64.match(/^data:image\/(\w+)/);
-                    if (m) ext = m[1] === 'jpeg' ? '.jpg' : `.${m[1]}`;
-                }
-
-                const filename = `nanobanana_${Date.now()}_${i}${ext}`;
-                await this.saveToServer(b64, filename);
-                this.generatedImages.push({ url: `/ccc_nanobanana_output/${filename}`, b64: b64 });
-                // Eagle 自動保存
-                if (_eagleSettings.autoSaveNanobanana) {
-                    saveToEagle(`/ccc_nanobanana_output/${filename}`, filename, ['comfyui-comic-creator', 'nanobanana']);
-                }
+                const { url, dataUrl } = await saveNanobananaImageAndMaybeEagle(images[i], `nanobanana_${i}`);
+                this.generatedImages.push({ url, b64: dataUrl });
             }
 
             this.showResult(this.generatedImages[0].url);
@@ -315,15 +265,6 @@ class NanobananaManager {
             reader.onerror = reject;
             reader.readAsDataURL(blob);
         });
-    }
-
-    async saveToServer(base64, filename) {
-        const response = await fetch('/api/ccc/save-nanobanana-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64, filename: filename })
-        });
-        return await response.json();
     }
 
     showResult(url) {
@@ -355,6 +296,86 @@ class NanobananaManager {
     }
 }
 
+// Nanobanana APIキーの設定状況を確認する（NanobananaManager.refreshApiKey()・
+// 半自動マンガのNanobananaモーダル双方から利用する共通ロジック）。
+async function checkNanobananaKeyStatus() {
+    try {
+        const response = await fetch('/api/ccc/nanobanana/key');
+        const data = await response.json();
+        if (data.status === 'ok') return { connected: true, text: t('nb.connected') };
+        return { connected: false, text: t('nb.noApiKey') };
+    } catch (e) {
+        console.error('Failed to fetch Nanobanana key:', e);
+        return { connected: false, text: t('nb.serverError') };
+    }
+}
+
+// Nanobanana画像生成APIを呼び出し、base64画像文字列の配列を返す（NanobananaManager.generate()・
+// 半自動マンガのNanobananaバッチ生成 双方から利用）。エラー時はresolveBackendErrorで
+// 多言語化済みメッセージのErrorをthrowする。
+async function requestNanobananaGenerate(payload) {
+    const response = await fetch('/api/ccc/nanobanana/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    if (data.status !== 'ok') {
+        throw new Error(resolveBackendError(data.error_code, data.error_params) || data.message || t('nb.generateFailed'));
+    }
+    const images = data.images || [];
+    if (images.length === 0) {
+        throw new Error(t('nb.noImagesGenerated'));
+    }
+    return images;
+}
+
+// base64/data-URI文字列をdata URLへ正規化し、ファイル拡張子を判定する
+// （マジックバイト方式。APIはPNGとは限らずJPEG等を返すため）。
+function _normalizeNanobananaImage(b64) {
+    let ext = '.png';
+    if (!b64.startsWith('data:')) {
+        let mime = 'image/png';
+        if (b64.startsWith('/9j/'))        { mime = 'image/jpeg'; ext = '.jpg'; }
+        else if (b64.startsWith('UklGR'))  { mime = 'image/webp'; ext = '.webp'; }
+        else if (b64.startsWith('R0lGOD')) { mime = 'image/gif';  ext = '.gif'; }
+        b64 = `data:${mime};base64,` + b64;
+    } else {
+        const m = b64.match(/^data:image\/(\w+)/);
+        if (m) ext = m[1] === 'jpeg' ? '.jpg' : `.${m[1]}`;
+    }
+    return { dataUrl: b64, ext };
+}
+
+async function _saveNanobananaImageToServer(base64, filename) {
+    const response = await fetch('/api/ccc/save-nanobanana-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64, filename: filename })
+    });
+    return await response.json();
+}
+
+/**
+ * Nanobanana生成結果1枚を正規化・サーバー保存し、_eagleSettings.autoSaveNanobananaが
+ * 有効な場合はEagleへも自動登録する（NanobananaManager.generate()・半自動マンガの
+ * Nanobananaバッチ生成 双方から利用する共通処理）。
+ * @param {string} rawB64 APIレスポンスの画像文字列（data URIまたは素のbase64）
+ * @param {string} filenamePrefix ファイル名の先頭部分（例: 'nanobanana_0' / 'nanobanana_autocomic'）
+ * @param {string[]} [tags]
+ * @returns {Promise<{url: string, dataUrl: string}>}
+ */
+async function saveNanobananaImageAndMaybeEagle(rawB64, filenamePrefix, tags = ['comfyui-comic-creator', 'nanobanana']) {
+    const { dataUrl, ext } = _normalizeNanobananaImage(rawB64);
+    const filename = `${filenamePrefix}_${Date.now()}${ext}`;
+    await _saveNanobananaImageToServer(dataUrl, filename);
+    const url = `/ccc_nanobanana_output/${filename}`;
+    if (_eagleSettings.autoSaveNanobanana) {
+        saveToEagle(url, filename, tags);
+    }
+    return { url, dataUrl };
+}
+
 // 初期化
 let nanobananaManager = null;
 function initNanobananaTab() {
@@ -363,7 +384,7 @@ function initNanobananaTab() {
     }
 }
 
-export { initNanobananaTab };
+export { initNanobananaTab, requestNanobananaGenerate, saveNanobananaImageAndMaybeEagle, checkNanobananaKeyStatus };
 
 // まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
 // （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、

@@ -73,4 +73,32 @@ function pickSdxlResolution(aspectRatio) {
     return { width: best.width, height: best.height };
 }
 
-export { mapScriptPageToPanels, pickSdxlResolution };
+// Nanobananaの解像度プリセット（templates/index.htmlの#nanobanana-resolutionセレクトと同じ5種類）。
+// 値はSDXL_RESOLUTIONSと現状同一だが、Nanobanana側のプリセットが将来変更された場合に
+// 個別追従できるよう、意図的に独立した定数として持つ。
+const NANOBANANA_RESOLUTIONS = [
+    { key: 'horizontal_wide', width: 1344, height: 768 },
+    { key: 'horizontal',      width: 1216, height: 832 },
+    { key: 'square',          width: 1024, height: 1024 },
+    { key: 'vertical',        width: 832,  height: 1216 },
+    { key: 'vertical_tall',   width: 768,  height: 1344 },
+];
+
+/**
+ * コマのbboxアスペクト比（width/height）に最も近いNanobanana解像度プリセットを選ぶ。
+ * pickSdxlResolution()と同じ対数スケール比較ロジック。
+ * @param {number} aspectRatio コマのwidth/height
+ * @returns {{width: number, height: number}}
+ */
+function pickNanobananaResolution(aspectRatio) {
+    const targetLogRatio = Math.log(aspectRatio > 0 ? aspectRatio : 1);
+    let best = NANOBANANA_RESOLUTIONS[2];
+    let bestDiff = Infinity;
+    for (const r of NANOBANANA_RESOLUTIONS) {
+        const diff = Math.abs(targetLogRatio - Math.log(r.width / r.height));
+        if (diff < bestDiff) { bestDiff = diff; best = r; }
+    }
+    return { width: best.width, height: best.height };
+}
+
+export { mapScriptPageToPanels, pickSdxlResolution, pickNanobananaResolution };

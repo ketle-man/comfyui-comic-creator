@@ -2,6 +2,20 @@
 
 ---
 
+## 2026-08-05（半自動マンガ「画像を一括生成（Nanobanana）」機能を追加、v1.29.0）
+
+`feature/semi-auto-comic-nanobanana`ブランチで作業。スクリプトタブの半自動マンガ作成機能に、既存の「画像を一括生成（I2I）」（Workflow Studio連携）と対になる、Nanobanana（Gemini画像生成API、CC自身が持つ独立タブ`nanobanana.js`と同じ連携）を使うバッチI2I生成機能を追加した。まずは既存I2Iモーダルとは別のボタン・別のモーダルとして実装し、バックエンド選択式の1モーダルへの統合は将来の検討課題とする。
+
+- `auto-comic-core.js`に、既存`pickSdxlResolution`と同じ対数スケール比較ロジックの`pickNanobananaResolution(aspectRatio)`を追加。Nanobananaの解像度プリセット（5種類、値はSDXLと現状同一）から、コマのbboxアスペクト比に最も近いものを自動選択する。
+- `nanobanana.js`の`NanobananaManager`内に埋め込まれていた「APIキー確認」「生成API呼び出し」「base64正規化＋サーバー保存＋Eagle自動保存」の3ロジックを、モジュールスコープの独立関数（`checkNanobananaKeyStatus`/`requestNanobananaGenerate`/`saveNanobananaImageAndMaybeEagle`）として切り出しexport。既存Nanobananaタブ自体もこれらを呼ぶ形にリファクタリングし、挙動を変えずに半自動マンガ側と共有できるようにした。
+- `26-auto-comic-bridge.js`に「画像を一括生成（Nanobanana）」ボタン・モーダル（`_openAutoComicNanobananaModal`）・実行ロジック（`_runAutoImageGenerateNanobanana`）を追加。既存I2Iモーダルと同じ対象コマ絞り込み・Positive結合・`pushHistory`の設計を踏襲しつつ、モデル選択（3種）・I2I強度スライダー・接続状態表示を持つ。各コマの現在の画像を`_getPanelImageBlob`でラスタライズしdata URL化してNanobanana APIへ送信し、結果はコマのbboxへ`preserveAspectRatio:'none'`でストレッチ挿入する（T2I/I2Iバッチと同じスケール調整方式）。
+- 判明した既存事実: `py/ccc.py`の`handle_nanobanana_generate`は`width`/`height`を実ピクセル指定ではなくアスペクト比文字列に変換してGeminiへ渡すのみで、`strength`パラメータは一切処理していない。既存Nanobananaタブのstrengthスライダーも現状バックエンド未反映であり、新モーダルのstrengthスライダーも同じ制約を引き継ぐ（バックエンド改修は今回スコープ外）。
+- Kaptureで実機E2E確認済み: 既存Nanobananaタブの回帰なし（リファクタリング後も接続状態表示・生成が正常動作）、新モーダルのUI表示・入力項目がすべて正常、test1作品（半自動マンガ、2コマ）で実際にRunを実行し2コマとも生成成功→レイアウトタブへ自動切替→コマ全面へ隙間なくストレッチ挿入を確認。ネットワークログで`/api/ccc/nanobanana/generate`→`/api/ccc/save-nanobanana-image`→`/api/ccc/eagle/add`の呼び出し順序を確認（Eagle未起動環境のため`eagle/add`は500だったが、fire-and-forgetのため他コマの処理には影響せず両コマとも成功）。挿入された`<image>`の`href`が`data:image/...;base64,...`形式であること、および作品保存→リロード→再読込後も画像が壊れずに表示されることを確認（過去のblob URL永続化バグの再発なし）。新規コード起因のコンソールエラーなし。
+- ヘルプ（ja/en/zh、「プロット」節に新規`<li>`）・README（3言語）を更新済み。バージョンアップ・mainへのマージ・プッシュは別途指示があるまで行わない。
+- **追加修正: I2I強度スライダーを削除、「2K」生成トグルを追加（Nanobananaタブ・半自動マンガモーダル両方）。** ユーザー指示によりGemini画像生成APIの公式ドキュメント（`https://ai.google.dev/gemini-api/docs/image-generation`・`https://ai.google.dev/api/generate-content`）を確認した結果、(1) I2Iの変化度合いを数値で指定するパラメータ（denoising strength等）はAPIに一切存在せず、変化の強さはPositiveプロンプトの文章のみで制御する仕様であることが確定した。(2) `generateContent`エンドポイントの`GenerationConfig.imageConfig`（`ImageConfig`型）に、既存実装が使っている`aspectRatio`に加えて`imageSize`フィールド（`"1K"`/`"2K"`/`"4K"`、未指定時は`"1K"`）が存在することが判明した（モデルにより対応状況が異なり、`gemini-3.1-flash-lite-image`は`1K`のみ対応、`gemini-3.1-flash-image`/`gemini-3-pro-image`は`2K`/`4K`まで対応）。これを受けて、①`nanobanana.js`・`26-auto-comic-bridge.js`・`templates/index.html`から`nanobanana-i2i-strength`スライダー（UIのみでバックエンド未反映だった）を削除、②`py/ccc.py`の`handle_nanobanana_generate`に`image_size`リクエストパラメータを追加し`imageConfig.imageSize`へ渡すよう変更、③両UIの解像度セレクト隣に「2K」チェックボックスを追加（選択したアスペクト比を維持したまま約2倍相当の解像度で生成、対応モデル選択時のみ有効）。i18nキー`nb.i2iStrength`を`nb.2kLabel`/`nb.2kHint`に置き換え（3言語）。Kaptureで確認したところ、JS側（UIの表示・strength削除・リクエストペイロードへの`image_size`付与）は正常動作を確認したが、`py/ccc.py`の変更はComfyUIのカスタムノードロード方式上サーバー再起動が必要だった（ユーザーが再起動を実施）。再起動後、Nanobananaタブで`gemini-3.1-flash-image`モデル＋「2K」ONで生成→`naturalWidth`/`naturalHeight`が2048×2048（既定の1024×1024から狙い通り2倍）になることを確認。`gemini-3.1-flash-lite-image`（2K非対応）では従来通り1024×1024のまま生成されることも確認済み。半自動マンガのNanobananaモーダルでも同モデル＋2K ONでtest1作品の2コマに対しRunを実行し、2件とも生成成功→コマのbboxへスケール調整挿入（挿入された`<image>`のdata URL長が従来の1K生成時（26万〜100万文字程度）に対し2K生成時は245万〜360万文字程度と明確に大きく、高解像度化を確認）。両モーダルとも新規コード起因のコンソールエラーなし。
+
+---
+
 ## 2026-08-05（Imageタブヘルプの翻訳漏れ修正・レイアウトタブ表示サイズの不連続ジャンプ修正・アセットパネル「P」タブ更新漏れ修正、v1.28.0）
 
 ユーザー報告の3件に対応。いずれもバグ修正で、未リリースの下記「3Dポーズタブに風エフェクト」（2026-08-04）と合わせてv1.28.0としてまとめてリリースする。

@@ -17,6 +17,11 @@
 //   モーダルの全体指示（Positive/Negative）＋コマごとの画像プロンプトを組み合わせて
 //   Workflow StudioのI2I（15-pixifx-bridge.jsのレイアウトタブI2Iモーダルと同じ
 //   sendI2IRunToWorkflowStudio()経路）を順次リクエストし、結果で該当コマの画像を置き換える。
+// - 「画像を一括生成（Nanobanana）」: 上記I2Iモーダルと対の実装。生成バックエンドがWorkflow
+//   StudioではなくCC自身のNanobanana連携（Gemini画像生成API、nanobanana.js）である点、
+//   モデル選択・I2I強度を持つ点、解像度プリセットがNanobanana用（pickNanobananaResolution）
+//   である点が異なる。まずは別ボタン・別モーダルとして実装し、将来的にバックエンド選択式の
+//   1モーダルへ統合することも検討している。
 // type="module" として読み込まれる。initProjectTab()と同様、'project'タブへの
 // 切替時に01-state.jsから初期化される。
 // ============================================================
@@ -25,7 +30,7 @@ import { t } from '../i18n.js';
 import { state, switchTab } from './01-state.js';
 import { _script, _scriptIsMangaLikeType } from './21-script-tab.js';
 import { _scriptManga, _scriptMangaData } from './21a-script-manga.js';
-import { mapScriptPageToPanels, pickSdxlResolution } from '../auto-comic-core.js';
+import { mapScriptPageToPanels, pickSdxlResolution, pickNanobananaResolution } from '../auto-comic-core.js';
 import { getBoundingBoxFromPoints, insertImage } from './08-panels-images.js';
 import { getPanelLayerSvg } from './04b-layer-panel-render.js';
 import { pushHistory } from './07-pages.js';
@@ -33,6 +38,7 @@ import { createBalloonAtPosition } from './09c-balloon-handles.js';
 import { applyBubbleTextToShape, BUBBLE_TEXT_PT_TO_SVG } from './09f-bubble-text.js';
 import { requestPanelImageFromWorkflowStudio, sendI2IRunToWorkflowStudio, getI2ISettingsState, saveI2ISettingsState } from './14-integrations.js';
 import { embedFontsInSvg, drawSvgOnCanvas } from './12-text-png-export.js';
+import { requestNanobananaGenerate, saveNanobananaImageAndMaybeEagle, checkNanobananaKeyStatus } from '../nanobanana.js';
 
 // フキダシ形状が未指定（プロット「フキダシ形状」列が空）の場合のフォールバック値
 const AUTO_BALLOON_TYPE = 'rect';
@@ -40,16 +46,20 @@ const AUTO_BALLOON_TYPE = 'rect';
 // Workflow Studioの生成結果URL（blob: URL等、ページリロード後は無効になる一時参照のことがある）を
 // fetchしてbase64データURLへ変換する。insertImage()はhrefへ渡された文字列をそのままSVGに永続化する
 // ため、blob: URLを直接渡すと保存→再読込後に画像が壊れる（insertImageFromUrl()と同じ変換パターン）。
-async function _urlToDataUrl(url) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
-    const blob = await res.blob();
-    return await new Promise((resolve, reject) => {
+function _blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
     });
+}
+
+async function _urlToDataUrl(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+    const blob = await res.blob();
+    return _blobToDataUrl(blob);
 }
 
 // I2I一括生成用: 対象コマの現在の画像（panel.panelSvgContent、insertImage()等で既に挿入済みの
@@ -492,6 +502,213 @@ function _openAutoComicI2IModal() {
     });
 }
 
+// ============================================================
+// 「画像を一括生成（Nanobanana）」モーダル
+// Workflow Studio版I2Iモーダル（_openAutoComicI2IModal）と対の実装。対象コマの絞り込み・
+// Positive結合・pushHistory等の設計は同じだが、生成バックエンドがNanobanana（Gemini画像生成
+// API、nanobanana.js）である点、モデル選択・2K生成トグルを持つ点、解像度プリセットが
+// pickNanobananaResolution()である点が異なる。Gemini画像生成APIにdenoising strength相当の
+// パラメータは存在しない（変化の度合いは自然言語プロンプトのみで制御する仕様）ため、
+// I2I強度スライダーは持たない。まずは別モーダルとして実装し、将来的にはバックエンド選択式の
+// 1モーダルへ統合することも検討している。
+// ============================================================
+
+let _autoNbModel = 'gemini-3.1-flash-lite-image';
+let _autoNbPositive = '';
+let _autoNbNegative = '';
+let _autoNb2k = false;
+let _autoNbSkipEmptyPrompt = false;
+
+// 対応付け済みの各コマについて、コマの現在の画像を入力にNanobanana I2I生成を順次リクエストし、
+// 結果を該当コマへ挿入する。skipEmptyPromptの絞り込みは_runAutoImageGenerateI2Iと同じ。
+async function _runAutoImageGenerateNanobanana({ model, positive, negative, is2k, skipEmptyPrompt }, statusEl) {
+    const mapping = _computeMapping();
+    if (!mapping) return { ok: false };
+    if (mapping.error === 'noActivePage') { alert(t('script.autoComicMapNoActivePage')); return { ok: false }; }
+
+    const { mapped, warning } = mapping;
+    _autoComicRenderResult(mapped, warning);
+
+    const targets = skipEmptyPrompt
+        ? mapped.filter(item => item.imagePrompt && item.imagePrompt.trim())
+        : mapped;
+    if (targets.length === 0) { alert(t('script.autoComicGenerateNoPrompt')); return { ok: false }; }
+
+    pushHistory();
+
+    let successCount = 0;
+    let failCount = 0;
+    for (let i = 0; i < targets.length; i++) {
+        const item = targets[i];
+        if (statusEl) statusEl.textContent = t('script.autoComicGenerateProgress', i + 1, targets.length);
+
+        const panel = state.activePage.panels.find(p => p.id === item.panelId);
+        const bbox = panel?.points ? getBoundingBoxFromPoints(panel.points) : null;
+        if (!bbox || !bbox.width || !bbox.height) { failCount++; continue; }
+
+        try {
+            const { width, height } = pickNanobananaResolution(bbox.width / bbox.height);
+            const blob = await _getPanelImageBlob(panel, bbox, width, height);
+            if (!blob) { failCount++; continue; }
+            const inputDataUrl = await _blobToDataUrl(blob);
+
+            const genPayload = {
+                model,
+                prompt: _composeI2IPositive(positive, item.imagePrompt),
+                negative_prompt: negative,
+                width, height,
+                num_images: 1,
+                seed: Math.floor(Math.random() * 1000000),
+                images: [{ data: inputDataUrl, mime: 'image/png' }],
+            };
+            if (is2k) genPayload.image_size = '2K';
+            const images = await requestNanobananaGenerate(genPayload);
+
+            const { dataUrl } = await saveNanobananaImageAndMaybeEagle(images[0], 'nanobanana_autocomic');
+
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = dataUrl;
+            });
+            state.selectedPanelId = item.panelId;
+            state.selectedOverlay = false;
+            // Gemini側が返す実解像度は指定プリセット通りとは限らないため、T2I/I2Iバッチと
+            // 同じくbboxへストレッチする明示的なplacement＋preserveAspectRatio="none"を渡す
+            await insertImage(
+                dataUrl, img.width, img.height,
+                { preserveAspectRatio: 'none' },
+                { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height },
+            );
+            successCount++;
+        } catch (e) {
+            console.error('[AutoComic Nanobanana] generate/insert error for panel', item.panelId, e);
+            failCount++;
+        }
+    }
+
+    if (statusEl) statusEl.textContent = '';
+    return { ok: true, successCount, failCount };
+}
+
+function _openAutoComicNanobananaModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'tsm-overlay';
+
+    const dialog = document.createElement('div');
+    dialog.className = 'tsm-dialog li2i-dialog';
+    dialog.innerHTML = `
+        <div class="tsm-header">
+            <h3>${t('script.autoNbModalHeading')}</h3>
+            <button type="button" id="anb-close-btn" class="tsm-close-btn" title="${t('common.close')}">×</button>
+        </div>
+        <div class="tsm-body li2i-body">
+            <div class="fontmgr-style-group">
+                <span id="anb-connection-status" class="comfyui-status disconnected">${t('script.autoNbCheckingConnection')}</span>
+            </div>
+            <div class="fontmgr-style-group">
+                <label>${t('nb.modelLabel')}</label>
+                <select id="anb-model" class="comfyui-select">
+                    <option value="gemini-3.1-flash-lite-image">gemini-3.1-flash-lite-image</option>
+                    <option value="gemini-3.1-flash-image">gemini-3.1-flash-image</option>
+                    <option value="gemini-3-pro-image">gemini-3-pro-image</option>
+                </select>
+                <label style="cursor:pointer; margin-left:8px; display:inline-flex; align-items:center; gap:4px;">
+                    <input type="checkbox" id="anb-2k"> <span>${t('nb.2kLabel')}</span>
+                </label>
+            </div>
+            <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
+                <label class="fontmgr-style-group-label">${t('script.autoI2IPositiveLabel')}</label>
+                <textarea id="anb-positive" rows="5"></textarea>
+                <span style="font-size:11px; color:var(--text-secondary);">${t('script.autoI2IPositiveHint')}</span>
+            </div>
+            <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
+                <label class="fontmgr-style-group-label">${t('script.autoI2INegativeLabel')}</label>
+                <textarea id="anb-negative" rows="5"></textarea>
+            </div>
+            <div class="fontmgr-style-group">
+                <label style="cursor:pointer; display:flex; align-items:center; gap:4px;">
+                    <input type="checkbox" id="anb-skip-empty-prompt"> ${t('script.autoI2ISkipEmptyPromptLabel')}
+                </label>
+            </div>
+            <span style="font-size:11px; color:var(--text-secondary);">${t('script.autoNbResolutionHint')}</span>
+            <div class="fontmgr-style-group">
+                <span id="anb-status" style="font-size:12px; color:var(--text-secondary);"></span>
+                <button type="button" id="anb-run-btn" class="btn primary" style="margin-left:auto;">${t('layout.i2iRunBtn')}</button>
+            </div>
+        </div>
+    `;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    const $ = id => dialog.querySelector('#' + id);
+
+    $('anb-model').value = _autoNbModel;
+    $('anb-2k').checked = _autoNb2k;
+    $('anb-positive').value = _autoNbPositive;
+    $('anb-negative').value = _autoNbNegative;
+    $('anb-skip-empty-prompt').checked = _autoNbSkipEmptyPrompt;
+
+    $('anb-model').addEventListener('change', e => { _autoNbModel = e.target.value; });
+    $('anb-2k').addEventListener('change', e => { _autoNb2k = e.target.checked; });
+    $('anb-positive').addEventListener('input', e => { _autoNbPositive = e.target.value; });
+    $('anb-negative').addEventListener('input', e => { _autoNbNegative = e.target.value; });
+    $('anb-skip-empty-prompt').addEventListener('change', e => { _autoNbSkipEmptyPrompt = e.target.checked; });
+
+    // 接続状態チェック（未接続ならRun実行をブロックする、nanobanana.jsのrefreshApiKey()と
+    // 同じロジックを共有）
+    let _connected = false;
+    (async () => {
+        const { connected, text } = await checkNanobananaKeyStatus();
+        _connected = connected;
+        const statusEl = $('anb-connection-status');
+        statusEl.textContent = text;
+        statusEl.className = `comfyui-status ${connected ? 'connected' : 'disconnected'}`;
+    })();
+
+    const close = () => document.body.removeChild(overlay);
+    const onKeydown = (e) => { if (e.key === 'Escape') closeAndCleanup(); };
+    document.addEventListener('keydown', onKeydown);
+    const closeAndCleanup = () => { document.removeEventListener('keydown', onKeydown); close(); };
+
+    $('anb-close-btn').addEventListener('click', closeAndCleanup);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeAndCleanup(); });
+
+    $('anb-run-btn').addEventListener('click', async () => {
+        if (!_connected) { alert(t('nb.apiKeyMissing')); return; }
+
+        const runBtn = $('anb-run-btn');
+        const statusEl = $('anb-status');
+
+        runBtn.disabled = true;
+        runBtn.textContent = t('layout.i2iRunningBtn');
+
+        const result = await _runAutoImageGenerateNanobanana({
+            model: _autoNbModel,
+            positive: _autoNbPositive,
+            negative: _autoNbNegative,
+            is2k: _autoNb2k,
+            skipEmptyPrompt: _autoNbSkipEmptyPrompt,
+        }, statusEl);
+
+        runBtn.disabled = false;
+        runBtn.textContent = t('layout.i2iRunBtn');
+
+        if (!result.ok) return;
+        if (result.successCount === 0) {
+            alert(t('script.autoComicGenerateAllFailed'));
+            return;
+        }
+
+        closeAndCleanup();
+        await switchTab('layout');
+        alert(result.failCount > 0
+            ? t('script.autoComicGenerateFailedSome', result.successCount, result.failCount)
+            : t('script.autoComicGenerateSuccess', result.successCount));
+    });
+}
+
 let _autoComicBridgeInited = false;
 function initAutoComicBridge() {
     if (_autoComicBridgeInited) return;
@@ -500,6 +717,7 @@ function initAutoComicBridge() {
     document.getElementById('script-autocomic-balloon-btn')?.addEventListener('click', _handleAutoBalloonGenerateClick);
     document.getElementById('script-autocomic-generate-btn')?.addEventListener('click', _handleAutoImageGenerateClick);
     document.getElementById('script-autocomic-generate-i2i-btn')?.addEventListener('click', _openAutoComicI2IModal);
+    document.getElementById('script-autocomic-generate-nanobanana-btn')?.addEventListener('click', _openAutoComicNanobananaModal);
 }
 
 export { initAutoComicBridge };

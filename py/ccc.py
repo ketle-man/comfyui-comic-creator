@@ -369,6 +369,9 @@ async def handle_nanobanana_generate(request):
         num_images = data.get('num_images', 1)
         width = data.get('width', 1024)
         height = data.get('height', 1024)
+        # Gemini API の ImageConfig.imageSize（'1K'/'2K'/'4K'、未指定時は'1K'相当）。
+        # aspectRatioは維持したまま出力解像度のみ引き上げる用途（例: 選択解像度を2倍で生成）。
+        image_size = data.get('image_size')
 
         def get_aspect_ratio(w, h):
             ratio = w / h
@@ -405,9 +408,12 @@ async def handle_nanobanana_generate(request):
             parts = [{"text": full_prompt}]
             for img in i2i_images:
                 parts.insert(0, {"inline_data": {"mime_type": img['mime_type'], "data": img['data']}})
+            image_config = {"aspectRatio": aspect_ratio}
+            if image_size:
+                image_config["imageSize"] = image_size
             payload = {
                 "contents": [{"parts": parts}],
-                "generationConfig": {"imageConfig": {"aspectRatio": aspect_ratio}},
+                "generationConfig": {"imageConfig": image_config},
             }
             req_body = json.dumps(payload).encode('utf-8')
             def _call():
