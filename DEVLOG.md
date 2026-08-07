@@ -2,6 +2,20 @@
 
 ---
 
+## 2026-08-07（デフォルトワークフロー系チェックボックスがRunに反映されないバグを修正、v1.30.1）
+
+ユーザー報告「T2I一括生成でデフォルトワークフローのチェックを外して別のワークフロー（boogu_t2i.json）を生成UIタブに読み込んで実行したが、ernie_t2i.jsonで実行される」を調査。
+
+**原因**: T2I/I2Iモーダルの「デフォルトワークフローを使用する」チェックボックス・ファイル名入力欄は、実行(Run)時には一切参照されず、**「保存」ボタンを押してlocalStorageへ書き込んで初めて次回以降の実行に反映される**設計になっていた。`requestPanelImageFromWorkflowStudio()`/`sendI2IRunToWorkflowStudio()`（14-integrations.js）が、呼び出し時の引数ではなく内部でモジュールスコープの`_t2iSettings`/`_i2iSettings`（保存済み設定）を直接参照していたため。チェックボックスを変更しただけで「保存」を押し忘れると、画面表示と実際の挙動が食い違う（今回は前回セッションでON+`ernie_t2i.json`を保存済みだったため、OFFにしても保存し直さない限りernie_t2i.jsonのまま実行され続けた）。
+
+同じ設計上の欠陥が、スクリプトタブのT2I/I2Iモーダルだけでなく、**レイアウトタブのI2Iモーダル**（15-pixifx-bridge.js）と**ImageタブのSelect I2Iパネル**（image-tab.js）の計4箇所すべてに存在していたため、まとめて修正した。
+
+**修正**: `requestPanelImageFromWorkflowStudio(prompt, width, height, negative, wfOverride)`/`sendI2IRunToWorkflowStudio(imageBlob, params, wfOverride)`（14-integrations.js）に、任意の`wfOverride: {enabled, file}`引数を追加。渡された場合はそちらを優先し、省略時は従来通り保存済み設定（`getT2ISettingsState()`/`getI2ISettingsState()`）を使う（既存呼び出し元との後方互換を維持）。4箇所すべてのRunボタンのクリックハンドラで、モーダル/パネルに**今表示されているチェックボックス・ファイル名入力欄の値**をそのまま`wfOverride`として渡すよう変更。これにより「保存」ボタンは「次回モーダルを開いたときの初期値を保存する」という役割に純化され、Runは常に画面表示中の設定通りに実行されるようになった。
+
+Kaptureで実機E2E確認済み: Comic Creator画面内のWorkflow Studioタブ経由で`boogu_t2i.json`を生成UIタブへ手動ロードし、T2Iモーダルで「デフォルトワークフローを使用する」をOFFにした状態（**「保存」ボタンは押さず**）でRunを実行。コンソールログで`[Eagle] Saved: Boogu_00005_.png`/`Boogu_00006_.png`（Booguモデル、boogu_t2i.json由来）を確認し、修正前に発生していた「ernie_t2i.jsonで実行される」問題が解消されたことを確認（test1作品、2コマとも成功）。検証後は「元に戻す」でtest1作品を挿入前の状態に復元済み。新規コード起因のコンソールエラーなし。v1.30.1としてリリース。
+
+---
+
 ## 2026-08-07（「画像を一括生成」(T2I)をI2I同様のモーダルに変更、ヘルプ更新、v1.30.0）
 
 ユーザーから「`ernie_t2i.json`をWorkflow Studioの生成UIタブに読み込んで実行したが、別のワークフローが実行されたようだ」との報告を受け調査。

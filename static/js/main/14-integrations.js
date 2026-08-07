@@ -420,9 +420,12 @@ async function sendInpaintToWorkflowStudio(imageBlob, maskBlob, params) {
  * （loadWfmGalleryTab()でiframeロードのみ保証）。
  * @param {Blob} imageBlob
  * @param {{positive:string, negative:string, denoise:number}} params
+ * @param {{enabled:boolean, file:string}} [wfOverride] - 呼び出し元UIの現在の表示値をそのまま使いたい場合に指定
+ *   （省略時は保存済みのI2I設定`getI2ISettingsState()`を使う。モーダル/パネルの「保存」ボタンを押していなくても
+ *   画面上の現在のチェックボックス/ファイル名の値をそのまま実行に反映させるために使う）
  * @returns {Promise<{ok:boolean, url?:string, message?:string}>}
  */
-async function sendI2IRunToWorkflowStudio(imageBlob, params) {
+async function sendI2IRunToWorkflowStudio(imageBlob, params, wfOverride) {
     const loaded = await loadWfmGalleryTab();
     if (!loaded) {
         return { ok: false, message: t('settings.wfmNotFound') };
@@ -434,10 +437,12 @@ async function sendI2IRunToWorkflowStudio(imageBlob, params) {
         return { ok: false, message: 'Workflow Studio I2I run bridge is not ready' };
     }
 
+    const wf = wfOverride || getI2ISettingsState();
+
     let workflowData = null;
     let workflowFilename = null;
-    if (_i2iSettings.defaultWorkflowEnabled && _i2iSettings.defaultWorkflowFile) {
-        workflowFilename = _i2iSettings.defaultWorkflowFile;
+    if (wf.enabled && wf.file) {
+        workflowFilename = wf.file;
         try {
             const wfRes = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(workflowFilename)}`);
             if (wfRes.ok) {
@@ -493,16 +498,19 @@ async function requestLLMPromptFromWorkflowStudio(context) {
 /**
  * 画像生成プロンプトとサイズ（コマのbboxアスペクト比に応じて算出）から、Workflow Studio
  * (iframe)のGenerate UIでtxt2img生成を実行し、結果URLを受け取る（半自動マンガ作成の
- * コマ単位バッチ画像生成用）。タブ切替はしない。T2I設定でデフォルトワークフローが有効な場合、
+ * コマ単位バッチ画像生成用）。タブ切替はしない。デフォルトワークフローが有効な場合、
  * 実行前にそのワークフローをWorkflow Studio側に読み込ませる（I2I/Inpaintと同じ方式）。
  * 無効な場合はGenerate UIに現在ロード中のワークフローがそのまま使われる。
  * @param {string} prompt
  * @param {number} width
  * @param {number} height
  * @param {string} [negative]
+ * @param {{enabled:boolean, file:string}} [wfOverride] - 呼び出し元UIの現在の表示値をそのまま使いたい場合に指定
+ *   （省略時は保存済みのT2I設定`getT2ISettingsState()`を使う。モーダルの「保存」ボタンを押していなくても
+ *   画面上の現在のチェックボックス/ファイル名の値をそのまま実行に反映させるために使う）
  * @returns {Promise<{ok:boolean, url?:string, message?:string}>}
  */
-async function requestPanelImageFromWorkflowStudio(prompt, width, height, negative) {
+async function requestPanelImageFromWorkflowStudio(prompt, width, height, negative, wfOverride) {
     const loaded = await loadWfmGalleryTab();
     if (!loaded) {
         return { ok: false, message: t('settings.wfmNotFound') };
@@ -514,10 +522,12 @@ async function requestPanelImageFromWorkflowStudio(prompt, width, height, negati
         return { ok: false, message: 'Workflow Studio generate bridge is not ready' };
     }
 
+    const wf = wfOverride || getT2ISettingsState();
+
     let workflowData = null;
     let workflowFilename = null;
-    if (_t2iSettings.defaultWorkflowEnabled && _t2iSettings.defaultWorkflowFile) {
-        workflowFilename = _t2iSettings.defaultWorkflowFile;
+    if (wf.enabled && wf.file) {
+        workflowFilename = wf.file;
         try {
             const wfRes = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(workflowFilename)}`);
             if (wfRes.ok) {

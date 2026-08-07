@@ -235,7 +235,7 @@ let _autoT2ISkipEmptyPrompt = false;
 // 経由のtxt2img生成を順次リクエストし、結果を該当コマへ挿入する。skipEmptyPromptがtrueの場合、
 // コマの画像プロンプトが空のコマはスルーする（I2Iと同じ絞り込み）。falseの場合は全対応付け済み
 // コマが対象（モーダルの全体Positive/Negativeのみでも処理される）。
-async function _runAutoImageGenerateT2I({ positive, negative, skipEmptyPrompt }, statusEl) {
+async function _runAutoImageGenerateT2I({ positive, negative, skipEmptyPrompt, wfEnabled, wfFile }, statusEl) {
     const mapping = _computeMapping();
     if (!mapping) return { ok: false };
     if (mapping.error === 'noActivePage') { alert(t('script.autoComicMapNoActivePage')); return { ok: false }; }
@@ -263,6 +263,7 @@ async function _runAutoImageGenerateT2I({ positive, negative, skipEmptyPrompt },
         const { width, height } = pickSdxlResolution(bbox.width / bbox.height);
         const genResult = await requestPanelImageFromWorkflowStudio(
             _composeOverallPrompt(positive, item.imagePrompt), width, height, negative,
+            { enabled: wfEnabled, file: wfFile },
         );
         if (!genResult?.ok || !genResult.url) {
             console.warn('[AutoComic] generate failed for panel', item.panelId, genResult?.message);
@@ -392,6 +393,10 @@ function _openAutoComicT2IModal() {
             positive: _autoT2IPositive,
             negative: _autoT2INegative,
             skipEmptyPrompt: _autoT2ISkipEmptyPrompt,
+            // Runは常にモーダルに今表示されているチェックボックス/ファイル名の値を使う
+            // （「保存」ボタンは次回モーダルを開いたときの初期値を保存するだけで、Run自体には影響しない）
+            wfEnabled: $('at2i-default-wf-enabled').checked,
+            wfFile: $('at2i-default-wf-name').value,
         }, statusEl);
 
         runBtn.disabled = false;
@@ -434,7 +439,7 @@ function _composeOverallPrompt(overallPositive, panelPrompt) {
 // 対応付け済みの各コマについて、コマの現在の画像を入力にI2Iを順次リクエストし、結果で置き換える。
 // skipEmptyPromptがtrueの場合、コマの画像プロンプトが空のコマはスルーする（T2Iと同じ絞り込み）。
 // falseの場合は全対応付け済みコマが対象（モーダルの全体Positive/Negativeのみでも処理される）。
-async function _runAutoImageGenerateI2I({ positive, negative, denoise, skipEmptyPrompt }, statusEl) {
+async function _runAutoImageGenerateI2I({ positive, negative, denoise, skipEmptyPrompt, wfEnabled, wfFile }, statusEl) {
     const mapping = _computeMapping();
     if (!mapping) return { ok: false };
     if (mapping.error === 'noActivePage') { alert(t('script.autoComicMapNoActivePage')); return { ok: false }; }
@@ -468,7 +473,7 @@ async function _runAutoImageGenerateI2I({ positive, negative, denoise, skipEmpty
                 positive: _composeOverallPrompt(positive, item.imagePrompt),
                 negative,
                 denoise,
-            });
+            }, { enabled: wfEnabled, file: wfFile });
             if (!genResult?.ok || !genResult.url) {
                 console.warn('[AutoComic I2I] generate failed for panel', item.panelId, genResult?.message);
                 failCount++;
@@ -602,6 +607,10 @@ function _openAutoComicI2IModal() {
             negative: _autoI2INegative,
             denoise: _autoI2IDenoise,
             skipEmptyPrompt: _autoI2ISkipEmptyPrompt,
+            // Runは常にモーダルに今表示されているチェックボックス/ファイル名の値を使う
+            // （「保存」ボタンは次回モーダルを開いたときの初期値を保存するだけで、Run自体には影響しない）
+            wfEnabled: $('ai2i-default-wf-enabled').checked,
+            wfFile: $('ai2i-default-wf-name').value,
         }, statusEl);
 
         runBtn.disabled = false;

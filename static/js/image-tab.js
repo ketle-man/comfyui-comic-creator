@@ -1699,6 +1699,11 @@ class ImageTab {
                 positive: this._selectI2IPositive,
                 negative: this._selectI2INegative,
                 denoise:  this._selectI2IDenoise,
+            }, {
+                // Runは常にパネルに今表示されているチェックボックス/ファイル名の値を使う
+                // （「保存」ボタンは次回パネル表示時の初期値を保存するだけで、Run自体には影響しない）
+                enabled: document.getElementById("ie-i2i-default-wf-enabled")?.checked,
+                file: document.getElementById("ie-i2i-default-wf-name")?.value,
             });
 
             if (!result?.ok) throw new Error(result?.message || "I2I failed");

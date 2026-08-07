@@ -319,6 +319,11 @@ function openLayoutI2IModal() {
                 positive: _layoutI2IPositive,
                 negative: _layoutI2INegative,
                 denoise:  _layoutI2IDenoise,
+            }, {
+                // Runは常にモーダルに今表示されているチェックボックス/ファイル名の値を使う
+                // （「保存」ボタンは次回モーダルを開いたときの初期値を保存するだけで、Run自体には影響しない）
+                enabled: $('li2i-default-wf-enabled').checked,
+                file: $('li2i-default-wf-name').value,
             });
             if (!result?.ok) throw new Error(result?.message || 'I2I failed');
 
