@@ -9,10 +9,11 @@
 // - 「フキダシを自動生成」(Phase 2): 対応付け結果をもとに、各コマへセリフ件数分の
 //   フキダシ（コマ内で上から均等配置）を自動生成しテキストを流し込む。形状はセリフごとの
 //   「フキダシ形状」列指定を優先し、未指定（空）の場合は角丸矩形にフォールバックする。
-// - 「画像を一括生成」(Phase 3, T2I): 対応付け結果のうち画像プロンプトが入力されている
-//   各コマについて、コマのbboxアスペクト比に応じたSDXL標準解像度でWorkflow Studio
-//   経由の画像生成を順次リクエストし、結果を該当コマへ挿入する（sloppy-comicの
-//   逐次forループと同じ設計）。
+// - 「画像を一括生成」(Phase 3, T2I): I2Iモーダルと同じ構成の専用モーダルを開く。モーダルの
+//   全体Positive/NegativeとコマごとのT2Iプロンプトを結合し、コマのbboxアスペクト比に応じた
+//   SDXL標準解像度でWorkflow Studio経由の画像生成を順次リクエストし、結果を該当コマへ挿入する
+//   （sloppy-comicの逐次forループと同じ設計）。「コマの画像プロンプトが空の場合はスルーする」
+//   チェックとT2I用デフォルトワークフロー指定（I2I設定とは独立）を持つ。
 // - 「画像を一括生成（I2I）」(Phase 3追加分): 対応付け済みの各コマの現在の画像を入力に、
 //   モーダルの全体指示（Positive/Negative）＋コマごとの画像プロンプトを組み合わせて
 //   Workflow StudioのI2I（15-pixifx-bridge.jsのレイアウトタブI2Iモーダルと同じ
@@ -36,7 +37,7 @@ import { getPanelLayerSvg } from './04b-layer-panel-render.js';
 import { pushHistory } from './07-pages.js';
 import { createBalloonAtPosition } from './09c-balloon-handles.js';
 import { applyBubbleTextToShape, BUBBLE_TEXT_PT_TO_SVG } from './09f-bubble-text.js';
-import { requestPanelImageFromWorkflowStudio, sendI2IRunToWorkflowStudio, getI2ISettingsState, saveI2ISettingsState } from './14-integrations.js';
+import { requestPanelImageFromWorkflowStudio, sendI2IRunToWorkflowStudio, getI2ISettingsState, saveI2ISettingsState, getT2ISettingsState, saveT2ISettingsState } from './14-integrations.js';
 import { embedFontsInSvg, drawSvgOnCanvas } from './12-text-png-export.js';
 import { requestNanobananaGenerate, saveNanobananaImageAndMaybeEagle, checkNanobananaKeyStatus } from '../nanobanana.js';
 
@@ -218,20 +219,34 @@ async function _handleAutoBalloonGenerateClick() {
     alert(t('script.autoComicBalloonSuccess', createdCount));
 }
 
-// 対応付け済みのコマのうち、画像プロンプトが入力されている各コマについて、コマのbboxアスペクト比に
-// 応じたSDXL標準解像度でWorkflow Studio経由の画像生成を順次リクエストし、結果を該当コマへ挿入する。
-async function _handleAutoImageGenerateClick() {
+// ============================================================
+// 「画像を一括生成」モーダル（T2I）
+// I2I一括生成モーダル（_openAutoComicI2IModal）と同じ構成。既存I2Iモーダルと異なり
+// 対象コマの現在の画像は使わず（txt2img）、Denoiseも持たない。全体Positive/Negative、
+// 「コマの画像プロンプトが空の場合はスルーする」チェック、T2I用デフォルトワークフロー指定
+// （I2I設定とは独立の_t2iSettings、14-integrations.js）を持つ。
+// ============================================================
+
+let _autoT2IPositive = '';
+let _autoT2INegative = '';
+let _autoT2ISkipEmptyPrompt = false;
+
+// 対応付け済みの各コマについて、コマのbboxアスペクト比に応じたSDXL標準解像度でWorkflow Studio
+// 経由のtxt2img生成を順次リクエストし、結果を該当コマへ挿入する。skipEmptyPromptがtrueの場合、
+// コマの画像プロンプトが空のコマはスルーする（I2Iと同じ絞り込み）。falseの場合は全対応付け済み
+// コマが対象（モーダルの全体Positive/Negativeのみでも処理される）。
+async function _runAutoImageGenerateT2I({ positive, negative, skipEmptyPrompt }, statusEl) {
     const mapping = _computeMapping();
-    if (!mapping) return;
-    if (mapping.error === 'noActivePage') { alert(t('script.autoComicMapNoActivePage')); return; }
+    if (!mapping) return { ok: false };
+    if (mapping.error === 'noActivePage') { alert(t('script.autoComicMapNoActivePage')); return { ok: false }; }
 
     const { mapped, warning } = mapping;
     _autoComicRenderResult(mapped, warning);
 
-    const targets = mapped.filter(item => item.imagePrompt && item.imagePrompt.trim());
-    if (targets.length === 0) { alert(t('script.autoComicGenerateNoPrompt')); return; }
-
-    const statusEl = document.getElementById('script-autocomic-map-status');
+    const targets = skipEmptyPrompt
+        ? mapped.filter(item => item.imagePrompt && item.imagePrompt.trim())
+        : mapped;
+    if (targets.length === 0) { alert(t('script.autoComicGenerateNoPrompt')); return { ok: false }; }
 
     pushHistory();
 
@@ -246,7 +261,9 @@ async function _handleAutoImageGenerateClick() {
         if (!bbox || !bbox.width || !bbox.height) { failCount++; continue; }
 
         const { width, height } = pickSdxlResolution(bbox.width / bbox.height);
-        const genResult = await requestPanelImageFromWorkflowStudio(item.imagePrompt, width, height);
+        const genResult = await requestPanelImageFromWorkflowStudio(
+            _composeOverallPrompt(positive, item.imagePrompt), width, height, negative,
+        );
         if (!genResult?.ok || !genResult.url) {
             console.warn('[AutoComic] generate failed for panel', item.panelId, genResult?.message);
             failCount++;
@@ -281,16 +298,117 @@ async function _handleAutoImageGenerateClick() {
     }
 
     if (statusEl) statusEl.textContent = '';
+    return { ok: true, successCount, failCount };
+}
 
-    if (successCount === 0) {
-        alert(t('script.autoComicGenerateAllFailed'));
-        return;
-    }
+function _openAutoComicT2IModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'tsm-overlay';
 
-    await switchTab('layout');
-    alert(failCount > 0
-        ? t('script.autoComicGenerateFailedSome', successCount, failCount)
-        : t('script.autoComicGenerateSuccess', successCount));
+    const dialog = document.createElement('div');
+    dialog.className = 'tsm-dialog li2i-dialog';
+    dialog.innerHTML = `
+        <div class="tsm-header">
+            <h3>${t('script.autoT2IModalHeading')}</h3>
+            <button type="button" id="at2i-close-btn" class="tsm-close-btn" title="${t('common.close')}">×</button>
+        </div>
+        <div class="tsm-body li2i-body">
+            <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
+                <label class="fontmgr-style-group-label">${t('script.autoI2IPositiveLabel')}</label>
+                <textarea id="at2i-positive" rows="5"></textarea>
+                <span style="font-size:11px; color:var(--text-secondary);">${t('script.autoI2IPositiveHint')}</span>
+            </div>
+            <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
+                <label class="fontmgr-style-group-label">${t('script.autoI2INegativeLabel')}</label>
+                <textarea id="at2i-negative" rows="5"></textarea>
+            </div>
+            <div class="fontmgr-style-group">
+                <label style="cursor:pointer; display:flex; align-items:center; gap:4px;">
+                    <input type="checkbox" id="at2i-skip-empty-prompt"> ${t('script.autoI2ISkipEmptyPromptLabel')}
+                </label>
+            </div>
+            <div class="fontmgr-style-group">
+                <span id="at2i-status" style="font-size:12px; color:var(--text-secondary);"></span>
+                <button type="button" id="at2i-run-btn" class="btn primary" style="margin-left:auto;">${t('layout.i2iRunBtn')}</button>
+            </div>
+            <div style="margin:8px 0 4px; border-top:1px solid var(--border-color); padding-top:8px; font-size:11px; color:var(--text-secondary); letter-spacing:0.05em;">
+                ${t('script.autoT2ISettingsHeading')}
+            </div>
+            <div class="fontmgr-style-group">
+                <label style="cursor:pointer; display:flex; align-items:center; gap:4px;">
+                    <input type="checkbox" id="at2i-default-wf-enabled"> ${t('layout.i2iUseDefaultWf')}
+                </label>
+            </div>
+            <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
+                <label class="fontmgr-style-group-label">${t('layout.i2iWfFileLabel')}</label>
+                <input type="text" id="at2i-default-wf-name" placeholder="cc_t2i_default.json">
+            </div>
+            <div class="fontmgr-style-group">
+                <button type="button" id="at2i-settings-save-btn" class="btn small secondary">${t('common.save')}</button>
+                <span id="at2i-settings-status" style="font-size:11px; color:var(--text-secondary); margin-left:8px;"></span>
+            </div>
+        </div>
+    `;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    const $ = id => dialog.querySelector('#' + id);
+
+    $('at2i-positive').value = _autoT2IPositive;
+    $('at2i-negative').value = _autoT2INegative;
+    $('at2i-skip-empty-prompt').checked = _autoT2ISkipEmptyPrompt;
+
+    $('at2i-positive').addEventListener('input', e => { _autoT2IPositive = e.target.value; });
+    $('at2i-negative').addEventListener('input', e => { _autoT2INegative = e.target.value; });
+    $('at2i-skip-empty-prompt').addEventListener('change', e => { _autoT2ISkipEmptyPrompt = e.target.checked; });
+
+    // T2I設定（I2I設定とは独立のデフォルトワークフロー、14-integrations.js）
+    const curWf = getT2ISettingsState();
+    $('at2i-default-wf-enabled').checked = curWf.enabled;
+    $('at2i-default-wf-name').value = curWf.file;
+    $('at2i-settings-save-btn').addEventListener('click', () => {
+        saveT2ISettingsState($('at2i-default-wf-enabled').checked, $('at2i-default-wf-name').value);
+        const wfStatusEl = $('at2i-settings-status');
+        wfStatusEl.textContent = t('layout.i2iSettingsSaved');
+        setTimeout(() => { wfStatusEl.textContent = ''; }, 2000);
+    });
+
+    const close = () => document.body.removeChild(overlay);
+    const onKeydown = (e) => { if (e.key === 'Escape') closeAndCleanup(); };
+    document.addEventListener('keydown', onKeydown);
+    const closeAndCleanup = () => { document.removeEventListener('keydown', onKeydown); close(); };
+
+    $('at2i-close-btn').addEventListener('click', closeAndCleanup);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeAndCleanup(); });
+
+    $('at2i-run-btn').addEventListener('click', async () => {
+        const runBtn = $('at2i-run-btn');
+        const statusEl = $('at2i-status');
+
+        runBtn.disabled = true;
+        runBtn.textContent = t('layout.i2iRunningBtn');
+
+        const result = await _runAutoImageGenerateT2I({
+            positive: _autoT2IPositive,
+            negative: _autoT2INegative,
+            skipEmptyPrompt: _autoT2ISkipEmptyPrompt,
+        }, statusEl);
+
+        runBtn.disabled = false;
+        runBtn.textContent = t('layout.i2iRunBtn');
+
+        if (!result.ok) return;
+        if (result.successCount === 0) {
+            alert(t('script.autoComicGenerateAllFailed'));
+            return;
+        }
+
+        closeAndCleanup();
+        await switchTab('layout');
+        alert(result.failCount > 0
+            ? t('script.autoComicGenerateFailedSome', result.successCount, result.failCount)
+            : t('script.autoComicGenerateSuccess', result.successCount));
+    });
 }
 
 // ============================================================
@@ -307,8 +425,9 @@ let _autoI2INegative = '';
 let _autoI2IDenoise = 1.0;
 let _autoI2ISkipEmptyPrompt = false;
 
-// モーダルの全体Positiveとコマごとの画像プロンプトを結合する（どちらか一方が空でも成立する）
-function _composeI2IPositive(overallPositive, panelPrompt) {
+// モーダルの全体Positiveとコマごとの画像プロンプトを結合する（どちらか一方が空でも成立する）。
+// T2I/I2I/Nanobananaの全モーダルで共有する。
+function _composeOverallPrompt(overallPositive, panelPrompt) {
     return [overallPositive, panelPrompt].map(s => (s || '').trim()).filter(Boolean).join(', ');
 }
 
@@ -346,7 +465,7 @@ async function _runAutoImageGenerateI2I({ positive, negative, denoise, skipEmpty
             if (!blob) { failCount++; continue; }
 
             const genResult = await sendI2IRunToWorkflowStudio(blob, {
-                positive: _composeI2IPositive(positive, item.imagePrompt),
+                positive: _composeOverallPrompt(positive, item.imagePrompt),
                 negative,
                 denoise,
             });
@@ -554,7 +673,7 @@ async function _runAutoImageGenerateNanobanana({ model, positive, negative, is2k
 
             const genPayload = {
                 model,
-                prompt: _composeI2IPositive(positive, item.imagePrompt),
+                prompt: _composeOverallPrompt(positive, item.imagePrompt),
                 negative_prompt: negative,
                 width, height,
                 num_images: 1,
@@ -715,7 +834,7 @@ function initAutoComicBridge() {
     _autoComicBridgeInited = true;
     document.getElementById('script-autocomic-map-btn')?.addEventListener('click', _handleAutoComicMapClick);
     document.getElementById('script-autocomic-balloon-btn')?.addEventListener('click', _handleAutoBalloonGenerateClick);
-    document.getElementById('script-autocomic-generate-btn')?.addEventListener('click', _handleAutoImageGenerateClick);
+    document.getElementById('script-autocomic-generate-btn')?.addEventListener('click', _openAutoComicT2IModal);
     document.getElementById('script-autocomic-generate-i2i-btn')?.addEventListener('click', _openAutoComicI2IModal);
     document.getElementById('script-autocomic-generate-nanobanana-btn')?.addEventListener('click', _openAutoComicNanobananaModal);
 }

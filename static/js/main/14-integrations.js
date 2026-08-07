@@ -2,7 +2,7 @@
 // main.js 分割ファイル (15/24): Eagle連携+WorkflowStudioギャラリー+GMIC連携
 // 元 main.js の行 12796-13097 に相当
 // type="module" として読み込まれる（ESモジュール化 G6）。
-// 主なトップレベル定義: _eagleApiUrl,_eagleSettings,_eagleSettingsInited,_gmicSettingsInited,_i2iSettings,_inpaintSettings,_inpaintSettingsInited,_saveEagleSettings,_saveI2ISettings,_saveInpaintSettings,_wfmGalleryLoaded,gmicAbort,gmicInsertResult,gmicOpenGui,gmicState,gmicWaitForJob,getI2ISettingsState,initEagleSettings,initGmicSettings,initGmicTab,initInpaintSettings,initWfmGalleryTab,loadWfmGalleryTab,requestLLMPromptFromWorkflowStudio,requestPanelImageFromWorkflowStudio,saveI2ISettingsState,saveToEagle,sendI2IRunToWorkflowStudio,sendImageToWorkflowStudioI2I,sendInpaintToWorkflowStudio
+// 主なトップレベル定義: _eagleApiUrl,_eagleSettings,_eagleSettingsInited,_gmicSettingsInited,_i2iSettings,_inpaintSettings,_inpaintSettingsInited,_t2iSettings,_saveEagleSettings,_saveI2ISettings,_saveInpaintSettings,_saveT2ISettings,_wfmGalleryLoaded,gmicAbort,gmicInsertResult,gmicOpenGui,gmicState,gmicWaitForJob,getI2ISettingsState,getT2ISettingsState,initEagleSettings,initGmicSettings,initGmicTab,initInpaintSettings,initWfmGalleryTab,loadWfmGalleryTab,requestLLMPromptFromWorkflowStudio,requestPanelImageFromWorkflowStudio,saveI2ISettingsState,saveT2ISettingsState,saveToEagle,sendI2IRunToWorkflowStudio,sendImageToWorkflowStudioI2I,sendInpaintToWorkflowStudio
 // 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
 // 呼び出し箇所は書き換えていない）: state/switchTab（01-state.js）
 // ============================================================
@@ -186,6 +186,29 @@ const _inpaintSettings = (() => {
 
 function _saveInpaintSettings() {
     localStorage.setItem('ccc_inpaint_settings', JSON.stringify(_inpaintSettings));
+}
+
+// T2I設定（デフォルトワークフロー。I2I/Inpaint設定とは独立。OFFならWorkflow Studio側で
+// 現在読み込まれているワークフローをそのまま使う）
+const _t2iSettings = (() => {
+    try { return JSON.parse(localStorage.getItem('ccc_t2i_settings') || '{}'); } catch { return {}; }
+})();
+
+function _saveT2ISettings() {
+    localStorage.setItem('ccc_t2i_settings', JSON.stringify(_t2iSettings));
+}
+
+function getT2ISettingsState() {
+    return {
+        enabled: !!_t2iSettings.defaultWorkflowEnabled,
+        file: _t2iSettings.defaultWorkflowFile || 'cc_t2i_default.json',
+    };
+}
+
+function saveT2ISettingsState(enabled, file) {
+    _t2iSettings.defaultWorkflowEnabled = !!enabled;
+    _t2iSettings.defaultWorkflowFile    = (file || '').trim() || 'cc_t2i_default.json';
+    _saveT2ISettings();
 }
 
 let _inpaintSettingsInited = false;
@@ -469,14 +492,17 @@ async function requestLLMPromptFromWorkflowStudio(context) {
 
 /**
  * 画像生成プロンプトとサイズ（コマのbboxアスペクト比に応じて算出）から、Workflow Studio
- * (iframe)のGenerate UIで現在ロード中のワークフローを使ってtxt2img生成を実行し、結果URLを
- * 受け取る（半自動マンガ作成のコマ単位バッチ画像生成用）。タブ切替はしない。
+ * (iframe)のGenerate UIでtxt2img生成を実行し、結果URLを受け取る（半自動マンガ作成の
+ * コマ単位バッチ画像生成用）。タブ切替はしない。T2I設定でデフォルトワークフローが有効な場合、
+ * 実行前にそのワークフローをWorkflow Studio側に読み込ませる（I2I/Inpaintと同じ方式）。
+ * 無効な場合はGenerate UIに現在ロード中のワークフローがそのまま使われる。
  * @param {string} prompt
  * @param {number} width
  * @param {number} height
+ * @param {string} [negative]
  * @returns {Promise<{ok:boolean, url?:string, message?:string}>}
  */
-async function requestPanelImageFromWorkflowStudio(prompt, width, height) {
+async function requestPanelImageFromWorkflowStudio(prompt, width, height, negative) {
     const loaded = await loadWfmGalleryTab();
     if (!loaded) {
         return { ok: false, message: t('settings.wfmNotFound') };
@@ -488,8 +514,24 @@ async function requestPanelImageFromWorkflowStudio(prompt, width, height) {
         return { ok: false, message: 'Workflow Studio generate bridge is not ready' };
     }
 
+    let workflowData = null;
+    let workflowFilename = null;
+    if (_t2iSettings.defaultWorkflowEnabled && _t2iSettings.defaultWorkflowFile) {
+        workflowFilename = _t2iSettings.defaultWorkflowFile;
+        try {
+            const wfRes = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(workflowFilename)}`);
+            if (wfRes.ok) {
+                workflowData = await wfRes.json();
+            } else {
+                console.warn('[T2I] default workflow fetch failed:', wfRes.status);
+            }
+        } catch (e) {
+            console.warn('[T2I] default workflow fetch error:', e);
+        }
+    }
+
     try {
-        return await fn(prompt, width, height);
+        return await fn(prompt, width, height, negative, workflowData, workflowFilename);
     } catch (e) {
         console.error('[AutoComic] requestPanelImageFromWorkflowStudio error:', e);
         return { ok: false, message: e.message };
@@ -654,6 +696,7 @@ async function gmicInsertResult() {
 export {
     _eagleSettings, saveToEagle, initEagleSettings, initGmicSettings,
     getI2ISettingsState, saveI2ISettingsState, initInpaintSettings,
+    getT2ISettingsState, saveT2ISettingsState,
     initWfmGalleryTab, loadWfmGalleryTab,
     sendImageToWorkflowStudioI2I, sendInpaintToWorkflowStudio, sendI2IRunToWorkflowStudio,
     requestLLMPromptFromWorkflowStudio, requestPanelImageFromWorkflowStudio,

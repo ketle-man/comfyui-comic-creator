@@ -2,6 +2,23 @@
 
 ---
 
+## 2026-08-07（「画像を一括生成」(T2I)をI2I同様のモーダルに変更、ヘルプ更新、v1.30.0）
+
+ユーザーから「`ernie_t2i.json`をWorkflow Studioの生成UIタブに読み込んで実行したが、別のワークフローが実行されたようだ」との報告を受け調査。
+
+**原因調査**: コードのバグではなく、ユーザーが手動でワークフローをロードしたのがComic Creator画面内に埋め込まれたWorkflow Studio（`wfmgallery-iframe`）ではなく、ブラウザの別タブとして独立に開いた`/wfm`だったことが原因と判明。Kaptureで両タブを確認したところ、Comic Creator内のiframe側は起動時に自動ロードされるデフォルトワークフロー（`2.json`）のままで、ユーザーが別タブでロードした`ernie_t2i.json`は反映されていなかった（同じURLでも別ブラウザタブ＝別JS実行コンテキストのため状態が共有されない）。「画像を一括生成」(`requestPanelImageFromWorkflowStudio`)は「専用ワークフロー選択には未対応で常にGenerate UIに現在ロード中のワークフローをそのまま使う」設計だったため、iframe側の`2.json`がそのまま実行されていた。
+
+**対応（ユーザー要望）**:
+- **T2I版「画像を一括生成」のモーダル化**: 既存の「画像を一括生成（I2I）」と同じ構成（全体Positive/Negativeプロンプト、「コマの画像プロンプトが空の場合はスルーする」チェック、デフォルトワークフロー指定）を持つ専用モーダルに変更。`_handleAutoImageGenerateClick`を`_runAutoImageGenerateT2I`＋`_openAutoComicT2IModal`に置き換え（`26-auto-comic-bridge.js`）。I2I/Nanobananaモーダルと共有していたPositive結合ヘルパー`_composeI2IPositive`を`_composeOverallPrompt`へ汎用リネーム。
+- `14-integrations.js`に、I2I/Inpaint設定と同じ独立パターンで`_t2iSettings`（localStorage `ccc_t2i_settings`）・`getT2ISettingsState`/`saveT2ISettingsState`を新設（T2I/I2I/Inpaintそれぞれ別々のデフォルトワークフローを持てる）。`requestPanelImageFromWorkflowStudio(prompt, width, height, negative)`を拡張し、T2I設定が有効な場合は実行前にワークフローJSONを取得してWorkflow Studio側へ渡すようにした。
+- Workflow Studio側`gallery-tab.js`の`_wfmReceiveGenerateRequest`をI2I/Inpaintと同じパターンに拡張（`negative`・`workflowData`・`workflowFilename`引数を追加、詳細はComfyUI-Workflow-Studio側DEVLOG参照）。
+- モーダル下部の見出しをI2Iと共通の「I2I設定」のまま流用していたところ紛らわしかったため、専用の「T2I設定」ラベル（`script.autoT2ISettingsHeading`）を追加。
+- **ヘルプ更新（ja/en/zh）**: 「画像を一括生成」の説明をモーダル仕様に更新。「Workflow Studio連携について」の独立`<li>`を新設し、L/T2I/I2I連携機能が対象とするのはComic Creator画面内の「Workflow Studio」タブに埋め込まれたインスタンスであり、ブラウザの別タブ・別ウィンドウで開いたWorkflow Studioとは無関係である点を明記（今回の調査結果を踏まえた注意喚起）。「画像を一括生成（I2I）」の説明にDenoise指定は対応ワークフロー（denoiseパラメータを持つノードを含むもの）のみ有効という注記を追加。
+
+Kaptureで実機E2E確認済み: T2Iモーダルの表示・入力保持（Positive/Negative/スルーチェック/デフォルトWF設定）を確認。`ccc_t2i_settings`が`ccc_i2i_settings`/`ccc_inpaint_settings`とは独立してlocalStorageに保存されることを確認。実際にComic Creator画面内のWorkflow Studioタブ経由で`ernie_t2i.json`をT2I設定のデフォルトワークフローに指定してRunを実行し、`/queue`監視・コンソールログで`ernie_t2i.json`のモデル（`Ernie-Image-Turbo`）による生成が実行されEagleへ保存されたことを確認（test1作品、2コマとも成功、レイアウトタブへ自動挿入）。検証後は「元に戻す」でtest1作品を挿入前の状態に復元済み。新規コード起因のコンソールエラーなし。ユーザー指示によりボタン名を「画像を一括生成」→「画像を一括生成（T2I）」に変更（i18n・ヘルプ・README 3言語とも追従）。v1.30.0としてリリース。
+
+---
+
 ## 2026-08-05（半自動マンガ「画像を一括生成（Nanobanana）」機能を追加、v1.29.0）
 
 `feature/semi-auto-comic-nanobanana`ブランチで作業。スクリプトタブの半自動マンガ作成機能に、既存の「画像を一括生成（I2I）」（Workflow Studio連携）と対になる、Nanobanana（Gemini画像生成API、CC自身が持つ独立タブ`nanobanana.js`と同じ連携）を使うバッチI2I生成機能を追加した。まずは既存I2Iモーダルとは別のボタン・別のモーダルとして実装し、バックエンド選択式の1モーダルへの統合は将来の検討課題とする。
