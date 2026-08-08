@@ -551,24 +551,6 @@ class ImageTab {
         sel.innerHTML = list.map(f => `<option value="${f}" ${f === current ? "selected" : ""}>${f}</option>`).join("");
     }
 
-    /** #ie-text3d-font の options を _text3dTool.fontSource（Google/System）で再構築する */
-    async _populateText3DFontSelect() {
-        const t3 = this._text3dTool;
-        if (!t3) return;
-        const families = t3.fontSource === "system"
-            ? await this._getSystemFontFamiliesCached()
-            : _fontMgrGoogleList();
-        const sel = document.getElementById("ie-text3d-font");
-        if (!sel) return; // 取得中にツールが切り替わっていた場合
-        const current = t3.fontFamily;
-        if (families.length === 0) {
-            sel.innerHTML = `<option value="${current}">${t("image.fontListEmpty", current)}</option>`;
-            return;
-        }
-        const list = families.includes(current) ? families : [current, ...families];
-        sel.innerHTML = list.map(f => `<option value="${f}" ${f === current ? "selected" : ""}>${f}</option>`).join("");
-    }
-
     async _checkBiRefNetAvailability() {
         try {
             const resp = await fetch("/mask_editor/birefnet/status");
@@ -1019,17 +1001,22 @@ class ImageTab {
             });
         } else if (toolId === "text3d" && this._text3dTool) {
             const t3 = this._text3dTool;
+            const isSvg = t3.renderMode === "svg";
             el.innerHTML = `
-                <div class="ie-opt-group">
-                    <textarea id="ie-text3d-input" rows="1" style="width:120px;font-size:12px;resize:vertical;" placeholder="${t("layout.text3dTextPlaceholder")}">${t3.text}</textarea>
-                </div>
                 <div class="ie-opt-group" style="gap:2px;">
-                    <button class="it-btn it-btn-sm ${t3.fontSource === "google" ? "ie-opt-active" : ""}" id="ie-text3d-fsrc-google">${t("layout.text3dFontSourceGoogle")}</button>
-                    <button class="it-btn it-btn-sm ${t3.fontSource === "system" ? "ie-opt-active" : ""}" id="ie-text3d-fsrc-system">${t("layout.text3dFontSourceSystem")}</button>
-                    <select id="ie-text3d-font" class="ie-opt-select" style="min-width:100px;">
-                        <option value="${t3.fontFamily}">${t3.fontFamily}</option>
-                    </select>
+                    <button class="it-btn it-btn-sm ${!isSvg ? "ie-opt-active" : ""}" id="ie-text3d-mode-text">${t("layout.text3dModeText")}</button>
+                    <button class="it-btn it-btn-sm ${isSvg ? "ie-opt-active" : ""}" id="ie-text3d-mode-svg">${t("layout.text3dModeSvg")}</button>
                 </div>
+                ${!isSvg ? `` : `
+                <div class="ie-opt-group" style="gap:4px;">
+                    <input type="file" id="ie-text3d-svg-file" accept=".svg,image/svg+xml" style="font-size:11px;max-width:120px;">
+                    <span id="ie-text3d-svg-filename" style="font-size:11px;color:var(--text-secondary);">${t3.svgFileName || t("layout.text3dSvgFileNoneLabel")}</span>
+                </div>
+                <div class="ie-opt-group">
+                    <label style="font-size:11px;">${t("layout.text3dSvgSizeLabel")}</label>
+                    <input type="range" id="ie-text3d-svg-size" min="0.3" max="4.0" step="0.1" value="${t3.svgSize}" style="width:60px;">
+                </div>
+                `}
                 <div class="ie-opt-group">
                     <label style="font-size:11px;">${t("layout.text3dDepthLabel")}</label>
                     <input type="range" id="ie-text3d-depth" min="0.02" max="1.0" step="0.01" value="${t3.depth}" style="width:60px;">
@@ -1037,11 +1024,6 @@ class ImageTab {
                 <div class="ie-opt-group" style="gap:4px;">
                     <input type="checkbox" id="ie-text3d-bevel" ${t3.bevelEnabled ? "checked" : ""}>
                     <label for="ie-text3d-bevel">${t("layout.text3dBevelLabel")}</label>
-                </div>
-                <div class="ie-opt-group" style="gap:2px;">
-                    <button class="it-btn it-btn-sm ${t3.align === "left" ? "ie-opt-active" : ""}" id="ie-text3d-align-left">${t("layout.text3dAlignLeft")}</button>
-                    <button class="it-btn it-btn-sm ${t3.align === "center" ? "ie-opt-active" : ""}" id="ie-text3d-align-center">${t("layout.text3dAlignCenter")}</button>
-                    <button class="it-btn it-btn-sm ${t3.align === "right" ? "ie-opt-active" : ""}" id="ie-text3d-align-right">${t("layout.text3dAlignRight")}</button>
                 </div>
                 <div class="ie-opt-group">
                     <button class="it-btn it-btn-sm" id="ie-text3d-reset-camera-btn" title="${t("layout.text3dResetCameraTitle")}">RC</button>
@@ -1052,27 +1034,29 @@ class ImageTab {
                     <button class="it-btn it-btn-sm" id="ie-text3d-cancel-btn">${t("image.text3dCancel")}</button>
                 </div>
             `;
-            document.getElementById("ie-text3d-input")?.addEventListener("input", e => t3.setText(e.target.value));
-            ["google", "system"].forEach(src => {
-                document.getElementById(`ie-text3d-fsrc-${src}`)?.addEventListener("click", async () => {
-                    if (t3.fontSource === src) return;
-                    t3.fontSource = src;
-                    await this._populateText3DFontSelect();
+            document.getElementById("ie-text3d-mode-text")?.addEventListener("click", () => {
+                if (t3.renderMode === "text") return;
+                t3.setRenderMode("text");
+                this._renderToolOptions("text3d");
+            });
+            document.getElementById("ie-text3d-mode-svg")?.addEventListener("click", () => {
+                if (t3.renderMode === "svg") return;
+                t3.setRenderMode("svg");
+                this._renderToolOptions("text3d");
+            });
+            if (isSvg) {
+                document.getElementById("ie-text3d-svg-file")?.addEventListener("change", async e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    let warning = "";
+                    try { warning = await t3.setSvgFile(file); } catch (err) { console.error("[text3d] SVG読込失敗:", err); }
                     this._renderToolOptions("text3d");
+                    if (warning) this._toast(warning, "info");
                 });
-            });
-            document.getElementById("ie-text3d-font")?.addEventListener("change", async e => {
-                try { await t3.setFont(e.target.value, t3.fontSource); } catch { /* エラーはreloadFont内でconsole出力済み */ }
-            });
-            this._populateText3DFontSelect();
+                document.getElementById("ie-text3d-svg-size")?.addEventListener("input", e => t3.setSvgSize(parseFloat(e.target.value)));
+            }
             document.getElementById("ie-text3d-depth")?.addEventListener("input", e => t3.setDepth(parseFloat(e.target.value)));
             document.getElementById("ie-text3d-bevel")?.addEventListener("change", e => t3.setBevel(e.target.checked));
-            ["left", "center", "right"].forEach(al => {
-                document.getElementById(`ie-text3d-align-${al}`)?.addEventListener("click", () => {
-                    t3.setAlign(al);
-                    this._renderToolOptions("text3d");
-                });
-            });
             document.getElementById("ie-text3d-reset-camera-btn")?.addEventListener("click", () => t3.resetCamera());
             document.getElementById("ie-text3d-settings-btn")?.addEventListener("click", () => t3.openSettingsModal());
             document.getElementById("ie-text3d-commit-btn")?.addEventListener("click", () => {

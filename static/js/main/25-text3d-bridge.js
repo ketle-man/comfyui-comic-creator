@@ -14,6 +14,19 @@ import { openText3DSettingsModal } from '../text3d-settings-modal.js';
 
 let _systemFontFamiliesCache = null; // window.queryLocalFonts() の結果（family名の重複除去済み配列）をキャッシュ
 
+// editor.getSvgWarnings() が返す警告キー → i18nキーの対応表（text3d-core.js側は翻訳を持たないため呼び出し側で変換する）
+const SVG_WARNING_I18N_KEYS = {
+    svgTextNode: 'layout.text3dSvgTextNodeWarning',
+    svgImageNode: 'layout.text3dSvgImageNodeWarning',
+    svgNoPath: 'layout.text3dSvgNoPathWarning',
+    svgParseFailed: 'layout.text3dSvgParseFailed',
+    svgBevelTooLarge: 'layout.text3dSvgBevelTooLargeWarning',
+};
+
+function _text3dFormatSvgWarnings(keys) {
+    return (keys || []).map(k => t(SVG_WARNING_I18N_KEYS[k] ?? k)).join(' / ');
+}
+
 // state.text3d.materialParams をエディタへ適用すべきタイミングかどうか。
 // マテリアル設定は⚙モーダルからeditorへ直接適用され、editor内部に生きた状態として保持されるため、
 // 毎回のshowText3DCanvas呼び出しで無条件に上書きすると、モーダルでの調整がリセットされてしまう。
@@ -30,15 +43,14 @@ function initText3DTab() {
     const reeditBtn  = document.getElementById('text3d-reedit-btn');
     const statusEl   = document.getElementById('text3d-status');
 
-    const textInput   = document.getElementById('text3d-text-input');
-    const fsrcGoogleBtn = document.getElementById('text3d-fsrc-google');
-    const fsrcSystemBtn = document.getElementById('text3d-fsrc-system');
-    const fontSelect   = document.getElementById('text3d-font-family');
     const depthInput   = document.getElementById('text3d-depth');
     const bevelInput   = document.getElementById('text3d-bevel');
-    const alignLeftBtn   = document.getElementById('text3d-align-left');
-    const alignCenterBtn = document.getElementById('text3d-align-center');
-    const alignRightBtn  = document.getElementById('text3d-align-right');
+    const modeTextBtn    = document.getElementById('text3d-mode-text');
+    const modeSvgBtn     = document.getElementById('text3d-mode-svg');
+    const svgControls    = document.getElementById('text3d-svg-controls');
+    const svgFileInput   = document.getElementById('text3d-svg-file');
+    const svgFileNameEl  = document.getElementById('text3d-svg-filename');
+    const svgSizeInput   = document.getElementById('text3d-svg-size');
 
     if (!placeBtn) return; // HTMLが存在しない場合はスキップ
 
@@ -86,36 +98,35 @@ function initText3DTab() {
     });
 
     if (settingsBtn) settingsBtn.addEventListener('click', () => {
-        if (state.text3d.editor) openText3DSettingsModal(state.text3d.editor, state.text3d.wrapper);
+        if (!state.text3d.editor) return;
+        // モーダルがcvsWrapperを一時的に借りている間、コマ位置追従用ResizeObserverが
+        // 元のコマ位置へ強制的に書き戻してしまいモーダル内プレビューが画面外へ飛ぶ不具合への対応
+        // （実機検証で確認）。モーダルを開く前に止め、閉じたら再セットアップする。
+        state.text3d.resizeObserver?.disconnect();
+        openText3DSettingsModal(state.text3d.editor, state.text3d.wrapper, {
+            onClose: () => {
+                _text3dStartResizeObserver();
+                // テキスト・整列・行間はモーダル内でeditorへ直接適用されるため、閉じた時点で
+                // editor側の最新値をstateへ読み戻す（次回showText3DCanvas→_text3dApplyInitialState
+                // が古いstate値で上書きしてしまわないようにするため）。
+                const p = state.text3d.editor.getParams();
+                state.text3d.text = p.text;
+                state.text3d.align = p.align;
+                state.text3d.lineHeight = p.lineHeight;
+            },
+            fontControls: {
+                getFontSource: () => state.text3d.fontSource,
+                setFontSource: (source) => { state.text3d.fontSource = source; },
+                getFontFamily: () => state.text3d.fontFamily,
+                setFontFamily: (family) => { state.text3d.fontFamily = family; _text3dReloadFont(); },
+                getFontFamilyOptions: (source) => _text3dGetFontFamilyOptions(source),
+            },
+        });
     });
 
     if (reeditBtn) reeditBtn.addEventListener('click', () => {
         if (state.selectedImageEl) startReeditText3D(state.selectedImageEl);
     });
-
-    // テキスト入力（デバウンスして再構築負荷を抑える）
-    if (textInput) {
-        let debounceTimer = null;
-        textInput.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                state.text3d.editor?.setText(textInput.value);
-            }, 200);
-        });
-    }
-
-    // フォントソース切替
-    const _setFontSource = (source) => {
-        state.text3d.fontSource = source;
-        if (fsrcGoogleBtn) fsrcGoogleBtn.classList.toggle('active', source === 'google');
-        if (fsrcSystemBtn) fsrcSystemBtn.classList.toggle('active', source === 'system');
-        _text3dPopulateFontSelect(source, fontSelect);
-        _text3dReloadFont(fontSelect, statusEl);
-    };
-    if (fsrcGoogleBtn) fsrcGoogleBtn.addEventListener('click', () => _setFontSource('google'));
-    if (fsrcSystemBtn) fsrcSystemBtn.addEventListener('click', () => _setFontSource('system'));
-
-    if (fontSelect) fontSelect.addEventListener('change', () => _text3dReloadFont(fontSelect, statusEl));
 
     if (depthInput) depthInput.addEventListener('input', () => {
         state.text3d.editor?.setDepth(parseFloat(depthInput.value));
@@ -124,17 +135,63 @@ function initText3DTab() {
         state.text3d.editor?.setBevel(bevelInput.checked);
     });
 
-    const _setAlign = (align) => {
-        state.text3d.editor?.setAlign(align);
-        [alignLeftBtn, alignCenterBtn, alignRightBtn].forEach(b => b?.classList.remove('active'));
-        ({ left: alignLeftBtn, center: alignCenterBtn, right: alignRightBtn }[align])?.classList.add('active');
+    // モード切替（テキスト/SVG立体化）
+    const _setRenderMode = (mode) => {
+        state.text3d.renderMode = mode;
+        modeTextBtn?.classList.toggle('active', mode === 'text');
+        modeSvgBtn?.classList.toggle('active', mode === 'svg');
+        if (svgControls) svgControls.style.display = mode === 'svg' ? 'flex' : 'none';
+        state.text3d.editor?.setRenderMode(mode);
+        if (statusEl) statusEl.textContent = _text3dFormatSvgWarnings(state.text3d.editor?.getSvgWarnings());
     };
-    if (alignLeftBtn)   alignLeftBtn.addEventListener('click', () => _setAlign('left'));
-    if (alignCenterBtn) alignCenterBtn.addEventListener('click', () => _setAlign('center'));
-    if (alignRightBtn)  alignRightBtn.addEventListener('click', () => _setAlign('right'));
+    if (modeTextBtn) modeTextBtn.addEventListener('click', () => _setRenderMode('text'));
+    if (modeSvgBtn)  modeSvgBtn.addEventListener('click', () => _setRenderMode('svg'));
+
+    // SVGファイル選択
+    if (svgFileInput) svgFileInput.addEventListener('change', () => {
+        const file = svgFileInput.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            state.text3d.svgData = String(reader.result || '');
+            state.text3d.svgFileName = file.name;
+            if (svgFileNameEl) svgFileNameEl.textContent = file.name;
+            state.text3d.editor?.setSvgData(state.text3d.svgData);
+            if (statusEl) statusEl.textContent = _text3dFormatSvgWarnings(state.text3d.editor?.getSvgWarnings());
+        };
+        reader.onerror = () => {
+            if (statusEl) statusEl.textContent = t('layout.text3dSvgParseFailed');
+        };
+        reader.readAsText(file);
+    });
+
+    if (svgSizeInput) svgSizeInput.addEventListener('input', () => {
+        state.text3d.svgSize = parseFloat(svgSizeInput.value);
+        state.text3d.editor?.setSvgSize(state.text3d.svgSize);
+    });
 }
 
 // コマ上に Three.js canvas をオーバーレイ表示する（showPose3DCanvasと同型）
+// コマ位置追従用ResizeObserverを(再)セットアップする。showText3DCanvas()に加え、
+// 3Dテキスト設定モーダルを閉じた直後（onCloseコールバック）からも呼ばれる
+// （モーダルがcvsWrapperを借りている間はこのobserverを止めておく必要があるため）。
+function _text3dStartResizeObserver() {
+    const previewContainer = document.getElementById('layout-preview');
+    const svgEl = document.querySelector('#layout-preview #image-layer svg');
+    if (!previewContainer || !svgEl) return;
+
+    if (state.text3d.resizeObserver) state.text3d.resizeObserver.disconnect();
+    state.text3d.resizeObserver = new ResizeObserver(() => {
+        if (state.text3d.activePanelId) {
+            const p = state.activePage?.panels.find(pp => pp.id === state.text3d.activePanelId);
+            const sv = document.querySelector('#layout-preview #image-layer svg');
+            if (p && sv) _text3dSyncPosition(p, sv);
+        }
+    });
+    state.text3d.resizeObserver.observe(svgEl);
+    state.text3d.resizeObserver.observe(previewContainer);
+}
+
 function showText3DCanvas(panelId) {
     if (!panelId || !state.activePage) return;
 
@@ -207,16 +264,7 @@ function showText3DCanvas(panelId) {
     // 反映されない・カメラが手動操作で見失った位置のまま戻らない、という不具合になる（実機で確認）。
     _text3dApplyInitialState();
 
-    if (state.text3d.resizeObserver) state.text3d.resizeObserver.disconnect();
-    state.text3d.resizeObserver = new ResizeObserver(() => {
-        if (state.text3d.activePanelId) {
-            const p = state.activePage?.panels.find(pp => pp.id === state.text3d.activePanelId);
-            const sv = document.querySelector('#layout-preview #image-layer svg');
-            if (p && sv) _text3dSyncPosition(p, sv);
-        }
-    });
-    state.text3d.resizeObserver.observe(svgEl);
-    state.text3d.resizeObserver.observe(previewContainer);
+    _text3dStartResizeObserver();
 
     if (state.text3d.editor) {
         const cvs = state.text3d.canvas;
@@ -239,31 +287,57 @@ function _text3dApplyInitialState() {
     const editor = state.text3d.editor;
     if (!editor) return;
 
-    const textInput = document.getElementById('text3d-text-input');
     const depthInput = document.getElementById('text3d-depth');
     const bevelInput = document.getElementById('text3d-bevel');
-    const fontSelect = document.getElementById('text3d-font-family');
     const statusEl = document.getElementById('text3d-status');
+    const modeTextBtn   = document.getElementById('text3d-mode-text');
+    const modeSvgBtn    = document.getElementById('text3d-mode-svg');
+    const svgControls   = document.getElementById('text3d-svg-controls');
+    const svgFileNameEl = document.getElementById('text3d-svg-filename');
+    const svgSizeInput  = document.getElementById('text3d-svg-size');
 
     editor.setDepth(parseFloat(depthInput?.value ?? 0.15));
-    editor.setBevel(!!bevelInput?.checked);
 
     // マテリアルは⚙モーダルで直接editorへ適用され、editor内部に生きた状態として残る。
     // 新規作成直後・再編集復元直後（_pendingMaterialApply）以外は上書きしない。
     if (_pendingMaterialApply) {
         const mp = state.text3d.materialParams;
-        editor.setColor(mp.color);
+        editor.setBevel(!!bevelInput?.checked, {
+            bevelThickness: mp.bevelThickness,
+            bevelSize: mp.bevelSize,
+            bevelSegments: mp.bevelSegments,
+        });
+        editor.setFrontColor(mp.frontColor);
+        editor.setSideColor(mp.sideColor);
+        editor.setSeparateSides(mp.separateSides);
         editor.setMaterialType(mp.materialType);
         editor.setMetalness(mp.metalness);
         editor.setRoughness(mp.roughness);
         editor.setShadeColor(mp.shadeColor);
         editor.setToony(mp.toony);
         _pendingMaterialApply = false;
+    } else {
+        editor.setBevel(!!bevelInput?.checked);
     }
 
-    _text3dPopulateFontSelect(state.text3d.fontSource, fontSelect);
-    _text3dReloadFont(fontSelect, statusEl).then(() => {
-        editor.setText(textInput?.value ?? '');
+    // SVG立体化モード（パネルに残っている現在値を毎回同期する）
+    const mode = state.text3d.renderMode || 'text';
+    modeTextBtn?.classList.toggle('active', mode === 'text');
+    modeSvgBtn?.classList.toggle('active', mode === 'svg');
+    if (svgControls) svgControls.style.display = mode === 'svg' ? 'flex' : 'none';
+    if (svgFileNameEl) svgFileNameEl.textContent = state.text3d.svgFileName || t('layout.text3dSvgFileNoneLabel');
+    if (svgSizeInput) svgSizeInput.value = state.text3d.svgSize ?? 1.5;
+    editor.setSvgSize(state.text3d.svgSize ?? 1.5);
+    editor.setSvgData(state.text3d.svgData || '');
+    editor.setRenderMode(mode);
+    if (mode === 'svg') statusEl && (statusEl.textContent = _text3dFormatSvgWarnings(editor.getSvgWarnings()));
+
+    // テキスト内容・整列・行間・フォントは⚙設定モーダルへ移動しUI要素を持たないため、
+    // state.text3dの値をここで一括適用する（モーダルを閉じた際にstateへ読み戻される）。
+    editor.setAlign(state.text3d.align || 'center');
+    editor.setLineHeight(state.text3d.lineHeight ?? 1.4);
+    _text3dReloadFont().then(() => {
+        editor.setText(state.text3d.text || '');
     });
 }
 
@@ -385,35 +459,17 @@ async function commitText3D() {
     if (statusEl) statusEl.textContent = t('layout.text3dCommitted');
 }
 
-// フォントセレクトを現在のソース(Google/System)に応じて再構築する
-function _text3dPopulateFontSelect(source, fontSelect) {
-    if (!fontSelect) return;
-    const prevValue = fontSelect.value;
-    fontSelect.innerHTML = '';
-
-    let families = [];
+// 指定ソース(Google/System)のフォントファミリー一覧を返す（⚙設定モーダルのfontControls用）。
+// システムフォットは初回のみ非同期取得しキャッシュする。
+function _text3dGetFontFamilyOptions(source) {
     if (source === 'system') {
-        families = _systemFontFamiliesCache || [];
-    } else {
-        families = Array.from(GOOGLE_FONT_FAMILIES);
-    }
-
-    families.forEach(family => {
-        const opt = document.createElement('option');
-        opt.value = family;
-        opt.textContent = family;
-        fontSelect.appendChild(opt);
-    });
-
-    if (families.includes(prevValue)) fontSelect.value = prevValue;
-    else if (families.includes(state.text3d.fontFamily)) fontSelect.value = state.text3d.fontFamily;
-
-    if (source === 'system' && !_systemFontFamiliesCache) {
-        _text3dLoadSystemFontFamilies().then(list => {
+        if (_systemFontFamiliesCache) return _systemFontFamiliesCache;
+        return _text3dLoadSystemFontFamilies().then(list => {
             _systemFontFamiliesCache = list;
-            if (state.text3d.fontSource === 'system') _text3dPopulateFontSelect('system', fontSelect);
+            return list;
         });
     }
+    return Array.from(GOOGLE_FONT_FAMILIES);
 }
 
 async function _text3dLoadSystemFontFamilies() {
@@ -427,13 +483,14 @@ async function _text3dLoadSystemFontFamilies() {
     }
 }
 
-// 選択中のフォントファミリーをロードしてエディタに適用する
-async function _text3dReloadFont(fontSelect, statusEl) {
-    const family = fontSelect?.value;
+// state.text3d.fontFamily/fontSource（現在選択中のフォント）をロードしてエディタに適用する。
+// フォント選択UIは⚙設定モーダルへ移動しUI要素を常時持たないため、DOMではなくstateを直接読む。
+async function _text3dReloadFont() {
+    const family = state.text3d.fontFamily;
     const source = state.text3d.fontSource;
+    const statusEl = document.getElementById('text3d-status');
     if (!family || !state.text3d.editor) return;
 
-    state.text3d.fontFamily = family;
     if (statusEl) statusEl.textContent = t('layout.text3dFontLoading');
     try {
         const font = await loadFontForText3d(family, source);
@@ -463,32 +520,40 @@ function startReeditText3D(imageEl) {
     state.text3d.reeditImageEl = imageEl;
     state.text3d.fontSource = params.fontSource || 'google';
     state.text3d.fontFamily = params.fontFamily || state.text3d.fontFamily;
+    // SVG立体化モード関連の復元（旧データにはrenderMode/svgDataが存在しないため'text'にフォールバック）
+    state.text3d.renderMode = params.renderMode === 'svg' ? 'svg' : 'text';
+    state.text3d.svgData = params.svgData || '';
+    state.text3d.svgFileName = params.svgFileName || '';
+    state.text3d.svgSize = params.svgSize ?? 1.5;
+    // テキスト内容・整列・行間の復元（⚙設定モーダルへ移動しUI要素を持たないためstateへ直接格納する）
+    state.text3d.text = params.text || '';
+    state.text3d.align = params.align || 'center';
+    state.text3d.lineHeight = params.lineHeight ?? 1.4;
 
     // UIコントロールに復元値を反映（showText3DCanvas → _text3dApplyInitialStateがこの値を読む）
-    const textInput = document.getElementById('text3d-text-input');
     const depthInput = document.getElementById('text3d-depth');
     const bevelInput = document.getElementById('text3d-bevel');
-    const fsrcGoogleBtn = document.getElementById('text3d-fsrc-google');
-    const fsrcSystemBtn = document.getElementById('text3d-fsrc-system');
 
-    if (textInput) textInput.value = params.text || '';
     if (depthInput) depthInput.value = params.depth ?? 0.15;
     if (bevelInput) bevelInput.checked = !!params.bevelEnabled;
 
     // マテリアルはUI要素を持たないため state.text3d.materialParams に復元値を格納し、
     // 次の showText3DCanvas → _text3dApplyInitialState() での1回限りの適用を予約する。
+    // 旧データ（frontColor/sideColor導入前）は単色の`color`をfrontColor/sideColor両方へフォールバックする。
     state.text3d.materialParams = {
-        color: params.color || '#ffffff',
+        frontColor: params.frontColor || params.color || '#ffffff',
+        sideColor: params.sideColor || params.frontColor || params.color || '#ffffff',
+        separateSides: !!params.separateSides,
         materialType: params.materialType === 'toon' ? 'toon' : 'standard',
         metalness: params.metalness ?? 0.1,
         roughness: params.roughness ?? 0.6,
         shadeColor: params.shadeColor || '#999999',
         toony: params.toony ?? 0.9,
+        bevelThickness: params.bevelThickness ?? 0.02,
+        bevelSize: params.bevelSize ?? 0.01,
+        bevelSegments: params.bevelSegments ?? 2,
     };
     _pendingMaterialApply = true;
-
-    if (fsrcGoogleBtn) fsrcGoogleBtn.classList.toggle('active', state.text3d.fontSource === 'google');
-    if (fsrcSystemBtn) fsrcSystemBtn.classList.toggle('active', state.text3d.fontSource === 'system');
 
     // subtabを3Dテキストに切り替えてから表示する
     document.querySelector('.subtab-btn[data-subtab="text3d"]')?.click();

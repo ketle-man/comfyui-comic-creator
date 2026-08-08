@@ -708,11 +708,18 @@
               <!-- 3Dテキストサブタブ -->
               <div id="subtab-text3d" class="subtab-content" style="display:none; flex:1; padding:0; margin:0;">
                 <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
-                  <textarea id="text3d-text-input" rows="1" style="width:140px; resize:vertical; font-size:12px;" data-i18n-placeholder="layout.text3dTextPlaceholder" placeholder="テキストを入力"></textarea>
-                  <!-- フォントソース切替 -->
-                  <button id="text3d-fsrc-google" class="btn small active" style="white-space:nowrap;" data-i18n="layout.text3dFontSourceGoogle" title="Google Fontsから選択">Google</button>
-                  <button id="text3d-fsrc-system" class="btn small" style="white-space:nowrap;" data-i18n="layout.text3dFontSourceSystem" title="このPCにインストール済みのフォントから選択">システム</button>
-                  <select id="text3d-font-family" style="max-width:140px; font-size:12px;"></select>
+                  <!-- モード切替（テキスト/SVG立体化） -->
+                  <button id="text3d-mode-text" class="btn small active" style="white-space:nowrap;" data-i18n="layout.text3dModeText" title="文字を3D化します">テキスト</button>
+                  <button id="text3d-mode-svg" class="btn small" style="white-space:nowrap;" data-i18n="layout.text3dModeSvg" title="SVGファイルのパスを3D化します">SVG</button>
+                  <!-- 区切り -->
+                  <div style="border-left:1px solid var(--border-color); height:20px;"></div>
+                  <!-- SVGモード専用コントロール -->
+                  <div id="text3d-svg-controls" style="display:none; flex-wrap:wrap; gap:6px; align-items:center;">
+                    <input type="file" id="text3d-svg-file" accept=".svg,image/svg+xml" style="font-size:11px; max-width:160px;" />
+                    <span id="text3d-svg-filename" style="font-size:11px; color:var(--text-secondary); white-space:nowrap;" data-i18n="layout.text3dSvgFileNoneLabel">ファイル未選択</span>
+                    <label style="font-size:11px; white-space:nowrap;" data-i18n="layout.text3dSvgSizeLabel" title="SVGの大きさ">サイズ:</label>
+                    <input type="range" id="text3d-svg-size" min="0.3" max="4.0" step="0.1" value="1.5" style="width:60px;" />
+                  </div>
                   <!-- 区切り -->
                   <div style="border-left:1px solid var(--border-color); height:20px;"></div>
                   <!-- 押し出し・ベベル -->
@@ -720,11 +727,7 @@
                   <input type="range" id="text3d-depth" min="0.02" max="1.0" step="0.01" value="0.15" style="width:60px;" />
                   <label style="font-size:11px; white-space:nowrap; display:flex; align-items:center; gap:2px;"><input type="checkbox" id="text3d-bevel" /><span data-i18n="layout.text3dBevelLabel">面取り</span></label>
                   <!-- ライト・マテリアル設定モーダル -->
-                  <button id="text3d-settings-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.text3dSettingsBtn" data-i18n-title="layout.text3dSettingsBtnTitle" title="ライト・マテリアル（色/質感）・ズーム操作方式を設定します">⚙ 設定</button>
-                  <!-- 整列 -->
-                  <button id="text3d-align-left" class="btn small" style="white-space:nowrap;" data-i18n="layout.text3dAlignLeft" title="左揃え">左</button>
-                  <button id="text3d-align-center" class="btn small active" style="white-space:nowrap;" data-i18n="layout.text3dAlignCenter" title="中央揃え">中央</button>
-                  <button id="text3d-align-right" class="btn small" style="white-space:nowrap;" data-i18n="layout.text3dAlignRight" title="右揃え">右</button>
+                  <button id="text3d-settings-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.text3dSettingsBtn" data-i18n-title="layout.text3dSettingsBtnTitle" title="ライト・マテリアル（色/質感）・テキスト編集・ズーム操作方式を設定します">⚙ 3D設定</button>
                   <!-- 区切り -->
                   <div style="border-left:1px solid var(--border-color); height:20px;"></div>
                   <!-- 配置・確定・キャンセル・再編集 -->

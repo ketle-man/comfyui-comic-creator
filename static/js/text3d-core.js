@@ -7,8 +7,18 @@
 //
 // 日本語グリフの立体化: opentype.js の Font.getPath() が返すパスコマンド(M/L/C/Q)を
 // THREE.ShapePath に変換 → toShapes() → THREE.ExtrudeGeometry で押し出す。
+//
+// SVG立体化: SVGLoader.parse() が返すパスを SVGLoader.createShapes() で Shape[] に変換し、
+// 同じ ExtrudeGeometry で押し出す（テキストモードと押し出し/ベベル設定を共有）。
+// SVGLoaderの座標系はSVG標準の「Y軸下向き正」のため、テキストモードと同様にYを反転する。
+//
+// 表面/側面カラー: THREE.ExtrudeGeometryは標準で「キャップ面(表裏)=materialIndex 0」
+// 「側面(押し出し面)=materialIndex 1」の2グループを自動生成するため、
+// new THREE.Mesh(geometry, [frontMaterial, sideMaterial]) と配列を渡すだけで
+// 表面/側面を別マテリアルにできる（three.js本体のExtrudeGeometry実装に基づく挙動）。
+// 分離しない場合はfrontMaterialをそのままsideにも使い回す（同一インスタンス参照）。
 
-export function initText3DEditor(THREE, OrbitControls, MToonMaterial, canvas, options = {}) {
+export function initText3DEditor(THREE, OrbitControls, MToonMaterial, SVGLoaderClass, canvas, options = {}) {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setSize(canvas.width || 1, canvas.height || 1, false);
 
@@ -122,17 +132,23 @@ export function initText3DEditor(THREE, OrbitControls, MToonMaterial, canvas, op
 
     let mesh = null;
     let currentFont = null; // opentype.Font
+    let lastSvgWarnings = []; // 直近のSVGパース結果に対する警告キー配列（getSvgWarnings()で参照）
     const params = {
         text: '',
         fontFamily: '',
         fontSource: 'google',
         fontSizeWorld: 1.2,
+        renderMode: 'text',        // 'text' | 'svg'
+        svgData: '',               // SVG立体化モード時の生SVG文字列
+        svgSize: 1.5,              // SVGのバウンディングボックス最大辺を合わせるワールドサイズ（fontSizeWorldと同オーダー）
         depth: 0.15,
         bevelEnabled: false,
         bevelThickness: 0.02,
         bevelSize: 0.01,
         bevelSegments: 2,
-        color: '#ffffff',
+        frontColor: '#ffffff',
+        sideColor: '#ffffff',
+        separateSides: false,      // trueならfrontColor/sideColorを別マテリアルにする
         metalness: 0.1,
         roughness: 0.6,
         materialType: 'standard', // 'standard' | 'toon'
@@ -196,26 +212,168 @@ export function initText3DEditor(THREE, OrbitControls, MToonMaterial, canvas, op
         if (!mesh) return;
         scene.remove(mesh);
         mesh.geometry.dispose();
-        mesh.material.dispose();
+        // mesh.materialは常に[front, side]の配列（分離しない場合は同一インスタンスを共有）。
+        // Setで重複除去してから破棄する。
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        new Set(mats).forEach((m) => m.dispose());
         mesh = null;
+    }
+
+    // mesh.material（常に[front, side]の配列。非分離時はfront===sideの同一インスタンス）を
+    // 重複なく巡回する。setMetalness等のライブ更新系セッターが使う。
+    function _forEachMaterial(fn) {
+        if (!mesh) return;
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        new Set(mats).forEach(fn);
     }
 
     // ExtrudeGeometryの側面・キャップ面の法線向きが文字形状によって不安定になるケースへの
     // 安全策として両面描画にする（片面カリングによる欠け表示を防ぐ）。Standard/Toon共通。
-    function _createMaterial() {
+    function _createMaterial(colorHex) {
         if (params.materialType === 'toon' && MToonMaterial) {
             return new MToonMaterial({
-                color: params.color,
+                color: colorHex,
                 shadeColorFactor: params.shadeColor,
                 shadingToonyFactor: params.toony,
                 side: THREE.DoubleSide,
             });
         }
         return new THREE.MeshStandardMaterial({
-            color: params.color,
+            color: colorHex,
             metalness: params.metalness,
             roughness: params.roughness,
             side: THREE.DoubleSide,
+        });
+    }
+
+    // 表面(materialIndex 0)・側面(materialIndex 1)用マテリアルを生成する。
+    // separateSidesがfalseの場合はsideにfrontと同一インスタンスを使い回す
+    // （setFrontColor()の1回のcolor.set()だけで両方に反映されるようにするため）。
+    function _buildMaterials() {
+        const front = _createMaterial(params.frontColor);
+        const side = params.separateSides ? _createMaterial(params.sideColor) : front;
+        return [front, side];
+    }
+
+    // SVG文字列をパースしてExtrudeGeometryを生成する（3d-text-generator/src/utils/svgToShapes.ts を
+    // vanilla js化して移植）。テキストモードと同じdepth/bevel設定を共有する。
+    // opts.forceNoBevel: trueの場合ベベルを無効化して押し出す（面取りがSVGの細い部分で自己交差し
+    // NaN頂点を生んだ場合の再構築フォールバック。_rebuildGeometry()から呼ばれる）。
+    // 戻り値: { geometry, warnings, hasTextNodes, hasImageNodes, pathCount, shapeCount }
+    // geometryがnullの場合はパース失敗/有効パスなし（warningsに理由キーが入る）。
+    function _buildSvgGeometry(svgString, targetSize, opts = {}) {
+        if (!svgString || !svgString.trim() || !SVGLoaderClass) return null;
+
+        const warnings = [];
+        const hasTextNodes = /<(text|tspan)[\s>]/i.test(svgString);
+        const hasImageNodes = /<(image|img)[\s>]/i.test(svgString);
+        if (hasTextNodes) warnings.push('svgTextNode');
+        if (hasImageNodes) warnings.push('svgImageNode');
+
+        let svgData;
+        try {
+            svgData = new SVGLoaderClass().parse(svgString);
+        } catch (err) {
+            console.error('[text3d] SVGパースに失敗しました:', err);
+            return { geometry: null, warnings: ['svgParseFailed', ...warnings], hasTextNodes, hasImageNodes, pathCount: 0, shapeCount: 0 };
+        }
+
+        const paths = svgData.paths || [];
+        if (paths.length === 0) {
+            return { geometry: null, warnings: ['svgNoPath', ...warnings], hasTextNodes, hasImageNodes, pathCount: 0, shapeCount: 0 };
+        }
+
+        const allShapes = [];
+        paths.forEach((path) => {
+            // 標準: SVGLoaderの通常のシェイプ生成
+            let shapes = [];
+            try { shapes = SVGLoaderClass.createShapes(path); } catch (err) { /* ignore */ }
+
+            // フォールバック1: createShapes()が空を返した場合（stroke-onlyやfill:noneのパス）にtoShapes()を強制
+            if ((!shapes || shapes.length === 0) && typeof path.toShapes === 'function') {
+                try { shapes = path.toShapes(); } catch (err) { /* ignore */ }
+            }
+
+            // フォールバック2: それでも空ならsubPathの点列から直接Shapeを構築する（線画向け救済策）
+            if ((!shapes || shapes.length === 0) && path.subPaths && path.subPaths.length > 0) {
+                path.subPaths.forEach((subPath) => {
+                    const points = subPath.getPoints();
+                    if (points && points.length >= 3) {
+                        const shape = new THREE.Shape();
+                        shape.moveTo(points[0].x, points[0].y);
+                        for (let i = 1; i < points.length; i++) shape.lineTo(points[i].x, points[i].y);
+                        shapes.push(shape);
+                    }
+                });
+            }
+
+            if (shapes && shapes.length > 0) allShapes.push(...shapes);
+        });
+
+        if (allShapes.length === 0) {
+            return { geometry: null, warnings: ['svgNoPath', ...warnings], hasTextNodes, hasImageNodes, pathCount: paths.length, shapeCount: 0 };
+        }
+
+        const geometry = new THREE.ExtrudeGeometry(allShapes, {
+            depth: params.depth,
+            bevelEnabled: opts.forceNoBevel ? false : params.bevelEnabled,
+            bevelThickness: params.bevelThickness,
+            bevelSize: params.bevelSize,
+            bevelSegments: params.bevelSegments,
+            curveSegments: 8,
+            steps: 1,
+        });
+
+        // SVGLoaderの座標系はSVG標準の「Y軸下向き正」のため、テキストモードと同じくY反転する
+        geometry.scale(1, -1, 1);
+
+        // バウンディングボックスの最大辺をsvgSize（テキストのfontSizeWorldと同オーダー）に正規化する
+        geometry.computeBoundingBox();
+        const rawSize = new THREE.Vector3();
+        geometry.boundingBox.getSize(rawSize);
+        const maxDim = Math.max(rawSize.x, rawSize.y, 0.0001);
+        const scale = (targetSize || 1.5) / maxDim;
+        geometry.scale(scale, scale, 1);
+
+        return { geometry, warnings, hasTextNodes, hasImageNodes, pathCount: paths.length, shapeCount: allShapes.length };
+    }
+
+    // ジオメトリが健全かどうかを検証する。ExtrudeGeometryは面取り(bevelSize/bevelThickness)が
+    // 形状の細い部分（鋭い先端や薄い線幅）に対して大きすぎると、ベベル輪郭が自己交差して破綻することが
+    // ある（three.js本体の既知の制約。実機検証でSVGモードにて確認）。破綻のパターンは2種類あり、
+    // 頂点座標そのものがNaNになるケースと、面積0の三角形が生じて法線ベクトルが(0,0,0)になり、
+    // シェーダー側の正規化(0/0)でNaN化して真っ黒に描画されるケース（コンソールエラーは出ない）がある。
+    // 後者はbbox（頂点座標）だけを見ても検出できないため、normal属性も併せて走査する。
+    function _isGeometryValid(geometry) {
+        const pos = geometry.attributes.position;
+        if (!pos) return false;
+        const parr = pos.array;
+        for (let i = 0; i < parr.length; i++) {
+            if (!Number.isFinite(parr[i])) return false;
+        }
+        const nrm = geometry.attributes.normal;
+        if (nrm) {
+            const narr = nrm.array;
+            for (let i = 0; i < narr.length; i += 3) {
+                const x = narr[i], y = narr[i + 1], z = narr[i + 2];
+                if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return false;
+                if (x === 0 && y === 0 && z === 0) return false;
+            }
+        }
+        return true;
+    }
+
+    function _buildTextExtrudeGeometry(bevelEnabled) {
+        const shapes = _buildShapesForText(currentFont, params.text, params.fontSizeWorld, params.align, params.lineHeight);
+        if (shapes.length === 0) return null;
+        return new THREE.ExtrudeGeometry(shapes, {
+            depth: params.depth,
+            bevelEnabled,
+            bevelThickness: params.bevelThickness,
+            bevelSize: params.bevelSize,
+            bevelSegments: params.bevelSegments,
+            curveSegments: 8,
+            steps: 1,
         });
     }
 
@@ -224,36 +382,53 @@ export function initText3DEditor(THREE, OrbitControls, MToonMaterial, canvas, op
 
     function _rebuildGeometry() {
         _disposeMesh();
-        if (!currentFont || !params.text.trim()) { lastBBoxSize = { width: 0, height: 0, depth: 0 }; return; }
 
-        const shapes = _buildShapesForText(currentFont, params.text, params.fontSizeWorld, params.align, params.lineHeight);
-        if (shapes.length === 0) { lastBBoxSize = { width: 0, height: 0, depth: 0 }; return; }
+        let geometry;
+        if (params.renderMode === 'svg') {
+            const result = _buildSvgGeometry(params.svgData, params.svgSize);
+            lastSvgWarnings = result ? result.warnings : [];
+            if (!result || !result.geometry) { lastBBoxSize = { width: 0, height: 0, depth: 0 }; return; }
+            geometry = result.geometry;
+        } else {
+            lastSvgWarnings = [];
+            if (!currentFont || !params.text.trim()) { lastBBoxSize = { width: 0, height: 0, depth: 0 }; return; }
+            geometry = _buildTextExtrudeGeometry(params.bevelEnabled);
+            if (!geometry) { lastBBoxSize = { width: 0, height: 0, depth: 0 }; return; }
+        }
 
-        const geometry = new THREE.ExtrudeGeometry(shapes, {
-            depth: params.depth,
-            bevelEnabled: params.bevelEnabled,
-            bevelThickness: params.bevelThickness,
-            bevelSize: params.bevelSize,
-            bevelSegments: params.bevelSegments,
-            curveSegments: 8,
-            steps: 1,
-        });
         geometry.computeBoundingBox();
+
+        // 面取りが原因でジオメトリが破綻した場合、真っ黒なまま無音で失敗させず、
+        // 面取りを無効化して再構築することで必ず何かが表示される状態に復旧する。
+        if (params.bevelEnabled && !_isGeometryValid(geometry)) {
+            console.warn('[text3d] 面取り(ベベル)が形状に対して大きすぎて破綻したため、面取りを無効化して再構築しました');
+            geometry.dispose();
+            if (params.renderMode === 'svg') {
+                const fallback = _buildSvgGeometry(params.svgData, params.svgSize, { forceNoBevel: true });
+                lastSvgWarnings = [...(fallback ? fallback.warnings : []), 'svgBevelTooLarge'];
+                if (!fallback || !fallback.geometry) { lastBBoxSize = { width: 0, height: 0, depth: 0 }; return; }
+                geometry = fallback.geometry;
+            } else {
+                geometry = _buildTextExtrudeGeometry(false);
+                if (!geometry) { lastBBoxSize = { width: 0, height: 0, depth: 0 }; return; }
+            }
+            geometry.computeBoundingBox();
+        }
+
         const bb = geometry.boundingBox;
         lastBBoxSize = {
             width: bb.max.x - bb.min.x,
             height: bb.max.y - bb.min.y,
             depth: bb.max.z - bb.min.z,
         };
-        // bbox中心を原点に揃える（カメラ・回転操作の基準を文字数に依らず一定にするため）
+        // bbox中心を原点に揃える（カメラ・回転操作の基準を文字数/SVG形状に依らず一定にするため）
         geometry.translate(
             -(bb.max.x + bb.min.x) / 2,
             -(bb.max.y + bb.min.y) / 2,
             -(bb.max.z + bb.min.z) / 2,
         );
 
-        const material = _createMaterial();
-        mesh = new THREE.Mesh(geometry, material);
+        mesh = new THREE.Mesh(geometry, _buildMaterials());
         scene.add(mesh);
     }
 
@@ -312,14 +487,57 @@ export function initText3DEditor(THREE, OrbitControls, MToonMaterial, canvas, op
             if (opts.bevelSegments != null) params.bevelSegments = opts.bevelSegments;
             _rebuildGeometry();
         },
+        // 面取り厚み/サイズ/分割数を個別に変更する（⚙設定モーダルの詳細スライダー用。ON/OFF自体はsetBevelで扱う）
+        setBevelThickness(v) { params.bevelThickness = v; _rebuildGeometry(); },
+        setBevelSize(v) { params.bevelSize = v; _rebuildGeometry(); },
+        setBevelSegments(v) { params.bevelSegments = Math.round(v); _rebuildGeometry(); },
         setAlign(align) { params.align = align; _rebuildGeometry(); },
-        setColor(hex) { params.color = hex; if (mesh) mesh.material.color.set(hex); },
-        setMetalness(v) { params.metalness = v; if (mesh && mesh.material.isMeshStandardMaterial) mesh.material.metalness = v; },
-        setRoughness(v) { params.roughness = v; if (mesh && mesh.material.isMeshStandardMaterial) mesh.material.roughness = v; },
+        setLineHeight(v) { params.lineHeight = v; _rebuildGeometry(); if (!userAdjustedCamera) _fitCameraToText(); },
+        // ---- SVG立体化モード ----
+        setRenderMode(mode) {
+            params.renderMode = mode === 'svg' ? 'svg' : 'text';
+            _rebuildGeometry();
+            if (!userAdjustedCamera) _fitCameraToText();
+        },
+        setSvgData(svgString) {
+            params.svgData = svgString || '';
+            _rebuildGeometry();
+            if (!userAdjustedCamera) _fitCameraToText();
+        },
+        setSvgSize(v) {
+            params.svgSize = v;
+            _rebuildGeometry();
+            if (!userAdjustedCamera) _fitCameraToText();
+        },
+        // 直近のSVGパース結果に対する警告キー配列（'svgTextNode'/'svgImageNode'/'svgNoPath'/'svgParseFailed'）。
+        // 呼び出し側がi18nメッセージへ変換して表示する。
+        getSvgWarnings() { return lastSvgWarnings.slice(); },
+        // ---- 表面/側面カラー ----
+        // 非分離時はmesh.material[0]===mesh.material[1]（同一インスタンス）のため、
+        // frontのcolor.set()だけで両方に反映される。
+        setFrontColor(hex) {
+            params.frontColor = hex;
+            if (mesh) {
+                const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                mats[0].color.set(hex);
+            }
+        },
+        setColor(hex) { this.setFrontColor(hex); }, // 後方互換エイリアス（旧API。表面色として扱う）
+        setSideColor(hex) {
+            params.sideColor = hex;
+            if (mesh && params.separateSides) {
+                const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                if (mats[1]) mats[1].color.set(hex);
+            }
+        },
+        // マテリアルインスタンスの共有/分離自体が切り替わるため再構築する
+        setSeparateSides(v) { params.separateSides = !!v; _rebuildGeometry(); },
+        setMetalness(v) { params.metalness = v; _forEachMaterial((m) => { if (m.isMeshStandardMaterial) m.metalness = v; }); },
+        setRoughness(v) { params.roughness = v; _forEachMaterial((m) => { if (m.isMeshStandardMaterial) m.roughness = v; }); },
         // マテリアルクラス自体が変わるため、ライブ更新ではなくジオメトリごと再構築する
         setMaterialType(type) { params.materialType = type; _rebuildGeometry(); },
-        setShadeColor(hex) { params.shadeColor = hex; if (mesh && mesh.material.isMToonMaterial) mesh.material.shadeColorFactor.set(hex); },
-        setToony(v) { params.toony = v; if (mesh && mesh.material.isMToonMaterial) mesh.material.shadingToonyFactor = v; },
+        setShadeColor(hex) { params.shadeColor = hex; _forEachMaterial((m) => { if (m.isMToonMaterial) m.shadeColorFactor.set(hex); }); },
+        setToony(v) { params.toony = v; _forEachMaterial((m) => { if (m.isMToonMaterial) m.shadingToonyFactor = v; }); },
         resetCamera() {
             userAdjustedCamera = false;
             if (lastBBoxSize.width > 0 && lastBBoxSize.height > 0) {

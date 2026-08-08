@@ -104,12 +104,27 @@ const state = {
         fontFamily: 'BIZ UDPGothic',
         resizeObserver: null,   // SVGリサイズ監視
         reeditImageEl: null,    // 再編集対象の既存<image>要素（nullなら新規配置モード）
+        // SVG立体化モード関連（パネルのモード切替UIが直接読み書きする。textareaやフォント選択と同階層）
+        renderMode: 'text',     // 'text' | 'svg'
+        svgData: '',            // 選択中SVGファイルの生文字列
+        svgFileName: '',        // 選択中SVGファイル名（表示用）
+        svgSize: 1.5,
+        // テキスト内容・整列・行間（⚙設定モーダルへツールバーから移動したため、UI要素ではなく
+        // ここで保持する。モーダル内で直接editorへ適用されるため、モーダルを閉じた時点で
+        // editor.getParams()から読み戻して同期する。
+        // text初期値はtext3d-core.jsのparams初期値（空文字）とは異なりあえて'text'にしている
+        // （「コマに配置」を押した直後から3Dビューに何か表示され、操作に迷わないようにするため）。
+        text: 'text',
+        align: 'center',
+        lineHeight: 1.4,
         // マテリアル設定（⚙設定モーダルへツールバーから移動したため、UI要素ではなくここで保持する。
         // 既定値はtext3d-core.jsのparams初期値と一致させる）
         materialParams: {
-            color: '#ffffff', materialType: 'standard',
+            frontColor: '#ffffff', sideColor: '#ffffff', separateSides: false,
+            materialType: 'standard',
             metalness: 0.1, roughness: 0.6,
             shadeColor: '#999999', toony: 0.9,
+            bevelThickness: 0.02, bevelSize: 0.01, bevelSegments: 2,
         },
     }
 };
