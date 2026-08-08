@@ -185,7 +185,14 @@ export function initText3DEditor(THREE, OrbitControls, MToonMaterial, SVGLoaderC
             let penX = 0;
             if (align === 'center') penX = -font.getAdvanceWidth(line, fontSizeWorld) / 2;
             else if (align === 'right') penX = -font.getAdvanceWidth(line, fontSizeWorld);
-            const y = -i * fontSizeWorld * lineHeight;
+            // opentype.jsのgetPath(x, y, ...)はY軸下向き正の座標系でyをベースライン位置として
+            // 使い、その後 shapePath.moveTo(cmd.x, -cmd.y) で全体を符号反転してthree.js座標系
+            // （Y軸上向き正）に変換している（このファイル冒頭の注意1）。そのため、ここで渡す行の
+            // ベースラインyは「後で符号反転されること」を見込んで先に逆方向にしておく必要がある。
+            // 以前は `y = -i * ...`（iが増えるほどyが負）としていたため、符号反転後は逆にiが増える
+            // ほど最終Y座標が正（上）になり、2行目以降が1行目より上に表示される不具合があった
+            // （テキストボックスでは1行目が上・2行目が下なのに、3Dプレビューでは逆順になる）。
+            const y = i * fontSizeWorld * lineHeight;
 
             for (const ch of line) {
                 const glyph = font.charToGlyph(ch);

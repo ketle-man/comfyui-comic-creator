@@ -139,6 +139,16 @@ function _enqueueActivePageSave(fn) {
     return run;
 }
 
+// 現時点でキューに積まれている（進行中・待機中の）保存がすべて完了するのを待つ。
+// レイアウトタブ再表示・ページタブでのページ選択など、DBから state.activePage を
+// 読み直す箇所はこれを待ってから読むこと。待たずに読むと、削除直後にタブを切り替えた場合など
+// dbPutがまだコミットされていない古いレコードを読んでしまい、削除したはずのオブジェクトが
+// 復活して見える不具合になる（_enqueueActivePageSave自体は保存同士の順序を保証するだけで、
+// 保存とは独立した経路からの読み込みまでは保護しないため）。
+function _waitForActivePageSaveQueue() {
+    return _activePageSaveQueue;
+}
+
 // opts.deferThumb=true の場合、サムネイル計算をdebounceして保存を即座に返す。
 // レイアウトタブ内の高頻度なコマ編集保存（savePanelSvg/saveOverlaySvg）から使う。
 // 未指定時は従来通り、保存前にサムネイルを同期計算して埋め込む
@@ -252,6 +262,7 @@ export {
     DB_NAME, DB_VERSION, openDB, _setDb,
     dbGet, dbPut, dbDelete, dbGetAll, dbGetAllPagesMeta,
     readFileAsText, readFileAsDataURL, svgTextToDataUrl, _enqueueActivePageSave, _dbPutRaw,
+    _waitForActivePageSaveQueue,
 };
 
 // まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
@@ -267,4 +278,5 @@ window.readFileAsDataURL = readFileAsDataURL;
 window.svgTextToDataUrl = svgTextToDataUrl;
 window._enqueueActivePageSave = _enqueueActivePageSave;
 window._dbPutRaw = _dbPutRaw;
+window._waitForActivePageSaveQueue = _waitForActivePageSaveQueue;
 

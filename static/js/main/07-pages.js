@@ -19,7 +19,7 @@
 // ============================================================
 
 import { t } from '../i18n.js';
-import { dbPut, dbGet, dbGetAllPagesMeta, _enqueueActivePageSave } from './00-db.js';
+import { dbPut, dbGet, dbGetAllPagesMeta, _enqueueActivePageSave, _waitForActivePageSaveQueue } from './00-db.js';
 import {
     selectPanel, handleInsertImageFromLocal, initDragAndDrop, updatePanelSelectDropdown,
     initImageManipulation, getStrokeWidthFromElement, saveDraftSvg, _syncDraftInteractivity,
@@ -507,6 +507,11 @@ async function renderLayoutTab() {
     // ドローツールのプロパティ変更がdebounce待ちのまま呼ばれると、DBの保存が
     // 完了する前に古いデータを読み込んでしまうため、必ず先にflushを待つ
     await _layerDrawFlushPendingSave();
+    // 削除等の直後（savePanelSvg/saveOverlaySvg経由のdbPutがまだコミットされていない状態）に
+    // タブを切り替えて戻ってくると、下のdbGet()が古いレコードを読んでしまい、削除したはずの
+    // オブジェクトが復活して見える不具合があった。_enqueueActivePageSaveのキューが
+    // 空になるのを待ってから読み直すことで、進行中の保存を必ず先に完了させる。
+    await _waitForActivePageSaveQueue();
     updateLayoutPageNav();
     if (!state.activePage) return;
 
