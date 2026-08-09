@@ -159,6 +159,13 @@ async function dbPut(storeName, data, opts) {
         if (deferThumb) {
             _scheduleThumbUpdate(storeName, data);
         } else {
+            // 即時書き込みの前に、同じレコードに対する保留中のサムネイル遅延書き込み
+            // （_scheduleThumbUpdate）があれば取り消す。取り消さずに残すと、後からそのタイマーが
+            // 発火した際、そこで捕まえていた古いスナップショットでこの書き込みが上書きされてしまい、
+            // 今まさに保存した変更（削除直後にドロップした新しい画像等）が消えて見える
+            const key = storeName + ':' + data.name;
+            const pending = _thumbDebounceTimers.get(key);
+            if (pending) { clearTimeout(pending); _thumbDebounceTimers.delete(key); }
             try {
                 const merged = buildMergedSvg(data) || data.svgContent;
                 data.thumb = await _rasterizeSvgThumb(merged, data.width, data.height);

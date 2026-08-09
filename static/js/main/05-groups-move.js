@@ -579,7 +579,12 @@ async function deleteSelectedObject() {
         panelId = el.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
                   (el.closest('g[data-overlay-layer]') ? '__overlay__' : state.selectedPanelId || 'panel-0');
     } else if (kind === 'image') {
-        panelId = el.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0';
+        // 実際のDOM上の親コマ（g[data-clip-panel]）を最優先にする。data-panel-id属性を
+        // 先に見ると、何らかの理由で属性が実際の所属コマとズレていた場合、削除保存が
+        // 誤ったコマのpanelSvgContentに対して行われ、本来のコマ側は未更新のまま残り、
+        // 見た目は削除済みなのに再描画すると復活する不具合になる
+        panelId = el.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
+                  el.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0';
     } else {
         panelId = state.selectedPanelId || 'panel-0';
     }

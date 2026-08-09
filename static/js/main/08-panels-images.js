@@ -1443,6 +1443,18 @@ function initDragAndDrop() {
                 alert(t('layout.msgCreatePageFirst'));
                 return;
             }
+
+            // ドロップした座標の直下にあるコマを判定し、そのコマへ挿入する。
+            // state.selectedPanelId だけを見ていると、ファイルをドラッグしただけでは
+            // 選択状態が変わらないため、以前に選択していた別コマ（例えば直前に画像を削除した
+            // コマ）へ誤って挿入されてしまう（見た目上ドロップしたコマとは別の場所に画像が入る）
+            const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+            const dropPanelId = dropTarget?.closest('[data-panel-id]')?.getAttribute('data-panel-id');
+            if (dropPanelId && dropPanelId !== state.selectedPanelId &&
+                state.activePage.panels?.some(p => p.id === dropPanelId)) {
+                selectPanel(dropPanelId);
+            }
+
             if (!state.selectedPanelId) {
                 alert(t('layout.msgSelectPanelFirst'));
                 return;

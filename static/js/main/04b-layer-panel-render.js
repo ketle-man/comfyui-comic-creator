@@ -234,7 +234,9 @@ function renderLayerPanel() {
         item.querySelector('.lock-btn').addEventListener('click', async (e) => {
             e.stopPropagation();
             if (panelLocked) return;
-            const panelId = img.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0';
+            // 実際のDOM上の親コマを最優先で使う（data-panel-id属性とのズレによる誤保存を防ぐ）
+            const panelId = img.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
+                             img.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0';
             if (individualLocked) {
                 delete img.dataset.locked;
             } else {
@@ -253,14 +255,19 @@ function renderLayerPanel() {
             e.stopPropagation();
             img.style.display = isHidden ? '' : 'none';
             const curSvg = getPanelLayerSvg();
-            if (curSvg) await savePanelSvg(img.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0', curSvg);
+            const visPanelId = img.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
+                                img.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0';
+            if (curSvg) await savePanelSvg(visPanelId, curSvg);
             renderLayerPanel();
         });
         item.querySelector('.delete-btn').addEventListener('click', async (e) => {
             e.stopPropagation();
             if (isLocked) return;
             pushHistory();
-            const panelId = img.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0';
+            // 実際のDOM上の親コマを最優先で使う（data-panel-id属性とのズレにより誤ったコマへ
+            // 保存され、削除が本来のコマに反映されない＝再描画時に復活する不具合を防ぐ）
+            const panelId = img.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
+                             img.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0';
             if (state.selectedImageId === img.id) { state.selectedImageId = null; state.selectedImageEl = null; }
             state.checkedLayerEls.delete(img);
             img.remove();

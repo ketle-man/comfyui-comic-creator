@@ -917,7 +917,11 @@ async function savePanelSvg(panelId, panelLayerSvgEl) {
             state.activePage = updatedRecord;
             renderLayerPanel();
         } catch (e) {
+            // ここで失敗を握りつぶすと、DOM上は削除済みに見えても
+            // state.activePage側は旧データ（削除前の画像等）を保持したままになり、
+            // 次にrenderLayoutTabが走った際に「削除したはずのオブジェクトが復活する」ように見える
             console.error('Panel save error:', e);
+            alert(t('page.msgSaveFailed', e.message));
         }
     });
 }

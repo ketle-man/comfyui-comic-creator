@@ -255,6 +255,7 @@ function _buildBalloonShapeEl(type, cx, cy, rx, ry) {
         shape.dataset.spikeCount    = 24;
         shape.dataset.spikeLevel    = 30;
         shape.dataset.spikeVariance = 30;
+        shape.dataset.spikeCurve    = 0;
     } else if (type === 'thought') {
         shape.dataset.thoughtBubbleSize   = 800;
         shape.dataset.thoughtBubbleCount  = 5;
@@ -389,6 +390,7 @@ async function addExtensionBalloon() {
         shape.dataset.spikeCount    = baseEl.dataset.spikeCount;
         shape.dataset.spikeLevel    = baseEl.dataset.spikeLevel;
         shape.dataset.spikeVariance = baseEl.dataset.spikeVariance;
+        shape.dataset.spikeCurve    = baseEl.dataset.spikeCurve || 0;
     } else if (type === 'thought') {
         shape.dataset.thoughtBubbleSize   = baseEl.dataset.thoughtBubbleSize;
         shape.dataset.thoughtBubbleCount  = baseEl.dataset.thoughtBubbleCount;
@@ -489,10 +491,12 @@ function _syncH2UI(el) {
         setVal('h2-spike-count',    el.dataset.spikeCount     || 24);
         setVal('h2-spike-level',    el.dataset.spikeLevel     || 30);
         setVal('h2-spike-variance', el.dataset.spikeVariance  || 30);
+        setVal('h2-spike-curve',    el.dataset.spikeCurve     || 0);
         setText('h2-seed-val',           el.dataset.seed           || 1);
         setText('h2-spike-count-val',    el.dataset.spikeCount     || 24);
         setText('h2-spike-level-val',    el.dataset.spikeLevel     || 30);
         setText('h2-spike-variance-val', el.dataset.spikeVariance  || 30);
+        setText('h2-spike-curve-val',    el.dataset.spikeCurve     || 0);
     } else if (type === 'thought') {
         setVal('h2-thought-bubble',    el.dataset.thoughtBubbleSize || 800);
         setText('h2-thought-bubble-val', el.dataset.thoughtBubbleSize || 800);

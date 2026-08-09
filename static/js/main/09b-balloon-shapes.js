@@ -400,10 +400,41 @@ function _h2_getBoundaryPoint(type, rx, ry, angleRad, rectRadius) {
     return { x: r * Math.cos(angleRad), y: r * Math.sin(angleRad), r };
 }
 
+// トゲ間の谷（凹角）を丸めるための補助関数。谷の頂点をベジエ制御点として使い、
+// その頂点そのものへは到達させず前後をQ曲線でつなぐことで、トゲの先端（ピーク）は
+// 鋭いまま維持しつつ、谷とその手前側面がなだらかな曲線になる。
+// curveAmt: 0（丸めなし＝従来通り直線）〜0.5（谷に隣接する各辺の半分まで曲線化＝最大）
+function _h2RoundValleysInClosedPath(points, curveAmt) {
+    if (!curveAmt) {
+        let path = `M ${points[0].x},${points[0].y}`;
+        for (let i = 1; i < points.length; i++) path += ` L ${points[i].x},${points[i].y}`;
+        return path + ' Z';
+    }
+    const n = points.length;
+    const lerp = (a, b, k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
+    // points[0]は谷（偶数インデックス=谷、奇数=ピーク）なので、その丸め後の終点から描画を開始する
+    const startPt = lerp(points[0], points[1], curveAmt);
+    let path = `M ${startPt.x},${startPt.y}`;
+    for (let i = 1; i <= n; i++) {
+        const idx = i % n;
+        const cur = points[idx];
+        if (idx % 2 === 0) { // 谷: 手前まで直線→頂点を制御点にしたQ曲線で丸める
+            const prev = points[(idx - 1 + n) % n];
+            const next = points[(idx + 1) % n];
+            const beforePt = lerp(prev, cur, 1 - curveAmt);
+            const afterPt = lerp(cur, next, curveAmt);
+            path += ` L ${beforePt.x},${beforePt.y} Q ${cur.x},${cur.y} ${afterPt.x},${afterPt.y}`;
+        } else { // ピーク: 鋭いまま直線で到達
+            path += ` L ${cur.x},${cur.y}`;
+        }
+    }
+    return path + ' Z';
+}
+
 // hukidasi2 互換: bomb (バクダン/ギザギザ) パス生成
-// params: { cx, cy, rx, ry, tailAngleDeg, tailLength, tailWidth(半角度deg), tailCurve, seed, spikeCount, spikeLevel, spikeVariance, borderWidth }
+// params: { cx, cy, rx, ry, tailAngleDeg, tailLength, tailWidth(半角度deg), tailCurve, seed, spikeCount, spikeLevel, spikeVariance, spikeCurve, borderWidth }
 function generateBombPath(params) {
-    const { cx, cy, rx, ry, tailAngleDeg, tailLength, tailWidth, tailCurve, seed, spikeCount, spikeLevel, spikeVariance, borderWidth } = params;
+    const { cx, cy, rx, ry, tailAngleDeg, tailLength, tailWidth, tailCurve, seed, spikeCount, spikeLevel, spikeVariance, spikeCurve, borderWidth } = params;
     const rng = _h2_mulberry32(seed || 1);
     const numSpikes = spikeCount || 24;
     const levelScale = (spikeLevel !== undefined ? spikeLevel : 30) / 100;
@@ -446,10 +477,9 @@ function generateBombPath(params) {
     const b1 = { x: cx + Math.max(0, bp1.r - overlap) * Math.cos(b1Rad), y: cy + Math.max(0, bp1.r - overlap) * Math.sin(b1Rad) };
     const b2 = { x: cx + Math.max(0, bp2.r - overlap) * Math.cos(b2Rad), y: cy + Math.max(0, bp2.r - overlap) * Math.sin(b2Rad) };
     // 制御点 = b1b2中点 + 法線オフセット（サイズ変更でb1/b2と一緒に追従）
-    // 本体パス
-    let bodyPath = `M ${points[0].x},${points[0].y}`;
-    for (let i = 1; i < points.length; i++) bodyPath += ` L ${points[i].x},${points[i].y}`;
-    bodyPath += ' Z';
+    // 本体パス（spikeCurveが指定されていれば谷を丸めてトゲの内側を曲線にする）
+    const curveAmt = Math.max(0, Math.min(100, spikeCurve || 0)) / 100 * 0.5;
+    let bodyPath = _h2RoundValleysInClosedPath(points, curveAmt);
 
     // 尻尾パス（tailCurve=0なら直線）
     let tailPath;
@@ -1002,6 +1032,7 @@ function _updateH2ShapePath(el) {
             spikeCount:    parseInt(el.dataset.spikeCount || 24),
             spikeLevel:    parseFloat(el.dataset.spikeLevel || 30),
             spikeVariance: parseFloat(el.dataset.spikeVariance || 30),
+            spikeCurve:    parseFloat(el.dataset.spikeCurve || 0),
         });
         bodyPath = result.bodyPath;
         tailPath = result.tailPath;

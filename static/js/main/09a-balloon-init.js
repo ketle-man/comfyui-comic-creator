@@ -562,6 +562,7 @@ function initBalloonManager() {
         ['h2-spike-count',    'spikeCount',       'h2-spike-count-val',      '' ],
         ['h2-spike-level',    'spikeLevel',       'h2-spike-level-val',      '' ],
         ['h2-spike-variance', 'spikeVariance',    'h2-spike-variance-val',   '' ],
+        ['h2-spike-curve',    'spikeCurve',       'h2-spike-curve-val',      '' ],
         ['h2-thought-bubble', 'thoughtBubbleSize','h2-thought-bubble-val',   '' ],
         ['h2-thought-count',  'thoughtBubbleCount','h2-thought-count-val',  '' ],
         ['h2-thought-offset', 'thoughtBubbleOffset','h2-thought-offset-val', '' ],
@@ -642,6 +643,7 @@ function initBalloonManager() {
                 el.dataset.spikeCount = 24;
                 el.dataset.spikeLevel = 30;
                 el.dataset.spikeVariance = 30;
+                el.dataset.spikeCurve = 0;
             } else if (newType === 'thought' && !el.dataset.thoughtBubbleSize) {
                 el.dataset.thoughtBubbleSize = 800;
             } else if (newType === 'rect' && !el.dataset.rectRadius) {

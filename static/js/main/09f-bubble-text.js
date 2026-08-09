@@ -114,7 +114,8 @@ function _bubbleTextRenderText(el, area) {
     // （画面上の物理的な位置に寄せる。延長フキダシを重ねて配置した際、テキストを隅に寄せて衝突を避けるための機能）。
     const align = el.dataset.textAlign || 'center';
     const valign = el.dataset.textValign || 'center';
-    const lineHeight = fontSizeSvg * 1.4;
+    const lineHeightMult = parseFloat(el.dataset.lineHeightMult) || 1.4;
+    const lineHeight = fontSizeSvg * lineHeightMult;
     const k = area.kind === 'oval' ? Math.SQRT2 : 1;
     // 楕円形状は対角線方向の実効半径がrx/ryそのものより小さい（内接矩形相当のrx/k, ry/k）ため、
     // 折り返し判定だけでなく寄せ位置の計算にも同じkを反映し、どの方向に寄せてもpadding分の
@@ -136,6 +137,7 @@ function _bubbleTextRenderText(el, area) {
     textEl.setAttribute('stroke', 'none');
     textEl.setAttribute('font-family', fontFamily);
     textEl.setAttribute('font-size', fontSizeSvg);
+    textEl.setAttribute('font-weight', el.dataset.textBold === '1' ? 'bold' : 'normal');
     textEl.style.pointerEvents = 'none';
     // 09e-text-tool.js 側の単独テキスト選択・回転処理が誤って付与しうる状態を毎回リセットする
     // （回転・選択は外側の<g>=balloon-shapeが一元管理するため、内部の<text>は独自状態を持たない）
@@ -275,7 +277,7 @@ async function _bubbleTextSaveFor(el, overlaySvgEl) {
 
 // モーダルで指定した内容を、選択中のフキダシ(el)へ適用する（textbox-*・h2タイプ共通の入口）。
 // rx/ryは変更しない（箱のサイズはハンドル操作、またはtextbox-*の既存サイズをそのまま使う）。
-async function applyBubbleTextToShape(el, { text, fontSizePt, textAlign, textValign, fontFamily, vertical, textColor, fillColor, borderEnabled }) {
+async function applyBubbleTextToShape(el, { text, fontSizePt, textAlign, textValign, fontFamily, vertical, textColor, fillColor, borderEnabled, lineHeightMult, bold }) {
     const overlaySvgEl = el.ownerSVGElement || el.closest('svg');
     if (!overlaySvgEl) return null;
 
@@ -291,6 +293,8 @@ async function applyBubbleTextToShape(el, { text, fontSizePt, textAlign, textVal
     el.dataset.textValign = textValign || 'center';
     el.dataset.bubbleTextVertical = vertical ? '1' : '0';
     el.dataset.textColor = textColor || '#000000';
+    el.dataset.lineHeightMult = lineHeightMult || 1.4;
+    el.dataset.textBold = bold ? '1' : '0';
 
     const kind = _bubbleTextShapeKind(el.dataset.shapeType);
     if (kind) {
@@ -465,6 +469,14 @@ function openBubbleTextModal(existingEl) {
                         <option value="#FF0000">${t('common.red')}</option>
                         <option value="#0000FF">${t('common.blue')}</option>
                     </select>
+                    <label style="margin-left:10px; display:flex; align-items:center; gap:4px;">
+                        <input type="checkbox" id="btm-bold" /> ${t('bubbleText.boldLabel')}
+                    </label>
+                </div>
+                <div class="fontmgr-style-group">
+                    <label>${t('bubbleText.lineHeightLabel')}</label>
+                    <input type="range" id="btm-line-height" min="0.8" max="3" step="0.1" value="1.4" style="width:100px;" />
+                    <span id="btm-line-height-val" style="font-size:11px; min-width:24px;">1.4</span>
                 </div>
                 ${isTextboxKind ? `
                 <div class="fontmgr-style-group">
@@ -475,19 +487,17 @@ function openBubbleTextModal(existingEl) {
                     </label>
                 </div>` : ''}
                 <div class="fontmgr-style-group">
-                    <label class="fontmgr-style-group-label" id="btm-align-label">${t('font.alignLabel')}</label>
-                    <div class="btm-shape-btns">
-                        <button type="button" class="btn small secondary btm-align-btn" data-align="left"></button>
-                        <button type="button" class="btn small secondary btm-align-btn" data-align="center">${t('font.alignCenter')}</button>
-                        <button type="button" class="btn small secondary btm-align-btn" data-align="right"></button>
-                    </div>
-                </div>
-                <div class="fontmgr-style-group">
                     <label class="fontmgr-style-group-label" id="btm-valign-label">${t('bubbleText.valignLabelH')}</label>
                     <div class="btm-shape-btns">
                         <button type="button" class="btn small secondary btm-valign-btn" data-valign="top"></button>
                         <button type="button" class="btn small secondary btm-valign-btn" data-valign="center">${t('font.alignCenter')}</button>
                         <button type="button" class="btn small secondary btm-valign-btn" data-valign="bottom"></button>
+                    </div>
+                    <label class="fontmgr-style-group-label" id="btm-align-label" style="margin-left:10px;">${t('font.alignLabel')}</label>
+                    <div class="btm-shape-btns">
+                        <button type="button" class="btn small secondary btm-align-btn" data-align="left"></button>
+                        <button type="button" class="btn small secondary btm-align-btn" data-align="center">${t('font.alignCenter')}</button>
+                        <button type="button" class="btn small secondary btm-align-btn" data-align="right"></button>
                     </div>
                 </div>
                 <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
@@ -582,9 +592,16 @@ function openBubbleTextModal(existingEl) {
 
     $('btm-text-input').value = existingEl.dataset.bubbleText || '';
     $('btm-font-size').value = Math.round((parseFloat(existingEl.dataset.fontSizeSvg) || 0) / BUBBLE_TEXT_PT_TO_SVG) || 150;
+    const curLineHeight = parseFloat(existingEl.dataset.lineHeightMult) || 1.4;
+    $('btm-line-height').value = curLineHeight;
+    $('btm-line-height-val').textContent = curLineHeight.toFixed(1);
+    $('btm-line-height').addEventListener('input', (e) => {
+        $('btm-line-height-val').textContent = parseFloat(e.target.value).toFixed(1);
+    });
     const presetColors = ['#000000', '#FFFFFF', '#FF0000', '#0000FF'];
     const curTextColor = existingEl.dataset.textColor || '#000000';
     $('btm-text-color').value = presetColors.includes(curTextColor.toUpperCase()) ? curTextColor.toUpperCase() : '#000000';
+    $('btm-bold').checked = existingEl.dataset.textBold === '1';
 
     if (isTextboxKind) {
         $('btm-fill-color').value = /^#[0-9a-f]{6}$/i.test(existingEl.getAttribute('fill')) ? existingEl.getAttribute('fill') : '#FFFFFF';
@@ -627,6 +644,8 @@ function openBubbleTextModal(existingEl) {
             fontFamily: $('btm-font-family').value || undefined,
             vertical: isVertical,
             textColor: $('btm-text-color').value,
+            lineHeightMult: parseFloat($('btm-line-height').value) || 1.4,
+            bold: $('btm-bold').checked,
         };
         if (isTextboxKind) {
             params.fillColor = $('btm-fill-color').value;
