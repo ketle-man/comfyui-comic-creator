@@ -1042,10 +1042,16 @@ function _tmplParsePathD(d) {
 }
 
 // svgTextが<polygon>要素を1つでも含むかどうか（安価な事前チェック用）。
-function _tmplSvgHasPolygons(svgText) {
+// _prepareTemplateSvgDocForPage・線幅変更処理は<polygon>要素しか見ないため、
+// 元のsvgContentを安全にそのまま使えるのは「全コマがpolygonである」場合のみ。
+// 一部のコマだけrect/pathで残りがpolygon、という混在テンプレート（例: 直線のコマはrect、
+// 曲線を含むコマだけpolygonでエクスポートするツール）で「polygonが1つでもあれば元のまま使う」
+// という判定にしていると、rect/path側のコマがpolygon限定の処理から漏れて
+// 枠線非表示・線幅変更が一部のコマにしか効かなくなる（2026-08-13発覚）。
+function _tmplSvgHasEnoughPolygons(svgText, minCount) {
     if (!svgText) return false;
     try {
-        return new DOMParser().parseFromString(svgText, 'image/svg+xml').querySelectorAll('polygon').length > 0;
+        return new DOMParser().parseFromString(svgText, 'image/svg+xml').querySelectorAll('polygon').length >= minCount;
     } catch { return false; }
 }
 
@@ -1073,9 +1079,11 @@ function _tmplTemplateToPageSvgString(templateRecord) {
 }
 
 // ページ生成時、テンプレートの元svgContentをそのまま使うか判定する。
-// <polygon>を含まない（rect/path等で読み込まれた）テンプレートは合成SVGにフォールバックする。
+// 全コマ（panel_0＋panels全て）がpolygonでない（rect/path等が1つでも混ざる、
+// または全く含まない）テンプレートは合成SVGにフォールバックする。
 function _tmplResolveTemplateSvgForPage(templateRecord) {
-    return _tmplSvgHasPolygons(templateRecord.svgContent)
+    const requiredPolygonCount = (templateRecord.panels || []).length + 1; // +1 = panel_0分
+    return _tmplSvgHasEnoughPolygons(templateRecord.svgContent, requiredPolygonCount)
         ? templateRecord.svgContent
         : _tmplTemplateToPageSvgString(templateRecord);
 }

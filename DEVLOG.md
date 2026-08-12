@@ -2,6 +2,18 @@
 
 ---
 
+## 2026-08-12（rect/polygon混在テンプレートで一部コマだけ枠線幅が反映されない不具合を修正、v1.33.0）
+
+上記の修正（CSSクラスのstroke優先度問題）をユーザーが新規作成したファイル（`corel_svg10.svg`/`corel_svg11.svg`、UTF-8、panel_1・panel_2は`<rect>`、panel_3のみ曲線的な形状のため`<polygon>`という混在構成）で確認したところ、「コマは問題ないが、コマ枠線幅がコマ3にしか効かない」と報告（スクリーンショット添付）。
+
+**原因**: `_tmplResolveTemplateSvgForPage`（ページ生成時に元のsvgContentをそのまま使うか、保存済み座標から合成したSVGにフォールバックするかを判定）が「`<polygon>`が1つでも含まれていれば元のsvgContentをそのまま使う」という判定になっていた。`_prepareTemplateSvgDocForPage`や線幅変更処理は`<polygon>`要素しか見ないため、rect製のpanel_1・panel_2はそもそも処理対象に含まれず、polygon製のpanel_3だけに線幅変更が反映されていた。
+
+**修正**: 判定基準を「`<polygon>`の数が全コマ数（panel_0＋panels全て）以上あるか」に変更（`_tmplSvgHasPolygons` → `_tmplSvgHasEnoughPolygons`にリネームし、必要数を引数で受け取るように変更）。一部だけrect/pathが混ざるテンプレートは合成SVGへ確実にフォールバックされるようになった。
+
+Kaptureで実機検証済み: panel_0/1/2をrect、panel_3のみpolygonという混在SVGを再現し、修正前は判定通り合成フォールバックされず一部のコマの線幅が変更されないことを確認した上で修正を適用。修正後は合成フォールバックが正しく発動し、全コマ（panel_0の非表示化含む）に`getComputedStyle()`で線幅80pxが反映されることを確認。既存の全回帰テスト（純粋polygon形式は引き続き元のsvgContentをそのまま使う＝CorelDraw/ウィザード生成テンプレートの見た目を変えない、純粋rect形式は引き続き合成フォールバック）も再実行し正常。
+
+---
+
 ## 2026-08-12（CorelDraw/Affinity実ファイルの実機確認で見つかったテンプレート取込みの追加不具合4件を修正、v1.33.0）
 
 上記のテンプレートSVG互換性拡張について、ユーザーが実際にCorelDraw・Affinity Designerで作成したファイル（`coreldraw/`・`affinity/`フォルダに計7ファイル）で確認したところ、「CorelDrawは矩形でサイズが小さくなり、パスではコマがおかしな状態になる（コマに配置できない）」「Affinityもサイズが小さくなる」との報告を受け、実ファイルを直接調査。当初は文字コード（CorelDrawはUTF-16 BOM付き）を疑ったが、`FileReader.readAsText(file,'utf-8')`は実際にはBOMを見て正しくUTF-16として復号することを実機で確認し否定。真因は以下4件だった。
