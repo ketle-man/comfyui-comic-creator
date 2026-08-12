@@ -1453,9 +1453,19 @@ function initDragAndDrop() {
             if (dropPanelId && dropPanelId !== state.selectedPanelId &&
                 state.activePage.panels?.some(p => p.id === dropPanelId)) {
                 selectPanel(dropPanelId);
+            } else if (dropTarget?.closest('g[data-overlay-layer]')) {
+                // オーバーレイ上の既存コンテンツ（画像等）に直接ドロップした場合は、
+                // コマの当たり判定が無いオーバーレイでも明示的にオーバーレイへ切り替える
+                // （オーバーレイにはコマの panel-overlay のような全面クリック検出用ポリゴンが無いため、
+                //  空白部分へのドロップはコマ判定に頼らず、事前に選択されているレイヤーに従う＝下のelse節）
+                state.selectedPanelId = null;
+                state.selectedOverlay = true;
             }
 
-            if (!state.selectedPanelId) {
+            // コマ・オーバーレイのどちらも選択されていなければ挿入できない
+            // （オーバーレイの空白部分にドロップした場合、上記のコマ当たり判定には掛からないため、
+            //  レイアウトタブのレイヤーパネルで事前に「オーバーレイ」を選択しておく必要がある）
+            if (!state.selectedPanelId && !state.selectedOverlay) {
                 alert(t('layout.msgSelectPanelFirst'));
                 return;
             }

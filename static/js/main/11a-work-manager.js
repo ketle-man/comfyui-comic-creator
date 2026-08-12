@@ -18,7 +18,7 @@ import { updateTemplateSidePanel } from './02-assets.js';
 import { _maskState, _maskSetEditing } from './04a-mask-core.js';
 import { renderLayerPanel } from './04b-layer-panel-render.js';
 import { _round2 } from './05-groups-move.js';
-import { _prepareTemplateSvgDocForPage } from './06c-template-wizard.js';
+import { _prepareTemplateSvgDocForPage, _tmplResolveTemplateSvgForPage } from './06c-template-wizard.js';
 import { loadPages, renderLayoutTab, renderPageSelector, renderPageThumbGrid, switchActivePage, updateLayoutPageNav } from './07-pages.js';
 import { _clearObjectSelection, updatePanelSelectDropdown } from './08-panels-images.js';
 import { updateBalloonPanelSelect } from './09e-text-tool.js';
@@ -768,7 +768,7 @@ async function insertTemplatePageToWork(templateName) {
         const sy = targetH / templateRecord.height;
         const needScale = Math.abs(sx - 1) > 1e-9 || Math.abs(sy - 1) > 1e-9;
 
-        const { svgDoc } = _prepareTemplateSvgDocForPage(templateRecord.svgContent);
+        const { svgDoc } = _prepareTemplateSvgDocForPage(_tmplResolveTemplateSvgForPage(templateRecord));
         const svgEl = svgDoc.querySelector('svg');
         if (needScale && svgEl) {
             Array.from(svgEl.children).forEach(child => _scaleSvgElementTree(child, sx, sy));

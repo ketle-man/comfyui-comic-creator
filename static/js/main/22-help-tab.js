@@ -202,12 +202,12 @@ const _HELP_DATA = [
                 body: '<ul><li>拡張子: <code>.svg</code></li><li>エンコーディング: UTF-8</li><li>ルート要素: <code>&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 W H"&gt;</code><br>viewBoxのW・Hがページサイズ（px単位）になります。</li></ul>',
             },
             {
-                heading: 'polygon要素によるコマ定義',
-                body: 'コマは <code>&lt;polygon&gt;</code> 要素で定義します。<pre class="help-code">&lt;polygon points="x1,y1 x2,y2 x3,y3 x4,y4" /&gt;</pre><ul><li><b>points属性</b>: コマの頂点座標をスペース区切りで列挙します（3点以上）。</li><li><b>panel_0（外枠）</b>: 最初のpolygonは<b>ページ外枠</b>として扱われます。コマとしてカウントされず、オーバーレイレイヤーのクリップ境界になります。通常はページ全体を覆う四角形を指定します。</li><li><b>panel_1〜</b>: 2番目以降のpolygonがコマ1・コマ2…として番号付けられます。</li></ul>',
+                heading: 'コマとして使える図形',
+                body: 'コマは <code>&lt;polygon&gt;</code> だけでなく、<code>&lt;rect&gt;</code> / <code>&lt;path&gt;</code> / <code>&lt;polyline&gt;</code> / <code>&lt;circle&gt;</code> / <code>&lt;ellipse&gt;</code> でも定義できます。Inkscape・Illustrator・Affinity Designer・CorelDrawなど、どのソフトで描いても（矩形ツール／ベジェツール／多角形・星ツールいずれでも）そのまま読み込めます。<code>&lt;g&gt;</code> による入れ子や <code>transform</code>（translate/scale/rotate/matrix等）にも対応しているため、レイヤーをグループ化していても問題ありません。<pre class="help-code">&lt;polygon points="x1,y1 x2,y2 x3,y3 x4,y4" /&gt;\n&lt;rect x="0" y="0" width="800" height="1200" /&gt;\n&lt;path d="M 0,0 H 800 V 1200 H 0 Z" /&gt;</pre><ul><li><b>panel_0（外枠）</b>: 最初に描画された図形は<b>ページ外枠</b>として扱われます。コマとしてカウントされず、オーバーレイレイヤーのクリップ境界になります。通常はページ全体を覆う四角形を指定します。</li><li><b>panel_1〜</b>: 2番目以降に描画された図形が、コマ1・コマ2…として番号付けられます。</li><li><b>装飾用の背景図形</b>: id/labelで <code>panel_0</code>/<code>panel_N</code> と名付けられておらず、かつストローク（線）が無い図形（塗りつぶしのみの背景矩形など）は、コマとして扱わず自動的に除外されます。</li></ul>',
             },
             {
                 heading: 'id属性・その他の属性',
-                body: '<ul><li>polygonに <code>id</code> 属性を付与すると内部管理IDとして使用されます（省略可。省略時は自動採番）。</li><li><code>stroke</code> / <code>stroke-width</code>: 枠線の色と幅。これがコマ枠として表示されます。</li><li><code>fill</code>: 通常は <code>none</code> または <code>transparent</code> を指定してください。</li><li>panel_0のstrokeは読み込み時に自動的に <code>none</code> に変更されます（外枠を非表示にするため）。</li></ul>',
+                body: '<ul><li>図形に <code>id</code> 属性（Inkscapeの場合は <code>inkscape:label</code> でも可）を <code>panel_0</code> / <code>panel_1</code> のように付与すると、描画順によらずページ外枠・コマ番号を明示できます（省略可。省略時は描画順で自動採番）。</li><li><code>stroke</code> / <code>stroke-width</code>: 枠線の色と幅。これがコマ枠として表示されます。</li><li><code>fill</code>: 通常は <code>none</code> または <code>transparent</code> を指定してください（白などの塗りでも問題ありません）。</li><li>panel_0のstrokeは読み込み時に自動的に <code>none</code> に変更されます（外枠を非表示にするため）。</li></ul>',
             },
             {
                 heading: '最小構成の例',
@@ -277,31 +277,27 @@ const _HELP_DATA = [
             },
             {
                 heading: 'ステップ2: 外枠（panel_0）を描く',
-                body: '<ol><li>ツールバーから <b>多角形/星ツール</b> または <b>矩形ツール（R）</b> を選択します。<br>※矩形ツールで描いた場合、後でXMLエディタで <code>&lt;rect&gt;</code> を <code>&lt;polygon&gt;</code> に変換する必要があります。最初から <b>ベジェ/直線ツール（B）</b> で描くと polygon に近い形になります。</li><li>ページ全体を覆う四角形を描きます（例: 0,0 〜 800,1200）。</li><li>これが panel_0（ページ外枠）になります。<b>必ず最初に描く</b>こと（SVG内で最初のpolygonになる必要があります）。</li></ol>',
+                body: '<ol><li>ツールバーから <b>矩形ツール（R）</b>・<b>多角形/星ツール（*）</b>・<b>ベジェ/直線ツール（B）</b> のいずれかを選択します。<code>&lt;rect&gt;</code>・<code>&lt;path&gt;</code>・<code>&lt;polygon&gt;</code> のどれで保存されても読み込めるので、好きなツールで構いません。</li><li>ページ全体を覆う四角形を描きます（例: 0,0 〜 800,1200）。</li><li>これが panel_0（ページ外枠）になります。<b>必ず最初に描く</b>こと（一番最初に描いた図形がページ外枠として扱われます）。</li></ol>',
             },
             {
                 heading: 'ステップ3: コマを描く',
-                body: '<ol><li><b>ベジェ/直線ツール（B）</b> を選択します。</li><li>ツールコントロールバーで「<b>直線を作成</b>」モードにします。</li><li>コマの各頂点をクリックして多角形を描きます。最後に始点をクリックして閉じるか、Enterで確定します。</li><li>コマの数だけ繰り返します。</li><li>各コマを選択し、<b>オブジェクトプロパティ</b>（Ctrl+Shift+O）でIDを設定できます（任意）。</li></ol><b>Tip:</b> グリッドを使うと正確に配置できます。表示 → ガイド、またはファイル → ドキュメントのプロパティ → スナップ で設定してください。',
+                body: '<ol><li>ステップ2と同じく、好きな描画ツールでコマの区切り線を描きます。</li><li>矩形ツールならドラッグするだけ、ベジェ/直線ツールなら各頂点をクリックして多角形を描き、最後に始点をクリックするかEnterで閉じます。</li><li>コマの数だけ繰り返します。</li><li>各コマを選択し、<b>オブジェクトプロパティ</b>（Ctrl+Shift+O）でID（例: <code>panel_1</code>）を設定できます（省略した場合は描画順で自動的に番号が振られます）。</li></ol><b>Tip:</b> グリッドを使うと正確に配置できます。表示 → ガイド、またはファイル → ドキュメントのプロパティ → スナップ で設定してください。',
             },
             {
                 heading: 'ステップ4: fillとstrokeの設定',
-                body: '<ol><li>全コマ（panel_0含む）を選択します（Ctrl+A）。</li><li><b>オブジェクト → フィル/ストローク</b>（Shift+Ctrl+F）を開きます。</li><li>「フィル」タブで <b>×（塗りなし）</b> を選択、または <code>none</code> に設定します。</li><li>「ストローク（外枠）」タブで <b>単色</b> を選択し、色を黒（<code>#000000</code>）に設定します。</li><li>「ストロークのスタイル」タブで幅を <b>2〜4px</b> に設定します。</li></ol>',
+                body: '<ol><li>全コマ（panel_0含む）を選択します（Ctrl+A）。</li><li><b>オブジェクト → フィル/ストローク</b>（Shift+Ctrl+F）を開きます。</li><li>「ストローク（外枠）」タブで <b>単色</b> を選択し、色を黒（<code>#000000</code>）に設定します。</li><li>「ストロークのスタイル」タブで幅を <b>2〜4px</b> に設定します。</li></ol><b>重要:</b> ストロークが無い（線が見えない）図形は、id/labelで <code>panel_N</code> と明示しない限り「装飾用の背景」とみなされコマから除外されます。panel_0（外枠）だけはストロークが無くても問題ありません。',
             },
             {
-                heading: 'ステップ5: SVGとして保存・変換',
-                body: '<ol><li>メニュー <b>ファイル → 名前を付けて保存</b>（Ctrl+Shift+S）を選択します。</li><li>ファイル形式を <b>プレーンSVG（*.svg）</b> にして保存します。<br>（「Inkscape SVG」ではなく「プレーンSVG」を選ぶと余分なInkscape固有属性が除去されます）</li></ol><b>重要:</b> Inkscapeはデフォルトで <code>&lt;rect&gt;</code> や <code>&lt;path&gt;</code> 形式で保存します。このアプリは <code>&lt;polygon&gt;</code> のみ対応のため、ベジェツールで描いた図形は内部的にpathになります。そのため保存後に以下の手順でpolygonに変換してください。',
+                heading: 'ステップ5: SVGとして保存する',
+                body: '<ol><li>メニュー <b>ファイル → 名前を付けて保存</b>（Ctrl+Shift+S）を選択します。</li><li>ファイル形式は <b>Inkscape SVG</b>・<b>プレーンSVG</b> のどちらでも読み込めます。<code>sodipodi:</code>/<code>inkscape:</code> 名前空間の属性が付いていても問題ありません。</li></ol>path→polygonへの変換など、保存後の手動加工は<b>不要</b>です。作成したファイルをそのまま次のステップで読み込めます。',
             },
             {
-                heading: 'ステップ6: pathをpolygonに変換する',
-                body: '<ol><li>Inkscape上で全コマを選択します。</li><li>メニュー <b>パス → オブジェクトをパスへ</b>（Shift+Ctrl+C）を実行します（既にpathの場合は不要）。</li><li>保存したSVGをテキストエディタで開きます。</li><li><code>&lt;path d="M x1,y1 L x2,y2 ... Z"/&gt;</code> の形式になっています。各座標を抽出して <code>&lt;polygon points="x1,y1 x2,y2 ..."/&gt;</code> に書き換えます。</li></ol><b>簡単な方法:</b> 矩形のみのテンプレートであれば、Inkscapeの <b>XMLエディタ</b>（Ctrl+Shift+X）で要素タグを <code>rect</code> から <code>polygon</code> に変更し、<code>points</code> 属性を手動で追加する方法もあります。<br><br><b>自動変換Tip:</b> Python + xml.etree などでpath → polygon変換スクリプトを書くのが確実です。直線パスの場合は <code>d</code> 属性の <code>M</code>/<code>L</code>/<code>Z</code> を分解して座標を抽出できます。',
-            },
-            {
-                heading: 'ステップ7: アプリに読み込む',
-                body: '<ol><li>作成した <code>.svg</code> ファイルをテンプレートタブにドラッグ&amp;ドロップします。</li><li>サムネイルが表示されれば読み込み成功です。</li><li>コマ番号がサイドパネルに表示されない場合は、SVG内のpolygon数を確認してください（panel_0 + コマ数）。</li></ol>',
+                heading: 'ステップ6: アプリに読み込む',
+                body: '<ol><li>作成した <code>.svg</code> ファイルをテンプレートタブの「SVGからテンプレート作成」で選択します。</li><li>サムネイルが表示されれば読み込み成功です。</li><li>コマ番号がサイドパネルに表示されない場合は、トラブルシューティングを確認してください。</li></ol>',
             },
             {
                 heading: 'トラブルシューティング',
-                body: '<ul><li><b>コマが認識されない</b>: SVGに <code>&lt;polygon&gt;</code> 要素がない。pathのまま保存されている可能性があります。</li><li><b>コマ数がずれる</b>: panel_0（外枠）を忘れずに含めてください。polygon数 = コマ数 + 1 になります。</li><li><b>サイズがおかしい</b>: viewBoxの単位がpx以外（mm等）になっている場合は、ドキュメントプロパティで単位をpxに変更してから保存し直してください。</li><li><b>Inkscape SVGで保存した場合</b>: <code>sodipodi:</code> や <code>inkscape:</code> 名前空間の属性が大量に含まれますが、polygon要素のパース自体は問題ありません。気になる場合はプレーンSVGで保存してください。</li></ul>',
+                body: '<ul><li><b>コマが認識されない</b>: 図形にストローク（線）が設定されているか確認してください。ストロークが無く、id/labelも <code>panel_N</code> の形式でない図形はコマとして扱われません。</li><li><b>コマ数がずれる</b>: panel_0（外枠）は最初に描いた図形が自動的に割り当てられます。順序を変えたい場合は、外枠にしたい図形のid（またはinkscape:label）を <code>panel_0</code> にしてください。</li><li><b>ページサイズがおかしい</b>: ドキュメントのプロパティで単位をmm/inにしていても、SVGの <code>viewBox</code> 値をそのまま読み込むため通常は問題ありません。サイズがずれる場合はドキュメントのプロパティの「スケーリング」で <b>1ユーザー単位 = 1px</b> になっているか確認してください。</li></ul>',
             },
         ],
     },

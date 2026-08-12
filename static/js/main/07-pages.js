@@ -30,7 +30,7 @@ import { _insetPolygonPoints, _round2, deleteSelectedObject } from './05-groups-
 import { flipSelected } from './09c-balloon-handles.js';
 import { _getOrBuildPageThumb } from './11a-work-manager.js';
 import { _applyLayoutPreviewSize, _layoutPreviewSizePct, sanitizeSvgTree, updateTemplateSidePanel } from './02-assets.js';
-import { _prepareTemplateSvgDocForPage } from './06c-template-wizard.js';
+import { _prepareTemplateSvgDocForPage, _tmplResolveTemplateSvgForPage } from './06c-template-wizard.js';
 import { _layerDrawAttachOverlay, _layerDrawDetachOverlay, _layerDrawFlushPendingSave, _layerDrawState } from './17a-layer-draw-input.js';
 import { initPanelsOnSvg } from './08-panels-images.js';
 import { initBalloonTools } from './09d-balloon-tools.js';
@@ -442,7 +442,8 @@ async function createPageFromTemplate() {
         const pageName = `${templateRecord.name}_${timestamp}`;
 
         // テンプレートSVGからコマ番号テキストを除去し、panel_0の枠線を非表示にする
-        const { svgDoc, polygons } = _prepareTemplateSvgDocForPage(templateRecord.svgContent);
+        // （<polygon>を含まない形式で読み込まれたテンプレートは、保存済みのコマ座標から合成したSVGにフォールバック）
+        const { svgDoc, polygons } = _prepareTemplateSvgDocForPage(_tmplResolveTemplateSvgForPage(templateRecord));
 
         // コマの線幅を指定（既定値はテンプレートに保存されている線幅、小数点第2位まで）
         const comaPolygons = Array.from(polygons).slice(1);

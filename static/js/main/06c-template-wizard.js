@@ -529,21 +529,30 @@ function _tmplSidePanelUpdate(name) {
     if (removeBtn) removeBtn.disabled = !group;
 }
 
-/** テンプレートのコマ枠線幅をsvgContentから抽出する（panel_0はページベースなので2番目以降を優先） */
+function _tmplReadStrokeWidthAttr(el) {
+    let sw = el.getAttribute('stroke-width');
+    if (!sw) {
+        const m = (el.getAttribute('style') || '').match(/stroke-width\s*:\s*([\d.]+)/);
+        if (m) sw = m[1];
+    }
+    const v = parseFloat(sw);
+    return Number.isNaN(v) ? null : v;
+}
+
+/**
+ * テンプレートのコマ枠線幅をsvgContentから抽出する（panel_0はページベースなので2番目以降を優先）。
+ * stroke-widthが明示されている図形のみを候補とすることで、装飾用の背景矩形
+ * （ストローク指定なし）を自然に除外する。
+ */
 function _tmplGetFrameWidth(template) {
     if (!template.svgContent) return null;
     try {
         const doc = new DOMParser().parseFromString(template.svgContent, 'image/svg+xml');
-        const polys = doc.querySelectorAll('polygon');
-        const target = polys[1] || polys[0];
-        if (!target) return null;
-        let sw = target.getAttribute('stroke-width');
-        if (!sw) {
-            const m = (target.getAttribute('style') || '').match(/stroke-width\s*:\s*([\d.]+)/);
-            if (m) sw = m[1];
-        }
-        const v = parseFloat(sw);
-        return isNaN(v) ? null : Math.round(v * 10) / 10;
+        const candidates = Array.from(doc.querySelectorAll(_TMPL_SHAPE_SELECTOR))
+            .map(_tmplReadStrokeWidthAttr)
+            .filter(v => v !== null);
+        const v = candidates.length > 1 ? candidates[1] : candidates[0];
+        return v === undefined ? null : Math.round(v * 10) / 10;
     } catch { return null; }
 }
 
@@ -669,7 +678,16 @@ async function renameTemplate(oldName) {
     input.addEventListener('keydown', e => { if (e.key === 'Enter') doRename(); });
 }
 
-// SVG解析ロジック（変更なし）
+// SVG解析ロジック
+// Inkscape/Illustrator/Affinity Designer/CorelDraw等、ツールによって図形の出力形式が
+// <rect>/<path>/<polygon>/<circle>/<ellipse>とバラバラでも読み込めるよう、
+// ブラウザ本体のSVGエンジン（getCTM/getPointAtLength）にtransform解決と曲線近似を委ねる。
+// 手計算でmatrix合成やベジェ曲線・円弧のフラット化を行うより、UAの実装に任せた方が
+// 各ツール固有の癖（入れ子group、matrix/skew、sodipodi:type=star等）に対して確実。
+const _TMPL_SHAPE_SELECTOR = 'rect, polygon, polyline, path, circle, ellipse';
+const _TMPL_HIDDEN_ANCESTOR_SELECTOR = 'defs, clipPath, mask, symbol, pattern';
+const _TMPL_INKSCAPE_NS = 'http://www.inkscape.org/namespaces/inkscape';
+
 function parseSVGForTemplate(svgText, filename) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgText, 'image/svg+xml');
@@ -680,37 +698,328 @@ function parseSVGForTemplate(svgText, filename) {
     const viewBoxAttr = svgEl.getAttribute('viewBox');
     if (!viewBoxAttr) throw new Error(t('tmpl.errNoViewBox'));
 
-    const viewBox = viewBoxAttr.split(' ').map(Number);
+    const viewBox = viewBoxAttr.trim().split(/[\s,]+/).map(Number);
     const width = viewBox[2];
     const height = viewBox[3];
 
-    const panels = [];
-    const polygons = doc.querySelectorAll('polygon');
-    let basePanelPoints = '';   // panel_0のpolygon座標（オーバーレイのクリップ範囲）
+    const { rootSvg, cleanup } = _tmplAttachHiddenSvg(svgEl);
+    let panels, basePanelPoints;
 
-    polygons.forEach((poly, index) => {
-        let id = poly.id;
-        if (!id) id = `panel_${index}`;
+    try {
+        const shapeEls = _tmplCollectShapeElements(rootSvg);
 
-        // panel_0はページベースとして扱い、コマに含めない（オーバーレイのクリップ範囲として保存）
-        if (index === 0 || id === 'panel_0') {
-            basePanelPoints = poly.getAttribute('points').trim();
-            return;
+        // 明示的に panel_0 と名付けられた図形があればそれを基準とし、
+        // なければ（従来どおり）最初に描画された図形をベースとして扱う。
+        const explicitBaseIndex = shapeEls.findIndex(el => _tmplMatchesPanelZero(el));
+        const baseIndex = explicitBaseIndex !== -1 ? explicitBaseIndex : 0;
+
+        // ストロークが不可視でid/labelも無い図形（装飾用の背景矩形など）を除外して抽出する。
+        ({ panels, basePanelPoints } = _tmplExtractPanels(shapeEls, baseIndex, true));
+        // 除外しすぎて1コマも残らなかった場合は、装飾判定なしで再抽出する（安全弁）。
+        if (panels.length === 0) {
+            ({ panels, basePanelPoints } = _tmplExtractPanels(shapeEls, baseIndex, false));
         }
-
-        const points = poly.getAttribute('points').trim();
-        let number = index;
-        const match = id.match(/panel_(\d+)/);
-        if (match) number = parseInt(match[1]);
-
-        panels.push({ id, number, points });
-    });
+    } finally {
+        cleanup();
+    }
 
     if (panels.length === 0) throw new Error(t('tmpl.errNoPanels'));
 
     panels.sort((a, b) => a.number - b.number);
 
     return { id: filename, name: filename, width, height, panels, basePanelPoints };
+}
+
+function _tmplExtractPanels(shapeEls, baseIndex, filterDecorativeBackground) {
+    const panels = [];
+    let basePanelPoints = '';
+
+    shapeEls.forEach((el, index) => {
+        if (index === baseIndex) {
+            basePanelPoints = _tmplShapeToPointsStr(el);
+            return;
+        }
+
+        // id/labelでpanel_Nと明示されていない図形は、ストロークが不可視なら
+        // コマではなく装飾用の背景（テンプレートウィザードが出力する白背景矩形や、
+        // Illustrator/Affinity等が付与するアートボード背景など）とみなして除外する。
+        // panel_0（ベース）はクリップ範囲としてのみ使うため、この判定の対象外。
+        const explicitNumber = _tmplPanelNumberExplicit(el);
+        if (filterDecorativeBackground && explicitNumber === null && !_tmplHasVisibleStroke(el)) return;
+
+        const points = _tmplShapeToPointsStr(el);
+        if (!points) return; // 幅0の矩形など、面積を持たない図形は無視
+
+        const id = el.getAttribute('id') || `panel_${index}`;
+        const number = explicitNumber !== null ? explicitNumber : panels.length + 1;
+        panels.push({ id, number, points });
+    });
+
+    return { panels, basePanelPoints };
+}
+
+// getCTM()/getPointAtLength()はレイアウトを持つ（=実DOMにアタッチされた）要素でないと
+// 正確に計算できないため、画面外の非表示コンテナに一時的に取り込んでから解析する。
+function _tmplAttachHiddenSvg(svgEl) {
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-99999px';
+    container.style.top = '-99999px';
+    const imported = document.importNode(svgEl, true);
+    container.appendChild(imported);
+    document.body.appendChild(container);
+    return { rootSvg: imported, cleanup: () => container.remove() };
+}
+
+function _tmplCollectShapeElements(root) {
+    return Array.from(root.querySelectorAll(_TMPL_SHAPE_SELECTOR)).filter(el => {
+        if (el.closest(_TMPL_HIDDEN_ANCESTOR_SELECTOR)) return false; // clipPath/defs内の定義図形は除外
+        if (_tmplIsHiddenAncestry(el)) return false; // 非表示レイヤー（Illustratorの隠しレイヤー等）を除外
+        return true;
+    });
+}
+
+function _tmplIsHiddenAncestry(el) {
+    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+        const style = node.getAttribute('style') || '';
+        if (/display\s*:\s*none/i.test(style) || node.getAttribute('display') === 'none') return true;
+        if (/visibility\s*:\s*hidden/i.test(style) || node.getAttribute('visibility') === 'hidden') return true;
+    }
+    return false;
+}
+
+function _tmplGetLabel(el) {
+    return el.getAttributeNS(_TMPL_INKSCAPE_NS, 'label') || el.getAttribute('inkscape:label') || '';
+}
+
+function _tmplMatchesPanelZero(el) {
+    const id = el.getAttribute('id') || '';
+    const label = _tmplGetLabel(el);
+    return /^panel[_-]?0$/i.test(id) || /^panel[_-]?0$/i.test(label);
+}
+
+// id/labelが panel_N 形式に一致する場合のみ数値を返す（一致しなければnull＝番号は未指定）。
+function _tmplPanelNumberExplicit(el) {
+    const id = el.getAttribute('id') || '';
+    const label = _tmplGetLabel(el);
+    const match = id.match(/panel[_-]?(\d+)/i) || label.match(/panel[_-]?(\d+)/i);
+    return match ? parseInt(match[1], 10) : null;
+}
+
+// 実際に線として見える（不透明度・太さが0でない）strokeを持つかどうか。
+// getComputedStyle()を使うことで、style属性/プレゼンテーション属性/内蔵<style>クラス
+// いずれで指定されていてもツールを問わず正しく解決できる。
+function _tmplHasVisibleStroke(el) {
+    const cs = getComputedStyle(el);
+    const stroke = cs.stroke;
+    if (!stroke || stroke === 'none') return false;
+    const opacity = parseFloat(cs.strokeOpacity);
+    if (!Number.isNaN(opacity) && opacity <= 0) return false;
+    const width = parseFloat(cs.strokeWidth);
+    if (!Number.isNaN(width) && width <= 0) return false;
+    return true;
+}
+
+// 図形要素をルートSVGのユーザー座標系（viewBox基準）における "x,y x,y ..." 文字列へ変換する。
+// getCTM()はその要素自身のtransform属性＋祖先<g>のtransformを全て解決した、
+// 最も近い祖先ビューポート（＝ルートsvg）の座標系への変換行列を返す。
+function _tmplShapeToPointsStr(el) {
+    const localPts = _tmplLocalShapePoints(el);
+    if (!localPts || localPts.length < 2) return '';
+
+    const svgRoot = el.ownerSVGElement;
+    const ctm = el.getCTM ? el.getCTM() : null;
+    if (!ctm || !svgRoot || !svgRoot.createSVGPoint) {
+        return localPts.map(p => `${_tmplRound(p.x)},${_tmplRound(p.y)}`).join(' ');
+    }
+
+    const svgPt = svgRoot.createSVGPoint();
+    return localPts.map(p => {
+        svgPt.x = p.x;
+        svgPt.y = p.y;
+        const transformed = svgPt.matrixTransform(ctm);
+        return `${_tmplRound(transformed.x)},${_tmplRound(transformed.y)}`;
+    }).join(' ');
+}
+
+function _tmplRound(n) {
+    return Math.round(n * 1000) / 1000;
+}
+
+// 各図形タグごとに、その要素自身のローカル座標系（transform適用前）での頂点列を返す。
+// path曲線（ベジェ/円弧）はgetPointAtLength()でサンプリングして多角形近似する。
+function _tmplLocalShapePoints(el) {
+    const tag = el.tagName.toLowerCase();
+    switch (tag) {
+        case 'polygon':
+        case 'polyline':
+            return _tmplParsePointsAttr(el.getAttribute('points') || '');
+        case 'rect': {
+            const x = parseFloat(el.getAttribute('x') || '0');
+            const y = parseFloat(el.getAttribute('y') || '0');
+            const w = parseFloat(el.getAttribute('width') || '0');
+            const h = parseFloat(el.getAttribute('height') || '0');
+            if (!(w > 0) || !(h > 0)) return null;
+            return [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }];
+        }
+        case 'circle':
+        case 'ellipse': {
+            const cx = parseFloat(el.getAttribute('cx') || '0');
+            const cy = parseFloat(el.getAttribute('cy') || '0');
+            const rx = parseFloat(el.getAttribute(tag === 'circle' ? 'r' : 'rx') || '0');
+            const ry = parseFloat(el.getAttribute(tag === 'circle' ? 'r' : 'ry') || '0');
+            if (!(rx > 0) || !(ry > 0)) return null;
+            const segments = 48;
+            const pts = [];
+            for (let i = 0; i < segments; i++) {
+                const a = (i / segments) * Math.PI * 2;
+                pts.push({ x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) });
+            }
+            return pts;
+        }
+        case 'path':
+            return _tmplFlattenPath(el);
+        default:
+            return null;
+    }
+}
+
+function _tmplParsePointsAttr(str) {
+    const nums = str.trim().split(/[\s,]+/).map(Number).filter(n => Number.isFinite(n));
+    const pts = [];
+    for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i], y: nums[i + 1] });
+    return pts;
+}
+
+// M/L/H/V/Zのコマンド境界（=直線区間の頂点）を数値として直接算出することで、
+// 等間隔サンプリングでは避けられない「角が斜めに削れる」現象を防ぐ。
+// C/S/Q/T/A（曲線）は、そのコマンド1個分だけを含む一時的な<path>をブラウザに解釈させ、
+// getTotalLength/getPointAtLengthでフラット化する（曲線の数式を自前実装しない）。
+// 直線区間の頂点は常に厳密な座標になり、曲線⇔直線の境界も一時pathの始点・終点として
+// 厳密に一致するため、角の崩れが起きない。
+const _TMPL_PATH_CMD_RE = /[MmLlHhVvCcSsQqTtAaZz][^MmLlHhVvCcSsQqTtAaZz]*/g;
+const _TMPL_PATH_NUM_RE = /[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g;
+
+function _tmplFlattenPath(pathEl) {
+    const d = pathEl.getAttribute('d') || '';
+    try {
+        const pts = _tmplParsePathD(d);
+        if (pts && pts.length >= 2) return pts;
+    } catch { /* フォールバックへ */ }
+
+    // 万一パースできない特殊なd属性の場合は、従来の等間隔サンプリングにフォールバックする。
+    let total;
+    try { total = pathEl.getTotalLength(); } catch { return null; }
+    if (!(total > 0) || !Number.isFinite(total)) return null;
+    const steps = Math.min(128, Math.max(4, Math.ceil(total / 15)));
+    const pts = [];
+    for (let i = 0; i <= steps; i++) {
+        const p = pathEl.getPointAtLength((total * i) / steps);
+        pts.push({ x: p.x, y: p.y });
+    }
+    return pts;
+}
+
+function _tmplParsePathD(d) {
+    const chunks = d.trim().match(_TMPL_PATH_CMD_RE) || [];
+    const pts = [];
+    let cx = 0, cy = 0, startX = 0, startY = 0;
+    const pushPt = (x, y) => { pts.push({ x, y }); cx = x; cy = y; };
+
+    for (const chunk of chunks) {
+        const cmd = chunk[0];
+        const type = cmd.toUpperCase();
+        const abs = cmd === type;
+        const rest = chunk.slice(1);
+
+        if (type === 'Z') { cx = startX; cy = startY; continue; }
+
+        if (type === 'M' || type === 'L') {
+            const nums = rest.match(_TMPL_PATH_NUM_RE) || [];
+            for (let i = 0; i + 1 < nums.length; i += 2) {
+                let x = parseFloat(nums[i]), y = parseFloat(nums[i + 1]);
+                if (!abs) { x += cx; y += cy; }
+                pushPt(x, y);
+                if (type === 'M' && i === 0) { startX = x; startY = y; }
+            }
+            continue;
+        }
+
+        if (type === 'H') {
+            for (const n of (rest.match(_TMPL_PATH_NUM_RE) || [])) {
+                let x = parseFloat(n);
+                if (!abs) x += cx;
+                pushPt(x, cy);
+            }
+            continue;
+        }
+
+        if (type === 'V') {
+            for (const n of (rest.match(_TMPL_PATH_NUM_RE) || [])) {
+                let y = parseFloat(n);
+                if (!abs) y += cy;
+                pushPt(cx, y);
+            }
+            continue;
+        }
+
+        // C/S/Q/T/A: このコマンド分だけの一時pathを作り、ブラウザにフラット化させる。
+        // 暗黙の繰り返し（例: "C x1,y1 x2,y2 x,y x1,y1 x2,y2 x,y"）は境界が滑らかに
+        // 繋がる前提のため、まとめて1本のセグメントとして扱って問題ない。
+        const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        tmp.setAttribute('d', `M ${cx},${cy} ${cmd}${rest}`);
+        const total = tmp.getTotalLength();
+        if (total > 0) {
+            const steps = Math.min(64, Math.max(4, Math.ceil(total / 8)));
+            for (let i = 1; i <= steps; i++) {
+                const p = tmp.getPointAtLength((total * i) / steps);
+                pts.push({ x: p.x, y: p.y });
+            }
+            const endPt = tmp.getPointAtLength(total);
+            cx = endPt.x; cy = endPt.y;
+        }
+    }
+
+    return pts;
+}
+
+// svgTextが<polygon>要素を1つでも含むかどうか（安価な事前チェック用）。
+function _tmplSvgHasPolygons(svgText) {
+    if (!svgText) return false;
+    try {
+        return new DOMParser().parseFromString(svgText, 'image/svg+xml').querySelectorAll('polygon').length > 0;
+    } catch { return false; }
+}
+
+// テンプレートのコマ形状（panels[].points / basePanelPoints）から、
+// _tmplWizBuildSvgString と同じ構造（白背景rect + panel_0 + panel_N のpolygon）のSVG文字列を合成する。
+// rect/path等、<polygon>を含まない形式で読み込まれたテンプレートをページ化する際、
+// _prepareTemplateSvgDocForPage や _scaleSvgElementTree（いずれもpolygon前提の処理を含む）に
+// 安全に渡せる正規化済みSVGを用意するためのフォールバック。
+// ※<polygon>を既に含むテンプレート（従来のCorelDraw出力・ウィザード生成など）はこの合成を経由せず、
+//   元のsvgContent（独自の色・装飾等を含む）をそのまま使うため、既存の見た目に影響しない。
+function _tmplTemplateToPageSvgString(templateRecord) {
+    const w = templateRecord.width;
+    const h = templateRecord.height;
+    const strokeWidth = Math.max(4, w * 0.003);
+    const base = templateRecord.basePanelPoints || `0,0 ${w},0 ${w},${h} 0,${h}`;
+    const parts = [];
+    parts.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">`);
+    parts.push(`  <rect x="0" y="0" width="${w}" height="${h}" fill="#ffffff"/>`);
+    parts.push(`  <polygon id="panel_0" points="${base}" fill="none" stroke="#000" stroke-width="${strokeWidth}"/>`);
+    [...(templateRecord.panels || [])].sort((a, b) => a.number - b.number).forEach(p => {
+        parts.push(`  <polygon id="panel_${p.number}" points="${p.points}" fill="none" stroke="#000" stroke-width="${strokeWidth}"/>`);
+    });
+    parts.push('</svg>');
+    return parts.join('\n');
+}
+
+// ページ生成時、テンプレートの元svgContentをそのまま使うか判定する。
+// <polygon>を含まない（rect/path等で読み込まれた）テンプレートは合成SVGにフォールバックする。
+function _tmplResolveTemplateSvgForPage(templateRecord) {
+    return _tmplSvgHasPolygons(templateRecord.svgContent)
+        ? templateRecord.svgContent
+        : _tmplTemplateToPageSvgString(templateRecord);
 }
 
 /**
@@ -745,6 +1054,7 @@ function _prepareTemplateSvgDocForPage(svgContent) {
 
 export {
     TMPLWIZ_DEFAULT, _TMPLWIZ_LS_GRID, _prepareTemplateSvgDocForPage, _tmplGetFrameWidth,
+    _tmplResolveTemplateSvgForPage,
     _tmplGroupsRefreshUI, _tmplSidePanelUpdate, _tmplWiz, _tmplWizAttachCanvasEvents,
     _tmplWizBuildSvgString, _tmplWizCanvasMouseDown, _tmplWizCanvasMouseMove, _tmplWizCanvasMouseUp,
     _tmplWizClientToSvg, _tmplWizCommitCut, _tmplWizComputeInitialPanels, _tmplWizCreateBase,

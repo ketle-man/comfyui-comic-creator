@@ -1119,7 +1119,7 @@ const LANGUAGES = {
         'tmpl.renameFailed': (m) => `名前変更に失敗しました: ${m}`,
         'tmpl.errNoSvg': 'SVG要素が見つかりません。',
         'tmpl.errNoViewBox': 'viewBox属性が見つかりません。',
-        'tmpl.errNoPanels': 'コマ(polygon要素)が見つかりませんでした。panel_0はオーバーレイ用ベースとして扱われるため、panel_1以降のpolygonが必要です。',
+        'tmpl.errNoPanels': 'コマとして使える図形（rect/polygon/path等）が見つかりませんでした。1番目に描画された図形はページ外枠（panel_0）として扱われるため、それ以降にコマとなる図形が1つ以上必要です。',
 
         // -- マスク 実行時メッセージ（Phase 2, 04a-mask-core.js） --
         'mask.layerLabel': (tgt) => `レイヤー(${tgt})`,
@@ -2426,7 +2426,7 @@ const LANGUAGES = {
         'tmpl.renameFailed': (m) => `Failed to rename: ${m}`,
         'tmpl.errNoSvg': 'No SVG element found.',
         'tmpl.errNoViewBox': 'No viewBox attribute found.',
-        'tmpl.errNoPanels': 'No panels (polygon elements) found. panel_0 is treated as the overlay base, so polygons from panel_1 onward are required.',
+        'tmpl.errNoPanels': 'No usable panel shapes (rect/polygon/path/etc.) were found. The first shape drawn is treated as the page frame (panel_0), so at least one more shape is required for the panels.',
 
         'mask.layerLabel': (tgt) => `Layer (${tgt})`,
         'mask.typeShow': 'show',
@@ -3726,7 +3726,7 @@ const LANGUAGES = {
         'tmpl.renameFailed': (m) => `重命名失败：${m}`,
         'tmpl.errNoSvg': '未找到SVG元素。',
         'tmpl.errNoViewBox': '未找到viewBox属性。',
-        'tmpl.errNoPanels': '未找到分格（polygon元素）。panel_0作为覆盖层基底处理，因此需要panel_1及以后的polygon。',
+        'tmpl.errNoPanels': '未找到可用作分格的图形（rect/polygon/path等）。最先绘制的图形会被当作页面外框（panel_0），因此之后至少需要一个分格图形。',
 
         'mask.layerLabel': (tgt) => `图层(${tgt})`,
         'mask.typeShow': '显示',

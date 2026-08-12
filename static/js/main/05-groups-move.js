@@ -300,10 +300,16 @@ async function duplicateSelectedObject(targetPanelId) {
         return;
     }
 
-    // 複製元の親コマgからコマIDを取得
+    // 複製元のコマIDを取得。実際のDOM上の所属レイヤー（.closest()で祖先を辿って判定）を優先する
+    // （グループ化されたオブジェクト等、直接の親が data-clip-panel / data-overlay-layer / data-draft-layer
+    //   のいずれでもないケースにも対応するため。moveSelectedObjectと同じロジック）
     const srcParentG = srcEl.parentNode;
-    const srcPanelId = srcParentG.getAttribute('data-clip-panel') ||
-                       (srcParentG.hasAttribute('data-overlay-layer') ? '__overlay__' : state.selectedPanelId || 'panel-0');
+    const srcAncestorLayer = srcEl.closest('g[data-clip-panel], g[data-overlay-layer], g[data-draft-layer]');
+    const srcPanelId = (srcAncestorLayer && (
+                           srcAncestorLayer.getAttribute('data-clip-panel') ||
+                           (srcAncestorLayer.hasAttribute('data-overlay-layer') ? '__overlay__' : '__draft__')
+                       )) ||
+                       (state.selectedPanelId || 'panel-0');
 
     pushHistory();
 
@@ -351,6 +357,12 @@ async function duplicateSelectedObject(targetPanelId) {
         const destCenter = _polygonCenter(basePts) || { x: srcCx, y: srcCy };
         const destParentG = panelSvg.querySelector('g[data-overlay-layer]') || getOrCreateOverlayGroup(panelSvg);
         const clone = _cloneWithNewIds(srcEl);
+        // 画像はdata-panel-idで所属レイヤーを追跡している（削除・ロック・移動元判定等が参照）ため、
+        // オーバーレイへ複製した際は'__overlay__'に更新しておく（放置すると複製元パネルのIDを
+        // 指したままになり、以後そのオブジェクトを移動しようとした際に移動元判定を誤る）
+        if (clone.tagName && clone.tagName.toLowerCase() === 'image') {
+            clone.setAttribute('data-panel-id', '__overlay__');
+        }
         _applyCenterTranslate(clone, srcCx, srcCy, destCenter.x, destCenter.y);
         destParentG.appendChild(clone);
         await saveOverlaySvg(panelSvg);
@@ -576,14 +588,24 @@ async function deleteSelectedObject() {
 
     let panelId;
     if (kind === 'group') {
-        panelId = el.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
-                  (el.closest('g[data-overlay-layer]') ? '__overlay__' : state.selectedPanelId || 'panel-0');
+        const ancestorLayer = el.closest('g[data-clip-panel], g[data-overlay-layer], g[data-draft-layer]');
+        panelId = (ancestorLayer && (
+                      ancestorLayer.getAttribute('data-clip-panel') ||
+                      (ancestorLayer.hasAttribute('data-overlay-layer') ? '__overlay__' : '__draft__')
+                  )) ||
+                  (state.selectedPanelId || 'panel-0');
     } else if (kind === 'image') {
-        // 実際のDOM上の親コマ（g[data-clip-panel]）を最優先にする。data-panel-id属性を
-        // 先に見ると、何らかの理由で属性が実際の所属コマとズレていた場合、削除保存が
-        // 誤ったコマのpanelSvgContentに対して行われ、本来のコマ側は未更新のまま残り、
-        // 見た目は削除済みなのに再描画すると復活する不具合になる
-        panelId = el.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
+        // 実際のDOM上の所属レイヤー（data-clip-panel/data-overlay-layer/data-draft-layerを
+        // .closest()で祖先から辿って判定）を最優先にする。data-panel-id属性を先に見ると、
+        // 何らかの理由で属性が実際の所属レイヤーとズレていた場合（例: オーバーレイへの移動時に
+        // 属性更新が漏れていた等）、削除保存が誤ったコマ/レイヤーのsvgContentに対して行われ、
+        // 本来のオーバーレイ/コマ側は未更新のまま残り、見た目は削除済みなのに次の保存を
+        // 挟んで再描画すると復活する不具合になる
+        const ancestorLayer = el.closest('g[data-clip-panel], g[data-overlay-layer], g[data-draft-layer]');
+        panelId = (ancestorLayer && (
+                      ancestorLayer.getAttribute('data-clip-panel') ||
+                      (ancestorLayer.hasAttribute('data-overlay-layer') ? '__overlay__' : '__draft__')
+                  )) ||
                   el.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0';
     } else {
         panelId = state.selectedPanelId || 'panel-0';
@@ -649,12 +671,19 @@ async function moveSelectedObject(targetPanelId) {
         return;
     }
 
-    // 移動元の親コマgからコマIDを取得（画像はdata-panel-id属性があれば最優先で使う。下書きレイヤー内の画像対応）
+    // 移動元のコマIDを取得。実際のDOM上の所属レイヤー（.closest()で祖先を辿って判定）を
+    // 最優先にする。data-panel-id属性は、グループ化等で直接の親が data-clip-panel / data-overlay-layer /
+    // data-draft-layer のいずれでもない場合のみのフォールバックとする
+    // （属性を先に見ると、複製・移動時にdata-panel-idの更新漏れがあった場合、実際の所属レイヤーと
+    // ズレたまま「移動できない（同コマ扱いされる）」「保存先を取り違えて複製に見える」不具合になる）。
     const srcParentG = srcEl.parentNode;
-    const srcPanelId = srcEl.getAttribute?.('data-panel-id') ||
-                       srcParentG.getAttribute('data-clip-panel') ||
-                       (srcParentG.hasAttribute('data-overlay-layer') ? '__overlay__' :
-                       (srcParentG.hasAttribute('data-draft-layer') ? '__draft__' : (state.selectedPanelId || 'panel-0')));
+    const srcAncestorLayer = srcEl.closest('g[data-clip-panel], g[data-overlay-layer], g[data-draft-layer]');
+    const srcPanelId = (srcAncestorLayer && (
+                           srcAncestorLayer.getAttribute('data-clip-panel') ||
+                           (srcAncestorLayer.hasAttribute('data-overlay-layer') ? '__overlay__' : '__draft__')
+                       )) ||
+                       srcEl.getAttribute?.('data-panel-id') ||
+                       (state.selectedPanelId || 'panel-0');
 
     // 同コマへの移動は意味がないので通知
     const isSamePanel = !targetPanelId || targetPanelId === srcPanelId;
@@ -694,6 +723,13 @@ async function moveSelectedObject(targetPanelId) {
         const destCenter = _polygonCenter(basePts) || { x: srcCx, y: srcCy };
         const destParentG = panelSvg.querySelector('g[data-overlay-layer]') || getOrCreateOverlayGroup(panelSvg);
         const clone = _cloneWithNewIds(srcEl);
+        // 画像はdata-panel-idで所属レイヤーを追跡している（削除・ロック・移動元判定等が参照）ため、
+        // オーバーレイへ移動した際は'__overlay__'に更新しておく（放置すると移動元パネルのIDを
+        // 指したままになり、以後そのオブジェクトを移動しようとした際に移動元判定を誤り、
+        // 「移動できない」「保存先を取り違えて複製のように見える」不具合の原因になる）
+        if (clone.tagName && clone.tagName.toLowerCase() === 'image') {
+            clone.setAttribute('data-panel-id', '__overlay__');
+        }
         _applyCenterTranslate(clone, srcCx, srcCy, destCenter.x, destCenter.y);
         destParentG.appendChild(clone);
         const clonedElId = clone.id || null;
