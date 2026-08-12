@@ -30,7 +30,7 @@ import { _insetPolygonPoints, _round2, deleteSelectedObject } from './05-groups-
 import { flipSelected } from './09c-balloon-handles.js';
 import { _getOrBuildPageThumb } from './11a-work-manager.js';
 import { _applyLayoutPreviewSize, _layoutPreviewSizePct, sanitizeSvgTree, updateTemplateSidePanel } from './02-assets.js';
-import { _prepareTemplateSvgDocForPage, _tmplResolveTemplateSvgForPage } from './06c-template-wizard.js';
+import { _prepareTemplateSvgDocForPage, _tmplResolveTemplateSvgForPage, _tmplForceInlineStyle } from './06c-template-wizard.js';
 import { _layerDrawAttachOverlay, _layerDrawDetachOverlay, _layerDrawFlushPendingSave, _layerDrawState } from './17a-layer-draw-input.js';
 import { initPanelsOnSvg } from './08-panels-images.js';
 import { initBalloonTools } from './09d-balloon-tools.js';
@@ -455,12 +455,7 @@ async function createPageFromTemplate() {
         const parsedLineWidth = parseFloat(lineWidthInput);
         const lineWidth = _round2(Math.max(0, isNaN(parsedLineWidth) ? defaultLineWidth : parsedLineWidth));
         comaPolygons.forEach(poly => {
-            poly.setAttribute('stroke-width', String(lineWidth));
-            const polyStyle = poly.getAttribute('style') || '';
-            if (polyStyle) {
-                const newPolyStyle = polyStyle.replace(/stroke-width\s*:[^;]+;?/g, '').trim();
-                poly.setAttribute('style', newPolyStyle ? `${newPolyStyle}; stroke-width: ${lineWidth};` : `stroke-width: ${lineWidth};`);
-            }
+            _tmplForceInlineStyle(poly, { 'stroke-width': String(lineWidth) });
         });
 
         const cleanSvgContent = new XMLSerializer().serializeToString(svgDoc.documentElement);

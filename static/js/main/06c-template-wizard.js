@@ -699,8 +699,6 @@ function parseSVGForTemplate(svgText, filename) {
     if (!viewBoxAttr) throw new Error(t('tmpl.errNoViewBox'));
 
     const viewBox = viewBoxAttr.trim().split(/[\s,]+/).map(Number);
-    const width = viewBox[2];
-    const height = viewBox[3];
 
     const { rootSvg, cleanup } = _tmplAttachHiddenSvg(svgEl);
     let panels, basePanelPoints;
@@ -727,7 +725,37 @@ function parseSVGForTemplate(svgText, filename) {
 
     panels.sort((a, b) => a.number - b.number);
 
+    // ページサイズはviewBoxの数値ではなく、panel_0（ページ外枠）の実座標の外接矩形から求める。
+    // getCTM()は「最も近い祖先ビューポート要素の“親”座標系」への変換を返す仕様のため、
+    // ルートsvgの直接の子孫にとってその変換先はviewBox内部座標系ではなく、
+    // ルートsvg自身のCSSピクセルサイズ（width/height属性を96dpiで解決した値）になる。
+    // Inkscape等はviewBoxの数値をこのCSSピクセル値と一致させて出力するため気づきにくいが、
+    // CorelDrawのように独自スケール（例: 1mm=100ユーザー単位）のviewBoxを使うツールでは、
+    // viewBoxの数値とpanels[].points/basePanelPointsの実際のスケールが食い違ってしまう
+    // （ページは21000x29700なのにコマは793x1122付近に収まる、といった不整合）。
+    // panel_0はgetCTM()を経由した同じ解決結果のため、そこから外接矩形を取ることで
+    // width/heightとコマ座標のスケールを常に一致させられる。
+    const baseBBox = _tmplBoundingBoxOfPointsStr(basePanelPoints);
+    const width = baseBBox ? baseBBox.width : viewBox[2];
+    const height = baseBBox ? baseBBox.height : viewBox[3];
+
     return { id: filename, name: filename, width, height, panels, basePanelPoints };
+}
+
+function _tmplBoundingBoxOfPointsStr(pointsStr) {
+    if (!pointsStr) return null;
+    const nums = pointsStr.trim().split(/[\s,]+/).map(Number).filter(Number.isFinite);
+    if (nums.length < 4) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let i = 0; i + 1 < nums.length; i += 2) {
+        const x = nums[i], y = nums[i + 1];
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return null;
+    return { width: maxX - minX, height: maxY - minY };
 }
 
 function _tmplExtractPanels(shapeEls, baseIndex, filterDecorativeBackground) {
@@ -750,7 +778,7 @@ function _tmplExtractPanels(shapeEls, baseIndex, filterDecorativeBackground) {
         const points = _tmplShapeToPointsStr(el);
         if (!points) return; // 幅0の矩形など、面積を持たない図形は無視
 
-        const id = el.getAttribute('id') || `panel_${index}`;
+        const id = el.getAttribute('id') || _tmplEffectiveId(el) || `panel_${index}`;
         const number = explicitNumber !== null ? explicitNumber : panels.length + 1;
         panels.push({ id, number, points });
     });
@@ -766,6 +794,23 @@ function _tmplAttachHiddenSvg(svgEl) {
     container.style.left = '-99999px';
     container.style.top = '-99999px';
     const imported = document.importNode(svgEl, true);
+
+    // width/height が % 指定（Affinity Designer等が既定で出力する width="100%" height="100%" 等）の場合、
+    // 非表示コンテナ側に具体的なサイズが無いため、CSSの「置換要素のデフォルトサイズ」
+    // （300×150にアスペクト比を保って収める）にフォールバックしてしまい、getCTM()がviewBoxの
+    // 数値と無関係などく小さいサイズを基準に解決してしまう（width/height属性が丸ごと無い場合は
+    // viewBoxがそのまま実寸として使われるため問題ない。%指定の場合のみ発生する）。
+    // viewBoxの数値をそのままpxとして明示指定し直すことで、意図した実寸で解決されるようにする。
+    const widthAttr = (imported.getAttribute('width') || '').trim();
+    const heightAttr = (imported.getAttribute('height') || '').trim();
+    if (widthAttr.endsWith('%') || heightAttr.endsWith('%')) {
+        const vb = (imported.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+        if (vb.length === 4 && Number.isFinite(vb[2]) && Number.isFinite(vb[3])) {
+            imported.setAttribute('width', String(vb[2]));
+            imported.setAttribute('height', String(vb[3]));
+        }
+    }
+
     container.appendChild(imported);
     document.body.appendChild(container);
     return { rootSvg: imported, cleanup: () => container.remove() };
@@ -788,19 +833,32 @@ function _tmplIsHiddenAncestry(el) {
     return false;
 }
 
+// Affinity Designer等、transform付きのレイヤーをid付き<g>でラップし、中の図形自体には
+// idを付けないツールがあるため、図形自身にidが無い場合は祖先方向に最も近いid付き要素を採用する
+// （defs/clipPath等は_tmplCollectShapeElementsで除外済みなので、ここでは考慮不要）。
+function _tmplEffectiveId(el) {
+    const node = el.closest('[id]');
+    return node ? node.getAttribute('id') : '';
+}
+
+// inkscape:labelも同様に、図形自身に無ければ祖先方向へ探す。
 function _tmplGetLabel(el) {
-    return el.getAttributeNS(_TMPL_INKSCAPE_NS, 'label') || el.getAttribute('inkscape:label') || '';
+    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+        const label = node.getAttributeNS(_TMPL_INKSCAPE_NS, 'label') || node.getAttribute('inkscape:label');
+        if (label) return label;
+    }
+    return '';
 }
 
 function _tmplMatchesPanelZero(el) {
-    const id = el.getAttribute('id') || '';
+    const id = _tmplEffectiveId(el);
     const label = _tmplGetLabel(el);
     return /^panel[_-]?0$/i.test(id) || /^panel[_-]?0$/i.test(label);
 }
 
 // id/labelが panel_N 形式に一致する場合のみ数値を返す（一致しなければnull＝番号は未指定）。
 function _tmplPanelNumberExplicit(el) {
-    const id = el.getAttribute('id') || '';
+    const id = _tmplEffectiveId(el);
     const label = _tmplGetLabel(el);
     const match = id.match(/panel[_-]?(\d+)/i) || label.match(/panel[_-]?(\d+)/i);
     return match ? parseInt(match[1], 10) : null;
@@ -1027,34 +1085,35 @@ function _tmplResolveTemplateSvgForPage(templateRecord) {
  * コマ番号テキスト（<text>要素）を除去し、panel_0（最初のpolygon）の枠線を非表示にする。
  * @returns {{ svgDoc: Document, polygons: NodeListOf<SVGPolygonElement> }}
  */
+// class等のCSSより確実に優先させるため、プレゼンテーション属性だけでなく
+// インラインstyle（CSS優先順位が最も高い）にも同じ値を設定する。
+// CorelDraw等、<defs><style>内のクラス指定（例: .str0{stroke:black;stroke-width:35.27}）で
+// ストロークを定義するツールの出力では、プレゼンテーション属性だけでは
+// 上書きできない（CSS優先度: クラスセレクタ > プレゼンテーション属性）。
+function _tmplForceInlineStyle(el, props) {
+    Object.entries(props).forEach(([k, v]) => el.setAttribute(k, v));
+    let newStyle = el.getAttribute('style') || '';
+    Object.keys(props).forEach(k => {
+        newStyle = newStyle.replace(new RegExp(`${k}\\s*:[^;]+;?`, 'gi'), '');
+    });
+    newStyle = newStyle.trim();
+    const forced = Object.entries(props).map(([k, v]) => `${k}: ${v}`).join('; ');
+    el.setAttribute('style', newStyle ? `${newStyle}; ${forced};` : `${forced};`);
+}
+
 function _prepareTemplateSvgDocForPage(svgContent) {
     const svgDoc = new DOMParser().parseFromString(svgContent, 'image/svg+xml');
     svgDoc.querySelectorAll('text').forEach(el => el.remove());
     const polygons = svgDoc.querySelectorAll('polygon');
     if (polygons.length > 0) {
-        const panel0 = polygons[0];
-        panel0.setAttribute('stroke', 'none');
-        panel0.setAttribute('stroke-width', '0');
-        // style属性内のstrokeも除去
-        const styleAttr = panel0.getAttribute('style') || '';
-        if (styleAttr) {
-            const newStyle = styleAttr
-                .replace(/stroke\s*:[^;]+;?/g, '')
-                .replace(/stroke-width\s*:[^;]+;?/g, '')
-                .trim();
-            if (newStyle) {
-                panel0.setAttribute('style', newStyle + '; stroke: none; stroke-width: 0;');
-            } else {
-                panel0.setAttribute('style', 'stroke: none; stroke-width: 0;');
-            }
-        }
+        _tmplForceInlineStyle(polygons[0], { stroke: 'none', 'stroke-width': '0' });
     }
     return { svgDoc, polygons };
 }
 
 export {
     TMPLWIZ_DEFAULT, _TMPLWIZ_LS_GRID, _prepareTemplateSvgDocForPage, _tmplGetFrameWidth,
-    _tmplResolveTemplateSvgForPage,
+    _tmplResolveTemplateSvgForPage, _tmplForceInlineStyle,
     _tmplGroupsRefreshUI, _tmplSidePanelUpdate, _tmplWiz, _tmplWizAttachCanvasEvents,
     _tmplWizBuildSvgString, _tmplWizCanvasMouseDown, _tmplWizCanvasMouseMove, _tmplWizCanvasMouseUp,
     _tmplWizClientToSvg, _tmplWizCommitCut, _tmplWizComputeInitialPanels, _tmplWizCreateBase,
