@@ -35,6 +35,7 @@ const _HELP_DATA = [
         sections: [
             { heading: '概要', body: 'ページタブの「テンプレート」サブタブで、マンガのページ枠テンプレートを管理します。SVGのインポートとウィザードでの作成に対応しています。' },
             { heading: '使い方', body: '<ul><li>「SVGからテンプレート作成」でSVGファイルをインポートします。</li><li>「テンプレートを作成」でウィザードを開き、線を引いてコマを分割する方式でテンプレートを作成できます。</li><li>一覧からサムネイルをクリックして選択し、「ページ新規作成」でそのテンプレートを使った新規ページを作成します（コマの線幅を指定できます）。</li><li>各カードにはテンプレート名の下にサイズとコマ枠幅（例: 21000×29700 / 枠幅 63）が表示されます。枠幅が抽出できないテンプレート（一部の外部SVG等）はサイズのみ表示されます。</li><li>作品での作業中は、レイアウトタブ左のアセットパネル「テンプレート」からの挿入が便利です（作品サイズに自動リサイズ）。</li></ul>' },
+            { heading: 'SVGインポート時のスケール補正', body: '<ul><li>Inkscape等の外部SVGは、ツールによってページの実寸(mm)と内部座標のスケールの対応関係が異なります。この差を無視すると、テンプレートごとにコマ枠線幅の見た目の太さが揃わなくなります。</li><li>SVGファイルの<code>width</code>属性（実寸・単位付き）から、他のテンプレートと枠線幅を揃えるためのスケール補正が必要かどうかを自動判定します。必要な場合は確認ダイアログが表示され、算出した倍率がデフォルト値として入力欄に入っています。そのまま「OK」で補正を適用、<b>1</b>を入力すれば補正せずそのまま読み込めます。</li><li>確認ダイアログで「キャンセル」を押すと、インポート自体を中止します（テンプレートは作成されません）。</li><li>同名のテンプレートが既に存在する場合は上書きせず、別の名前の入力を求められます（ここでキャンセル、または空欄のまま確定するとインポートを中止します）。</li><li><code>width</code>属性が無い、または<code>%</code>指定のSVGはスケールを自動判定できないため、確認ダイアログなしでそのまま読み込まれます。</li></ul>' },
             { heading: 'グループ管理', body: '<ul><li>右サイドパネルの「グループ管理」欄でグループの追加（名前入力→「追加」）・名前変更（✎）・削除（✕）ができます。</li><li>テンプレートを選択した状態でグループを選び「グループに追加」ボタンを押すと、そのテンプレートをグループに追加します。</li><li>「グループから削除」ボタンでグループから外します。</li><li>上部のフィルタドロップダウンでグループを選ぶと、そのグループのテンプレートのみ表示します。</li></ul>' },
             { heading: 'ガイドグリッド（分割画面）', body: '<ul><li>「ベースを作成」後の分割画面で「ガイドグリッド」にチェックを入れると、指定した幅・高さの格子線がキャンバスに表示されます（見た目だけのガイドで、コマ分割データには影響しません）。</li><li>「スナップ」にチェックを入れると、分割線の始点・終点がグリッドの交点に自動で吸着します。表示をOFFにしたままスナップだけを有効にすることもできます。</li><li>グリッドの表示ON/OFF・幅・高さ・スナップの設定はブラウザに記憶され、次回ウィザードを開いたときも引き継がれます。</li></ul>' },
             { heading: 'ポイント', body: '<ul><li>テンプレートはコマ数や形状が異なる複数種類を登録できます。</li><li>削除したテンプレートは復元できないため注意してください。</li><li>「名前変更」ボタンでテンプレート名を変更できます（選択時に有効）。</li></ul>' },
@@ -214,8 +215,12 @@ const _HELP_DATA = [
                 body: '<pre class="help-code">&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1200"&gt;\n  &lt;!-- panel_0: ページ外枠 --&gt;\n  &lt;polygon points="0,0 800,0 800,1200 0,1200"\n           fill="none" stroke="#000" stroke-width="2"/&gt;\n  &lt;!-- コマ1 --&gt;\n  &lt;polygon points="10,10 390,10 390,590 10,590"\n           fill="none" stroke="#000" stroke-width="2"/&gt;\n  &lt;!-- コマ2 --&gt;\n  &lt;polygon points="410,10 790,10 790,590 410,590"\n           fill="none" stroke="#000" stroke-width="2"/&gt;\n  &lt;!-- コマ3 --&gt;\n  &lt;polygon points="10,610 790,610 790,1190 10,1190"\n           fill="none" stroke="#000" stroke-width="2"/&gt;\n&lt;/svg&gt;</pre>この例は800×1200pxのページに3コマ（上2段・下1段）を配置したテンプレートです。',
             },
             {
+                heading: '実寸とコマ枠線幅の統一（スケール補正）',
+                body: 'アプリ内蔵の「テンプレートを作成」ウィザードは内部座標系を「1ユーザー単位 = 0.01mm」（A4 = 21000×29700）で扱いますが、Inkscape等の外部ツールが出力するSVGは、<code>viewBox</code>のユーザー単位と実寸(mm)との対応関係がツールごとに異なります（例: Inkscapeは96dpiのpx単位で出力するため、1ユーザー単位≒0.2646mm）。この差を無視すると、同じ数値のコマ枠線幅でもテンプレートによって太さが大きく異なって見えてしまいます。<br><br>SVGインポート時、ルート<code>&lt;svg&gt;</code>要素の<code>width</code>属性（<code>210mm</code>のような単位付きの実寸）とpanel_0の外接矩形から、内部標準スケールへ正規化する倍率を自動算出します。1から十分離れている場合は確認ダイアログが表示され、算出した倍率を確認・補正した上でインポートできます（適用するとコマ座標・ページサイズ・線幅がすべて内部標準スケールへ変換されます）。<code>width</code>属性が無い、または<code>%</code>指定のSVGでは自動判定できないため、ダイアログは表示されずそのまま読み込まれます。',
+            },
+            {
                 heading: '制限・注意事項',
-                body: '<ul><li>コマは <code>&lt;polygon&gt;</code> のみ対応です（<code>&lt;rect&gt;</code> <code>&lt;path&gt;</code> は未対応）。</li><li>polygonの点は時計回り・反時計回りどちらでも動作しますが、自己交差する形状は表示が乱れる場合があります。</li><li>SVG内に <code>&lt;defs&gt;</code> <code>&lt;style&gt;</code> などの補助要素が含まれていても問題ありませんが、polygonのパース処理にのみ使用されます。</li><li>ファイル名はテンプレート名として表示されます。日本語ファイル名も使用できます。</li></ul>',
+                body: '<ul><li>polygonの点は時計回り・反時計回りどちらでも動作しますが、自己交差する形状は表示が乱れる場合があります。</li><li>SVG内に <code>&lt;defs&gt;</code> <code>&lt;style&gt;</code> などの補助要素が含まれていても問題ありません。</li><li>ファイル名はテンプレート名として表示されます。日本語ファイル名も使用できます。</li></ul>',
             },
         ],
     },
@@ -273,7 +278,7 @@ const _HELP_DATA = [
             },
             {
                 heading: 'ステップ1: ドキュメントサイズの設定',
-                body: '<ol><li>Inkscapeを起動し、メニュー <b>ファイル → ドキュメントのプロパティ</b>（Shift+Ctrl+D）を開きます。</li><li>「ページ」タブで幅・高さを設定します（例: 幅 800px、高さ 1200px）。単位は <b>px</b> を選択してください。</li><li>「スケーリング」セクションで <b>1ユーザー単位 = 1px</b> になっていることを確認します。</li><li>ダイアログを閉じます。</li></ol>',
+                body: '<ol><li>Inkscapeを起動し、メニュー <b>ファイル → ドキュメントのプロパティ</b>（Shift+Ctrl+D）を開きます。</li><li>「ページ」タブで幅・高さを設定します（例: A4サイズなら 210mm × 297mm、pxで指定するなら 800px × 1200px など）。単位は <b>mm</b>・<b>px</b> のどちらでも構いません。インポート時にSVGの<code>width</code>属性（実寸）から他のテンプレートとコマ枠線幅を揃えるためのスケールが自動的に判定されます。</li><li>ダイアログを閉じます。</li></ol>',
             },
             {
                 heading: 'ステップ2: 外枠（panel_0）を描く',
@@ -297,7 +302,7 @@ const _HELP_DATA = [
             },
             {
                 heading: 'トラブルシューティング',
-                body: '<ul><li><b>コマが認識されない</b>: 図形にストローク（線）が設定されているか確認してください。ストロークが無く、id/labelも <code>panel_N</code> の形式でない図形はコマとして扱われません。</li><li><b>コマ数がずれる</b>: panel_0（外枠）は最初に描いた図形が自動的に割り当てられます。順序を変えたい場合は、外枠にしたい図形のid（またはinkscape:label）を <code>panel_0</code> にしてください。</li><li><b>ページサイズがおかしい</b>: ドキュメントのプロパティで単位をmm/inにしていても、SVGの <code>viewBox</code> 値をそのまま読み込むため通常は問題ありません。サイズがずれる場合はドキュメントのプロパティの「スケーリング」で <b>1ユーザー単位 = 1px</b> になっているか確認してください。</li></ul>',
+                body: '<ul><li><b>コマが認識されない</b>: 図形にストローク（線）が設定されているか確認してください。ストロークが無く、id/labelも <code>panel_N</code> の形式でない図形はコマとして扱われません。</li><li><b>コマ数がずれる</b>: panel_0（外枠）は最初に描いた図形が自動的に割り当てられます。順序を変えたい場合は、外枠にしたい図形のid（またはinkscape:label）を <code>panel_0</code> にしてください。</li><li><b>コマ枠線幅が他のテンプレートと揃わない</b>: インポート時にSVGの<code>width</code>属性（実寸）からスケール補正の確認ダイアログが自動的に表示されます。ダイアログでそのまま「OK」を押すと算出した倍率が適用されます（<b>1</b>を入力すれば補正なしで読み込めます）。ダイアログが出ない場合は、SVGに<code>width</code>属性が無い（<code>viewBox</code>のみ）か、<code>%</code>指定になっている可能性があります。</li></ul>',
             },
         ],
     },
@@ -376,6 +381,7 @@ const _HELP_I18N = {
             sections: [
                 { heading: 'Overview', body: 'Manage manga page frame templates in the "Templates" sub-tab of the Page tab. Supports both importing SVG files and creating templates with the wizard.' },
                 { heading: 'Usage', body: '<ul><li>Use "Create Template from SVG" to import an SVG file.</li><li>Use "Create Template" to open the wizard, where you can create a template by drawing lines to split the page into panels.</li><li>Click a thumbnail in the list to select it, then use "New Page" to create a new page from that template (you can specify the panel line width).</li><li>Each card shows the size and panel frame width below the template name (e.g. 21000×29700 / Frame 63). For templates whose frame width cannot be extracted (some external SVGs, etc.), only the size is shown.</li><li>While working within a work, inserting from the "Template" asset panel on the left of the Layout tab is convenient (automatically resized to the work\'s size).</li></ul>' },
+                { heading: 'Scale Correction on SVG Import', body: '<ul><li>External SVGs from tools like Inkscape can have a different relationship between the page\'s real-world size (mm) and the internal coordinate scale depending on the tool. Ignoring this difference means panel border widths won\'t look consistent across templates.</li><li>The app automatically checks, from the SVG\'s <code>width</code> attribute (a real-world size with a unit), whether a scale correction is needed to match panel border widths with other templates. If so, a confirmation dialog appears with the calculated multiplier pre-filled. Click "OK" as-is to apply it, or enter <b>1</b> to import without correction.</li><li>Clicking "Cancel" in the confirmation dialog cancels the import entirely (no template is created).</li><li>If a template with the same name already exists, it will not be overwritten — you\'ll be asked to enter a different name instead (cancelling or leaving it blank cancels the import).</li><li>SVGs without a <code>width</code> attribute, or with a <code>%</code> value, can\'t be auto-detected, so they are imported as-is without a confirmation dialog.</li></ul>' },
                 { heading: 'Group Management', body: '<ul><li>In the "Group Management" area of the right side panel, you can add a group (enter a name → "Add"), rename it (✎), or delete it (✕).</li><li>With a template selected, choose a group and click "Add to Group" to add that template to the group.</li><li>Click "Remove from Group" to remove it from the group.</li><li>Selecting a group from the filter dropdown at the top shows only templates in that group.</li></ul>' },
                 { heading: 'Guide Grid (Split Screen)', body: '<ul><li>On the split screen after "Create Base", checking "Guide Grid" displays grid lines of the specified width and height on the canvas (a purely visual guide that does not affect the panel split data).</li><li>Checking "Snap" causes the start and end points of split lines to automatically snap to grid intersections. You can enable snapping alone while keeping the grid display off.</li><li>The grid\'s on/off state, width, height, and snap settings are remembered by the browser and carried over the next time you open the wizard.</li></ul>' },
                 { heading: 'Tips', body: '<ul><li>You can register multiple templates with different panel counts and shapes.</li><li>Deleted templates cannot be restored, so please be careful.</li><li>The "Rename" button lets you change a template\'s name (enabled when a template is selected).</li></ul>' },
@@ -627,6 +633,7 @@ const _HELP_I18N = {
             sections: [
                 { heading: '概述', body: '在页面标签页的"模板"子标签中管理漫画分格模板。支持导入SVG文件和使用向导创建模板两种方式。' },
                 { heading: '使用方法', body: '<ul><li>使用"从SVG创建模板"导入SVG文件。</li><li>使用"创建模板"打开向导，通过画线分割分格的方式创建模板。</li><li>在列表中点击缩略图选中后，使用"新建页面"以该模板创建新页面（可以指定分格线宽）。</li><li>每张卡片会在模板名称下方显示尺寸和分格边框宽度（例如：21000×29700 / 边框宽 63）。无法提取边框宽度的模板（部分外部SVG等）仅显示尺寸。</li><li>在作品中工作时，从排版标签左侧的素材面板"模板"插入会很方便（自动调整为作品尺寸）。</li></ul>' },
+                { heading: '导入SVG时的缩放校正', body: '<ul><li>来自Inkscape等工具的外部SVG，其页面实际尺寸(mm)与内部坐标缩放之间的对应关系因工具而异。忽略这一差异会导致不同模板的分格边框宽度看起来粗细不一致。</li><li>应用会根据SVG的<code>width</code>属性（带单位的实际尺寸）自动判断是否需要缩放校正以使边框宽度与其他模板保持一致。如需要，会弹出确认对话框，并预填计算出的倍率。直接点击"确定"即可应用该倍率，输入<b>1</b>则不做校正直接导入。</li><li>在确认对话框中点击"取消"将中止整个导入（不会创建模板）。</li><li>如果同名模板已存在，不会被覆盖，而是会要求输入其他名称（此时取消或留空同样会中止导入）。</li><li>没有<code>width</code>属性、或该属性为<code>%</code>值的SVG无法自动判断，会不弹出确认对话框直接按原样导入。</li></ul>' },
                 { heading: '分组管理', body: '<ul><li>在右侧面板的"分组管理"区域可以添加分组（输入名称→"添加"）、重命名（✎）、删除（✕）。</li><li>选中模板后选择分组并点击"添加到分组"，即可将该模板加入分组。</li><li>点击"从分组中删除"可将其移出分组。</li><li>在顶部的筛选下拉菜单中选择分组，将只显示该分组的模板。</li></ul>' },
                 { heading: '参考网格（分割界面）', body: '<ul><li>在"创建基础"之后的分割界面中勾选"参考网格"，画布上会显示指定宽度和高度的网格线（仅作视觉参考，不影响分格数据）。</li><li>勾选"吸附"后，分割线的起点和终点会自动吸附到网格交点。也可以在不显示网格的情况下单独启用吸附。</li><li>网格的显示开关、宽度、高度和吸附设置会被浏览器记住，下次打开向导时会保留。</li></ul>' },
                 { heading: '要点', body: '<ul><li>可以注册多种不同分格数量和形状的模板。</li><li>删除的模板无法恢复，请谨慎操作。</li><li>"重命名"按钮可以更改模板名称（选中模板时可用）。</li></ul>' },

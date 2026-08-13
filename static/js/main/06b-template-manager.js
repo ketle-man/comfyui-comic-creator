@@ -9,12 +9,12 @@
 // ============================================================
 
 import { t } from '../i18n.js';
-import { dbGetAll, dbPut, readFileAsText } from './00-db.js';
+import { dbGet, dbGetAll, dbPut, readFileAsText } from './00-db.js';
 import {
     parseSVGForTemplate, openTemplateWizard, closeTemplateWizard, _tmplWizCreateBase,
     _tmplWizSave, _tmplWizUndo, _tmplWizReset, _tmplWizSetOrientation, _tmplWizSetCutMode,
     _tmplWiz, _tmplWizSaveGridSettings, _tmplWizRender, renameTemplate, deleteTemplate,
-    renderTemplateList, _tmplGroupsRefreshUI, _tmplSidePanelUpdate,
+    renderTemplateList, _tmplGroupsRefreshUI, _tmplSidePanelUpdate, _tmplApplyImportScale,
 } from './06c-template-wizard.js';
 import { state } from './01-state.js';
 
@@ -103,9 +103,42 @@ async function initTemplateManager() {
         try {
             const svgText = await readFileAsText(file);
             const templateName = file.name.replace(/\.svg$/i, '');
-            const template = parseSVGForTemplate(svgText, templateName);
+            let template = parseSVGForTemplate(svgText, templateName);
+            let finalSvgText = svgText;
 
-            await saveTemplate(template, svgText);
+            // SVGのwidth属性（実寸mm）から算出したスケール補正値が1から十分離れている場合、
+            // 適用してよいか確認する。テンプレートウィザードの内部座標系は「1ユーザー単位=0.01mm」
+            // 固定だが、外部SVGはツールごとに実寸との対応関係が異なり、補正しないと
+            // テンプレート間でコマ枠線幅の見た目の太さが揃わないため（2026-08-13発覚）。
+            // Cancelはインポート自体の中止として扱う（数値入力してOKなら、その値で作成する。
+            // 1を入力すれば補正なしで作成できる）。
+            if (template.suggestedScale && Math.abs(template.suggestedScale - 1) > 0.02) {
+                const defaultScale = Math.round(template.suggestedScale * 1000) / 1000;
+                const input = prompt(t('tmpl.scaleConfirmPrompt', defaultScale), String(defaultScale));
+                if (input === null) { fileInput.value = ''; return; }
+                const scale = parseFloat(input);
+                if (Number.isFinite(scale) && scale > 0 && Math.abs(scale - 1) > 0.001) {
+                    const applied = _tmplApplyImportScale(template, svgText, scale);
+                    template = applied.template;
+                    finalSvgText = applied.svgText;
+                }
+            }
+
+            // 同名テンプレートが既に存在する場合、確認なしで上書きしていたのを改め、
+            // 別の名前を入力してもらう（2026-08-13発覚: 確認なしの上書きにより、
+            // 補正ダイアログをCancelしたつもりでも既存の同名テンプレートが上書きされ、
+            // 「作成した」表示は出るのに新規のテンプレートとしては現れないように見えた）。
+            let finalName = template.name;
+            while (await dbGet('templates', finalName)) {
+                const newName = prompt(t('tmpl.namePromptDuplicate', finalName), finalName)?.trim();
+                if (!newName) { fileInput.value = ''; return; }
+                finalName = newName;
+            }
+            if (finalName !== template.name) {
+                template = { ...template, id: finalName, name: finalName };
+            }
+
+            await saveTemplate(template, finalSvgText);
             await loadTemplates();
             renderTemplateList();
 

@@ -354,13 +354,19 @@ async function switchActivePage(pageName) {
 // レイアウトのページナビゲーション（ページ送り・番号表示・削除）
 // ==============================
 
-/** ページ送りの対象リスト（作業中の作品があればそのページ順、なければ全ページの名前昇順） */
+/**
+ * ページ送りの対象リスト（作業中の作品のページ順。グループ配列の順序＝作品内ページ順）。
+ * 作品が未選択、またはその作品にページが1件も無い場合は空リストを返す。
+ * 「ページは必ず作品・stock・任意グループのいずれかに属する運用」（11a-work-manager.jsの
+ * _adoptOrphanPagesToStock参照）のため、以前あった「全ページの名前昇順」への
+ * フォールバックは不要かつ有害だった：作品を閉じた直後やページ0件の新規作品でも
+ * ページ送りボタンが無効化されず、押すと別の作品のページへ切り替わってしまっていた
+ * （アセットパネルのPタブには正しく「ページがありません」と出るため、レイアウトタブの
+ * ページ送りだけが作品スコープを外れていた。2026-08-13発覚）。
+ */
 function _layoutPageList() {
-    if (state.activeWork && _pageMgrGroups.data[state.activeWork.name]?.length) {
-        // グループ配列の順序＝作品内ページ順
-        return _pageMgrGroups.data[state.activeWork.name].slice();
-    }
-    return state.pages.map(p => p.name).sort((a, b) => a.localeCompare(b));
+    if (!state.activeWork) return [];
+    return (_pageMgrGroups.data[state.activeWork.name] || []).slice();
 }
 
 /** ページ番号表示とボタンの活性状態を更新する */

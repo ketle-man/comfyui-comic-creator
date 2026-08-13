@@ -688,6 +688,153 @@ const _TMPL_SHAPE_SELECTOR = 'rect, polygon, polyline, path, circle, ellipse';
 const _TMPL_HIDDEN_ANCESTOR_SELECTOR = 'defs, clipPath, mask, symbol, pattern';
 const _TMPL_INKSCAPE_NS = 'http://www.inkscape.org/namespaces/inkscape';
 
+// ==============================
+// SVGインポート時の実寸スケール正規化
+// ==============================
+// テンプレートウィザードの内部座標系は「1ユーザー単位 = 0.01mm」固定
+// （TMPLWIZ_DEFAULT: portraitW=21000, portraitH=29700 = 210mm/297mm × 100）。
+// Inkscape等の外部SVGはwidth/height属性の実寸単位とviewBoxユーザー単位の対応関係が
+// ツール依存（例: Inkscapeは96dpi px基準で出力するため1ユーザー単位≒0.2646mm）で、
+// この差を正規化しないとテンプレート間でコマ枠線幅の見た目の太さが揃わない
+// （同じstroke-width数値でも実際の相対的太さが最大数十倍異なる。2026-08-13発覚）。
+const _TMPL_UNIT_TO_MM = { mm: 1, cm: 10, in: 25.4, pt: 25.4 / 72, pc: 25.4 / 6, px: 25.4 / 96 };
+const _TMPL_INTERNAL_UNITS_PER_MM = 100; // TMPLWIZ_DEFAULTの21000/210mmに対応
+
+function _tmplParseLengthToMm(str) {
+    const m = String(str || '').trim().match(/^([\d.eE+-]+)\s*([a-z%]*)$/i);
+    if (!m) return null;
+    const value = parseFloat(m[1]);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    const unit = (m[2] || 'px').toLowerCase();
+    if (unit === '%') return null; // %指定は実寸不明のため判定不可
+    const factor = _TMPL_UNIT_TO_MM[unit];
+    return factor ? value * factor : null;
+}
+
+// svg要素のwidth属性（実寸・単位付き）とpanel_0の外接矩形（viewBoxユーザー座標系）から、
+// 内部標準スケール（1ユーザー単位=0.01mm）へ正規化するための倍率を算出する。
+// 判定不能（width属性が無い/%指定/単位不明）な場合はnullを返す。
+function _tmplComputeSuggestedScale(svgEl, baseBBox) {
+    if (!baseBBox || !(baseBBox.width > 0)) return null;
+    const widthMm = _tmplParseLengthToMm(svgEl.getAttribute('width'));
+    if (!widthMm) return null;
+    const mmPerUnit = widthMm / baseBBox.width;
+    return _TMPL_INTERNAL_UNITS_PER_MM * mmPerUnit;
+}
+
+function _tmplScalePointsStr(pointsStr, scale) {
+    const nums = String(pointsStr || '').trim().split(/[\s,]+/).map(Number).filter(Number.isFinite);
+    const pairs = [];
+    for (let i = 0; i + 1 < nums.length; i += 2) {
+        pairs.push(`${_tmplRound(nums[i] * scale)},${_tmplRound(nums[i + 1] * scale)}`);
+    }
+    return pairs.join(' ');
+}
+
+// d属性中の座標数値をscale倍する。Aコマンド（円弧）はrx,ry,x,yのみスケールし、
+// x-axis-rotation（角度）とlarge-arc-flag/sweep-flag（0/1固定値）はスケール対象から除外する。
+function _tmplScalePathD(d, scale) {
+    const chunks = d.trim().match(_TMPL_PATH_CMD_RE) || [];
+    return chunks.map(chunk => {
+        const cmd = chunk[0];
+        const type = cmd.toUpperCase();
+        if (type === 'Z') return cmd;
+        const rest = chunk.slice(1);
+        const nums = rest.match(_TMPL_PATH_NUM_RE) || [];
+        if (nums.length === 0) return chunk;
+
+        if (type === 'A') {
+            const out = [];
+            for (let i = 0; i + 6 < nums.length; i += 7) {
+                out.push(
+                    _tmplRound(parseFloat(nums[i]) * scale), _tmplRound(parseFloat(nums[i + 1]) * scale),
+                    nums[i + 2], nums[i + 3], nums[i + 4],
+                    _tmplRound(parseFloat(nums[i + 5]) * scale), _tmplRound(parseFloat(nums[i + 6]) * scale),
+                );
+            }
+            return cmd + out.join(' ');
+        }
+        return cmd + nums.map(n => _tmplRound(parseFloat(n) * scale)).join(' ');
+    }).join(' ');
+}
+
+// SVG要素ツリーの座標属性・stroke-widthをscale倍で書き換える（インポート時の一回限りの正規化用）。
+// 11a-work-manager.jsの_scaleSvgElementTreeはtransform()でラップして視覚的にスケールするのに対し、
+// こちらは属性値そのものを書き換える。_tmplGetFrameWidth等が属性値を直接読むため、
+// 値そのものを内部標準スケールへ焼き込む必要がある。
+function _tmplBakeScaleIntoSvgTree(el, scale) {
+    if (el.nodeType !== 1) return;
+    const scaleAttr = (attr) => {
+        const v = parseFloat(el.getAttribute(attr));
+        if (Number.isFinite(v)) el.setAttribute(attr, String(_tmplRound(v * scale)));
+    };
+
+    const tag = el.tagName.toLowerCase();
+    switch (tag) {
+        case 'polygon': case 'polyline':
+            if (el.getAttribute('points')) el.setAttribute('points', _tmplScalePointsStr(el.getAttribute('points'), scale));
+            break;
+        case 'rect': case 'image': case 'use':
+            scaleAttr('x'); scaleAttr('y'); scaleAttr('width'); scaleAttr('height');
+            scaleAttr('rx'); scaleAttr('ry');
+            break;
+        case 'line':
+            scaleAttr('x1'); scaleAttr('y1'); scaleAttr('x2'); scaleAttr('y2');
+            break;
+        case 'circle':
+            scaleAttr('cx'); scaleAttr('cy'); scaleAttr('r');
+            break;
+        case 'ellipse':
+            scaleAttr('cx'); scaleAttr('cy'); scaleAttr('rx'); scaleAttr('ry');
+            break;
+        case 'text': case 'tspan':
+            scaleAttr('x'); scaleAttr('y'); scaleAttr('font-size');
+            break;
+        case 'path': {
+            const d = el.getAttribute('d');
+            if (d) el.setAttribute('d', _tmplScalePathD(d, scale));
+            break;
+        }
+    }
+
+    scaleAttr('stroke-width');
+    const style = el.getAttribute('style');
+    if (style && /stroke-width/i.test(style)) {
+        el.setAttribute('style', style.replace(/stroke-width\s*:\s*([\d.]+)/gi,
+            (_, v) => `stroke-width: ${_tmplRound(parseFloat(v) * scale)}`));
+    }
+
+    Array.from(el.children).forEach(child => _tmplBakeScaleIntoSvgTree(child, scale));
+}
+
+// SVGインポート時のスケール補正をtemplate（parseSVGForTemplateの返り値）とsvgText両方に適用する。
+// panels/basePanelPoints/width/heightは数値をそのまま倍率でスケールし、
+// svgTextは全図形要素の座標・線幅を書き換えてviewBoxも合わせて更新する
+// （テンプレート一覧のサムネイル・カード情報表示（_tmplGetFrameWidth）は元のsvgContentを
+// 参照するため、svgText側も座標系を揃えておかないと表示上の線幅が食い違って見える）。
+function _tmplApplyImportScale(template, svgText, scale) {
+    const scaledTemplate = {
+        ...template,
+        width: _tmplRound(template.width * scale),
+        height: _tmplRound(template.height * scale),
+        basePanelPoints: _tmplScalePointsStr(template.basePanelPoints, scale),
+        panels: template.panels.map(p => ({ ...p, points: _tmplScalePointsStr(p.points, scale) })),
+    };
+
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+    const svgEl = doc.querySelector('svg');
+    let scaledSvgText = svgText;
+    if (svgEl) {
+        _tmplBakeScaleIntoSvgTree(svgEl, scale);
+        svgEl.setAttribute('viewBox', `0 0 ${scaledTemplate.width} ${scaledTemplate.height}`);
+        svgEl.removeAttribute('width');
+        svgEl.removeAttribute('height');
+        scaledSvgText = new XMLSerializer().serializeToString(svgEl);
+    }
+
+    return { template: scaledTemplate, svgText: scaledSvgText };
+}
+
 function parseSVGForTemplate(svgText, filename) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgText, 'image/svg+xml');
@@ -739,7 +886,11 @@ function parseSVGForTemplate(svgText, filename) {
     const width = baseBBox ? baseBBox.width : viewBox[2];
     const height = baseBBox ? baseBBox.height : viewBox[3];
 
-    return { id: filename, name: filename, width, height, panels, basePanelPoints };
+    // width/height属性（実寸・単位付き）から、内部標準スケールへの正規化倍率を算出する
+    // （呼び出し側がテンプレート間でコマ枠線幅を揃えるための補正確認に使う。判定不能ならnull）。
+    const suggestedScale = _tmplComputeSuggestedScale(svgEl, baseBBox);
+
+    return { id: filename, name: filename, width, height, panels, basePanelPoints, suggestedScale };
 }
 
 function _tmplBoundingBoxOfPointsStr(pointsStr) {
@@ -1071,8 +1222,13 @@ function _tmplTemplateToPageSvgString(templateRecord) {
     parts.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">`);
     parts.push(`  <rect x="0" y="0" width="${w}" height="${h}" fill="#ffffff"/>`);
     parts.push(`  <polygon id="panel_0" points="${base}" fill="none" stroke="#000" stroke-width="${strokeWidth}"/>`);
+    // idはpanel_${number}ではなくp.id（テンプレートのpanels[].idそのもの）を使う。
+    // createPageFromTemplateが複製するpageRecord.panels[].idはこの元id（Inkscape等の
+    // 要素id）のままで、コマ枠線幅変更処理（07-pages.js）もその id で svg 内の polygon を
+    // 検索するため、決め打ちのpanel_${number}にすると一致せず線幅変更が効かなくなる
+    // （2026-08-13発覚：rect/path形式のテンプレートでコマ枠線幅を変更しても表示が変わらないバグ）。
     [...(templateRecord.panels || [])].sort((a, b) => a.number - b.number).forEach(p => {
-        parts.push(`  <polygon id="panel_${p.number}" points="${p.points}" fill="none" stroke="#000" stroke-width="${strokeWidth}"/>`);
+        parts.push(`  <polygon id="${p.id}" points="${p.points}" fill="none" stroke="#000" stroke-width="${strokeWidth}"/>`);
     });
     parts.push('</svg>');
     return parts.join('\n');
@@ -1121,7 +1277,7 @@ function _prepareTemplateSvgDocForPage(svgContent) {
 
 export {
     TMPLWIZ_DEFAULT, _TMPLWIZ_LS_GRID, _prepareTemplateSvgDocForPage, _tmplGetFrameWidth,
-    _tmplResolveTemplateSvgForPage, _tmplForceInlineStyle,
+    _tmplResolveTemplateSvgForPage, _tmplForceInlineStyle, _tmplApplyImportScale,
     _tmplGroupsRefreshUI, _tmplSidePanelUpdate, _tmplWiz, _tmplWizAttachCanvasEvents,
     _tmplWizBuildSvgString, _tmplWizCanvasMouseDown, _tmplWizCanvasMouseMove, _tmplWizCanvasMouseUp,
     _tmplWizClientToSvg, _tmplWizCommitCut, _tmplWizComputeInitialPanels, _tmplWizCreateBase,

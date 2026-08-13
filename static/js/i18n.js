@@ -1097,6 +1097,8 @@ const LANGUAGES = {
         // -- テンプレート管理/ウィザード 実行時メッセージ（Phase 2, 06b/06c） --
         'tmpl.created': (name) => `テンプレート "${name}" を作成しました。`,
         'tmpl.createFailed': (m) => `テンプレート作成に失敗しました: ${m}`,
+        'tmpl.scaleConfirmPrompt': (scale) => `このSVGの実寸(mm)から判定すると、他のテンプレートとコマ枠線幅を揃えるには読み込み時に ${scale} 倍のスケール補正が必要そうです。\n\n適用する倍率を入力してください（補正せずそのまま読み込む場合は 1 を入力）。`,
+        'tmpl.namePromptDuplicate': (name) => `"${name}" という名前のテンプレートは既に存在します。上書きしないよう、別の名前を入力してください。`,
         'tmpl.alreadyExists': (name) => `"${name}" はすでに存在します。`,
         'tmpl.selectGroup': 'グループを選択してください。',
         'tmpl.newGroupNamePrompt': '新しいグループ名:',
@@ -2404,6 +2406,8 @@ const LANGUAGES = {
 
         'tmpl.created': (name) => `Template "${name}" has been created.`,
         'tmpl.createFailed': (m) => `Failed to create the template: ${m}`,
+        'tmpl.scaleConfirmPrompt': (scale) => `Based on this SVG's real-world size (mm), a scale correction of ${scale}x seems needed on import to match panel border widths with other templates.\n\nEnter the multiplier to apply (enter 1 to import as-is without correction).`,
+        'tmpl.namePromptDuplicate': (name) => `A template named "${name}" already exists. Enter a different name so it won't be overwritten.`,
         'tmpl.alreadyExists': (name) => `"${name}" already exists.`,
         'tmpl.selectGroup': 'Select a group.',
         'tmpl.newGroupNamePrompt': 'New group name:',
@@ -3704,6 +3708,8 @@ const LANGUAGES = {
 
         'tmpl.created': (name) => `模板"${name}"已创建。`,
         'tmpl.createFailed': (m) => `模板创建失败：${m}`,
+        'tmpl.scaleConfirmPrompt': (scale) => `根据此SVG的实际尺寸(mm)判断，为了让分格边框线宽与其他模板保持一致，导入时可能需要 ${scale} 倍的缩放校正。\n\n请输入要应用的倍率（如不校正直接导入，请输入 1）。`,
+        'tmpl.namePromptDuplicate': (name) => `名为"${name}"的模板已存在。请输入其他名称，以免覆盖它。`,
         'tmpl.alreadyExists': (name) => `"${name}"已存在。`,
         'tmpl.selectGroup': '请选择组。',
         'tmpl.newGroupNamePrompt': '新组名：',
