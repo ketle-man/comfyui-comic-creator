@@ -1379,6 +1379,10 @@ input[type="number"] {
   color: var(--text-color);
 }
 
+.tmplwiz-field-row input[type="number"]:disabled {
+  opacity: 0.5;
+}
+
 .tmplwiz-orientation-buttons {
   display: flex;
   gap: 8px;
@@ -2667,16 +2671,32 @@ input[type="number"] {
   flex-shrink: 0;
 }
 
-/* レイアウトタブ I2I モーダル（15-pixifx-bridge.js openLayoutI2IModal） */
+/* レイアウトタブ Generate モーダル（15-pixifx-bridge.js openLayoutI2IModal） */
 .li2i-dialog {
   width: 720px;
 }
 .li2i-body {
   padding: 14px 24px;
+  overflow-y: auto;
 }
 .li2i-target-btn.active {
   background-color: var(--primary-color);
   color: white;
+}
+.li2i-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.li2i-tab-btn.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+.li2i-settings-details {
+  margin-top: 8px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
 }
 
 /* フキダシ+テキスト作成/編集モーダル（09f-bubble-text.js） */

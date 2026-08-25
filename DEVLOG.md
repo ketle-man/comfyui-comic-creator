@@ -2,6 +2,62 @@
 
 ---
 
+## 2026-08-25（Generateモーダルのプロンプトタブでサブコマがコマと同じラベルになり判別できない不具合を修正、v1.35.0）
+
+ユーザーから、コマ1に複数のサブコマがあるページでGenerateモーダルを開くと、コマとサブコマのタブ名が同じ「コマN」形式になり判別できないとの報告。
+
+**原因**: プロンプトタブ生成処理（`15-pixifx-bridge.js` の `openLayoutI2IModal`）が `state.activePage.panels`（サブコマも `parentPanelId` 付きの通常エントリとして混在）を単純に配列順で走査し、種別を区別せず同じ `layout.i2iTabPanel`（「コマN」）ラベルを割り当てていたため。
+
+**修正**: `parentPanelId` の有無で通常コマとサブコマを別カウンタに分離し、サブコマには新設した `layout.i2iTabSubPanel`（「サブコマN」）ラベルを割り当てるよう変更。i18n（日英中3言語、英語は"Sub-panel N"、中国語は既存の「子画格」表記に合わせ「子画格N」）・ヘルプを更新。
+
+**検証**: `node --check` および `vm.SourceTextModule` によるESM構文検証のみ実施。comic-creatorはシンボリックリンクのため変更は即反映されるが、実機でのKapture検証は未実施。
+
+---
+
+## 2026-08-25（レイアウトタブのI2Iモーダルを「Generate」へ刷新、対象追加・コマ別プロンプトタブ・一括生成・T2I対応、v1.35.0）
+
+ユーザー依頼: レイアウトタブのI2Iモーダルを改善したい。Runボタンを対象行右端へ、全体/コマ別にプロンプトをタブ化、I2I設定のワークフローファイル指定を折りたたみに、T2Iを利用可能に、モーダル名・ボタン名をI2IからGenerateへ変更。
+
+**設計方針**: 対象=ページ全体時の一括生成方法（batchチェックボックス）や対象=選択タブ時のプロンプト合成方法など複数の設計判断が必要だったため、AskUserQuestionで段階的に確認しながら合意形成した。最終仕様: 対象は「選択画像」「ページ全体」「選択タブ」の3択。**batch**は対象=ページ全体のときのみ表示される処理方法選択（対象が選択画像／選択タブの場合は非表示）。「選択タブ」対象は選択中タブのプロンプトのみを使用（「全体」タブとは合成しない）。「ページ全体」＋batch ONは全コマ一括生成（「全体」＋各コマタブのプロンプトを合成、半自動マンガ作成のバッチ生成と同じ設計）。batch OFFは従来通りページ全体を1枚に合成しオーバーレイへ挿入（ラフ用途）。
+
+**実装**:
+- `15-pixifx-bridge.js` の `openLayoutI2IModal` を全面刷新。Run／T2Iチェックボックス／batchチェックボックスを対象行に集約し、プロンプトタブ（全体＋コマN）をタブごとに独立保持（`_layoutI2IPrompts`）、対象×T2I×batchの組み合わせごとに `_li2iRunSelected`／`_li2iRunWholePage`／`_li2iRunPanelTab`／`_li2iRunBatch` の4関数へ分岐。
+- T2Iは半自動マンガ作成で使われている `pickSdxlResolution`（`auto-comic-core.js`）・`requestPanelImageFromWorkflowStudio`（`14-integrations.js`、T2I用デフォルトワークフロー設定と対）をそのまま再利用。
+- コマ単位の画像取得（`_getPanelImageBlob`）とプロンプト合成（`_composeOverallPrompt`）は元々 `26-auto-comic-bridge.js` にのみ存在したため、`15-pixifx-bridge.js` 側へ移設・エクスポートし、`26-auto-comic-bridge.js` はそちらをimportするよう変更（重複コード解消）。
+- ワークフロー設定を `<details>`/`<summary>`（3Dポーズのシェイプキー折りたたみと同じ既存パターン）で折りたたみ化し、I2I用・T2I用のデフォルトワークフロー設定を個別に配置。
+- モーダル見出し・開くボタンのラベルをi18n経由で「I2I」→「Generate」に変更（内部の関数名・CSS/要素idプレフィックス `li2i-` は変更範囲外として維持）。
+
+**検証**: `node --check`・`vm.SourceTextModule` によるESM構文検証のみ実施。実機でのKapture検証は未実施。i18n（日英中3言語）・ヘルプ・README更新済み。
+
+---
+
+## 2026-08-25（テンプレート作成ウィザードに「デザインテンプレート」作成モードを追加、v1.35.0）
+
+ユーザー依頼: ページタブのテンプレート作成に、コマ外・コマ間の枠が一切ないデザイン用テンプレート（チラシ作成などの用途）を追加したい。
+
+**実装**: 設定画面に「デザイン」チェックボックスを追加（`06c-template-wizard.js` の `_tmplWizSetDesignMode`）。ONにするとフレーム幅入力欄を `0` に固定して無効化し、モーダル見出しを「デザインテンプレートを作成」に切り替える。分割ロジック自体（`_splitPolygonByLine` の gap パラメータ）は元々フレーム幅0を「余白/ガター無し」としてそのまま扱える設計だったため、UIトグルの追加のみで実現できた。保存時のデフォルト名も「デザインテンプレート_...」に変更し通常テンプレートと区別しやすくした。
+
+副次的に、design modeをOFFに戻した際、前回セッションのフレーム幅入力値が残っていて次回オープン時にデフォルト値の代わりに使われてしまうバグを実装中に発見し、`openTemplateWizard()` で `dataset.prevValue` を明示的に破棄するよう修正した。
+
+**検証**: `node --check`・`vm.SourceTextModule` によるESM構文検証のみ実施。実機でのKapture検証は未実施。i18n（日英中3言語）・ヘルプ・README更新済み。
+
+---
+
+## 2026-08-25（Imageタブの保存/送信ボタンを整理しLI Node機能を追加、Workflow StudioのSave to Inputボタンを削除、v1.35.0）
+
+ユーザー依頼: Imageタブ上部のSave/Sendボタン名を整理したい（Save: PNG/Project/Gallery、Send to: Eagle/wsI2I/LI Node/レイアウト）。またworkflow studioのImage EditタブのSend to Workflow機能を追加したい（既存のSend to ComfyUIは削除）。
+
+**調査結果**: workflow studio側の「Send to Workflow」機能は既に実装済み（過去のDEVLOG記録通り）だったため新規実装は不要と判明。今回の対応範囲は実質的に (1) comic-creator Imageタブのボタン整理・LI Node新規追加、(2) workflow studio側の冗長になった「Save to Input」（旧Send to ComfyUI）ボタンの削除、の2点。
+
+**実装**:
+- comic-creator Imageタブのアクションバーを区切り線で Save系（PNG/Project/Gallery）と Send to系（Eagle/wsI2I/LI Node/レイアウト）に整理。「Send to ComfyUI」ボタンと `_uploadToComfyUI()` を削除。
+- 新規「LI Node」ボタンを追加（`image-tab.js` の `_sendToLoadImageNode()`）。comic-creatorはComfyUIの「CC」ボタンから `window.open()` で開かれるポップアップのため `window.opener` ＝ComfyUI本体である性質を利用し、`window.opener.wfmSendImageToSelectedNode`（`web/comfyui/node_sets_menu.js`）経由でComfyUIキャンバス上の選択中ノードへ合成結果を直接送信する。Workflow Studio Image Editタブの「Send to Workflow」（`FileExport.sendToWorkflow`）と全く同じブリッジ機構を再利用。
+- ComfyUI-Workflow-Studio側の「Save to Input」ボタン（`ie-upload-comfy-btn`）と `uploadToComfyUI()` を削除。実行時コピー（StabilityMatrix `custom_nodes` 配下、シンボリックリンクではなく通常コピー）へも変更を同期しハッシュ一致を確認。
+
+**検証**: `node --check`・`vm.SourceTextModule` によるESM構文検証のみ実施。実機でのKapture検証は未実施。i18n（日英中3言語）・ヘルプ・README（comic-creator: 3言語、Workflow Studio: 英語）更新済み。
+
+---
+
 ## 2026-08-13（SVGインポート時のコマ枠線幅不一致を解消するスケール補正機能を追加、副次的に見つかった2件の不具合も修正、v1.33.0）
 
 ユーザーから「テンプレートを作成」ウィザードで作ったテンプレートと、InkscapeのSVGからテンプレート作成したものとでコマ枠線幅の太さが揃わない、線幅を100超にすると内側に白線が増える、との報告（スクリーンショット添付）。

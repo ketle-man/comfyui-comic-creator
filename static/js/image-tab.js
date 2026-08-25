@@ -2764,8 +2764,8 @@ class ImageTab {
         document.getElementById("ie-save-project-btn")?.addEventListener("click", () => this._saveProject());
         document.getElementById("ie-save-gallery-btn")?.addEventListener("click", () => this._saveToGallery());
         document.getElementById("ie-save-eagle-btn")?.addEventListener("click", () => this._saveToEagle());
-        document.getElementById("ie-upload-comfy-btn")?.addEventListener("click", () => this._uploadToComfyUI());
         document.getElementById("ie-send-i2i-btn")?.addEventListener("click", () => this._sendToI2I());
+        document.getElementById("ie-send-linode-btn")?.addEventListener("click", () => this._sendToLoadImageNode());
         document.getElementById("ie-save-layout-btn")?.addEventListener("click", () => this._saveToLayout());
         document.getElementById("ie-zoom-fit")?.addEventListener("click", () => this._fitToView());
         document.getElementById("ie-zoom-100")?.addEventListener("click", () => {
@@ -4369,8 +4369,18 @@ class ImageTab {
         }
     }
 
-    async _uploadToComfyUI() {
+    // 合成結果をアップロードし、window.opener（Comic CreatorはComfyUIの「CC」ボタンから
+    // window.open()で開かれるポップアップのため、opener=ComfyUI本体）経由でComfyUIキャンバス上の
+    // 選択中ノード（LoadImage等のimageウィジェットを持つノード。無ければグラフ内の最初の該当ノード
+    // にフォールバック）へファイル名を書き込む。Workflow Studio Image Editタブの「Send to Workflow」
+    // ボタン（FileExport.sendToWorkflow）と同じブリッジ（web/comfyui/node_sets_menu.js の
+    // window.wfmSendImageToSelectedNode）を利用する。
+    async _sendToLoadImageNode() {
         if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!window.opener || typeof window.opener.wfmSendImageToSelectedNode !== "function") {
+            this._toast("Open Comic Creator from ComfyUI's top menu to use this feature", "error");
+            return;
+        }
         const canvas = this._buildCompositeCanvas();
         const blob   = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
         const file   = new File([blob], (this._baseName || "cc-image") + "-output.png", { type: "image/png" });
@@ -4380,13 +4390,15 @@ class ImageTab {
         try {
             const r    = await fetch("/upload/image", { method: "POST", body: form });
             const data = await r.json();
-            this._toast(`Uploaded: ${data.name}`, "success");
-        } catch {
-            this._toast("Upload failed", "error");
+            const filename = data.subfolder ? `${data.subfolder}/${data.name}` : data.name;
+            window.opener.wfmSendImageToSelectedNode(filename);
+            this._toast(`Sent "${filename}" to workflow`, "success");
+        } catch (err) {
+            this._toast(`Send to workflow failed: ${err.message}`, "error");
         }
     }
 
-    // 合成結果をWorkflow StudioのGenerate UI Image入力スロットへ送信する（I2I連携）
+    // 合成結果をWorkflow StudioのGenerate UI Image入力スロットへ送信する（I2I連携・旧I2I機能）
     async _sendToI2I() {
         if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
         const canvas = this._buildCompositeCanvas();

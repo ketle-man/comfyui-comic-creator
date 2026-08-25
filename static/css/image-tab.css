@@ -139,6 +139,15 @@
     flex-wrap: wrap;
 }
 
+/* Save / Send to グループの区切り線 */
+.ie-action-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--it-border);
+    margin: 0 2px;
+    flex-shrink: 0;
+}
+
 /* Tool options bar */
 .ie-tool-options {
     display: flex;

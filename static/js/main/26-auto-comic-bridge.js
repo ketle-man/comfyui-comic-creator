@@ -38,8 +38,8 @@ import { pushHistory } from './07-pages.js';
 import { createBalloonAtPosition } from './09c-balloon-handles.js';
 import { applyBubbleTextToShape, BUBBLE_TEXT_PT_TO_SVG } from './09f-bubble-text.js';
 import { requestPanelImageFromWorkflowStudio, sendI2IRunToWorkflowStudio, getI2ISettingsState, saveI2ISettingsState, getT2ISettingsState, saveT2ISettingsState } from './14-integrations.js';
-import { embedFontsInSvg, drawSvgOnCanvas } from './12-text-png-export.js';
 import { requestNanobananaGenerate, saveNanobananaImageAndMaybeEagle, checkNanobananaKeyStatus } from '../nanobanana.js';
+import { _getPanelImageBlob, _composeOverallPrompt } from './15-pixifx-bridge.js';
 
 // フキダシ形状が未指定（プロット「フキダシ形状」列が空）の場合のフォールバック値
 const AUTO_BALLOON_TYPE = 'rect';
@@ -61,46 +61,6 @@ async function _urlToDataUrl(url) {
     if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
     const blob = await res.blob();
     return _blobToDataUrl(blob);
-}
-
-// I2I一括生成用: 対象コマの現在の画像（panel.panelSvgContent、insertImage()等で既に挿入済みの
-// コンテンツ）を、コマのbbox範囲だけラスタライズしてBlob化する。15-pixifx-bridge.jsの
-// _getPageBlob（ページ全体を対象）と同じ手法（embedFontsInSvg→drawSvgOnCanvas→canvas.toBlob）を、
-// 対象をページ全体ではなく単一コマのbboxに絞って適用したもの。panelSvgContentのルートsvgは
-// ページと同じ座標系（viewBox）で描かれているため、viewBoxをbboxへ差し替えるだけでそのコマの
-// 領域だけがクロップして描画される（08-panels-images.jsのinsertImage()が使う座標系と同じ）。
-async function _getPanelImageBlob(panel, bbox, pxW, pxH) {
-    if (!panel.panelSvgContent) return null;
-    const parser = new DOMParser();
-    const panelDoc = parser.parseFromString(panel.panelSvgContent, 'image/svg+xml');
-    const panelSvgEl = panelDoc.querySelector('svg');
-    if (!panelSvgEl) return null;
-    panelSvgEl.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
-    // デフォルトのpreserveAspectRatio="xMidYMid meet"だと、bboxとpxW/pxHのアスペクト比が
-    // 一致しない場合にラスタライズ時点で余白（レターボックス）ができてしまう。コマの内容を
-    // キャンバス全面に引き伸ばして描画するため"none"を明示する（insertImage側の挿入時も
-    // 同じくコマ全面へストレッチするため、送信画像との整合を取る）。
-    panelSvgEl.setAttribute('preserveAspectRatio', 'none');
-
-    const serializer = new XMLSerializer();
-    let svgStr = serializer.serializeToString(panelSvgEl);
-    if (!svgStr.includes('xmlns="http://www.w3.org/2000/svg"')) {
-        svgStr = svgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-    }
-    const embeddedSvg = await embedFontsInSvg(svgStr);
-
-    const canvas = document.getElementById('render-canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = pxW;
-    canvas.height = pxH;
-    ctx.clearRect(0, 0, pxW, pxH);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, pxW, pxH);
-    await drawSvgOnCanvas(ctx, embeddedSvg, pxW, pxH);
-
-    return await new Promise((resolve, reject) => {
-        canvas.toBlob(b => b ? resolve(b) : reject(new Error(t('page.errBlobGenFailed'))), 'image/png');
-    });
 }
 
 // スクリプトの表示中ページと、レイアウトタブで選択中のページの実パネルを対応付ける。
@@ -429,12 +389,6 @@ let _autoI2IPositive = '';
 let _autoI2INegative = '';
 let _autoI2IDenoise = 1.0;
 let _autoI2ISkipEmptyPrompt = false;
-
-// モーダルの全体Positiveとコマごとの画像プロンプトを結合する（どちらか一方が空でも成立する）。
-// T2I/I2I/Nanobananaの全モーダルで共有する。
-function _composeOverallPrompt(overallPositive, panelPrompt) {
-    return [overallPositive, panelPrompt].map(s => (s || '').trim()).filter(Boolean).join(', ');
-}
 
 // 対応付け済みの各コマについて、コマの現在の画像を入力にI2Iを順次リクエストし、結果で置き換える。
 // skipEmptyPromptがtrueの場合、コマの画像プロンプトが空のコマはスルーする（T2Iと同じ絞り込み）。

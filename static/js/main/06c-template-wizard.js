@@ -38,6 +38,7 @@ const _tmplWiz = {
     gridW: 1000,        // ガイドグリッドのセル幅
     gridH: 1000,        // ガイドグリッドのセル高さ
     gridSnap: false,    // 分割線の始点/終点をグリッドにスナップするか
+    designMode: false,  // ON: コマ外・コマ間の余白/枠を作らない「デザインテンプレート」作成モード（フレーム幅を強制的に0に固定）
 };
 
 // ガイドグリッドの表示ON/OFF・サイズはウィザードを開き直しても引き継がれるようlocalStorageへ永続化する
@@ -87,11 +88,44 @@ function openTemplateWizard() {
     _tmplWizSetCutMode('all');
     document.getElementById('tmplwiz-width').value = TMPLWIZ_DEFAULT.portraitW;
     document.getElementById('tmplwiz-height').value = TMPLWIZ_DEFAULT.portraitH;
-    document.getElementById('tmplwiz-frame-width').value = TMPLWIZ_DEFAULT.frameWidth;
+    const frameInput = document.getElementById('tmplwiz-frame-width');
+    delete frameInput.dataset.prevValue; // 前回セッションの値が残っていると、次に開いた際にデフォルト値の代わりに使われてしまうため破棄する
+    frameInput.value = TMPLWIZ_DEFAULT.frameWidth;
+    _tmplWizSetDesignMode(false);
     _tmplWizLoadGridSettings();
     _tmplWizSyncGridControls();
     _tmplWizShowStep('setup');
     overlay.style.display = 'flex';
+}
+
+// デザインテンプレートモードの切替: ONにするとコマ外・コマ間の余白/枠が一切無い
+// 「デザインテンプレート」（チラシ等の用途）を作成するモードになる。実体は
+// フレーム幅を0に固定するだけ（_tmplWizComputeInitialPanels/_splitPolygonByLineは
+// フレーム幅=0を既にそのまま「余白/ガター無し」として扱えるため、分割ロジック自体の変更は不要）。
+function _tmplWizSetDesignMode(enabled) {
+    _tmplWiz.designMode = enabled;
+
+    const toggle = document.getElementById('tmplwiz-design-toggle');
+    if (toggle) toggle.checked = enabled;
+
+    const frameInput = document.getElementById('tmplwiz-frame-width');
+    if (frameInput) {
+        if (enabled) {
+            frameInput.dataset.prevValue = frameInput.value;
+            frameInput.value = 0;
+            frameInput.disabled = true;
+        } else {
+            frameInput.disabled = false;
+            frameInput.value = frameInput.dataset.prevValue || TMPLWIZ_DEFAULT.frameWidth;
+        }
+    }
+
+    const header = document.getElementById('tmplwiz-header');
+    if (header) {
+        const key = enabled ? 'page.templateWizardDesign' : 'page.templateWizard';
+        header.dataset.i18n = key;
+        header.textContent = t(key);
+    }
 }
 
 function closeTemplateWizard() {
@@ -440,7 +474,8 @@ function _tmplWizBuildSvgString(orderedPanels) {
 async function _tmplWizSave() {
     if (_tmplWiz.panels.length === 0) { alert(t('tmpl.noPanels')); return; }
 
-    const defaultName = `${t('tmpl.defaultNamePrefix')}_${Date.now()}`;
+    const prefixKey = _tmplWiz.designMode ? 'tmpl.defaultNamePrefixDesign' : 'tmpl.defaultNamePrefix';
+    const defaultName = `${t(prefixKey)}_${Date.now()}`;
     const name = prompt(t('tmpl.namePrompt'), defaultName)?.trim();
     if (!name) return;
 
@@ -1283,8 +1318,8 @@ export {
     _tmplWizClientToSvg, _tmplWizCommitCut, _tmplWizComputeInitialPanels, _tmplWizCreateBase,
     _tmplWizDetachCanvasEvents, _tmplWizFindPanelIndexForCut, _tmplWizLoadGridSettings,
     _tmplWizOrderPanels, _tmplWizRender, _tmplWizRenderGrid, _tmplWizReset, _tmplWizSave,
-    _tmplWizSaveGridSettings, _tmplWizSetCutMode, _tmplWizSetOrientation, _tmplWizSetOrientationButtons,
-    _tmplWizShowStep, _tmplWizSnapPoint, _tmplWizSyncGridControls, _tmplWizUndo,
+    _tmplWizSaveGridSettings, _tmplWizSetCutMode, _tmplWizSetDesignMode, _tmplWizSetOrientation,
+    _tmplWizSetOrientationButtons, _tmplWizShowStep, _tmplWizSnapPoint, _tmplWizSyncGridControls, _tmplWizUndo,
     closeTemplateWizard, deleteTemplate, openTemplateWizard, parseSVGForTemplate,
     renameTemplate, renderTemplateList, selectTemplate,
 };

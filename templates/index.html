@@ -163,7 +163,7 @@
                 <button id="undo-btn" class="btn" data-i18n="layout.undoBtn">元に戻す</button>
                 <button id="insert-image-btn" class="btn secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.insertImage">画像を挿入</button>
                 <button id="layer-draw-open-imgedit" class="btn small secondary" style="white-space:nowrap; padding:8px 10px;" data-i18n="layout.openImageTabBtn" data-i18n-title="layout.openImageTabTitle" title="選択中の画像をImageタブで開く" disabled>画像タブで編集</button>
-                <button id="layout-i2i-modal-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.i2iModalBtn" data-i18n-title="layout.i2iModalTitle" title="選択画像またはページ全体をWorkflow Studioへ送信し、その場でI2I生成を実行">I2I</button>
+                <button id="layout-i2i-modal-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.i2iModalBtn" data-i18n-title="layout.i2iModalTitle" title="選択画像・ページ全体・コマ単位でWorkflow Studioへ送信し、I2I/T2I生成を実行">Generate</button>
                 <button id="object-center-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n-title="layout.objectCenterTitle" title="選択中のオブジェクトを中央（コマ内ならコマ中心、オーバーレイならページ中心）へ移動" disabled>OC</button>
                 <button id="close-work-btn" class="btn small secondary" style="white-space:nowrap; margin-left:4px; padding:8px 10px;" data-i18n="layout.closeWorkBtn" data-i18n-title="layout.closeWorkTitle" title="作品を閉じます（保存データは失われません。他タブでの作業を軽くしたいときに）">閉じる</button>
               </div>
@@ -814,13 +814,14 @@
                   <button class="it-btn it-btn-sm" id="ie-undo-btn" title="Undo (Ctrl+Z)">↩</button>
                   <button class="it-btn it-btn-sm" id="ie-redo-btn" title="Redo (Ctrl+Y)">↪</button>
                   <button class="it-btn it-btn-sm" id="ie-pixifx-btn" data-i18n="image.pixifxLabel" data-i18n-title="image.pixifxTitle" title="PixiJS FXでパーティクル・フィルタ効果を適用">✨ PixiJS FX</button>
-                  <button class="it-btn it-btn-sm" id="ie-save-btn">Save PNG</button>
-                  <button class="it-btn it-btn-sm" id="ie-save-project-btn" data-i18n-title="image.saveProjectTitle" title="レイヤー編集状態をアセットパネルのImageフォルダに保存し、後で再編集できるようにします">Save Project</button>
-                  <button class="it-btn it-btn-sm" id="ie-save-gallery-btn" data-i18n-title="image.saveGalleryTitle" title="ComfyUIのoutput/ccフォルダに保存">Save to Gallery</button>
-                  <button class="it-btn it-btn-sm" id="ie-save-eagle-btn" title="Save to Eagle library">Save to Eagle</button>
-                  <button class="it-btn it-btn-sm" id="ie-upload-comfy-btn" title="Send to ComfyUI (/upload/image)">Send to ComfyUI</button>
-                  <button class="it-btn it-btn-sm" id="ie-send-i2i-btn" data-i18n="image.sendToI2i" data-i18n-title="image.sendToI2iTitle" title="編集結果をWorkflow StudioのI2I入力へ送信">I2Iへ送る</button>
-                  <button class="it-btn it-btn-sm it-btn-primary" id="ie-save-layout-btn" data-i18n="image.sendToLayout" data-i18n-title="image.sendToLayoutTitle" title="レイアウトタブから開いた画像なら編集結果を書き戻し、新規作成したドキュメントならレイアウトの選択中コマ/オーバーレイに新規画像として挿入します">レイアウトに送る</button>
+                  <button class="it-btn it-btn-sm" id="ie-save-btn" title="Save as a PNG file">PNG</button>
+                  <button class="it-btn it-btn-sm" id="ie-save-project-btn" data-i18n-title="image.saveProjectTitle" title="レイヤー編集状態をアセットパネルのImageフォルダに保存し、後で再編集できるようにします">Project</button>
+                  <button class="it-btn it-btn-sm" id="ie-save-gallery-btn" data-i18n-title="image.saveGalleryTitle" title="ComfyUIのoutput/ccフォルダに保存">Gallery</button>
+                  <span class="ie-action-sep"></span>
+                  <button class="it-btn it-btn-sm" id="ie-save-eagle-btn" title="Save to Eagle library">Eagle</button>
+                  <button class="it-btn it-btn-sm" id="ie-send-i2i-btn" data-i18n="image.sendToI2i" data-i18n-title="image.sendToI2iTitle" title="編集結果をWorkflow StudioのI2I入力へ送信（旧I2I機能）">wsI2I</button>
+                  <button class="it-btn it-btn-sm" id="ie-send-linode-btn" data-i18n="image.sendToLiNode" data-i18n-title="image.sendToLiNodeTitle" title="合成結果をComfyUIキャンバス上で選択中のノード（Load Image等）のimageウィジェットへ直接送信します。ComfyUIのメニューから開いた場合のみ利用できます。">LI Node</button>
+                  <button class="it-btn it-btn-sm it-btn-primary" id="ie-save-layout-btn" data-i18n="image.sendToLayout" data-i18n-title="image.sendToLayoutTitle" title="レイアウトタブから開いた画像なら編集結果を書き戻し、新規作成したドキュメントならレイアウトの選択中コマ/オーバーレイに新規画像として挿入します">レイアウト</button>
                 </div>
                 <div class="ie-tool-options" id="ie-tool-options"></div>
                 <div class="ie-canvas-wrap" id="ie-canvas-wrap">
@@ -1873,7 +1874,7 @@
     <!-- Template Wizard Dialog -->
     <div id="tmplwiz-overlay" class="text-dialog-overlay" style="display: none">
       <div class="text-dialog tmplwiz-dialog">
-        <div class="text-dialog-header" data-i18n="page.templateWizard">テンプレートを作成</div>
+        <div class="text-dialog-header" id="tmplwiz-header" data-i18n="page.templateWizard">テンプレートを作成</div>
 
         <!-- 画面A: 設定 -->
         <div id="tmplwiz-step-setup">
@@ -1894,6 +1895,12 @@
             <label class="tmplwiz-label" for="tmplwiz-frame-width" data-i18n="wiz.frameWidthLabel">フレーム幅</label>
             <input type="number" id="tmplwiz-frame-width" min="0" step="10" />
           </div>
+          <div class="tmplwiz-field-row">
+            <label class="tmplwiz-label">
+              <input type="checkbox" id="tmplwiz-design-toggle" /> <span data-i18n="wiz.designModeLabel">デザイン</span>
+            </label>
+          </div>
+          <p class="tmplwiz-hint" data-i18n="wiz.designModeHint">ONにすると、コマ外・コマ間に余白や枠を作らない「デザインテンプレート」を作成します（チラシ等の用途向け）。コマ0・コマ1はページと同サイズになり、フレーム幅は使用されません（コマ境界線の太さはレイアウトタブの「コマ枠線幅」で後から調整できます）。</p>
         </div>
 
         <!-- 画面B: 分割 -->

@@ -13,8 +13,8 @@ import { dbGet, dbGetAll, dbPut, readFileAsText } from './00-db.js';
 import {
     parseSVGForTemplate, openTemplateWizard, closeTemplateWizard, _tmplWizCreateBase,
     _tmplWizSave, _tmplWizUndo, _tmplWizReset, _tmplWizSetOrientation, _tmplWizSetCutMode,
-    _tmplWiz, _tmplWizSaveGridSettings, _tmplWizRender, renameTemplate, deleteTemplate,
-    renderTemplateList, _tmplGroupsRefreshUI, _tmplSidePanelUpdate, _tmplApplyImportScale,
+    _tmplWizSetDesignMode, _tmplWiz, _tmplWizSaveGridSettings, _tmplWizRender, renameTemplate,
+    deleteTemplate, renderTemplateList, _tmplGroupsRefreshUI, _tmplSidePanelUpdate, _tmplApplyImportScale,
 } from './06c-template-wizard.js';
 import { state } from './01-state.js';
 
@@ -161,6 +161,7 @@ async function initTemplateManager() {
     document.getElementById('tmplwiz-orientation-landscape')?.addEventListener('click', () => _tmplWizSetOrientation('landscape'));
     document.getElementById('tmplwiz-mode-all-btn')?.addEventListener('click', () => _tmplWizSetCutMode('all'));
     document.getElementById('tmplwiz-mode-single-btn')?.addEventListener('click', () => _tmplWizSetCutMode('single'));
+    document.getElementById('tmplwiz-design-toggle')?.addEventListener('change', e => _tmplWizSetDesignMode(e.target.checked));
     document.getElementById('tmplwiz-grid-toggle')?.addEventListener('change', e => {
         _tmplWiz.gridEnabled = e.target.checked;
         _tmplWizSaveGridSettings();
