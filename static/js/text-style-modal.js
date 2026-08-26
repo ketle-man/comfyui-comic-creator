@@ -42,13 +42,15 @@ import { t } from './i18n.js';
 
     window.openTextStyleModal = function openTextStyleModal(opts = {}) {
         const fontFamily = opts.fontFamily || 'Zen Antique';
-        const previewText = opts.previewText || 'あ亜Aa1';
+        const previewText = opts.previewText || 'あ亜Aa1\nBb2';
         const initialStyle = opts.initialStyle || null;
         const previewSize = opts.previewSize;
         const onApply = typeof opts.onApply === 'function' ? opts.onApply : () => {};
 
         let styleList = loadStyles();
         let editingId = null;
+        let uiAlign = 'left';
+        let uiValign = 'top';
 
         const overlay = document.createElement('div');
         overlay.className = 'tsm-overlay';
@@ -63,10 +65,14 @@ import { t } from './i18n.js';
             <div class="fontmgr-style-layout tsm-body">
                 <div class="fontmgr-style-controls">
                     <div class="fontmgr-style-group">
-                        <label>${t('font.stylePreviewText')} <input type="text" id="tsm-preview-input" value="${esc(previewText)}" style="width:100px;" /></label>
+                        <label>${t('font.stylePreviewText')} <textarea id="tsm-preview-input" rows="2" style="width:100px; resize:vertical;">${esc(previewText)}</textarea></label>
                     </div>
                     <div class="fontmgr-style-group">
                         <label>${t('layout.sizeLabel')} <input type="number" id="tsm-preview-size" min="16" max="2000" value="120" style="width:60px;" /></label>
+                    </div>
+                    <div class="fontmgr-style-group">
+                        <label>${t('font.lineHeightLabel')} <input type="range" id="tsm-line-height" min="0.8" max="3" step="0.1" value="1.2" style="width:100px;" /></label>
+                        <span id="tsm-line-height-val" style="font-size:11px; min-width:24px;">1.2</span>
                     </div>
 
                     <div class="fontmgr-style-group">
@@ -110,12 +116,18 @@ import { t } from './i18n.js';
                     </div>
 
                     <div class="fontmgr-style-group">
-                        <label class="fontmgr-style-group-label">${t('font.alignLabel')}</label>
-                        <select id="tsm-align-select">
-                            <option value="left">${t('font.alignLeft')}</option>
-                            <option value="center">${t('font.alignCenter')}</option>
-                            <option value="right">${t('font.alignRight')}</option>
-                        </select>
+                        <label class="fontmgr-style-group-label">${t('font.valignLabel')}</label>
+                        <div class="style-align-btns">
+                            <button type="button" class="btn small secondary tsm-valign-btn" data-valign="top">${t('bubbleText.alignTop')}</button>
+                            <button type="button" class="btn small secondary tsm-valign-btn" data-valign="center">${t('font.alignCenter')}</button>
+                            <button type="button" class="btn small secondary tsm-valign-btn" data-valign="bottom">${t('bubbleText.alignBottom')}</button>
+                        </div>
+                        <label class="fontmgr-style-group-label" style="margin-left:10px;">${t('font.alignLabel')}</label>
+                        <div class="style-align-btns">
+                            <button type="button" class="btn small secondary tsm-align-btn" data-align="left">${t('font.alignLeft')}</button>
+                            <button type="button" class="btn small secondary tsm-align-btn" data-align="center">${t('font.alignCenter')}</button>
+                            <button type="button" class="btn small secondary tsm-align-btn" data-align="right">${t('font.alignRight')}</button>
+                        </div>
                     </div>
 
                     <div class="fontmgr-style-group">
@@ -174,6 +186,44 @@ import { t } from './i18n.js';
         document.body.appendChild(overlay);
 
         const $ = id => dialog.querySelector('#' + id);
+
+        // ── 上下/文字寄せボタン（フキダシ内包テキストと同じボタン形式UI） ──
+        const syncValignButtons = () => {
+            dialog.querySelectorAll('.tsm-valign-btn').forEach(b => {
+                const active = b.dataset.valign === uiValign;
+                b.classList.toggle('active', active);
+                b.classList.toggle('secondary', !active);
+            });
+        };
+        dialog.querySelectorAll('.tsm-valign-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                uiValign = btn.dataset.valign;
+                syncValignButtons();
+                renderPreview();
+            });
+        });
+        syncValignButtons();
+
+        const syncAlignButtons = () => {
+            dialog.querySelectorAll('.tsm-align-btn').forEach(b => {
+                const active = b.dataset.align === uiAlign;
+                b.classList.toggle('active', active);
+                b.classList.toggle('secondary', !active);
+            });
+        };
+        dialog.querySelectorAll('.tsm-align-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                uiAlign = btn.dataset.align;
+                syncAlignButtons();
+                renderPreview();
+            });
+        });
+        syncAlignButtons();
+
+        $('tsm-line-height').addEventListener('input', () => {
+            $('tsm-line-height-val').textContent = parseFloat($('tsm-line-height').value).toFixed(1);
+            renderPreview();
+        });
 
         // ── 塗り（塗りなし/単色/グラデーション/テクスチャ）状態 ──
         // ランプのストップ等はDOM入力では表現しきれないためモーダル内状態として保持する
@@ -338,7 +388,9 @@ import { t } from './i18n.js';
                 boldEnabled: $('tsm-bold-enable').checked,
                 italicEnabled: $('tsm-italic-enable').checked,
                 underlineEnabled: $('tsm-underline-enable').checked,
-                align: $('tsm-align-select').value || 'left',
+                align: uiAlign,
+                valign: uiValign,
+                lineHeightMult: parseFloat($('tsm-line-height').value) || 1.2,
                 bukuroEnabled: $('tsm-bukuro-enable').checked,
                 bukuroColor: $('tsm-bukuro-color').value,
                 bukuroWidth: parseFloat($('tsm-bukuro-width').value) || 0,
@@ -359,7 +411,13 @@ import { t } from './i18n.js';
             $('tsm-bold-enable').checked = !!style.boldEnabled;
             $('tsm-italic-enable').checked = !!style.italicEnabled;
             $('tsm-underline-enable').checked = !!style.underlineEnabled;
-            $('tsm-align-select').value = style.align || 'left';
+            uiAlign = style.align || 'left';
+            uiValign = style.valign || 'top';
+            syncAlignButtons();
+            syncValignButtons();
+            const lh = style.lineHeightMult || 1.2;
+            $('tsm-line-height').value = lh;
+            $('tsm-line-height-val').textContent = lh.toFixed(1);
             $('tsm-bukuro-enable').checked = !!style.bukuroEnabled;
             $('tsm-bukuro-color').value = style.bukuroColor;
             $('tsm-bukuro-width').value = style.bukuroWidth;
@@ -385,7 +443,12 @@ import { t } from './i18n.js';
             $('tsm-bold-enable').checked = false;
             $('tsm-italic-enable').checked = false;
             $('tsm-underline-enable').checked = false;
-            $('tsm-align-select').value = 'left';
+            uiAlign = 'left';
+            uiValign = 'top';
+            syncAlignButtons();
+            syncValignButtons();
+            $('tsm-line-height').value = 1.2;
+            $('tsm-line-height-val').textContent = '1.2';
             $('tsm-bukuro-enable').checked = false;
             $('tsm-bukuro-color').value = '#000000';
             $('tsm-bukuro-width').value = 8;
@@ -416,7 +479,13 @@ import { t } from './i18n.js';
             $('tsm-bold-enable').checked = !!style.boldEnabled;
             $('tsm-italic-enable').checked = !!style.italicEnabled;
             $('tsm-underline-enable').checked = !!style.underlineEnabled;
-            $('tsm-align-select').value = style.align || 'left';
+            uiAlign = style.align || 'left';
+            uiValign = style.valign || 'top';
+            syncAlignButtons();
+            syncValignButtons();
+            const lh = style.lineHeightMult || 1.2;
+            $('tsm-line-height').value = lh;
+            $('tsm-line-height-val').textContent = lh.toFixed(1);
             $('tsm-bukuro-enable').checked = !!style.bukuroEnabled;
             $('tsm-bukuro-color').value = style.bukuroColor || '#000000';
             $('tsm-bukuro-width').value = style.bukuroWidth || 8;
@@ -432,7 +501,7 @@ import { t } from './i18n.js';
             'tsm-preview-input', 'tsm-preview-size',
             'tsm-fill-color',
             'tsm-stroke-enable', 'tsm-stroke-color', 'tsm-stroke-width',
-            'tsm-bold-enable', 'tsm-italic-enable', 'tsm-underline-enable', 'tsm-align-select',
+            'tsm-bold-enable', 'tsm-italic-enable', 'tsm-underline-enable',
             'tsm-bukuro-enable', 'tsm-bukuro-color', 'tsm-bukuro-width',
             'tsm-shadow-enable', 'tsm-shadow-color', 'tsm-shadow-blur', 'tsm-shadow-dx', 'tsm-shadow-dy',
         ];

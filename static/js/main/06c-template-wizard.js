@@ -511,6 +511,8 @@ async function deleteTemplate(templateName) {
         if (delBtn) delBtn.disabled = true;
         const renameBtn = document.getElementById('template-rename-btn');
         if (renameBtn) renameBtn.disabled = true;
+        const insertPageBtn = document.getElementById('template-insert-page-btn');
+        if (insertPageBtn) insertPageBtn.disabled = true;
         await loadTemplates();
         renderTemplateList();
     } catch (e) {
@@ -651,6 +653,8 @@ function selectTemplate(name) {
     if (delBtn) delBtn.disabled = !name;
     const renameBtn = document.getElementById('template-rename-btn');
     if (renameBtn) renameBtn.disabled = !name;
+    const insertPageBtn = document.getElementById('template-insert-page-btn');
+    if (insertPageBtn) insertPageBtn.disabled = !name;
     _tmplSidePanelUpdate(name);
 }
 
@@ -703,6 +707,8 @@ async function renameTemplate(oldName) {
             if (delBtn) delBtn.disabled = false;
             const renameBtn = document.getElementById('template-rename-btn');
             if (renameBtn) renameBtn.disabled = false;
+            const insertPageBtn = document.getElementById('template-insert-page-btn');
+            if (insertPageBtn) insertPageBtn.disabled = false;
             close();
         } catch (e) {
             alert(t('tmpl.renameFailed', e.message));

@@ -4643,7 +4643,7 @@ class ImageTab {
     /** textProps からバウンディングボックスサイズを計測する（TextTool.createLayerDataの計測部分＋スタイル余白を考慮） */
     _measureTextBox(p) {
         const lines = p.text.split("\n");
-        const lineH = p.fontSize * 1.2;
+        const lineH = p.fontSize * (p.lineHeightMult || 1.2);
         const font = [
             p.italic ? "italic" : "",
             p.bold   ? "bold"   : "",
@@ -4672,7 +4672,12 @@ class ImageTab {
         }
 
         const tw = Math.max(1, Math.ceil(maxW + pad * 2));
-        const th = Math.max(1, Math.ceil(lines.length * lineH + pad * 2));
+        // lineHeightMultは行同士の間隔（ベースライン間隔）であり、1行分のグリフ自体の高さ
+        // （降下部分等の実際の描画範囲）とは独立。lineHeightMultを1.2未満に下げても最終行の
+        // グリフが見切れないよう、最終行の実高さ分は常にfontSize*1.2（従来固定値）で確保し、
+        // それ以外の行間隔にのみlineHeightMultを適用する
+        const naturalLineH = p.fontSize * 1.2;
+        const th = Math.max(1, Math.ceil((lines.length - 1) * lineH + naturalLineH + pad * 2));
         return { tw, th };
     }
 
@@ -4702,7 +4707,7 @@ class ImageTab {
         ].filter(Boolean).join(" ");
 
         const lines = p.text.split("\n");
-        const lineH = p.fontSize * 1.2;
+        const lineH = p.fontSize * (p.lineHeightMult || 1.2);
         const pad   = 4 + this._textExtraPad(p);
 
         const ctx = layer.ctx;
@@ -4891,6 +4896,7 @@ class ImageTab {
             fillGradient: style?.fillGradient || null,
             fillTexture: style?.fillTexture || null,
             bold: !!style?.boldEnabled, italic: !!style?.italicEnabled, underline: !!style?.underlineEnabled, align: style?.align || "left",
+            valign: style?.valign || "top", lineHeightMult: style?.lineHeightMult || 1.2,
             strokeEnabled: !!style?.strokeEnabled, strokeColor: style?.strokeColor || "#ffffff", strokeWidth: style?.strokeWidth || 0,
             bukuroEnabled: !!style?.bukuroEnabled, bukuroColor: style?.bukuroColor || "#000000", bukuroWidth: style?.bukuroWidth || 0,
             shadowEnabled: !!style?.shadowEnabled, shadowColor: style?.shadowColor || "#000000", shadowBlur: style?.shadowBlur || 0,
@@ -4936,6 +4942,7 @@ class ImageTab {
                     fillGradient: p.fillGradient || null,
                     fillTexture: p.fillTexture || null,
                     boldEnabled: !!p.bold, italicEnabled: !!p.italic, underlineEnabled: !!p.underline, align: p.align || "left",
+                    valign: p.valign || "top", lineHeightMult: p.lineHeightMult || 1.2,
                     strokeEnabled: !!p.strokeEnabled, strokeColor: p.strokeColor, strokeWidth: p.strokeWidth,
                     bukuroEnabled: !!p.bukuroEnabled, bukuroColor: p.bukuroColor, bukuroWidth: p.bukuroWidth,
                     shadowEnabled: !!p.shadowEnabled, shadowColor: p.shadowColor, shadowBlur: p.shadowBlur,
@@ -4946,7 +4953,11 @@ class ImageTab {
         return { fontFamily: this._textTool.fontFamily, fontSize: this._textTool.fontSize, style: null };
     }
 
-    /** textProps を差し替えて、中心位置を保ったままレイヤーを再構築・再描画する */
+    /**
+     * textProps を差し替えてレイヤーを再構築・再描画する。行数変化でレイヤー高さが変わる際、
+     * どこを基準に保つかは valign（テキストスタイルの「上下」設定）に従う:
+     * top=上端固定、bottom=下端固定、center(既定)=中心固定
+     */
     _applyTextPropsToLayer(layer, newProps) {
         const oldProps = layer.textProps;
         const scale = layer.displayW / oldProps.nativeW;
@@ -4955,12 +4966,17 @@ class ImageTab {
         newProps.nativeH = th;
 
         const centerX = layer.x + layer.displayW / 2;
+        const topY = layer.y;
+        const bottomY = layer.y + layer.displayH;
         const centerY = layer.y + layer.displayH / 2;
         layer.textProps = newProps;
         layer.displayW  = Math.max(1, Math.round(tw * scale));
         layer.displayH  = Math.max(1, Math.round(th * scale));
         layer.x = Math.round(centerX - layer.displayW / 2);
-        layer.y = Math.round(centerY - layer.displayH / 2);
+        const valign = newProps.valign || "top";
+        layer.y = valign === "top" ? Math.round(topY)
+            : valign === "bottom" ? Math.round(bottomY - layer.displayH)
+            : Math.round(centerY - layer.displayH / 2);
         this._rerenderTextLayer(layer);
     }
 

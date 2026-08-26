@@ -1,8 +1,9 @@
 // ============================================================
 // 作品/ページ管理 分割ファイル (1/2): 作品管理(ページグループ単位の作品)
 // 元 11-works.js（分割前）の行 1-691 に相当
-// type="module" として読み込まれる（ESモジュール化 G5）。10-output-pages.js/11b-page-manager-tab.js
-// とは相互import（循環）。循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため安全。
+// type="module" として読み込まれる（ESモジュール化 G5）。10-output-pages.js/11b-page-manager-tab.js/
+// 06b-template-manager.js とは相互import（循環）。循環先シンボルの参照はすべて関数内部（呼び出し時点で
+// 評価）に閉じているため安全。
 // _workSelected はモジュールスコープに閉じており、11b-page-manager-tab.js から更新するための
 // _setWorkSelected() セッターを新設した（00-db.jsの _setDb() と同じパターン）。
 // 主なトップレベル定義: STOCK_GROUP,TRASH_GROUP,_BACKUP_DB_STORES,_BACKUP_FORMAT,_BACKUP_LS_KEYS,_adoptOrphanPagesToStock,_assetTmplExpandedGroups,_assetTmplSelected,_closeWorkCreateDialog,_getOrBuildPageThumb,_initWorkCreateDialog,_initWorkMgr,_openWorkCreateDialog,_renderGroupList,_reservedGroupNames,_scalePointsStr,_scaleSvgContentByWrap,_scaleSvgElementTree,_trashGroupLabel,_workBackupExport,_workBackupImport,_workCreate,_workDlgApplyPreset,_workDlgGetPreset,_workDlgRebuildPresetSelect,_workListTab,_workMeta,_workSelected,_workSetActive,_workSetListTab,_workSizePresetList,_workSizePresets,_workTimestampStr,_workUpdateActiveLabel,_workUpdateOpenBtn,closeActiveWork,insertTemplatePageToWork,openWork,renderAssetTemplateGrid,renderWorkList

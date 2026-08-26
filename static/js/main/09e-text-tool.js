@@ -272,9 +272,18 @@ function openTextInputDialog(x, y, editTextEl = null) {
 }
 
 // テキスト要素の縦書き/横書きを切り替え、tspanの配置を再構築する
-// （applyTextInput の新規/再編集と、縦書きチェックボックスの選択中テキストへの即時反映から共用）
+// （applyTextInput の新規/再編集と、縦書きチェックボックスの選択中テキストへの即時反映、
+// および _fontMgrApplyStyleAttrsToTextEl からのスタイル適用（行間・整列・上下位置の反映）で共用）
 // keepCenter=true でブロックの中心位置を保ったまま切り替える（チェックボックス切替用。
 // 縦書きは親x,yから左へ列が伸びるため、そのままだと行数が多いテキストがコマ外へ飛び出す）
+//
+// 行間(dataset.lineHeightMult)・文字寄せ(dataset.textAlign)・上下位置(dataset.textValign)は
+// フォント管理タブ/テキストスタイルモーダルの「スタイル」から設定される（フキダシ内包テキストの
+// lineHeightMult/textAlign/textValignと同じ考え方）。未設定時は旧来の固定値（1.2em・左寄せ・上基準）
+// と同じ見た目になるようフォールバックするため、既存テキストの見た目は変わらない。
+// dy/dxはすべて「1行(列)分の相対量」を'em'単位で指定する（SVGの相対配置は加算されていくため）。
+// 'em'はフォントサイズに対する相対単位なので、リサイズハンドルでfont-sizeを変更しても
+// 行間・整列の比率は自動的に追従する（絶対px値の再計算は不要）。
 function _setTextElVertical(textEl, isVertical, keepCenter = false) {
     let beforeCx = null, beforeCy = null;
     if (keepCenter) {
@@ -287,7 +296,6 @@ function _setTextElVertical(textEl, isVertical, keepCenter = false) {
 
     const x = parseFloat(textEl.getAttribute('x'));
     const y = parseFloat(textEl.getAttribute('y'));
-    const fontSizeSvg = parseFloat(textEl.getAttribute('font-size')) || 40;
 
     // SVG1.1の writing-mode="tb" 属性はSVG2/CSS Writing Modesを実装する現行ブラウザでは
     // 無効な値として無視される（有効なのは horizontal-tb|vertical-rl|vertical-lr）ため、
@@ -301,18 +309,35 @@ function _setTextElVertical(textEl, isVertical, keepCenter = false) {
         textEl.style.textOrientation = '';
     }
 
-    textEl.querySelectorAll('tspan').forEach((ts, i) => {
+    const lineHeightMult = parseFloat(textEl.dataset.lineHeightMult) || 1.2;
+    const align = textEl.dataset.textAlign || 'left';
+    const valign = textEl.dataset.textValign || 'top';
+    // align: 横書き=水平方向の文字寄せ、縦書き=各列内での縦位置（上/中央/下）として流用する
+    // （フキダシ内包テキストと同じ考え方。09f-bubble-text.js _bubbleTextRenderText 参照）
+    const anchor = align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle';
+    textEl.setAttribute('text-anchor', anchor);
+
+    const tspans = textEl.querySelectorAll('tspan');
+    const n = tspans.length;
+    const totalEm = (n - 1) * lineHeightMult;
+    // valign: 横書き=ブロック上下位置、縦書き=列群の左右位置（副軸）
+    const firstOffsetEm = valign === 'center' ? totalEm / 2 : valign === 'bottom' ? totalEm : 0;
+
+    tspans.forEach((ts, i) => {
         ts.removeAttribute('x');
         ts.removeAttribute('y');
         ts.removeAttribute('dy');
+        ts.removeAttribute('dx');
         delete ts.dataset.origX;
         delete ts.dataset.origY;
         if (isVertical) {
-            ts.setAttribute('x', x - (fontSizeSvg * 1.2 * i));
+            const dxEm = i === 0 ? firstOffsetEm : -lineHeightMult;
             ts.setAttribute('y', y);
-        } else if (i > 0) {
+            if (dxEm !== 0) ts.setAttribute('dx', `${dxEm}em`);
+        } else {
             ts.setAttribute('x', x);
-            ts.setAttribute('dy', '1.2em');
+            const dyEm = i === 0 ? -firstOffsetEm : lineHeightMult;
+            if (dyEm !== 0) ts.setAttribute('dy', `${dyEm}em`);
         }
     });
 
@@ -634,6 +659,26 @@ function _textSyncTexturePatternScale(textEl) {
 // 要素のfont-sizeに比例スケールして適用するため、レイアウト（SVG単位）・Imageタブ（px）・
 // プレビューのどれでも文字サイズに対する見た目の比率が一致する
 function _fontMgrApplyStyleAttrsToTextEl(textEl, svgEl, styleObj) {
+    // 行間・文字寄せ・上下位置（複数行tspan配置）を反映する。プレビュー（フォント管理タブ／
+    // テキストスタイルモーダル）は textContent に改行入りの文字列を直接セットするだけで
+    // tspanをまだ持たないため、その場合は改行で分割して新規tspanを組み立ててから配置する
+    if (styleObj) {
+        textEl.dataset.lineHeightMult = styleObj.lineHeightMult || 1.2;
+        textEl.dataset.textAlign = styleObj.align || 'left';
+        textEl.dataset.textValign = styleObj.valign || 'top';
+    }
+    if (textEl.querySelectorAll('tspan').length === 0 && textEl.textContent) {
+        const lines = textEl.textContent.split('\n');
+        textEl.textContent = '';
+        const ns = 'http://www.w3.org/2000/svg';
+        lines.forEach(line => {
+            const tspan = document.createElementNS(ns, 'tspan');
+            tspan.textContent = line || ' ';
+            textEl.appendChild(tspan);
+        });
+    }
+    _setTextElVertical(textEl, textEl.style.writingMode === 'vertical-rl');
+
     const _fs = parseFloat(textEl.getAttribute('font-size'));
     const k = (isNaN(_fs) || _fs <= 0 ? 100 : _fs) / 100;
     _fontMgrApplyFillPaintToEl(textEl, svgEl, styleObj, k);
@@ -803,7 +848,9 @@ function _fontMgrExtractStyleFromTextEl(textEl, svgEl) {
         boldEnabled: textEl.getAttribute('font-weight') === 'bold',
         italicEnabled: textEl.getAttribute('font-style') === 'italic',
         underlineEnabled: textEl.getAttribute('text-decoration') === 'underline',
-        align: 'left',
+        align: textEl.dataset.textAlign || 'left',
+        valign: textEl.dataset.textValign || 'top',
+        lineHeightMult: parseFloat(textEl.dataset.lineHeightMult) || 1.2,
         bukuroEnabled: false,
         bukuroColor: '#000000',
         bukuroWidth: 8,

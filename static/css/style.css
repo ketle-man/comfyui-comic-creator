@@ -2733,6 +2733,15 @@ input[type="number"] {
   background-color: var(--primary-color);
   color: white;
 }
+/* テキストスタイルの上下/文字寄せボタン群（フォント管理タブ・テキストスタイルモーダル共通） */
+.style-align-btns {
+  display: flex;
+  gap: 6px;
+}
+.style-align-btns .btn.active {
+  background-color: var(--primary-color);
+  color: white;
+}
 #btm-text-input {
   width: 100%;
   resize: vertical;

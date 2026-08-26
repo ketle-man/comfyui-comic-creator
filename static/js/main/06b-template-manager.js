@@ -1,8 +1,9 @@
 // ============================================================
 // テンプレート作成ウィザード 分割ファイル (2/3): テンプレートグループ管理+テンプレート管理
 // 元 06-template-wizard.js（分割前）の行 798-1011 に相当
-// type="module" として読み込まれる（ESモジュール化 G2）。06c-template-wizard.js とは相互import（循環）。
-// 循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため安全（詳細はG1と同じ判断基準）。
+// type="module" として読み込まれる（ESモジュール化 G2）。06c-template-wizard.js / 11a-work-manager.js
+// とは相互import（循環）。循環先シンボルの参照はすべて関数内部（呼び出し時点で評価）に閉じているため
+// 安全（詳細はG1と同じ判断基準）。
 // 主なトップレベル定義: _tmplGroups,initTemplateManager,loadTemplates,saveTemplate
 // 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
 // 呼び出し箇所は書き換えていない）: state（01-state.js）
@@ -17,6 +18,7 @@ import {
     deleteTemplate, renderTemplateList, _tmplGroupsRefreshUI, _tmplSidePanelUpdate, _tmplApplyImportScale,
 } from './06c-template-wizard.js';
 import { state } from './01-state.js';
+import { insertTemplatePageToWork } from './11a-work-manager.js';
 
 // ==============================
 // テンプレート グループ管理
@@ -200,6 +202,12 @@ async function initTemplateManager() {
     const groupFilter = document.getElementById('template-group-filter');
     if (groupFilter) {
         groupFilter.addEventListener('change', () => renderTemplateList());
+    }
+
+    // 選択中のテンプレートを開いている作品へ新規ページとして挿入（アセットパネル「T」タブと同じ処理）
+    const insertPageBtn = document.getElementById('template-insert-page-btn');
+    if (insertPageBtn) {
+        insertPageBtn.addEventListener('click', () => insertTemplatePageToWork(state.selectedTemplateName));
     }
 
     // サイドパネル: グループ追加

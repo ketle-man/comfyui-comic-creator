@@ -439,6 +439,8 @@ function _fontMgrRenderAllTagsChips() {
 
 let _fontMgrStyleList = [];
 let _fontMgrEditingStyleId = null;
+let _fontMgrAlign = 'left';
+let _fontMgrValign = 'top';
 
 function _fontMgrLoadStyles() {
     try {
@@ -578,6 +580,22 @@ function _fontMgrDrawGradRamp() {
     });
 }
 
+// 上下/文字寄せボタン（フキダシ内包テキストと同じボタン形式UI）の選択状態をDOMへ反映
+function _fontMgrSyncValignButtons() {
+    document.querySelectorAll('.style-valign-btn').forEach(b => {
+        const active = b.dataset.valign === _fontMgrValign;
+        b.classList.toggle('active', active);
+        b.classList.toggle('secondary', !active);
+    });
+}
+function _fontMgrSyncAlignButtons() {
+    document.querySelectorAll('.style-align-btn').forEach(b => {
+        const active = b.dataset.align === _fontMgrAlign;
+        b.classList.toggle('active', active);
+        b.classList.toggle('secondary', !active);
+    });
+}
+
 // モード・チェックに応じたコントロールの表示切替
 function _fontMgrSyncFillUI() {
     const enableEl = document.getElementById('style-fill-enable');
@@ -650,7 +668,9 @@ function _fontMgrUpdateStylePreview() {
         boldEnabled: !!document.getElementById('style-bold-enable')?.checked,
         italicEnabled: !!document.getElementById('style-italic-enable')?.checked,
         underlineEnabled: !!document.getElementById('style-underline-enable')?.checked,
-        align: document.getElementById('style-align-select')?.value || 'left',
+        align: _fontMgrAlign,
+        valign: _fontMgrValign,
+        lineHeightMult: parseFloat(document.getElementById('style-line-height')?.value) || 1.2,
         bukuroEnabled: !!document.getElementById('style-bukuro-enable')?.checked,
         bukuroColor: document.getElementById('style-bukuro-color')?.value || '#000000',
         bukuroWidth: parseFloat(document.getElementById('style-bukuro-width')?.value) || 0,
@@ -689,7 +709,9 @@ function _fontMgrGetStyleFromUI(name) {
         boldEnabled: !!document.getElementById('style-bold-enable')?.checked,
         italicEnabled: !!document.getElementById('style-italic-enable')?.checked,
         underlineEnabled: !!document.getElementById('style-underline-enable')?.checked,
-        align: document.getElementById('style-align-select')?.value || 'left',
+        align: _fontMgrAlign,
+        valign: _fontMgrValign,
+        lineHeightMult: parseFloat(document.getElementById('style-line-height')?.value) || 1.2,
         bukuroEnabled: !!document.getElementById('style-bukuro-enable')?.checked,
         bukuroColor: document.getElementById('style-bukuro-color')?.value || '#000000',
         bukuroWidth: parseFloat(document.getElementById('style-bukuro-width')?.value) || 0,
@@ -710,7 +732,13 @@ function _fontMgrApplyStyleToUI(style) {
     document.getElementById('style-bold-enable').checked = !!style.boldEnabled;
     document.getElementById('style-italic-enable').checked = !!style.italicEnabled;
     document.getElementById('style-underline-enable').checked = !!style.underlineEnabled;
-    document.getElementById('style-align-select').value = style.align || 'left';
+    _fontMgrAlign = style.align || 'left';
+    _fontMgrValign = style.valign || 'top';
+    _fontMgrSyncAlignButtons();
+    _fontMgrSyncValignButtons();
+    const _lh = style.lineHeightMult || 1.2;
+    document.getElementById('style-line-height').value = _lh;
+    document.getElementById('style-line-height-val').textContent = _lh.toFixed(1);
     document.getElementById('style-bukuro-enable').checked = style.bukuroEnabled;
     document.getElementById('style-bukuro-color').value = style.bukuroColor;
     document.getElementById('style-bukuro-width').value = style.bukuroWidth;
@@ -736,7 +764,12 @@ function _fontMgrResetStyleUI() {
     document.getElementById('style-bold-enable').checked = false;
     document.getElementById('style-italic-enable').checked = false;
     document.getElementById('style-underline-enable').checked = false;
-    document.getElementById('style-align-select').value = 'left';
+    _fontMgrAlign = 'left';
+    _fontMgrValign = 'top';
+    _fontMgrSyncAlignButtons();
+    _fontMgrSyncValignButtons();
+    document.getElementById('style-line-height').value = 1.2;
+    document.getElementById('style-line-height-val').textContent = '1.2';
     document.getElementById('style-bukuro-enable').checked = false;
     document.getElementById('style-bukuro-color').value = '#000000';
     document.getElementById('style-bukuro-width').value = 8;
@@ -760,10 +793,10 @@ function _fontMgrRenderStyleSelect() {
 
 function _fontMgrInitStyleTab() {
     const previewInputIds = [
-        'style-preview-input', 'style-preview-size',
+        'style-preview-input', 'style-preview-size', 'style-line-height',
         'style-fill-color',
         'style-stroke-enable', 'style-stroke-color', 'style-stroke-width',
-        'style-bold-enable', 'style-italic-enable', 'style-underline-enable', 'style-align-select',
+        'style-bold-enable', 'style-italic-enable', 'style-underline-enable',
         'style-bukuro-enable', 'style-bukuro-color', 'style-bukuro-width',
         'style-shadow-enable', 'style-shadow-color', 'style-shadow-blur', 'style-shadow-dx', 'style-shadow-dy',
     ];
@@ -773,6 +806,29 @@ function _fontMgrInitStyleTab() {
         const evt = (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input';
         el.addEventListener(evt, _fontMgrUpdateStylePreview);
     });
+    document.getElementById('style-line-height')?.addEventListener('input', () => {
+        const lh = document.getElementById('style-line-height');
+        const lhVal = document.getElementById('style-line-height-val');
+        if (lhVal) lhVal.textContent = parseFloat(lh.value).toFixed(1);
+    });
+
+    // 上下/文字寄せボタン（フキダシ内包テキストと同じボタン形式UI）
+    document.querySelectorAll('.style-valign-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            _fontMgrValign = btn.dataset.valign;
+            _fontMgrSyncValignButtons();
+            _fontMgrUpdateStylePreview();
+        });
+    });
+    document.querySelectorAll('.style-align-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            _fontMgrAlign = btn.dataset.align;
+            _fontMgrSyncAlignButtons();
+            _fontMgrUpdateStylePreview();
+        });
+    });
+    _fontMgrSyncValignButtons();
+    _fontMgrSyncAlignButtons();
 
     // ── 塗り（塗りなし/モード/グラデーション/テクスチャ）イベント ──
     document.getElementById('style-fill-enable')?.addEventListener('change', e => {

@@ -39,6 +39,10 @@ function initPose3DTab() {
     const camModeBtn  = document.getElementById('pose3d-cam-mode-btn');
     const ptSlider    = document.getElementById('pose3d-point-size');
     const ptVal       = document.getElementById('pose3d-point-size-val');
+    const fovSlider   = document.getElementById('pose3d-fov');
+    const fovVal      = document.getElementById('pose3d-fov-val');
+    const nearSlider  = document.getElementById('pose3d-near');
+    const nearVal     = document.getElementById('pose3d-near-val');
 
     if (!placeBtn) return; // HTMLが存在しない場合はスキップ
 
@@ -263,6 +267,26 @@ function initPose3DTab() {
             if (ptVal) ptVal.textContent = v.toFixed(1);
             if (state.pose3d.editor) state.pose3d.editor.setPointSize(v);
         });
+    }
+
+    // カメラFOV(画角)スライダー
+    if (fovSlider) {
+        fovSlider.addEventListener('input', () => {
+            const v = parseFloat(fovSlider.value);
+            if (fovVal) fovVal.textContent = String(v);
+            if (state.pose3d.editor) state.pose3d.editor.setFov(v);
+        });
+        fovSlider.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
+    }
+
+    // カメラNear(ニアクリップ)スライダー
+    if (nearSlider) {
+        nearSlider.addEventListener('input', () => {
+            const v = parseFloat(nearSlider.value);
+            if (nearVal) nearVal.textContent = v.toFixed(2);
+            if (state.pose3d.editor) state.pose3d.editor.setNear(v);
+        });
+        nearSlider.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
     }
 }
 

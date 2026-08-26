@@ -696,6 +696,13 @@
                   <label style="font-size:11px; white-space:nowrap;" data-i18n="layout.pose3dPointSize">点サイズ:</label>
                   <input type="range" id="pose3d-point-size" min="0.2" max="3.0" step="0.1" value="1.0" style="width:60px;" />
                   <span id="pose3d-point-size-val" style="font-size:11px; min-width:24px;">1.0</span>
+                  <!-- カメラ FOV / Near -->
+                  <label style="font-size:11px; white-space:nowrap;" data-i18n="layout.pose3dFov" data-i18n-title="layout.pose3dFovTitle" title="カメラの画角(FOV)を変更します">FOV:</label>
+                  <input type="range" id="pose3d-fov" min="10" max="120" step="1" value="45" style="width:60px;" data-i18n-title="layout.pose3dFovTitle" title="カメラの画角(FOV)を変更します" />
+                  <span id="pose3d-fov-val" style="font-size:11px; min-width:24px;">45</span>
+                  <label style="font-size:11px; white-space:nowrap;" data-i18n="layout.pose3dNear" data-i18n-title="layout.pose3dNearTitle" title="カメラのニアクリップ面を変更します">Near:</label>
+                  <input type="range" id="pose3d-near" min="0.01" max="5" step="0.01" value="0.1" style="width:60px;" data-i18n-title="layout.pose3dNearTitle" title="カメラのニアクリップ面を変更します" />
+                  <span id="pose3d-near-val" style="font-size:11px; min-width:32px;">0.10</span>
                   <!-- 区切り -->
                   <div style="border-left:1px solid var(--border-color); height:20px;"></div>
                   <!-- 配置・確定・キャンセル -->
@@ -1003,10 +1010,14 @@
                   <div class="fontmgr-style-layout">
                     <div class="fontmgr-style-controls">
                       <div class="fontmgr-style-group">
-                        <label><span data-i18n="font.stylePreviewText">プレビュー文字:</span> <input type="text" id="style-preview-input" value="あ亜Aa1" style="width:100px;" /></label>
+                        <label><span data-i18n="font.stylePreviewText">プレビュー文字:</span> <textarea id="style-preview-input" rows="2" style="width:100px; resize:vertical;">あ亜Aa1&#10;Bb2</textarea></label>
                       </div>
                       <div class="fontmgr-style-group">
                         <label><span data-i18n="layout.sizeLabel">サイズ:</span> <input type="number" id="style-preview-size" min="16" max="200" value="150" style="width:60px;" /></label>
+                      </div>
+                      <div class="fontmgr-style-group">
+                        <label><span data-i18n="font.lineHeightLabel">行間:</span> <input type="range" id="style-line-height" min="0.8" max="3" step="0.1" value="1.2" style="width:100px;" /></label>
+                        <span id="style-line-height-val" style="font-size:11px; min-width:24px;">1.2</span>
                       </div>
 
                       <div class="fontmgr-style-group">
@@ -1048,12 +1059,18 @@
                       </div>
 
                       <div class="fontmgr-style-group">
-                        <label class="fontmgr-style-group-label" data-i18n="font.alignLabel">文字寄せ</label>
-                        <select id="style-align-select">
-                          <option value="left" data-i18n="font.alignLeft">左</option>
-                          <option value="center" data-i18n="font.alignCenter">中央</option>
-                          <option value="right" data-i18n="font.alignRight">右</option>
-                        </select>
+                        <label class="fontmgr-style-group-label" data-i18n="font.valignLabel">上下</label>
+                        <div class="style-align-btns">
+                          <button type="button" class="btn small secondary style-valign-btn" data-valign="top" data-i18n="bubbleText.alignTop">上</button>
+                          <button type="button" class="btn small secondary style-valign-btn" data-valign="center" data-i18n="font.alignCenter">中央</button>
+                          <button type="button" class="btn small secondary style-valign-btn" data-valign="bottom" data-i18n="bubbleText.alignBottom">下</button>
+                        </div>
+                        <label class="fontmgr-style-group-label" data-i18n="font.alignLabel" style="margin-left:10px;">文字寄せ</label>
+                        <div class="style-align-btns">
+                          <button type="button" class="btn small secondary style-align-btn" data-align="left" data-i18n="font.alignLeft">左</button>
+                          <button type="button" class="btn small secondary style-align-btn" data-align="center" data-i18n="font.alignCenter">中央</button>
+                          <button type="button" class="btn small secondary style-align-btn" data-align="right" data-i18n="font.alignRight">右</button>
+                        </div>
                       </div>
 
                       <div class="fontmgr-style-group">
@@ -1302,6 +1319,7 @@
                 <select id="template-group-filter" style="margin-left:8px; padding:4px 8px; font-size:13px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);">
                   <option value="" data-i18n="layout.fontCatAll">すべて</option>
                 </select>
+                <button id="template-insert-page-btn" class="btn secondary" disabled data-i18n="asset.insertAsPage" data-i18n-title="asset.insertAsPageTitle" title="選択したテンプレートを作品サイズにリサイズして新規ページとして追加します">ページとして挿入</button>
               </div>
               <div style="display:flex; gap:0; flex:1; overflow:hidden;">
                 <div id="template-list" class="template-grid" style="flex:1; overflow-y:auto;">
