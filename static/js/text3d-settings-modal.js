@@ -1,6 +1,6 @@
 // text3d-settings-modal.js — 3Dテキストの「ライト・マテリアル・テキスト設定」モーダル
 //
-// comfyui-vrm-pose-editor の light_editor.js (openLightEditor) を範にした軽量版。
+// comfyui-vrm-pose-editor の light_editor.js (openLightPoseEditor) を範にした軽量版。
 // text3dのライトはAmbient/Key/Fillの3灯固定（3Dポーズ側のような自由な追加/削除・
 // プリセットライブラリは持たない）。
 //

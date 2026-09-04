@@ -2,6 +2,22 @@
 
 ---
 
+## 2026-09-04（vrm-pose-editorのv0.14.0改名に追従できておらず3Dポーズの「ライト」ボタンが開けなくなっていた不具合を修正、v1.36.1）
+
+ユーザー報告: レイアウトタブ「3Dポーズ」の「ライト」ボタンを押しても何も起きない。`comfyui-vrm-pose-editor`（3Dポーズ機能の実体、[[vrm-pose-editor-architecture]]参照）を最近アップデートしたとのこと。
+
+**原因**: `comfyui-vrm-pose-editor` はv0.14.0で「Light & Pose Editor統合モーダル」化に伴い、`light_editor.js` の起動関数を `openLightEditor(editor, cvsWrapper)` から `openLightPoseEditor(editor, cvsWrapper, vrmBuffer, getShapeKeys, onClose, initialTab, nodeActions)` へ改名・シグネチャ変更していた。SPA側のブリッジ（`static/js/pose3d.js`）は旧関数名 `light.openLightEditor` を参照したままだったため `window.openLightEditor` が `undefined` になり、`23-pose3d-bridge.js` のライトボタンが「エディタが見つかりません」扱いになっていた。他のブリッジ関数（`initPoseEditor3D`・`openPoseLibrary`）は同アップデートでもシグネチャが後方互換だったため影響を受けていなかった。
+
+**修正**:
+- `pose3d.js`: `window.openLightPoseEditor = light.openLightPoseEditor;` に変更。
+- `23-pose3d-bridge.js`: ライトボタンの呼び出しを新シグネチャに合わせて更新。`vrmBuffer`には`state.pose3d.modelBuffer`、`getShapeKeys`には新設した`currentMorphKeys`（`onMorphKeysReady`コールバックで保持、ノード側`pose_editor_3d.js`の同名変数と同じパターン）を渡す。`nodeActions`はSPAには画像キャプチャ・VRM/VRMAロードのノード固有処理が無いため省略（呼び出し側で`nodeActions?.xxx?.()`と安全に扱われる設計のため未指定でも問題ない）。
+- モーダル内でWind/LookAt/カメラ/Point Size等を変更できるようになったため、`onClose`コールバック（`_pose3dOnLightPoseEditorClosed`を新設）でノード側`onLightPoseEditorClosed`と同じ内容をレイアウトタブのツールバーへ再同期するようにした。対応しないとモーダルを閉じた後にツールバー表示が古いまま残る新規の不具合になるところだった。
+- `text3d-settings-modal.js`のコメント中の関数名参照（`openLightEditor`→`openLightPoseEditor`）も修正。
+
+**検証**: Kaptureで実機検証済み。VRMモデル読込→ライトボタンでLight & Pose Editorモーダルが開くこと（Lightタブのライト一覧・プロパティ、Poseタブのシェイプキー14個表示）、モーダルを閉じてもレイアウトタブの3Dビュー・ツールバーが正常に復帰すること、コンソールにエラーが出ないこと（デフォルトモデル探索の404は既知の無害な挙動）を確認。他の3Dポーズ機能（モデル読込・ポーズライブラリ・ミラー・視線/揺れ/風トグル等）は今回のvrm-pose-editorアップデートでシグネチャ変更が無かったため影響なしとコード上でも確認済み。
+
+---
+
 ## 2026-08-26（テキストスタイルに行間・上下位置・文字寄せを追加し実テキストへ反映、v1.36.0）
 
 ユーザー依頼: テキストのスタイル（フォント管理タブ「スタイル」／レイアウト・Imageタブの「スタイル」モーダル、実体は共通の `text-style-modal.js`）のプレビュー文字を2行にし、サイズ下に行間スライダー、上下位置・文字寄せを追加したい。フキダシの内包テキスト（`09f-bubble-text.js`）と同様の見た目・操作にしたい。

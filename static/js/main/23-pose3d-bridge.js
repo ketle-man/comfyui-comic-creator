@@ -2,7 +2,7 @@
 // main.js 分割ファイル (24/24): 3Dポーズエディタ
 // 元 main.js の行 17767-18313 に相当
 // type="module" として読み込まれる（ESモジュール化 G9）。
-// 主なトップレベル定義: _arrayBufferToBase64,_base64ToArrayBuffer,_pose3dRebuildMorphSliders,_pose3dSyncPosition,commitPose3D,hidePose3DCanvas,initPose3DTab,showPose3DCanvas
+// 主なトップレベル定義: _arrayBufferToBase64,_base64ToArrayBuffer,_pose3dOnLightPoseEditorClosed,_pose3dRebuildMorphSliders,_pose3dSyncPosition,commitPose3D,hidePose3DCanvas,initPose3DTab,showPose3DCanvas
 // 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
 // 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
@@ -14,6 +14,59 @@ import { state } from './01-state.js';
 // ============================================================
 // 3D ポーズエディタ（方針B: canvasオーバーレイ + 確定時画像化）
 // ============================================================
+
+// Light & Pose Editor（openLightPoseEditor）のPoseタブ・シェイプキー一覧に渡すため、
+// onMorphKeysReadyで受け取った最新のキー配列をここに保持しておく（node側pose_editor_3d.jsの
+// currentMorphKeys と同じパターン）。
+let currentMorphKeys = [];
+
+// Light & Pose Editorを閉じた際、モーダル内でWind/LookAt/カメラ/Point Size等の状態が変更された
+// 可能性があるため、レイアウトタブ側のツールバー表示を再同期する
+// （node側pose_editor_3d.jsのonLightPoseEditorClosedと同じパターン）。
+function _pose3dOnLightPoseEditorClosed({ windBtn, windSourceBtn, ptSlider, ptVal, camModeBtn, lookAtBtn, fovSlider, fovVal, nearSlider, nearVal }) {
+    const editor = state.pose3d.editor;
+    if (!editor) return;
+
+    if (windBtn) {
+        const on = editor.getWindEnabled();
+        windBtn.textContent = on ? '🌬 風: ON' : '🌬 風: OFF';
+        windBtn.style.background = on ? 'var(--accent-primary, #0066cc)' : '';
+    }
+    if (windSourceBtn) {
+        const on = editor.getWindSourceEnabled();
+        windSourceBtn.textContent = on ? '🧭 発生源: ON' : '🧭 発生源: OFF';
+        windSourceBtn.style.background = on ? 'var(--accent-primary, #0066cc)' : '';
+    }
+    if (ptSlider) {
+        const v = editor.getPointSize();
+        ptSlider.value = String(v);
+        if (ptVal) ptVal.textContent = v.toFixed(1);
+    }
+    if (camModeBtn) {
+        const toOrtho = editor.getIsOrtho();
+        camModeBtn.dataset.mode     = toOrtho ? 'ortho' : 'persp';
+        camModeBtn.textContent      = toOrtho ? 'PR' : 'OT';
+        camModeBtn.style.background = toOrtho ? '#4a7aaa' : '';
+        camModeBtn.title            = toOrtho
+            ? t('layout.pose3dCamModeTitleOrtho')
+            : t('layout.pose3dCamModeTitle');
+    }
+    if (lookAtBtn) {
+        const on = editor.getLookAtEnabled();
+        lookAtBtn.textContent = on ? '👁 視線: ON' : '👁 視線: OFF';
+        lookAtBtn.style.background = on ? 'var(--accent-primary, #0066cc)' : '';
+    }
+    if (fovSlider) {
+        const v = editor.getFov();
+        fovSlider.value = String(v);
+        if (fovVal) fovVal.textContent = String(v);
+    }
+    if (nearSlider) {
+        const v = editor.getNear();
+        nearSlider.value = String(v);
+        if (nearVal) nearVal.textContent = v.toFixed(2);
+    }
+}
 
 function initPose3DTab() {
     const placeBtn      = document.getElementById('pose3d-place-btn');
@@ -175,15 +228,26 @@ function initPose3DTab() {
         window.openPoseLibrary(editor, state.pose3d.modelBuffer);
     });
 
-    // ライトエディタ（comfyui-vrm-pose-editor 連携）
+    // ライトエディタ（comfyui-vrm-pose-editor 連携。v0.14.0でopenLightEditor()は
+    // openLightPoseEditor()へ改名・シグネチャ変更されたため、それに合わせて呼び出す）
     if (lightBtn) lightBtn.addEventListener('click', () => {
-        if (typeof window.openLightEditor !== 'function') {
+        if (typeof window.openLightPoseEditor !== 'function') {
             if (statusEl) statusEl.textContent = t('layout.pose3dEditorNotFound');
             return;
         }
         const editor = state.pose3d.editor;
         if (!editor) { alert(t('layout.pose3dModelNotLoaded')); return; }
-        window.openLightEditor(editor, state.pose3d.wrapper);
+        window.openLightPoseEditor(
+            editor,
+            state.pose3d.wrapper,
+            state.pose3d.modelBuffer,
+            () => currentMorphKeys,
+            () => _pose3dOnLightPoseEditorClosed({
+                windBtn, windSourceBtn, ptSlider, ptVal,
+                camModeBtn, lookAtBtn, fovSlider, fovVal, nearSlider, nearVal,
+            }),
+            'light'
+        );
     });
 
     // ミラー（左右反転）
@@ -376,7 +440,10 @@ function showPose3DCanvas(panelId) {
             state.pose3d.canvas,
             state.pose3d.gizmoCanvas,
             './',
-            (keys) => _pose3dRebuildMorphSliders(keys, morphPanel),
+            (keys) => {
+                currentMorphKeys = keys;
+                _pose3dRebuildMorphSliders(keys, morphPanel);
+            },
             () => {
                 // モデルロード完了後にrendererサイズを強制再同期（初回配置時の表示抜け対策）
                 const cvs = state.pose3d.canvas;

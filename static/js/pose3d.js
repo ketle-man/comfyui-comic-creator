@@ -32,7 +32,7 @@ async function _installBridge() {
         return core.initPoseEditor3D(canvas, gizmoCanvas, baseUrl, onMorphKeysReady, false, onModelReady);
     };
     window.openPoseLibrary = library.openPoseLibrary;
-    window.openLightEditor = light.openLightEditor;
+    window.openLightPoseEditor = light.openLightPoseEditor;
 }
 
 _installBridge().catch((err) => {
