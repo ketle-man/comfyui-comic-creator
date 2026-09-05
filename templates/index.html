@@ -673,21 +673,22 @@
                     <span data-i18n="layout.pose3dLoadModel">モデル読込</span><input type="file" id="pose3d-vrm-input" accept=".vrm,.glb,.gltf" style="display:none;" />
                   </label>
                   <span id="pose3d-vrm-label" style="font-size:10px; color:var(--text-secondary); max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">default model</span>
+                  <!-- 配置（モデル読込の直後、ポーズ読込の左隣） -->
+                  <button id="pose3d-place-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.pose3dPlace" data-i18n-title="layout.pose3dPlaceTitle" title="選択中のコマに 3D ビューを配置します">コマに配置</button>
                   <!-- ポーズ読込・保存 -->
                   <label class="btn small" style="cursor:pointer; white-space:nowrap;" data-i18n-title="layout.pose3dLoadPoseTitle" title=".json / .vroidpose ファイルを読み込みます">
                     <span data-i18n="layout.pose3dLoadPose">ポーズ読込</span><input type="file" id="pose3d-pose-input" accept=".json,.vroidpose" style="display:none;" />
                   </label>
                   <button id="pose3d-save-pose-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.pose3dSavePose" data-i18n-title="layout.pose3dSavePoseTitle" title="現在のポーズを JSON として保存します">ポーズ保存</button>
-                  <!-- comfyui-vrm-pose-editor 連携: poses/へ保存・ポーズライブラリ -->
+                  <!-- comfyui-vrm-pose-editor 連携: poses/へ保存・Light & Pose Editor(Poseタブ) -->
                   <button id="pose3d-save-to-poses-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dSaveToPosesTitle" title="現在のポーズを comfyui-vrm-pose-editor の poses/ フォルダへ保存します">💾 poses/</button>
-                  <button id="pose3d-library-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.pose3dLibrary" data-i18n-title="layout.pose3dLibraryTitle" title="ポーズライブラリを開きます">📚 ライブラリ</button>
+                  <button id="pose3d-editor-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.pose3dEditor" data-i18n-title="layout.pose3dEditorBtnTitle" title="Light &amp; Pose Editor（ライト・ポーズライブラリ・VRMAタイムライン）を開きます">🎛 Editor</button>
                   <!-- CC / ミラー / リセット -->
                   <button id="pose3d-cc-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dCcTitle" title="カラー補正 (sRGB + ACES Filmic) の ON/OFF">CC: OFF</button>
                   <button id="pose3d-mirror-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.pose3dMirror" data-i18n-title="layout.pose3dMirrorTitle" title="ポーズを左右反転します">↔ ミラー</button>
                   <button id="pose3d-reset-pose-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dResetPoseTitle" title="ポーズをリセット">RP</button>
                   <button id="pose3d-reset-camera-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dResetCameraTitle" title="カメラをリセット">RC</button>
                   <button id="pose3d-cam-mode-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dCamModeTitle" title="カメラ: 透視投影 (クリックで平行投影に切替)">OT</button>
-                  <button id="pose3d-light-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.pose3dLight" data-i18n-title="layout.pose3dLightTitle" title="ライトエディタを開きます">💡 ライト</button>
                   <button id="pose3d-lookat-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dLookAtTitle" title="視線ターゲット: ONにすると3Dビュー内のシアン色マーカーをドラッグして目・頭の向きを誘導できます">👁 視線: OFF</button>
                   <button id="pose3d-springbone-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dSpringBoneTitle" title="揺れ物理(髪・スカート等)のON/OFF。OFFにすると現在の状態で固定されます">🎐 揺れ: ON</button>
                   <button id="pose3d-wind-btn" class="btn small" style="white-space:nowrap;" data-i18n-title="layout.pose3dWindTitle" title="そよ風エフェクトのON/OFF。強さ・向き・そよぎはライトエディタ内で調整できます">🌬 風: OFF</button>
@@ -705,8 +706,7 @@
                   <span id="pose3d-near-val" style="font-size:11px; min-width:32px;">0.10</span>
                   <!-- 区切り -->
                   <div style="border-left:1px solid var(--border-color); height:20px;"></div>
-                  <!-- 配置・確定・キャンセル -->
-                  <button id="pose3d-place-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.pose3dPlace" data-i18n-title="layout.pose3dPlaceTitle" title="選択中のコマに 3D ビューを配置します">コマに配置</button>
+                  <!-- 確定・キャンセル（配置ボタンはモデル読込の直後に移設済み） -->
                   <button id="pose3d-commit-btn" class="btn small" style="white-space:nowrap;" data-i18n="layout.pose3dCommit" data-i18n-title="layout.pose3dCommitTitle" title="現在のビューをキャプチャしてコマに確定します" disabled>コマに確定</button>
                   <button id="pose3d-refresh-btn" class="btn small secondary" style="white-space:nowrap;" data-i18n="layout.pose3dRefresh" data-i18n-title="layout.pose3dRefreshTitle" title="3Dビューが表示されない場合に再描画します">再描画</button>
                   <button id="pose3d-cancel-btn" class="btn small danger" style="white-space:nowrap; display:none;" data-i18n="common.cancel" data-i18n-title="layout.pose3dCancelTitle" title="3D ビューをキャンセルします">キャンセル</button>

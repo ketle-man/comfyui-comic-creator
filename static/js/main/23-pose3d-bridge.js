@@ -2,7 +2,7 @@
 // main.js 分割ファイル (24/24): 3Dポーズエディタ
 // 元 main.js の行 17767-18313 に相当
 // type="module" として読み込まれる（ESモジュール化 G9）。
-// 主なトップレベル定義: _arrayBufferToBase64,_base64ToArrayBuffer,_pose3dOnLightPoseEditorClosed,_pose3dRebuildMorphSliders,_pose3dSyncPosition,commitPose3D,hidePose3DCanvas,initPose3DTab,showPose3DCanvas
+// 主なトップレベル定義: _arrayBufferToBase64,_base64ToArrayBuffer,_pose3dCaptureFrameToPanel,_pose3dInsertCaptureIntoPanel,_pose3dOnLightPoseEditorClosed,_pose3dRebuildMorphSliders,_pose3dSyncPosition,commitPose3D,hidePose3DCanvas,initPose3DTab,showPose3DCanvas
 // 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
 // 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
@@ -79,8 +79,7 @@ function initPose3DTab() {
     const poseInput   = document.getElementById('pose3d-pose-input');
     const savePoseBtn = document.getElementById('pose3d-save-pose-btn');
     const saveToPosesBtn = document.getElementById('pose3d-save-to-poses-btn');
-    const libraryBtn  = document.getElementById('pose3d-library-btn');
-    const lightBtn    = document.getElementById('pose3d-light-btn');
+    const editorBtn   = document.getElementById('pose3d-editor-btn');
     const lookAtBtn   = document.getElementById('pose3d-lookat-btn');
     const springBoneBtn = document.getElementById('pose3d-springbone-btn');
     const windBtn = document.getElementById('pose3d-wind-btn');
@@ -217,20 +216,12 @@ function initPose3DTab() {
         }
     });
 
-    // ポーズライブラリ（comfyui-vrm-pose-editor 連携）
-    if (libraryBtn) libraryBtn.addEventListener('click', () => {
-        if (typeof window.openPoseLibrary !== 'function') {
-            if (statusEl) statusEl.textContent = t('layout.pose3dEditorNotFound');
-            return;
-        }
-        const editor = state.pose3d.editor;
-        if (!editor) { alert(t('layout.pose3dModelNotLoaded')); return; }
-        window.openPoseLibrary(editor, state.pose3d.modelBuffer);
-    });
-
-    // ライトエディタ（comfyui-vrm-pose-editor 連携。v0.14.0でopenLightEditor()は
-    // openLightPoseEditor()へ改名・シグネチャ変更されたため、それに合わせて呼び出す）
-    if (lightBtn) lightBtn.addEventListener('click', () => {
+    // Light & Pose Editor（comfyui-vrm-pose-editor 連携）。旧「ライト」「ライブラリ」の
+    // 2ボタンを1つに統合し、常にPoseタブで開く（ライト設定はモーダル内の💡Lightタブへ
+    // 切り替えるだけでよく、VRMAのLoad/Load KEY・キーフレームタイムラインの再生バーで
+    // 任意のフレームへシークし、📸 Captureボタン(nodeActions.doCapture経由で
+    // _pose3dCaptureFrameToPanelを呼ぶ)でその場でコマへ確定できる）。
+    if (editorBtn) editorBtn.addEventListener('click', () => {
         if (typeof window.openLightPoseEditor !== 'function') {
             if (statusEl) statusEl.textContent = t('layout.pose3dEditorNotFound');
             return;
@@ -246,7 +237,8 @@ function initPose3DTab() {
                 windBtn, windSourceBtn, ptSlider, ptVal,
                 camModeBtn, lookAtBtn, fovSlider, fovVal, nearSlider, nearVal,
             }),
-            'light'
+            'pose',
+            { doCapture: _pose3dCaptureFrameToPanel }
         );
     });
 
@@ -586,12 +578,9 @@ function hidePose3DCanvas() {
     if (statusEl) statusEl.textContent = '';
 }
 
-// キャプチャ → insertImage でSVGに焼き込む
-async function commitPose3D() {
-    const editor   = state.pose3d.editor;
-    const panelId  = state.pose3d.activePanelId;
-    if (!editor || !panelId) return;
-
+// 現在のeditorのポーズをキャプチャし、指定コマへinsertImageでSVGに焼き込む共通処理
+// （commitPose3D・_pose3dCaptureFrameToPanel の両方から使う）
+async function _pose3dInsertCaptureIntoPanel(editor, panelId) {
     // ポーズデータ・モデル情報を収集（再編集用）
     const poseJson  = editor.exportPose() ?? '';
     const modelB64  = (!state.pose3d.modelIsDefault && state.pose3d.modelBuffer)
@@ -606,9 +595,6 @@ async function commitPose3D() {
     const w = cvs.width  || 600;
     const h = cvs.height || 600;
 
-    // 3D ビューを隠してから選択コマに確定
-    hidePose3DCanvas();
-
     // selectedPanelId を確保
     const prevPanelId = state.selectedPanelId;
     state.selectedPanelId = panelId;
@@ -619,6 +605,36 @@ async function commitPose3D() {
     });
 
     state.selectedPanelId = prevPanelId;
+}
+
+// キャプチャ → insertImage でSVGに焼き込む
+async function commitPose3D() {
+    const editor   = state.pose3d.editor;
+    const panelId  = state.pose3d.activePanelId;
+    if (!editor || !panelId) return;
+
+    // 3D ビューを隠してから選択コマに確定
+    hidePose3DCanvas();
+
+    await _pose3dInsertCaptureIntoPanel(editor, panelId);
+
+    const statusEl = document.getElementById('pose3d-status');
+    if (statusEl) statusEl.textContent = t('layout.pose3dCommitted');
+}
+
+// Light & Pose Editorのキーフレームパネル「📸 Capture」ボタン(nodeActions.doCapture)から
+// 呼ばれる、SPA版の「今表示中のフレームのポーズをコマに確定」処理。commitPose3D()と違い
+// 3Dビュー/モーダルは閉じない（タイムラインの再生バーで任意のフレームへシークしては
+// このボタンでコマへ確定する、という操作を連続して行えるようにするため）。
+async function _pose3dCaptureFrameToPanel() {
+    const editor  = state.pose3d.editor;
+    const panelId = state.pose3d.activePanelId;
+    if (!editor || !panelId) {
+        alert(t('layout.pose3dSelectPanelFirst'));
+        return;
+    }
+
+    await _pose3dInsertCaptureIntoPanel(editor, panelId);
 
     const statusEl = document.getElementById('pose3d-status');
     if (statusEl) statusEl.textContent = t('layout.pose3dCommitted');
