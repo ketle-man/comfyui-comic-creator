@@ -2,6 +2,24 @@
 
 ---
 
+## 2026-09-05（3DポーズのVRMAライブラリ対応・任意フレームでのコマ確定、ライト/ライブラリボタンをEditorへ統合、v1.37.0）
+
+ユーザー依頼: `comfyui-vrm-pose-editor`をv0.18.0へアップデートしたことに伴い、SPA側の「ライブラリ」ボタンをVRMAに対応させたい。再生バーで任意のフレームでコマに確定したい。続けて、「ライト」「ライブラリ」の2ボタンを「Editor」ボタンに統合（ポーズタブで開く）、「コマに配置」ボタンを「ポーズ読込」ボタン左隣へ移動したい、との依頼。
+
+**背景**: v0.15.0で追加されたPose LibraryのVRMA対応（.vrmaのLoad/Load KEY）とv0.14.0で追加されたLight & Pose Editor統合モーダル（キーフレームタイムライン）は、いずれもComfyUIノード側専用の`nodeActions`ブリッジ（doCapture/loadVrmFile/loadVrmaFile/unloadVrma）を前提にした設計。前回セッション（9/4、v1.36.1）は`openLightPoseEditor()`自体の呼び出し不整合は修復したが、「ライブラリ」ボタンは単体の`openPoseLibrary()`を呼ぶ旧経路のままで、VRMAタイムライン機能には未対応だった。
+
+**実装**:
+- `23-pose3d-bridge.js`: 単体の`openPoseLibrary()`呼び出しをやめ、統合モーダル`openLightPoseEditor()`をPoseタブで開く形に統一（ノード側もv0.14.0以降、専用のPose Libraryボタンを廃止し同じ経路に一本化されているため）。これにより📚 Pose Library内のVRMAのLoad/Load KEY・キーフレームタイムライン（再生バー）がSPAからも利用可能に。
+- キーフレームパネルの「📸 Capture」ボタン（`nodeActions.doCapture`）に、新設した`_pose3dCaptureFrameToPanel()`を接続。既存の「コマに確定」（`commitPose3D`）と共通処理を`_pose3dInsertCaptureIntoPanel()`ヘルパーへ切り出しつつ、3Dビュー/モーダルを閉じない点だけを差別化（タイムラインを開いたまま任意のフレームへシークして連続してコマへ確定できるようにするため）。
+- 「ライト」「ライブラリ」の2ボタンを「🎛 Editor」1個に統合（常にPoseタブで開始、ライト設定が必要な場合はモーダル内の💡Lightタブへ切替）。「コマに配置」ボタンをモデル読込の直後・ポーズ読込の左隣へ移設。
+- ヘルプタブ（日英中）・README（日英中、3Dポーズ節とスクリーンショットギャラリーに新規2枚を追加）を更新。
+
+**vrm-pose-editor側の副次的な修正**（`light_editor.js`）: Pose Library呼び出しが`nodeActions`オブジェクトの真偽のみで「⬇ Load」ボタンのコールバックを生成しており、SPAのように`doCapture`のみを渡す部分的な`nodeActions`では`nodeActions.loadVrmaFile`が未定義のままクラッシュする不具合を発見・修正（`nodeActions?.loadVrmaFile`の存在チェックに変更）。ノード自体は常に4メソッド全部入りの`nodeActions`を渡すため、ノード単体での動作には影響しない。
+
+**検証**: Kaptureで実機検証済み。🎛 Editor→Poseタブ→📚 Pose Library→VRMA_01選択→🔑 Load KEY（284キーフレーム取込）→▶再生→任意フレームで一時停止→📸 Captureでコマ1へ確定（レイヤーパネルに画像追加、3Dビュー・モーダルとも継続動作）を確認。ボタン再配置後のツールバー順序（モデル読込→コマに配置→ポーズ読込→…→🎛 Editor→…）も確認。検証中に作成したテスト用キャプチャ画像は作業ファイルから削除済み。
+
+---
+
 ## 2026-09-04（vrm-pose-editorのv0.14.0改名に追従できておらず3Dポーズの「ライト」ボタンが開けなくなっていた不具合を修正、v1.36.1）
 
 ユーザー報告: レイアウトタブ「3Dポーズ」の「ライト」ボタンを押しても何も起きない。`comfyui-vrm-pose-editor`（3Dポーズ機能の実体、[[vrm-pose-editor-architecture]]参照）を最近アップデートしたとのこと。
