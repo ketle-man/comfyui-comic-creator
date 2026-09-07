@@ -1,0 +1,2 @@
+# -- Imageタブ: PSD(Photoshop)ファイルのインポート/エクスポート --
+psd-tools>=1.10

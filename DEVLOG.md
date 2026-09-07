@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-09-07（Imageタブに PSD 対応、出力タブに SVG エクスポートを追加、v1.38.0）
+
+ユーザー依頼: ComfyUI-Workflow-Studio 側で先行実装された Image Edit タブの PSD(Photoshop) 対応を、Comic Creator の Image タブにも移植したい。続けて、レイアウトタブ（ページ全体のコマ割り編集）の内容も外部ソフトで編集できるようにしたいとの相談を受け調査、出力タブへの SVG エクスポート追加とヘルプ・README への反映まで行った。
+
+**1. Image タブの PSD (Photoshop) 対応**: WFS 側の実装（`d75a9c8`）を参考に、バックエンド `py/ccc.py` に `POST /api/ccc/psd/import-layers`（multipart アップロード→レイヤー配列 JSON、psd-tools 使用）と `POST /api/ccc/psd/export-layers`（レイヤー配列 JSON→PSD バイナリ）を追加。フロントは `image-tab.js` に `_loadPsdFile`（PSD をレイヤー構成ごと新規ドキュメントとして開く。既存の作業内容とはマージしない）・`_saveAsPsd`／`_buildPsdExportLayers`（各レイヤーを回転・反転・拡縮のみベイクしたフルサイズ PNG として送信、opacity・blendMode は PSD レイヤー属性として別送り）を実装。`templates/index.html` に「Open PSD」「PSD」ボタンを追加。**調整レイヤーは PSD が独立レイヤーとして表現できないため、直下の可視レイヤーへ効果を焼き込んでから除外する簡略化**を採用（WFS 側にはこの機能自体が無く前例なし）。依存パッケージ `psd-tools` は新設した `requirements.txt` に記載（ComfyUI_5 の共有 venv には WFS 用に既にインストール済みだったため実機インストールは不要だった）。
+
+**2. レイアウトの PSD 化可能性・SVG 以外の外部編集フォーマットの調査**: psd-tools の書き込み API を確認したところ、新規作成できるレイヤー種別は実質 PixelLayer(ラスター) と Group(フォルダ) のみで、テキストレイヤー・ベクターシェイプ・レイヤー効果は書き込み不可と判明。レイアウトタブは Image タブの `LayerManager` のような明示的なレイヤー配列を持たず、複数の SVG 文字列を `buildMergedSvg()` で動的合成した結果としてしか完成形が存在しないため、PSD 化は Image タブ版より実装コストが大きいと判断。Krita `.kra`（オープンな形式だがベクターレイヤー対応には新規実装が必要）・CLIP STUDIO PAINT `.clip`（仕様非公開で信頼できる書き込み手段が無い）も調査した結果、**レイアウトタブは内部的に既に SVG そのもの**（`buildMergedSvg()` が完全な SVG を、`embedFontsInSvg()` がフォント埋め込みまで既に実装済み＝従来は内部のラスタライズ用途にのみ使用）であることから、SVG をそのままダウンロードできるようにする方針に決定。詳細は新設した `PLAN_svg_export.md` を参照。
+
+**3. 出力タブへの SVG エクスポート追加**: `12-text-png-export.js` の `handleExport()` に `isSvg` 分岐を追加し、既存の PNG/JPEG/WebP と同じ zip 保存・フォルダ書き込み・保存ダイアログの経路を共有。`drawSvgOnCanvas()` から SVG の width/height 属性設定ロジックを `_prepareSvgForExport()` として切り出して再利用（viewBox は維持するため出力サイズを変えてもベクター内容は劣化しない）。`templates/index.html` の `#export-format` に `SVG` を追加。
+
+**4. ユーザーによる外部ソフト実地検証**: 書き出した SVG を実際に主要ソフトで開いた結果、**Inkscape・Affinity Designer/Publisher はほぼそのまま再編集可能、Adobe Illustrator は画像リンクが切れ個別再指定が必要で実用性が低い、CorelDraw は読み込み時にハングアップし非対応**と判明。編集後 SVG の再インポート機能は「ページ全体の自動再分割は属性依存で壊れやすい」という調査結果を踏まえ、ユーザー判断により見送り（着手しない）。
+
+**5. Image タブの「Upload」ボタンを「File Open」に改名**: 併せてプレースホルダー文言（"Upload an image or drop it here" → "Open a file or drop it here" 等）も統一。
+
+**6. ドキュメント更新**: ヘルプタブ（日英中 3 言語、`22-help-tab.js`）に PSD 対応・File Open 改名・SVG エクスポート（Inkscape/Affinity/Illustrator/CorelDraw の互換性情報を含む）を反映。README（日英中 3 言語）にも同内容を反映し、`requirements.txt` 新設に伴い「追加の Python パッケージ不要」の記載を修正。
+
+**7. SVGインポート経路のサニタイズ漏れを修正（ユーザーからのセキュリティ観点の質問を受けて発見）**: SVG出力機能の追加を機に能動的コンテンツ（`<script>`・`on*`イベントハンドラ・`javascript:` URI）の混入経路を洗い出したところ、`02-assets.js`のグループアセット挿入（`insertGroupAsset`）は`sanitizeSvgTree()`で既に無害化済みだった一方、`10-output-pages.js`の`importImageAsPage()`（出力タブ「＋ 画像を取り込む」）は`file.type.startsWith('image/')`判定がSVG（`image/svg+xml`）も素通りするにもかかわらず、生バイトのままdata URLとして`<image href="data:...">`に埋め込んでおり未サニタイズだった。`<image>`要素経由の読み込みはブラウザの仕様上スクリプト実行が無効化されるため実害は限定的だが、防御を1箇所に統一するため、SVGファイル取込時のみ`readFileAsText`→`DOMParser`→`sanitizeSvgTree()`→`svgTextToDataUrl`の経路に変更し無害化してから埋め込むよう修正。
+
+**検証**: Kapture で実機検証済み。PSD インポート（2 レイヤーのテスト PSD → レイヤーパネルに正しく2枚表示）・エクスポート（psd-tools で再検証しレイヤー数・可視状態・合成結果が一致）、SVG エクスポート（`HTMLAnchorElement.prototype.click` をモンキーパッチして blob 内容を捕捉する手法で検証、`<text>` 要素・`@font-face` 埋め込みを含む正しい SVG を確認）、ヘルプタブの日英中 3 言語表示切替（コンソールエラー無し）を確認。サニタイズ修正は、`<script>`・`onload`・`javascript:` href を仕込んだ検証用 SVG を`importImageAsPage()`へ直接投入し、生成されたページの`svgContent`にこれらが一切含まれず`window.__xssFired`（検証用フラグ）も発火しないことを確認（検証用ページはテスト後に削除済み）。`10-output-pages.js`が`02-assets.js`経由で`01-state.js`と循環import（`10-output-pages.js`→`02-assets.js`→`01-state.js`→`10-output-pages.js`）になる点も確認したが、既存コードと同じく参照は関数内部（呼び出し時点で評価）に閉じているため実機で問題無く動作することを確認。
+
+---
+
 ## 2026-09-05（3DポーズのVRMAライブラリ対応・任意フレームでのコマ確定、ライト/ライブラリボタンをEditorへ統合、v1.37.0）
 
 ユーザー依頼: `comfyui-vrm-pose-editor`をv0.18.0へアップデートしたことに伴い、SPA側の「ライブラリ」ボタンをVRMAに対応させたい。再生バーで任意のフレームでコマに確定したい。続けて、「ライト」「ライブラリ」の2ボタンを「Editor」ボタンに統合（ポーズタブで開く）、「コマに配置」ボタンを「ポーズ読込」ボタン左隣へ移動したい、との依頼。

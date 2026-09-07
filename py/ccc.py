@@ -196,6 +196,158 @@ def _gmic_run_gui(job_id: str, input_path: str, output_path: str):
             _gmic_jobs[job_id]['error_code'] = getattr(e, 'code', None)
             _gmic_jobs[job_id]['error_params'] = getattr(e, 'params', {})
 
+# ─── PSD (Photoshop) 対応 ─────────────────────────────────────────────────────
+# Canvas2D の globalCompositeOperation 文字列 <-> psd_tools.constants.BlendMode 名の相互変換テーブル
+# (Imageタブの Layer.blendMode はCanvas2Dの合成モード文字列をそのまま保持している)
+_PSD_BLEND_MODE_MAP = {
+    "source-over": "NORMAL",
+    "multiply": "MULTIPLY",
+    "screen": "SCREEN",
+    "overlay": "OVERLAY",
+    "darken": "DARKEN",
+    "lighten": "LIGHTEN",
+    "color-dodge": "COLOR_DODGE",
+    "color-burn": "COLOR_BURN",
+    "hard-light": "HARD_LIGHT",
+    "soft-light": "SOFT_LIGHT",
+    "difference": "DIFFERENCE",
+    "exclusion": "EXCLUSION",
+    "hue": "HUE",
+    "saturation": "SATURATION",
+    "color": "COLOR",
+    "luminosity": "LUMINOSITY",
+}
+# 逆引き: psd_tools.constants.BlendMode 名 -> Canvas2D 文字列（PSDインポート用）。
+# CSSに対応物が無いPSD側のブレンドモード（Dissolve, Linear Burn/Dodge等）は "source-over" にフォールバックする。
+_CSS_BLEND_MODE_REVERSE = {v: k for k, v in _PSD_BLEND_MODE_MAP.items()}
+
+def _build_psd_from_layers(width: int, height: int, layers: list) -> bytes:
+    """Imageタブのレイヤー配列(dataURL+メタデータ)から1つのPSDを組み立て、バイナリを返す。
+    各レイヤー画像はフロントエンド側で回転・反転・拡縮をベイクしたキャンバス全体サイズの
+    PNGとして渡される前提のため位置は常に(0,0)。opacity/blendModeはPSDレイヤー属性として渡す。"""
+    try:
+        from psd_tools import PSDImage
+        from psd_tools.api.layers import PixelLayer
+        from psd_tools.constants import BlendMode
+    except ImportError as e:
+        raise RuntimeError(
+            "psd-tools がインストールされていません。ComfyUIのpython環境で "
+            "`pip install psd-tools` を実行してください。"
+        ) from e
+    from PIL import Image
+    import io
+
+    if not layers:
+        raise ValueError("書き出すレイヤーがありません")
+    if width <= 0 or height <= 0:
+        raise ValueError("キャンバスサイズが不正です")
+
+    base = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    psd = PSDImage.frompil(base)
+
+    added = 0
+    for layer_data in layers:
+        data_url = layer_data.get("imageData", "")
+        m = re.match(r"^data:image/\w+;base64,(.+)$", data_url)
+        if not m:
+            continue
+        try:
+            im = Image.open(io.BytesIO(base64.b64decode(m.group(1)))).convert("RGBA")
+        except Exception as e:
+            print(f"[ccc] PSD書き出し: レイヤー画像のデコードに失敗しました: {e}")
+            continue
+
+        name = str(layer_data.get("name") or "Layer")[:255]
+        opacity = int(max(0.0, min(1.0, float(layer_data.get("opacity", 1.0)))) * 255)
+        visible = bool(layer_data.get("visible", True))
+        blend_key = _PSD_BLEND_MODE_MAP.get(layer_data.get("blendMode", "source-over"), "NORMAL")
+        blend_mode = getattr(BlendMode, blend_key)
+
+        pixel_layer = PixelLayer.frompil(im, psd, name=name, top=0, left=0)
+        pixel_layer.opacity = opacity
+        pixel_layer.blend_mode = blend_mode
+        pixel_layer.visible = visible
+        added += 1
+
+    if added == 0:
+        raise ValueError("有効なレイヤー画像がありません")
+
+    buf = io.BytesIO()
+    psd.save(buf)
+    return buf.getvalue()
+
+def _extract_psd_layers(psd) -> dict:
+    """PSDImageインスタンスからレイヤー配列(dataURL+メタデータ)を抽出する。
+    グループ自体・ラスタ化できないレイヤー(調整レイヤー等)はスキップする。
+    戻り値のlayersはImageタブのLayer配列規約(先頭=最前面)に合わせて並べる。"""
+    from psd_tools.constants import BlendMode
+    import io
+
+    layers_out = []
+    for layer in psd.descendants():
+        if layer.is_group():
+            continue
+        try:
+            im = layer.topil()
+        except Exception as e:
+            print(f"[ccc] PSDインポート: レイヤー {layer.name!r} のラスタ化に失敗しました: {e}")
+            continue
+        if im is None:
+            continue
+        im = im.convert("RGBA")
+
+        left, top, right, bottom = layer.bbox
+        w, h = right - left, bottom - top
+        if w <= 0 or h <= 0:
+            continue
+
+        buf = io.BytesIO()
+        im.save(buf, format="PNG")
+        data_url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+        blend_value = layer.blend_mode
+        try:
+            blend_name = BlendMode(blend_value.value if hasattr(blend_value, "value") else blend_value).name
+        except ValueError:
+            blend_name = "NORMAL"
+        css_blend = _CSS_BLEND_MODE_REVERSE.get(blend_name, "source-over")
+
+        layers_out.append({
+            "name": layer.name or "Layer",
+            "x": left, "y": top, "width": w, "height": h,
+            "opacity": (layer.opacity if layer.opacity is not None else 255) / 255.0,
+            "visible": bool(layer.visible),
+            "blendMode": css_blend,
+            "imageData": data_url,
+        })
+
+    if not layers_out:
+        raise ValueError("インポート可能なレイヤーが見つかりませんでした")
+
+    # descendants()は背面→前面(下から上)の順で返るため、
+    # Imageタブのレイヤー配列規約(先頭=最前面)に合わせて反転する
+    layers_out.reverse()
+
+    return {"width": psd.width, "height": psd.height, "layers": layers_out}
+
+def _import_psd_bytes(psd_bytes: bytes) -> dict:
+    """アップロードされたPSDファイル(バイト列)をレイヤー配列(dataURL+メタデータ)に分解する。"""
+    try:
+        from psd_tools import PSDImage
+    except ImportError as e:
+        raise RuntimeError(
+            "psd-tools がインストールされていません。ComfyUIのpython環境で "
+            "`pip install psd-tools` を実行してください。"
+        ) from e
+    import io
+
+    try:
+        psd = PSDImage.open(io.BytesIO(psd_bytes))
+    except Exception as e:
+        raise ValueError(f"PSDファイルの読み込みに失敗しました: {e}") from e
+
+    return _extract_psd_layers(psd)
+
 # ─── Assets ──────────────────────────────────────────────────────────────────
 
 def _generate_assets_json() -> dict:
@@ -332,6 +484,52 @@ async def handle_save_image_project(request):
         return web.json_response({'status': 'ok', 'path': f'ccc_assets/image/{safe_name}.png'})
     except Exception as e:
         return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
+async def handle_psd_import_layers(request):
+    """POST /api/ccc/psd/import-layers - アップロードされたPSDをレイヤー配列(JSON)に分解して返す"""
+    try:
+        reader = await request.multipart()
+        field = await reader.next()
+        if field is None:
+            return web.json_response({'status': 'error', 'message': 'file field required'}, status=400)
+        psd_bytes = await field.read(decode=False)
+
+        # PSDのラスタ化はCPU負荷が高く同期実行するとイベントループ全体をブロックするため
+        # executorで実行する
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _import_psd_bytes, psd_bytes)
+        return web.json_response({'status': 'ok', **result})
+    except RuntimeError as e:
+        return _error_response(CCCError('psd_dependency_missing', str(e)), status=500)
+    except ValueError as e:
+        return _error_response(CCCError('psd_invalid_file', str(e)), status=400)
+    except Exception as e:
+        return _error_response(e, status=500)
+
+async def handle_psd_export_layers(request):
+    """POST /api/ccc/psd/export-layers - Imageタブのレイヤー配列を1つのPSDにして返す（ダウンロード用）"""
+    try:
+        data = await request.json()
+        width  = int(data.get('width', 0))
+        height = int(data.get('height', 0))
+        layers = data.get('layers', [])
+
+        # PSD組み立て(PIL合成・保存)はCPU負荷が高く同期実行するとイベントループ全体を
+        # ブロックするためexecutorで実行する
+        loop = asyncio.get_event_loop()
+        psd_bytes = await loop.run_in_executor(None, _build_psd_from_layers, width, height, layers)
+
+        return web.Response(
+            body=psd_bytes,
+            content_type='image/vnd.adobe.photoshop',
+            headers={'Content-Disposition': 'attachment; filename="comic-creator-image.psd"'},
+        )
+    except RuntimeError as e:
+        return _error_response(CCCError('psd_dependency_missing', str(e)), status=500)
+    except ValueError as e:
+        return _error_response(CCCError('psd_invalid_layers', str(e)), status=400)
+    except Exception as e:
+        return _error_response(e, status=500)
 
 async def handle_delete_asset(request):
     try:
@@ -729,6 +927,8 @@ def _build_dispatch_tables():
         "save-group-asset":            handle_save_group_asset,
         "save-image-project":          handle_save_image_project,
         "delete-asset":                handle_delete_asset,
+        "psd/import-layers":           handle_psd_import_layers,
+        "psd/export-layers":           handle_psd_export_layers,
         "nanobanana/generate":         handle_nanobanana_generate,
         "eagle/add":                   handle_eagle_add,
         "app-server/settings":         handle_post_app_server_settings,
@@ -787,6 +987,8 @@ class ComicCreator:
         app.router.add_post("/api/ccc/save-group-asset",         handle_save_group_asset)
         app.router.add_post("/api/ccc/save-image-project",       handle_save_image_project)
         app.router.add_post("/api/ccc/delete-asset",             handle_delete_asset)
+        app.router.add_post("/api/ccc/psd/import-layers",        handle_psd_import_layers)
+        app.router.add_post("/api/ccc/psd/export-layers",        handle_psd_export_layers)
         app.router.add_post("/api/ccc/nanobanana/generate",      handle_nanobanana_generate)
         app.router.add_post("/api/ccc/eagle/add",                handle_eagle_add)
         app.router.add_post("/api/ccc/app-server/settings",      handle_post_app_server_settings)

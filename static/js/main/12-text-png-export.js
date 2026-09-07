@@ -373,22 +373,29 @@ async function embedFontsInSvg(svgText) {
     return result;
 }
 
+// SVG文字列へ出力サイズ(width/height属性)を設定する。viewBoxは元のまま保持するため、
+// ベクター内容自体はどのサイズを指定しても劣化しない（Canvas描画・SVGファイル書き出し共通のヘルパー）。
+function _prepareSvgForExport(svgText, targetWidth, targetHeight) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, 'image/svg+xml');
+    const svgEl = doc.querySelector('svg');
+    if (!svgEl) return null;
+
+    if (!svgEl.getAttribute('xmlns')) {
+        svgEl.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    }
+    svgEl.setAttribute('width', targetWidth);
+    svgEl.setAttribute('height', targetHeight);
+
+    return new XMLSerializer().serializeToString(doc);
+}
+
 // SVGテキストをCanvasに描画するヘルパー
 function drawSvgOnCanvas(ctx, svgText, targetWidth, targetHeight) {
     return new Promise((resolve, reject) => {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(svgText, 'image/svg+xml');
-        const svgEl = doc.querySelector('svg');
-        if (!svgEl) { resolve(); return; }
+        const cleanedSvg = _prepareSvgForExport(svgText, targetWidth, targetHeight);
+        if (!cleanedSvg) { resolve(); return; }
 
-        if (!svgEl.getAttribute('xmlns')) {
-            svgEl.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        }
-        svgEl.setAttribute('width', targetWidth);
-        svgEl.setAttribute('height', targetHeight);
-
-        const serializer = new XMLSerializer();
-        const cleanedSvg = serializer.serializeToString(doc);
         const svgBlob = new Blob([cleanedSvg], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(svgBlob);
 
@@ -455,9 +462,14 @@ async function handleExport() {
     // レイヤー別出力の選択
     const exportBgOnly = document.getElementById('export-bg-only')?.checked ?? false;
 
+    // SVG形式: ラスタライズせずベクターのまま書き出す（外部ベクター編集ソフトでの再編集用途）。
+    // 既存のPNG/JPEG/WebPと同じ zip / フォルダ書き込み / 保存ダイアログの経路をそのまま共有する。
+    const isSvg = format === 'svg';
+
     let mimeType = 'image/png';
     if (format === 'jpeg') mimeType = 'image/jpeg';
     if (format === 'webp') mimeType = 'image/webp';
+    if (isSvg) mimeType = 'image/svg+xml';
 
     const suffix = exportBgOnly ? '_bg' : '';
 
@@ -470,8 +482,10 @@ async function handleExport() {
 
     const canvas = document.getElementById('render-canvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
+    if (!isSvg) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+    }
 
     const exportBtn = document.getElementById('export-btn');
     if (exportBtn) exportBtn.disabled = true;
@@ -511,19 +525,6 @@ async function handleExport() {
                 continue;
             }
 
-            ctx.clearRect(0, 0, targetWidth, targetHeight);
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0, 0, targetWidth, targetHeight);
-
-            if (exportBgOnly) {
-                await drawSvgOnCanvas(ctx, removeTextNodes(pageRecord.svgContent), targetWidth, targetHeight);
-            } else {
-                const mergedSvg = buildMergedSvg(pageRecord);
-                const rawSvg = mergedSvg || pageRecord.svgContent;
-                const embeddedSvg = await embedFontsInSvg(rawSvg);
-                await drawSvgOnCanvas(ctx, embeddedSvg, targetWidth, targetHeight);
-            }
-
             // 連番プレフィックス（複数ページ時のみ付与）
             const seqPrefix = targetPages.length > 1
                 ? String(i + 1).padStart(digits, '0') + '_'
@@ -532,11 +533,36 @@ async function handleExport() {
             const baseName = customName || page.name;
             const fileName = `${seqPrefix}${baseName}.${format}`;
 
-            let blob = await new Promise((resolve, reject) => {
-                canvas.toBlob(b => b ? resolve(b) : reject(new Error(t('page.errBlobGenFailed'))), mimeType, 0.95);
-            });
-            // 出力サブタブのメタ情報入力を画像ファイルへ埋め込む（PNG=iTXt / JPEG=XMP / WebP=XMP）
-            blob = await _embedImageMetadata(blob, mimeType, targetWidth, targetHeight);
+            let blob;
+            if (isSvg) {
+                const rawSvg = exportBgOnly
+                    ? removeTextNodes(pageRecord.svgContent)
+                    : (buildMergedSvg(pageRecord) || pageRecord.svgContent);
+                // フォント埋め込みはbg-only（コマ番号除去のみ）以外の通常出力にのみ適用
+                // （bg-onlyはテキストを含まないため不要、既存の背景ラスター出力と同じ扱い）
+                const embeddedSvg = exportBgOnly ? rawSvg : await embedFontsInSvg(rawSvg);
+                const preparedSvg = _prepareSvgForExport(embeddedSvg, targetWidth, targetHeight);
+                blob = new Blob([preparedSvg], { type: 'image/svg+xml;charset=utf-8' });
+            } else {
+                ctx.clearRect(0, 0, targetWidth, targetHeight);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+                if (exportBgOnly) {
+                    await drawSvgOnCanvas(ctx, removeTextNodes(pageRecord.svgContent), targetWidth, targetHeight);
+                } else {
+                    const mergedSvg = buildMergedSvg(pageRecord);
+                    const rawSvg = mergedSvg || pageRecord.svgContent;
+                    const embeddedSvg = await embedFontsInSvg(rawSvg);
+                    await drawSvgOnCanvas(ctx, embeddedSvg, targetWidth, targetHeight);
+                }
+
+                blob = await new Promise((resolve, reject) => {
+                    canvas.toBlob(b => b ? resolve(b) : reject(new Error(t('page.errBlobGenFailed'))), mimeType, 0.95);
+                });
+                // 出力サブタブのメタ情報入力を画像ファイルへ埋め込む（PNG=iTXt / JPEG=XMP / WebP=XMP）
+                blob = await _embedImageMetadata(blob, mimeType, targetWidth, targetHeight);
+            }
 
             if (zip) {
                 // zipに追加（保存はループ後にまとめて行う）

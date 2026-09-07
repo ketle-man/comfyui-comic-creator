@@ -14,9 +14,10 @@
 // ============================================================
 
 import { t } from '../i18n.js';
-import { dbGet, dbPut, dbGetAll, dbGetAllPagesMeta, readFileAsDataURL, svgTextToDataUrl } from './00-db.js';
+import { dbGet, dbPut, dbGetAll, dbGetAllPagesMeta, readFileAsDataURL, readFileAsText, svgTextToDataUrl } from './00-db.js';
 import { buildMergedSvg, renderPageSelector } from './07-pages.js';
 import { renderTemplateList } from './06c-template-wizard.js';
+import { sanitizeSvgTree } from './02-assets.js';
 import { _workMeta, renderWorkList } from './11a-work-manager.js';
 import { _pageMgrGroups, renderPageMgrGrid } from './11b-page-manager-tab.js';
 import { handleExport } from './12-text-png-export.js';
@@ -622,7 +623,21 @@ async function importImageAsPage(file) {
     }
 
     try {
-        const dataUrl = await readFileAsDataURL(file);
+        // SVGファイルは<script>やイベントハンドラ属性(onload等)を保持できる「能動的コンテンツ」
+        // のため、生バイトのままdata URL化せず一度パースしてsanitizeSvgTree()で無害化してから
+        // 埋め込む（02-assets.jsのグループアセット挿入と同じ防御をここにも適用。PNG/JPEG等の
+        // 通常のラスター画像はバイナリなのでこの経路を通らず従来どおり）
+        const isSvgFile = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name);
+        let dataUrl;
+        if (isSvgFile) {
+            const svgText = await readFileAsText(file);
+            const svgEl = new DOMParser().parseFromString(svgText, 'image/svg+xml').querySelector('svg');
+            if (!svgEl) { alert(t('page.msgNotImageFile', file.name)); return; }
+            sanitizeSvgTree(svgEl);
+            dataUrl = svgTextToDataUrl(new XMLSerializer().serializeToString(svgEl));
+        } else {
+            dataUrl = await readFileAsDataURL(file);
+        }
 
         // 画像の実寸を取得
         const { width, height } = await new Promise((resolve, reject) => {

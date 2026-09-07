@@ -811,8 +811,12 @@
               <div class="ie-center">
                 <div class="ie-action-bar">
                   <label class="it-btn it-btn-sm" style="cursor:pointer;">
-                    Upload
+                    File Open
                     <input type="file" id="ie-upload-input" accept="image/*" style="display:none;">
+                  </label>
+                  <label class="it-btn it-btn-sm" style="cursor:pointer;" title="PSD(Photoshop)ファイルをレイヤー構成ごと開きます">
+                    Open PSD
+                    <input type="file" id="ie-open-psd-input" accept=".psd" style="display:none;">
                   </label>
                   <button class="it-btn it-btn-sm" id="ie-new-btn">New</button>
                   <button class="it-btn it-btn-sm" id="ie-draft-btn" data-i18n="image.draftBtn" data-i18n-title="image.draftBtnTitle" title="作業中の作品と同じ縦横比・72dpi換算サイズで新規キャンバスを作成します（下書き用）">下書き</button>
@@ -822,6 +826,7 @@
                   <button class="it-btn it-btn-sm" id="ie-redo-btn" title="Redo (Ctrl+Y)">↪</button>
                   <button class="it-btn it-btn-sm" id="ie-pixifx-btn" data-i18n="image.pixifxLabel" data-i18n-title="image.pixifxTitle" title="PixiJS FXでパーティクル・フィルタ効果を適用">✨ PixiJS FX</button>
                   <button class="it-btn it-btn-sm" id="ie-save-btn" title="Save as a PNG file">PNG</button>
+                  <button class="it-btn it-btn-sm" id="ie-save-psd-btn" title="Save as a layered PSD(Photoshop) file">PSD</button>
                   <button class="it-btn it-btn-sm" id="ie-save-project-btn" data-i18n-title="image.saveProjectTitle" title="レイヤー編集状態をアセットパネルのImageフォルダに保存し、後で再編集できるようにします">Project</button>
                   <button class="it-btn it-btn-sm" id="ie-save-gallery-btn" data-i18n-title="image.saveGalleryTitle" title="ComfyUIのoutput/ccフォルダに保存">Gallery</button>
                   <span class="ie-action-sep"></span>
@@ -839,8 +844,8 @@
                   </div>
                   <div class="ie-placeholder" id="ie-placeholder">
                     <span class="ie-placeholder-icon">🖼</span>
-                    <span>Upload an image or drop it here</span>
-                    <span style="font-size:11px;opacity:0.6;">Drag &amp; drop · Upload · New</span>
+                    <span>Open a file or drop it here</span>
+                    <span style="font-size:11px;opacity:0.6;">Drag &amp; drop · File Open · New</span>
                   </div>
                 </div>
                 <div class="ie-zoom-bar">
@@ -1370,6 +1375,7 @@
                     <option value="jpeg">JPEG</option>
                     <option value="png">PNG</option>
                     <option value="webp">WebP</option>
+                    <option value="svg">SVG</option>
                     <option value="pdf">PDF</option>
                     <option value="epub">EPUB</option>
                   </select>

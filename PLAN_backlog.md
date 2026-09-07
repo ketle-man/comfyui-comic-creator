@@ -28,6 +28,7 @@
 
 ## 完了済み（記録）
 
+- **Imageタブに PSD 対応・出力タブに SVG エクスポートを追加**（2026-09-07 完了・承認済み）: ComfyUI-Workflow-Studio先行実装のPSD対応をImageタブへ移植（Open PSD/Save PSDボタン、`py/ccc.py`にPSDインポート/エクスポートAPI追加、`requirements.txt`新設）。レイアウトタブのPSD化可能性・SVG以外の外部編集フォーマットを調査した結果、出力タブへSVGエクスポートを追加（`handleExport()`の`isSvg`分岐、`_prepareSvgForExport()`）。ユーザーが実地検証した結果（Inkscape・Affinityはほぼ再編集可能、Illustratorは画像リンク切れで実用性低い、CorelDrawは読込でハングアップし非対応）と、ImageタブのUploadボタンをFile Openに改名した件も含め、ヘルプ・README 3言語に反映済み。編集後SVGの再インポート機能はユーザー判断により見送り。詳細はDEVLOG 2026-09-07、調査経緯は`PLAN_svg_export.md`参照。v1.38.0（pyproject.tomlのバージョンのみ更新、commit/push/リリースは未実施）。
 - **プロットに「フキダシ形状」列を追加、セリフごとに自動生成の形状を指定可能に**（2026-08-04 完了・承認済み）: Phase 1設計時点で見送っていた項目を実装。セリフオブジェクトに`shape`フィールド追加（既定=空文字→角丸矩形フォールバック、または6形状:normal/rect/thought/bomb/cloudpuffy/cloudwavy）。プロットのコマワリテーブルに列を追加し各セリフ行にドロップダウンを配置（レイアウトタブのフキダシツールと同じi18nキーを再利用）。「フキダシを自動生成」が`dialogues[i].shape || AUTO_BALLOON_TYPE`で指定形状を使うよう変更。旧形式データは読込時に自動補完。詳細は DEVLOG 2026-08-04。ヘルプ・README 3言語更新済み。
 
 - **スクリプトタブ: 「コマ数取得」実行時に誤削除防止の確認ダイアログを追加**（2026-08-04 完了・承認済み）: ユーザー要望「誤ってデータのあるコマを消してしまう恐れがある」に対応。`_scriptMangaPanelHasData(panel)`（画像プロンプトまたはセリフのいずれかが非空か判定）を追加し、コマ数取得でコマ数が減る際、削除対象のコマに1つでもデータがあれば`confirm()`で確認（空コマのみの削除は従来通り確認なし）。詳細は DEVLOG 2026-08-04。ヘルプ3言語更新済み。

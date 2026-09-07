@@ -2753,6 +2753,11 @@ class ImageTab {
             if (file) this._loadFile(file);
             e.target.value = "";
         });
+        document.getElementById("ie-open-psd-input")?.addEventListener("change", e => {
+            const file = e.target.files?.[0];
+            if (file) this._loadPsdFile(file);
+            e.target.value = "";
+        });
 
         document.getElementById("ie-new-btn")?.addEventListener("click", () => this._newCanvas());
         document.getElementById("ie-draft-btn")?.addEventListener("click", () => this._newDraftFromActiveWork());
@@ -2761,6 +2766,7 @@ class ImageTab {
         document.getElementById("ie-redo-btn")?.addEventListener("click", () => this._redo());
         document.getElementById("ie-pixifx-btn")?.addEventListener("click", () => this._openPixiFx());
         document.getElementById("ie-save-btn")?.addEventListener("click", () => this._savePng());
+        document.getElementById("ie-save-psd-btn")?.addEventListener("click", () => this._saveAsPsd());
         document.getElementById("ie-save-project-btn")?.addEventListener("click", () => this._saveProject());
         document.getElementById("ie-save-gallery-btn")?.addEventListener("click", () => this._saveToGallery());
         document.getElementById("ie-save-eagle-btn")?.addEventListener("click", () => this._saveToEagle());
@@ -2778,7 +2784,9 @@ class ImageTab {
             tab.addEventListener("drop", e => {
                 e.preventDefault();
                 const file = e.dataTransfer.files?.[0];
-                if (file && file.type.startsWith("image/")) this._loadFile(file);
+                if (!file) return;
+                if (file.name.toLowerCase().endsWith(".psd")) this._loadPsdFile(file);
+                else if (file.type.startsWith("image/")) this._loadFile(file);
             });
         }
     }
@@ -3269,6 +3277,50 @@ class ImageTab {
 
         document.getElementById("ie-placeholder").style.display = "none";
         this._toast(`Loaded: ${img.width}×${img.height}`, "success");
+    }
+
+    // PSD(Photoshop)ファイルをレイヤー構成ごと読み込む。ブラウザはPSDをネイティブデコードできないため
+    // サーバー側(psd-tools)でラスタライズしたレイヤー配列(dataURL)を受け取る。PSD自体のキャンバスサイズを
+    // そのまま使うため、既存の作業内容とはマージせず常に新規ドキュメントとして開く（loadProjectFromUrlと同様）。
+    async _loadPsdFile(file) {
+        const form = new FormData();
+        form.append("file", file);
+
+        let data;
+        try {
+            const r = await fetch("/api/ccc/psd/import-layers", { method: "POST", body: form });
+            data = await r.json();
+            if (data.status !== "ok") throw new Error(data.message || "unknown error");
+        } catch (err) {
+            this._toast("Failed to open PSD: " + err.message, "error");
+            return;
+        }
+
+        this._canvasW  = data.width;
+        this._canvasH  = data.height;
+        this._baseName = file.name.replace(/\.[^.]+$/, "");
+        this._sourceImageEl = null; // PSD読み込みはレイアウトへの書き戻し対象外
+        this._initCanvases();
+
+        await this._layerMgr.fromJSON({
+            width: data.width, height: data.height,
+            layers: data.layers.map(l => ({
+                name: l.name, type: "image",
+                x: l.x, y: l.y, displayW: l.width, displayH: l.height,
+                opacity: l.opacity, visible: l.visible, blendMode: l.blendMode,
+                imageData: l.imageData,
+            })),
+        });
+
+        this._undoStack = [];
+        this._redoStack = [];
+        this._setActiveTool("select");
+        this._refreshLayerList();
+        this._updateCompositeView();
+        this._fitToView();
+
+        document.getElementById("ie-placeholder").style.display = "none";
+        this._toast(`PSD loaded: ${data.layers.length} layer(s)`, "success");
     }
 
     /** 現在のドキュメントを閉じる（未保存確認あり）。空の状態なら何もしない */
@@ -4285,6 +4337,89 @@ class ImageTab {
         a.download = (this._baseName || "image") + "-output.png";
         a.click();
         this._toast("PNG saved", "success");
+    }
+
+    // _renderLayersComposite と同じ走査順(背面→前面)でレイヤーを辿り、PSDの1レイヤーずつに対応する
+    // 独立したフルサイズcanvasの配列を作る（回転・反転・拡縮はベイクするが、opacity/blendModeは
+    // ピクセルに焼き込まずPSDレイヤー属性として別送りする＝PSD側の合成で一度だけ適用される）。
+    // maskApply=trueのマスク群は対象レイヤーへ焼き込んで1枚にまとめる。調整レイヤーはPSDに独立した
+    // レイヤーとして表現できないため、直下の1枚へ効果を焼き込んでから除外する（本来は自分より下の
+    // 全レイヤーの累積結果に効くが、独立レイヤーへの分解では直下の1枚に対する近似に留める簡略化）。
+    _buildPsdExportLayers() {
+        const layers = this._layerMgr.layers;
+        const { maskGroupMap, skipIndices } = this._computeMaskGroups(layers);
+        const w = this._canvasW, h = this._canvasH;
+        const baked = []; // 背面→前面の順（PSD側で後から追加したレイヤーほど上に重なる）
+
+        const bakeLayer = (layer) => {
+            const canvas = document.createElement("canvas");
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.save();
+            Layer.applyTransform(ctx, layer);
+            ctx.drawImage(layer.canvas, -layer.canvas.width / 2, -layer.canvas.height / 2);
+            ctx.restore();
+            return canvas;
+        };
+
+        for (let j = layers.length - 1; j >= 0; j--) {
+            if (skipIndices.has(j)) {
+                if (!maskGroupMap.has(j)) continue;
+                const group = maskGroupMap.get(j);
+                if (!group.target || !group.target.visible || group.target.type === "adjustment") continue;
+                const canvas = document.createElement("canvas");
+                canvas.width = w; canvas.height = h;
+                this._renderMaskGroup(canvas.getContext("2d"), canvas, group.masks, group.target, false);
+                baked.push({ canvas, name: group.target.name || "Layer", visible: true, opacity: 1, blendMode: "source-over" });
+                continue;
+            }
+
+            const layer = layers[j];
+            if (!layer.visible || layer.type === "mask") continue; // maskApply=falseの無効マスクは書き出し対象外
+
+            if (layer.type === "adjustment") {
+                const prev = baked[baked.length - 1]; // 直下（既に処理済み＝より背面）の可視レイヤー
+                if (prev) this._applyAdjustmentLayer(prev.canvas.getContext("2d"), layer);
+                continue;
+            }
+
+            baked.push({ canvas: bakeLayer(layer), name: layer.name || "Layer", visible: layer.visible, opacity: layer.opacity, blendMode: layer.blendMode });
+        }
+
+        return baked.map(l => ({
+            name: l.name, visible: l.visible, opacity: l.opacity, blendMode: l.blendMode,
+            imageData: l.canvas.toDataURL("image/png"),
+        }));
+    }
+
+    // レイヤー編集状態を1枚のPSD(Photoshop)ファイルとして書き出す。
+    async _saveAsPsd() {
+        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        this._syncActiveLayerFromCanvas();
+        const exportLayers = this._buildPsdExportLayers();
+        if (exportLayers.length === 0) { this._toast("No layers to export", "error"); return; }
+
+        try {
+            const r = await fetch("/api/ccc/psd/export-layers", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ width: this._canvasW, height: this._canvasH, layers: exportLayers }),
+            });
+            if (!r.ok) {
+                const e = await r.json().catch(() => ({}));
+                throw new Error(e.message || r.statusText);
+            }
+            const blob = await r.blob();
+            const url  = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href     = url;
+            a.download = (this._baseName || "comic-creator-image") + ".psd";
+            a.click();
+            URL.revokeObjectURL(url);
+            this._toast("PSD saved", "success");
+        } catch (err) {
+            this._toast("PSD save failed: " + err.message, "error");
+        }
     }
 
     // レイヤー編集状態（LayerManager.toJSON、canvas内容込み）をサムネイルPNGとペアで
