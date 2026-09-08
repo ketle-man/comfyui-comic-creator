@@ -206,14 +206,21 @@ function dbGetAllPagesMeta() {
             const cursor = e.target.result;
             if (cursor) {
                 const v = cursor.value;
-                results.push({
-                    name: v.name,
-                    id: v.id,
-                    originalTemplate: v.originalTemplate,
-                    width: v.width,
-                    height: v.height,
-                    thumb: v.thumb,
-                });
+                // 異常終了（強制終了・クラッシュ等）でレコードが壊れ、値がnullのまま
+                // 残ってしまうケースへの防御。壊れたレコードのせいで一覧取得全体が
+                // ハングしないよう、スキップして続行する
+                if (v) {
+                    results.push({
+                        name: v.name,
+                        id: v.id,
+                        originalTemplate: v.originalTemplate,
+                        width: v.width,
+                        height: v.height,
+                        thumb: v.thumb,
+                    });
+                } else {
+                    console.warn('[DB] pages ストアに壊れたレコード(key=' + cursor.key + ')があります。スキップします。');
+                }
                 cursor.continue();
             } else {
                 resolve(results);

@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-09-08（Image/レイアウトタブの描画にペンタブレット筆圧対応、DBレコード破損の防御・復旧、v1.39.0）
+
+ユーザー依頼: 「Imageタブでペンタブレットで描画したい」。実装・検証を進める中で、レイアウトタブのペイント・マスクへの展開、動作確認中に発生したPCハングアップの原因調査・対策、その後発覚した既存不具合（マスクのストローク途切れ）の修正、IndexedDBレコード破損の調査・防御・復旧まで、一連の作業を行った。
+
+**1. Imageタブの筆圧対応**: `image-tab.js` の描画イベントを `mousedown/mousemove/mouseup` から Pointer Events (`pointerdown/pointermove/pointerup`) へ移行し、`event.pressure`（0〜1、マウスは0.5固定）を `image-tab/DrawTool.js`・`image-tab/MaskTool.js` の `onMouseDown/onMouseMove` へ伝播。両ツールに `_effectiveSize`/`_effectiveOpacity`（`0.3 + pressure*1.4` 等の係数でマウス操作時＝pressure 0.5を1.0倍に正規化）を追加し、ブラシサイズ・不透明度（DrawToolのみ）を筆圧に応じて可変化。描画キャンバスに `touch-action: none` を設定しペン/タッチでの誤スクロールを防止。Kaptureで合成PointerEvent（`pointerType: 'pen'`）を発火させ、低圧力/高圧力でブラシの太さ・濃さが実際に変化することをピクセル解析で確認。
+
+**2. レイアウトタブのペイント・マスクへの展開**: `main/04a-mask-core.js`（マスク。既にPointer Events化済みだったため筆圧受け渡しのみ追加）と `main/17d-layer-draw-paint.js`（ペイント。`mousedown`系のままだったためPointer Events化から実施）に同様の筆圧対応を追加。
+
+**3. ペイント機能によるPCハングアップの原因調査・対策**: 実機のペンタブレットで動作確認中、ユーザー環境でPCがハングアップ（NETIO.SYSがクラッシュとして観測、AdGuard等セキュリティソフトの影響も疑われたが127.0.0.1は保護対象外にしていた）。原因は `17d-layer-draw-paint.js` の `_paintStrokeAt` が **pointermoveのたびに** `canvas.toDataURL('image/png')`（PNGエンコード＋Base64化＋SVG `<image href>` 再デコード）という重い処理を実行していたこと。ペンタブレットの高頻度pointermove（マウスの数十倍のレートになりうる）でこれが繰り返されUIスレッドが占有され続け、システム全体の応答性低下→他ドライバのハングという連鎖が疑われた。**対策として設計変更**: ストローク中は `_paintToolState.canvas`（オフスクリーンの実データ）への描画とオーバーレイcanvas上へのプレビュー描画（新設 `_paintRenderPreview`/`_paintSvgToOverlay`、el の位置・回転をオーバーレイ座標へ変換して重ね描き）のみを行い、`requestAnimationFrame` でプレビュー描画自体もスロットリング（`_paintSchedulePreview`）。実際の `<image href>` への確定保存（重いtoDataURL）は新設 `_paintBakeToImage` が **pointerup時にのみ** 実行（ツール切り替え等でストローク中断された場合の保護も追加）。ユーザー確認により改善を確認。
+
+**4. マスクの「ストロークが短く途切れる」不具合の調査・修正（2件）**: ペイント改善確認後、マスクで新たに報告。
+- **1件目**: `04a-mask-core.js` の `_maskPointerLeave` が、`setPointerCapture` 済みにもかかわらず `pointerleave` のたびにストロークを強制終了させていた（本来 `setPointerCapture` 中は要素境界を跨いでも `pointermove/up` はキャプチャ元に届き続けるため、`pointerleave` で終了させる必要はない）。ペンを素早く動かすと一瞬の境界越えでストロークが分断されていたと推定。`pointerleave` では終了させず、代わりに保険として `pointercancel` イベントでのみ `_maskPointerUp` を呼ぶよう修正。
+- **2件目（1件目の修正後も再現）**: マスクの編集用オーバーレイcanvasに `touch-action: none` が設定されていなかった（ペイント側は設定済みだったが、マスク側は元々の実装に無かった）。これが無いとペンで一定距離動かした時点でブラウザがスクロール/パンジェスチャーと誤判定し、Pointer Eventsの配信が止まる。「ほぼ同じ長さで切れる」という症状と一致。`_maskAttachOverlay` のcanvas生成時に `touch-action:none` を追加し、ユーザー確認により改善を確認。
+
+**5. IndexedDBレコード破損の防御・復旧**: ユーザーが `Uncaught TypeError: Cannot read properties of null (reading 'name') at req.onsuccess (00-db.js:210:29)` を報告（併せて「ページタブのテンプレートが1つしかない」という症状、前回のハングアップとの関連を推測）。`dbGetAllPagesMeta()`（`main/00-db.js`）が `pages` ストアをカーソル走査中、あるレコードの `cursor.value` が `null`（前回ハングアップ時の保存処理の中断による破損と推定）だったため例外を投げ、`onsuccess` ハンドラ内の例外のためPromiseがresolve/rejectされず**呼び出し元が永久にpending**になっていたと判明（一覧取得がそこで止まって見える）。**防御**: `cursor.value` が falsy ならその1件をスキップして `cursor.continue()` する（`console.warn` で通知）よう修正。**復旧**: Kaptureで `ComicCreatorDB` を直接調査し、`pages` ストアの `test_new_20260714225304_1784037192978`（同一作品の他2ページは正常）が実際に `value: null` であることを確認、`store.delete()` で削除しクリーンアップ（元データ自体は失われていたため中身の復旧は不可、ユーザーも「壊れていれば復旧不要」と許容）。ついでにユーザーから「グループに"tate"/"yoko"があった記憶がある」との確認依頼を受け、`localStorage`（`page_groups`/`template_groups`/`work_size_presets`）を調査したが該当なし（記憶違いの可能性、実害報告なし）。
+
+**6. ドキュメント更新**: ヘルプタブ（日英中3言語、`22-help-tab.js`）に上記の筆圧対応を反映。レイアウトタブの「マスク」サブタブがヘルプに詳細見出しを持っていなかった（ツールペインの参照リストにも漏れていた）ことに気づき、この機会に新設（対象・レイヤー種別・編集・赤プレビュー・一括操作＋筆圧対応、3言語）。README（日英中3言語）にも同内容を反映し、同様に抜けていた「マスクツール」項目を新設。
+
+**検証**: Kaptureで実機検証済み。Imageタブ・レイアウトタブのペイント/マスクとも、合成PointerEvent（`pointerType: 'pen'`）で低圧力/高圧力のストロークを送り、ピクセル解析でブラシサイズ・不透明度が筆圧に応じて変化することを確認。ペイントのプレビュー分離設計は、ストローク確定前後で `<image href>` が更新されるタイミング（`pointerup`のみ）を確認。マスクのストローク途切れ修正は、`pointerdown→move→(境界外へ)pointerleave→move継続→pointerup` というシーケンスを送り、マスクレイヤーに途切れなく1本のストロークとして描画されること（179行にわたる連続した塗り）を確認。DB破損防御は、防御コード追加後に一覧取得がクラッシュせず完了することを確認。ヘルプ・README 3言語は `node --check` に加え、過去に見逃し実績のある `vm.SourceTextModule` での厳密構文検証も実施（今回1箇所、英語版の所有格アポストロフィのエスケープ漏れを検出・修正）。
+
+---
+
 ## 2026-09-07（Imageタブに PSD 対応、出力タブに SVG エクスポートを追加、v1.38.0）
 
 ユーザー依頼: ComfyUI-Workflow-Studio 側で先行実装された Image Edit タブの PSD(Photoshop) 対応を、Comic Creator の Image タブにも移植したい。続けて、レイアウトタブ（ページ全体のコマ割り編集）の内容も外部ソフトで編集できるようにしたいとの相談を受け調査、出力タブへの SVG エクスポート追加とヘルプ・README への反映まで行った。

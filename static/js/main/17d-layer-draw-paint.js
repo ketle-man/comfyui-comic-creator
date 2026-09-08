@@ -29,11 +29,13 @@ import { state } from './01-state.js';
 
 const _paintToolState = {
     active:        false, // 描画ON/OFF（ペイント専用。ドローの_layerDrawState.activeとは独立）
-    overlayCanvas: null,  // クリック捕捉用のオーバーレイcanvas
+    overlayCanvas: null,  // クリック捕捉用 兼 ストローク中プレビュー描画用のオーバーレイcanvas
     dragging:      false,
     lastLocal:     null,  // 直前のローカルピクセル座標（線分を繋ぐため）
     imgEl:         null,  // 現在ブラシ編集対象になっている<image>要素（data-ccc-paint-object="1"）
     canvas:        null,  // imgEl.hrefのビットマップを保持するオフスクリーンcanvas（フルピクセル解像度）
+    pressureEnabled: true, // ペンタブレットの筆圧でブラシ幅・不透明度を可変にする
+    previewScheduled: false, // rAFでのプレビュー描画スロットリング用フラグ
 };
 
 function initPaintTool() {
@@ -321,22 +323,26 @@ function _paintAttachOverlay() {
     if (!imageLayer) return;
     imageLayer.style.position = 'relative';
     _layerDrawResizeCanvas(svgEl, canvas); // 17aの汎用リサイズ関数を再利用
+    canvas.style.touchAction = 'none'; // ペン/タッチでのスクロール・ズームジェスチャーとの競合を防ぐ
     imageLayer.appendChild(canvas);
 
-    canvas.addEventListener('mousedown', _paintMouseDown);
-    canvas.addEventListener('mousemove', _paintMouseMove);
-    canvas.addEventListener('mouseup',   _paintMouseUp);
-    window.addEventListener('mouseup',   _paintMouseUpGlobal);
+    canvas.addEventListener('pointerdown', _paintMouseDown);
+    canvas.addEventListener('pointermove', _paintMouseMove);
+    canvas.addEventListener('pointerup',   _paintMouseUp);
+    window.addEventListener('pointerup',   _paintMouseUpGlobal);
 
     _paintSetStatus(t('draw.paintDrawingOn', _layerDrawTargetLabel()));
 }
 
 function _paintDetachOverlay() {
+    // ストローク確定前にツール切り替え等でoverlayが外れる場合、未反映の描画内容を失わないよう
+    // ここで先に確定保存しておく（通常はpointerup/pointerupGlobalで既に確定済み）
+    if (_paintToolState.dragging) _paintBakeToImage();
     const c = document.getElementById('_paint-tool-overlay');
     if (c) c.remove();
     _paintToolState.overlayCanvas = null;
     _paintReset();
-    window.removeEventListener('mouseup', _paintMouseUpGlobal);
+    window.removeEventListener('pointerup', _paintMouseUpGlobal);
     _paintSetStatus('');
 }
 
@@ -389,11 +395,79 @@ function _paintSvgPtToLocal(el, svgPt) {
     return { x: (px - x) / w * canvas.width, y: (py - y) / h * canvas.height };
 }
 
+// SVGユーザー空間座標 → オーバーレイ(スクリーン)canvas上のpx座標
+function _paintSvgToOverlay(svgX, svgY) {
+    const svgEl = getPanelLayerSvg();
+    const canvas = _paintToolState.overlayCanvas;
+    if (!svgEl || !canvas) return { x: 0, y: 0 };
+    const pt = svgEl.createSVGPoint();
+    pt.x = svgX; pt.y = svgY;
+    const clientPt = pt.matrixTransform(svgEl.getScreenCTM());
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: (clientPt.x - rect.left) * (canvas.width  / rect.width),
+        y: (clientPt.y - rect.top)  * (canvas.height / rect.height),
+    };
+}
+
+// ──────────────────────
+// ストローク中プレビュー
+// ストローク中は<image href>へのtoDataURL反映（重い）を行わず、オーバーレイcanvas上に
+// 実データcanvasの内容をel（位置・サイズ・回転）に合わせて重ね描きするだけに留める。
+// ペンタブレットの高頻度pointermoveでもUIスレッドをブロックしないための対策。
+// ──────────────────────
+function _paintRenderPreview() {
+    const ovCanvas = _paintToolState.overlayCanvas;
+    const el = _paintToolState.imgEl;
+    const src = _paintToolState.canvas;
+    if (!ovCanvas || !el || !src) return;
+    const ctx = ovCanvas.getContext('2d');
+    ctx.clearRect(0, 0, ovCanvas.width, ovCanvas.height);
+
+    const x = parseFloat(el.getAttribute('x')) || 0;
+    const y = parseFloat(el.getAttribute('y')) || 0;
+    const w = parseFloat(el.getAttribute('width'))  || 1;
+    const h = parseFloat(el.getAttribute('height')) || 1;
+    const angle = parseFloat(el.dataset.angle || 0);
+
+    const cx = x + w / 2, cy = y + h / 2;
+    const center = _paintSvgToOverlay(cx, cy);
+    const p0 = _paintSvgToOverlay(x, y);
+    const p1 = _paintSvgToOverlay(x + w, y);
+    const scale = Math.hypot(p1.x - p0.x, p1.y - p0.y) / w || 1;
+
+    ctx.save();
+    ctx.translate(center.x, center.y);
+    if (angle) ctx.rotate(angle * Math.PI / 180);
+    ctx.drawImage(src, -w * scale / 2, -h * scale / 2, w * scale, h * scale);
+    ctx.restore();
+}
+
+// rAFで1フレームに1回だけプレビュー再描画を間引く（高頻度pointermove対策の保険）
+function _paintSchedulePreview() {
+    if (_paintToolState.previewScheduled) return;
+    _paintToolState.previewScheduled = true;
+    requestAnimationFrame(() => {
+        _paintToolState.previewScheduled = false;
+        _paintRenderPreview();
+    });
+}
+
+// ストローク確定: 実データcanvasの内容を<image href>へ反映する（pointerup時のみ呼ぶ重い処理）
+function _paintBakeToImage() {
+    const el = _paintToolState.imgEl;
+    const canvas = _paintToolState.canvas;
+    if (!el || !canvas) return;
+    el.setAttribute('href', canvas.toDataURL('image/png'));
+    const ovCanvas = _paintToolState.overlayCanvas;
+    if (ovCanvas) ovCanvas.getContext('2d').clearRect(0, 0, ovCanvas.width, ovCanvas.height);
+}
+
 // ──────────────────────
 // マウスイベント
 // ──────────────────────
 async function _paintMouseDown(e) {
-    if (!_paintToolState.active) return;
+    if (!_paintToolState.active || (e.button !== undefined && e.button !== 0)) return;
     const el = state.selectedImageEl;
     // ペイントオブジェクトだけでなく、通常の画像（統合結果や挿入済み写真など）にも直接
     // ブラシ描画できるようにする。対象は「選択中の<image>要素」であること以外は問わない。
@@ -410,13 +484,13 @@ async function _paintMouseDown(e) {
     pushHistory();
     _paintToolState.dragging  = true;
     _paintToolState.lastLocal = null;
-    _paintStrokeAt(e.clientX, e.clientY);
+    _paintStrokeAt(e.clientX, e.clientY, e.pressure || 0.5);
     e.preventDefault();
 }
 
 function _paintMouseMove(e) {
     if (!_paintToolState.active || !_paintToolState.dragging) return;
-    _paintStrokeAt(e.clientX, e.clientY);
+    _paintStrokeAt(e.clientX, e.clientY, e.pressure || 0.5);
     e.preventDefault();
 }
 
@@ -424,6 +498,7 @@ function _paintMouseUp() {
     if (!_paintToolState.dragging) return;
     _paintToolState.dragging  = false;
     _paintToolState.lastLocal = null;
+    _paintBakeToImage(); // ストローク確定: ここで初めてtoDataURLし<image href>へ反映する
     _layerDrawSaveSelected(); // 17aの保存ディスパッチ（コマ/オーバーレイ/下書き対応）を再利用
 }
 
@@ -432,8 +507,10 @@ function _paintMouseUpGlobal() {
     if (_paintToolState.dragging) _paintMouseUp();
 }
 
-// canvas座標（clientX/clientY）でブラシストロークを1区間分描画し、<image href>へ即時反映する
-function _paintStrokeAt(clientX, clientY) {
+// canvas座標（clientX/clientY）でブラシストロークを1区間分描画する。
+// 重いtoDataURLはここでは行わず、オーバーレイ上のプレビュー再描画をスケジュールするだけに留める
+// （<image href>への確定反映は _paintBakeToImage が pointerup 時にのみ行う）。
+function _paintStrokeAt(clientX, clientY, pressure = 0.5) {
     const el = _paintToolState.imgEl;
     const canvas = _paintToolState.canvas;
     if (!el || !canvas) return;
@@ -442,9 +519,14 @@ function _paintStrokeAt(clientX, clientY) {
     const local = _paintSvgPtToLocal(el, svgPt);
 
     const eraser  = _paintIsEraserActive();
-    const strokeW = (parseFloat(document.getElementById('paint-brush-width').value) || 10) * (_paintIsX5Active() ? 5 : 1);
+    let strokeW = (parseFloat(document.getElementById('paint-brush-width').value) || 10) * (_paintIsX5Active() ? 5 : 1);
     const color   = document.getElementById('paint-brush-color').value;
-    const opacity = parseInt(document.getElementById('paint-opacity').value, 10) / 100;
+    let opacity = parseInt(document.getElementById('paint-opacity').value, 10) / 100;
+    if (_paintToolState.pressureEnabled) {
+        const p = Math.max(0, Math.min(1, pressure ?? 0.5));
+        strokeW *= (0.3 + p * 1.4);                              // pressure=0.5(マウス相当) -> 1.0x
+        opacity  = Math.max(0, Math.min(1, opacity * (0.4 + p * 1.2)));
+    }
     // ブラシ幅はSVGユーザー空間基準のため、画像の表示幅→実ピクセル幅の比率で
     // ローカルピクセル座標系のlineWidthへ変換する
     const imgW = parseFloat(el.getAttribute('width')) || 1;
@@ -473,7 +555,7 @@ function _paintStrokeAt(clientX, clientY) {
     ctx.restore();
 
     _paintToolState.lastLocal = local;
-    el.setAttribute('href', canvas.toDataURL('image/png'));
+    _paintSchedulePreview();
 }
 
 export { _paintToolState, initPaintTool, _paintUpdateToggle, _paintDetachOverlay };

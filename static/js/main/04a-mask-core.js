@@ -48,6 +48,7 @@ const _maskState = {
     brushMode: 'paint',    // 'paint' | 'erase'
     brushSize: 60,         // 画面px
     hardness: 0.8,
+    pressureEnabled: true, // ペンタブレットの筆圧でブラシサイズを可変にする
     showRed: true,
     historyPushed: false,  // 編集セッション中に一度だけ pushHistory
     pageName: null,        // 編集ON時のページ名（ページ切替時の持ち越し防止）
@@ -327,14 +328,19 @@ async function _maskBakeAndSave() {
 
 // ── ブラシ ──────────────────────────────────────────────
 
-function _maskBrushCanvasPx() {
+function _maskBrushCanvasPx(pressure = 0.5) {
     const svgEl = getPanelLayerSvg();
     const { region, maskCanvas } = _maskState;
     if (!svgEl || !region || !maskCanvas) return 20;
     const ctm = svgEl.getScreenCTM();
     const svgPerScreen = ctm ? 1 / Math.abs(ctm.a || 1) : 1;
     const canvasPerSvg = maskCanvas.width / region.w;
-    return Math.max(2, _maskState.brushSize * svgPerScreen * canvasPerSvg);
+    let px = _maskState.brushSize * svgPerScreen * canvasPerSvg;
+    if (_maskState.pressureEnabled) {
+        const p = Math.max(0, Math.min(1, pressure ?? 0.5));
+        px *= (0.3 + p * 1.4); // pressure=0.5(マウス相当) -> 1.0x
+    }
+    return Math.max(2, px);
 }
 
 function _maskStamp(cx, cy, sizePx) {
@@ -397,7 +403,7 @@ function _maskAttachOverlay() {
 
     const canvas = document.createElement('canvas');
     canvas.id = '_mask-edit-overlay';
-    canvas.style.cssText = 'position:absolute; top:0; left:0; cursor:crosshair; z-index:100; pointer-events:auto;';
+    canvas.style.cssText = 'position:absolute; top:0; left:0; cursor:crosshair; z-index:100; pointer-events:auto; touch-action:none;';
     imageLayer.style.position = 'relative';
     const rect = svgEl.getBoundingClientRect();
     const parentRect = imageLayer.getBoundingClientRect();
@@ -411,6 +417,7 @@ function _maskAttachOverlay() {
     canvas.addEventListener('pointerdown', _maskPointerDown);
     canvas.addEventListener('pointermove', _maskPointerMove);
     canvas.addEventListener('pointerup',   _maskPointerUp);
+    canvas.addEventListener('pointercancel', _maskPointerUp);
     canvas.addEventListener('pointerleave', _maskPointerLeave);
     _maskRenderOverlay();
     return true;
@@ -481,7 +488,7 @@ function _maskPointerDown(ev) {
     }
     _maskState.drawing = true;
     _maskState.lastPt = pt;
-    _maskStamp(pt.x, pt.y, _maskBrushCanvasPx());
+    _maskStamp(pt.x, pt.y, _maskBrushCanvasPx(ev.pressure || 0.5));
     _maskUpdateCursor(ev);
     _maskRenderOverlay();
 }
@@ -491,7 +498,7 @@ function _maskPointerMove(ev) {
     if (_maskState.drawing) {
         const pt = _maskClientToCanvas(ev.clientX, ev.clientY);
         if (pt && _maskState.lastPt) {
-            _maskStampLine(_maskState.lastPt, pt, _maskBrushCanvasPx());
+            _maskStampLine(_maskState.lastPt, pt, _maskBrushCanvasPx(ev.pressure || 0.5));
             _maskState.lastPt = pt;
         }
     }
@@ -507,8 +514,11 @@ async function _maskPointerUp() {
 }
 
 function _maskPointerLeave() {
+    // setPointerCapture中はcanvasの視覚的な境界を跨いでもpointermove/upはこの要素に届き続けるため、
+    // ここでストロークを終了させる必要はない（終了させるとペンの高速な動きでストロークが
+    // 途切れてしまう）。実際の中断はpointerup/pointercancelでのみ処理する。
+    if (_maskState.drawing) return;
     _maskState.cursorPt = null;
-    if (_maskState.drawing) { _maskPointerUp(); return; }
     _maskRenderOverlay();
 }
 

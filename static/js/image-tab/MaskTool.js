@@ -25,6 +25,11 @@ export class MaskTool {
         this.sizeJitterAmount = 0.5;    // 0–1: fraction of brushSize that can be removed
         this.rotationJitter   = false;
 
+        // Pen pressure (0–1, from PointerEvent.pressure; mouse reports 0.5).
+        // pressure=0.5 maps to a 1.0x multiplier so mouse behavior is unchanged.
+        this.pressureEnabled = true;
+        this._lastPressure   = 0.5;
+
         this._drawing    = false;
         this._lastX      = 0;
         this._lastY      = 0;
@@ -80,29 +85,31 @@ export class MaskTool {
         if (this.canvas) this.canvas.style.cursor = "";
     }
 
-    onMouseDown(x, y) {
-        this._drawing = true;
-        this._lastX   = x;
-        this._lastY   = y;
+    onMouseDown(x, y, pressure = 0.5) {
+        this._drawing      = true;
+        this._lastX         = x;
+        this._lastY         = y;
+        this._lastPressure  = pressure;
         if (this.brushImage) {
             this._initStrokeBuffer();
-            this._paintToStroke(x, y);
+            this._paintToStroke(x, y, pressure);
             this._mergeStroke();
         } else {
-            this._paint(x, y);
+            this._paint(x, y, pressure);
         }
     }
 
-    onMouseMove(x, y) {
+    onMouseMove(x, y, pressure = 0.5) {
         if (!this._drawing) return;
         if (this.brushImage) {
-            this._paintLineToStroke(this._lastX, this._lastY, x, y);
+            this._paintLineToStroke(this._lastX, this._lastY, x, y, this._lastPressure, pressure);
             this._mergeStroke();
         } else {
-            this._paintLine(this._lastX, this._lastY, x, y);
+            this._paintLine(this._lastX, this._lastY, x, y, this._lastPressure, pressure);
         }
-        this._lastX = x;
-        this._lastY = y;
+        this._lastX        = x;
+        this._lastY        = y;
+        this._lastPressure = pressure;
     }
 
     onMouseUp() {
@@ -115,6 +122,14 @@ export class MaskTool {
 
     onMouseLeave() {
         if (this._drawing) this.onMouseUp();
+    }
+
+    // ── Pressure response ──────────────────────────────────────────────
+
+    _effectiveSize(pressure) {
+        if (!this.pressureEnabled) return this.brushSize;
+        const p = Math.max(0, Math.min(1, pressure ?? 0.5));
+        return Math.max(1, this.brushSize * (0.3 + p * 1.4)); // p=0.5 -> 1.0x
     }
 
     // ── Stroke buffer (image brush only) ─────────────────────────────
@@ -149,54 +164,48 @@ export class MaskTool {
         ctx.globalCompositeOperation = "source-over";
     }
 
-    _paintToStroke(x, y) {
+    _paintToStroke(x, y, pressure = 0.5) {
         const saved = this.ctx;
         this.ctx = this._strokeCtx;
 
-        if (this.sizeJitter || this.rotationJitter) {
-            const savedSize      = this.brushSize;
-            const savedAngle     = this.angle;
-            const savedStamp     = this._imgStamp;
-            const savedStampSize = this._imgStampSize;
-            if (this.sizeJitter) {
-                this.brushSize = Math.max(1, savedSize * (1 - Math.random() * this.sizeJitterAmount));
-            }
-            if (this.rotationJitter) {
-                this.angle = Math.random() * 360;
-            }
-            this._paintImageBrush(x, y);
-            this.brushSize     = savedSize;
-            this.angle         = savedAngle;
-            this._imgStamp     = savedStamp;
-            this._imgStampSize = savedStampSize;
+        let size = this._effectiveSize(pressure);
+        if (this.sizeJitter) {
+            size = Math.max(1, size * (1 - Math.random() * this.sizeJitterAmount));
+        }
+
+        if (this.rotationJitter) {
+            const savedAngle = this.angle;
+            this.angle = Math.random() * 360;
+            this._paintImageBrush(x, y, size);
+            this.angle = savedAngle;
         } else {
-            this._paintImageBrush(x, y);
+            this._paintImageBrush(x, y, size);
         }
 
         this.ctx = saved;
     }
 
-    _paintLineToStroke(x0, y0, x1, y1) {
+    _paintLineToStroke(x0, y0, x1, y1, p0 = 0.5, p1 = 0.5) {
         const dist  = Math.hypot(x1 - x0, y1 - y0);
         const step  = Math.max(1, this.brushSize * this.spacing);
         const steps = Math.ceil(dist / step);
         for (let i = 1; i <= steps; i++) {
             const t = i / steps;
-            this._paintToStroke(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
+            this._paintToStroke(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, p0 + (p1 - p0) * t);
         }
     }
 
     // ── Circle brush ─────────────────────────────────────────────────
 
-    _getStamp() {
+    _getStamp(size) {
+        size = Math.max(1, Math.round(size));
         if (
             this._stamp &&
-            this._stampSize === this.brushSize &&
+            this._stampSize === size &&
             this._stampHard === this.hardness &&
             this._stampMode === this.mode
         ) return this._stamp;
 
-        const size  = Math.max(1, Math.round(this.brushSize));
         const sc    = document.createElement("canvas");
         sc.width    = size;
         sc.height   = size;
@@ -222,8 +231,9 @@ export class MaskTool {
         return sc;
     }
 
-    _paint(x, y) {
-        const stamp = this._getStamp();
+    _paint(x, y, pressure = 0.5) {
+        const size  = this._effectiveSize(pressure);
+        const stamp = this._getStamp(size);
         const s     = stamp.width;
         this.ctx.save();
         if (this.mode === "erase") {
@@ -233,13 +243,13 @@ export class MaskTool {
         this.ctx.restore();
     }
 
-    _paintLine(x0, y0, x1, y1) {
+    _paintLine(x0, y0, x1, y1, p0 = 0.5, p1 = 0.5) {
         const dist    = Math.hypot(x1 - x0, y1 - y0);
         const spacing = Math.max(1, this.brushSize * 0.2);
         const steps   = Math.max(1, Math.ceil(dist / spacing));
         for (let i = 1; i <= steps; i++) {
             const t = i / steps;
-            this._paint(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
+            this._paint(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, p0 + (p1 - p0) * t);
         }
     }
 
@@ -307,8 +317,8 @@ export class MaskTool {
         return sc;
     }
 
-    _paintImageBrush(x, y) {
-        const stamp = this._getImageStamp(Math.round(this.brushSize));
+    _paintImageBrush(x, y, size = this.brushSize) {
+        const stamp = this._getImageStamp(Math.round(size));
         this.ctx.globalCompositeOperation = "source-over";
         if (this.angle) {
             this.ctx.save();

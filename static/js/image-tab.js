@@ -2802,7 +2802,7 @@ class ImageTab {
             this._setZoom(this._zoom * (e.deltaY > 0 ? 0.9 : 1.1));
         }, { passive: false });
 
-        wrap.addEventListener("mousedown", e => {
+        wrap.addEventListener("pointerdown", e => {
             if (e.button === 1 || (e.button === 0 && this._spaceDown)) {
                 e.preventDefault();
                 this._panning  = true;
@@ -2820,7 +2820,7 @@ class ImageTab {
             if (!this._layerMgr || !drawCanvas) return;
             this._onToolMouseDown(e, drawCanvas);
         });
-        window.addEventListener("mousemove", e => {
+        window.addEventListener("pointermove", e => {
             if (this._panning) {
                 this._panOffset.x = e.clientX - this._panStart.x;
                 this._panOffset.y = e.clientY - this._panStart.y;
@@ -2840,7 +2840,7 @@ class ImageTab {
                 }
             }
         });
-        window.addEventListener("mouseup", e => {
+        window.addEventListener("pointerup", e => {
             if (this._panning && (e.button === 1 || e.button === 0)) {
                 this._panning = false;
                 wrap.style.cursor = this._spaceDown ? "grab" : "";
@@ -2854,10 +2854,11 @@ class ImageTab {
 
         const drawCanvas = document.getElementById("ie-canvas-draw");
         if (drawCanvas) {
-            drawCanvas.addEventListener("mousedown",  e => this._onToolMouseDown(e, drawCanvas));
-            drawCanvas.addEventListener("mousemove",  e => this._onToolMouseMove(e, drawCanvas));
-            drawCanvas.addEventListener("mouseup",    e => this._onToolMouseUp(e));
-            drawCanvas.addEventListener("mouseleave", () => this._onToolMouseLeave());
+            drawCanvas.style.touchAction = "none";
+            drawCanvas.addEventListener("pointerdown",  e => this._onToolMouseDown(e, drawCanvas));
+            drawCanvas.addEventListener("pointermove",  e => this._onToolMouseMove(e, drawCanvas));
+            drawCanvas.addEventListener("pointerup",    e => this._onToolMouseUp(e));
+            drawCanvas.addEventListener("pointerleave", () => this._onToolMouseLeave());
             // Textツール時はoverlayがpointer-events:noneでdblclickがここに落ちるため、
             // drawCanvas側にもテキスト再編集のダブルクリックを張る（Selectツール時はoverlay側が受ける）
             drawCanvas.addEventListener("dblclick",   e => this._onOverlayDblClick(e, drawCanvas));
@@ -2865,17 +2866,20 @@ class ImageTab {
 
         const overlay = document.getElementById("ie-canvas-overlay");
         if (overlay) {
-            overlay.addEventListener("mousedown",  e => this._onToolMouseDown(e, overlay));
-            overlay.addEventListener("mousemove",  e => this._onToolMouseMove(e, overlay));
-            overlay.addEventListener("mouseup",    e => this._onToolMouseUp(e));
-            overlay.addEventListener("mouseleave", () => this._onToolMouseLeave());
+            overlay.style.touchAction = "none";
+            overlay.addEventListener("pointerdown",  e => this._onToolMouseDown(e, overlay));
+            overlay.addEventListener("pointermove",  e => this._onToolMouseMove(e, overlay));
+            overlay.addEventListener("pointerup",    e => this._onToolMouseUp(e));
+            overlay.addEventListener("pointerleave", () => this._onToolMouseLeave());
             overlay.addEventListener("dblclick", e => this._onOverlayDblClick(e, overlay));
         }
     }
 
     _onToolMouseDown(e, refCanvas) {
         if (!this._layerMgr || e.button !== 0 || this._spaceDown) return;
-        const pos = DrawTool.getCanvasPos(refCanvas, e);
+        const pos      = DrawTool.getCanvasPos(refCanvas, e);
+        // PointerEvent.pressure: pen -> actual tilt/pressure, mouse -> 0.5 while a button is held.
+        const pressure = e.pressure || 0.5;
 
         if (this._eyedropperActive) {
             this._pickColorAt(pos.x, pos.y);
@@ -2887,7 +2891,7 @@ class ImageTab {
             if (!activeLayer) return;
             this._saveUndo();
             this._drawTool.setCanvas(activeLayer.canvas);
-            this._drawTool.onMouseDown(pos.x, pos.y);
+            this._drawTool.onMouseDown(pos.x, pos.y, pressure);
             this._updateCompositeView();
 
         } else if (this._activeTool === "fill" && this._fillTool) {
@@ -2908,7 +2912,7 @@ class ImageTab {
             if (sub === "paint" && this._maskTool) {
                 this._saveUndo();
                 this._maskTool.setCanvas(activeLayer.canvas);
-                this._maskTool.onMouseDown(pos.x, pos.y);
+                this._maskTool.onMouseDown(pos.x, pos.y, pressure);
                 this._updateCompositeView();
             } else if (sub === "color" && this._maskColorTool) {
                 this._saveUndo();
@@ -2961,15 +2965,16 @@ class ImageTab {
 
     _onToolMouseMove(e, refCanvas) {
         if (!this._layerMgr) return;
-        const pos = DrawTool.getCanvasPos(refCanvas, e);
+        const pos      = DrawTool.getCanvasPos(refCanvas, e);
+        const pressure = e.pressure || 0.5;
         if (this._activeTool === "draw") {
-            this._drawTool?.onMouseMove(pos.x, pos.y);
+            this._drawTool?.onMouseMove(pos.x, pos.y, pressure);
             if (this._drawTool?._drawing) this._updateCompositeView();
         }
         if (this._activeTool === "mask") {
             const sub = this._maskSubtool;
             if (sub === "paint") {
-                this._maskTool?.onMouseMove(pos.x, pos.y);
+                this._maskTool?.onMouseMove(pos.x, pos.y, pressure);
                 if (this._maskTool?._drawing) this._updateCompositeView();
             } else if (sub === "vector") {
                 this._maskVectorTool?.onMouseMove(pos.x, pos.y);
