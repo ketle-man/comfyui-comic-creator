@@ -244,6 +244,17 @@
     pointer-events: none; /* SelectTool.activate()でautoに変更 */
 }
 
+/* Selectツール専用の拡張オーバーレイ。キャンバス実サイズより一回り大きく取り、
+   キャンバス範囲外にはみ出したオブジェクトの選択枠・ハンドルも表示・操作できるようにする
+   （ピクセル内容自体はcanvas要素の性質上はみ出た部分を描画できないため対象外、枠とハンドルのみ）。
+   ie-canvas-overlay（Crop/Blur/Shape/MaskVector等が使う既存オーバーレイ）とは独立させ、
+   Selectツール以外の挙動には影響しないようにしている */
+#ie-canvas-select-overlay {
+    z-index: 4;
+    cursor: default;
+    pointer-events: none; /* SelectTool.activate()でautoに変更 */
+}
+
 .ie-placeholder {
     position: absolute;
     inset: 0;

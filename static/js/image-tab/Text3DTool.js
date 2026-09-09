@@ -117,18 +117,30 @@ export class Text3DTool {
         }
         if (!container.contains(this._wrapper)) container.appendChild(this._wrapper);
 
-        this._displayW = DEFAULT_CSS_W;
-        this._displayH = DEFAULT_CSS_H;
-        const left = Math.round(cssX - (DEFAULT_CSS_W * scaleX) / 2);
-        const top  = Math.round(cssY - (DEFAULT_CSS_H * scaleY) / 2);
+        // オーバーレイの画面上の表示サイズは常にDEFAULT_CSS_W×H(px)で固定する。
+        // 以前はwrapperのCSSサイズにscaleX/Y（ズーム倍率相当）を掛けていたため、大きいキャンバスを
+        // ズームアウトして編集していると操作用ウィンドウが縮んでしまい操作困難になっていた。
+        // 代わりに、キャンバス座標系での配置サイズ(displayW/displayH)をズーム倍率の逆数で求め、
+        // 画面上は常に同じ大きさに見えるようにする（ズームアウト中はキャンバス上でより広い範囲を
+        // 占める）。極端なズームアウトで際限なく広がらないよう、キャンバス実サイズの60%を上限にクランプする。
+        const invScaleX = scaleX > 0 ? 1 / scaleX : 1;
+        const invScaleY = scaleY > 0 ? 1 / scaleY : 1;
+        const maxW = cv.width  * 0.6;
+        const maxH = cv.height * 0.6;
+        const clamp = Math.min(1, maxW / (DEFAULT_CSS_W * invScaleX), maxH / (DEFAULT_CSS_H * invScaleY));
+        this._displayW = Math.round(DEFAULT_CSS_W * invScaleX * clamp);
+        this._displayH = Math.round(DEFAULT_CSS_H * invScaleY * clamp);
+
+        const left = Math.round(cssX - DEFAULT_CSS_W / 2);
+        const top  = Math.round(cssY - DEFAULT_CSS_H / 2);
         this._wrapper.style.left   = `${left}px`;
         this._wrapper.style.top    = `${top}px`;
-        this._wrapper.style.width  = `${DEFAULT_CSS_W * scaleX}px`;
-        this._wrapper.style.height = `${DEFAULT_CSS_H * scaleY}px`;
+        this._wrapper.style.width  = `${DEFAULT_CSS_W}px`;
+        this._wrapper.style.height = `${DEFAULT_CSS_H}px`;
 
-        // レイヤー確定時の配置座標（canvas座標系＝非ズームのオリジナル解像度）は中心基準で左上に変換
-        this._commitX = Math.round(canvasX - DEFAULT_CSS_W / 2);
-        this._commitY = Math.round(canvasY - DEFAULT_CSS_H / 2);
+        // レイヤー確定時の配置座標（canvas座標系）は中心基準で左上に変換
+        this._commitX = Math.round(canvasX - this._displayW / 2);
+        this._commitY = Math.round(canvasY - this._displayH / 2);
 
         const dpr = window.devicePixelRatio || 1;
         const cw = Math.round(DEFAULT_CSS_W * dpr);
@@ -344,9 +356,25 @@ export class Text3DTool {
             align: this.align,
             lineHeight: this.lineHeight,
         };
+        // 確定(PNG焼き込み)はプレビュー解像度のままだと、Imageタブ側でSelectToolを使って
+        // 拡大配置した際にジャギーが目立つ。プレビュー用WebGLキャンバスは常にDEFAULT_CSS_W×H×dpr
+        // 固定の軽量解像度で動いているため、固定倍率をそのまま掛けるだけだとキャンバス座標系での
+        // 実際の配置サイズ(displayW/displayH、ズームに応じて可変)によっては密度が足りず粗さが残る
+        // ケースがあった。displayW/displayHを基準に「配置後1pxあたり最低TARGET_DENSITY px」を
+        // 確保する解像度を動的に計算し、キャプチャ直前だけ一時的にその解像度でレンダリングしてから
+        // 元のプレビュー解像度に戻す（メモリ・処理負荷を抑えるためMAX_CAPTUREで上限も設ける）
+        const TARGET_DENSITY = 2.5;
+        const MAX_CAPTURE    = 4096;
+        const previewW = this._canvas.width;
+        const previewH = this._canvas.height;
+        const captureW = Math.min(MAX_CAPTURE, Math.max(previewW, Math.round(this._displayW * TARGET_DENSITY)));
+        const captureH = Math.min(MAX_CAPTURE, Math.max(previewH, Math.round(this._displayH * TARGET_DENSITY)));
+        this._editor.resizeRenderer(captureW, captureH);
         const dataUrl = this._editor.capture();
         const contentW = this._canvas.width;
         const contentH = this._canvas.height;
+        this._editor.resizeRenderer(previewW, previewH);
+
         const displayW = this._displayW;
         const displayH = this._displayH;
         const x = this._commitX;

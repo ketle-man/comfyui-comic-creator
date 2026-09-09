@@ -11,6 +11,7 @@ export class SelectTool {
     constructor() {
         this._overlay  = null;
         this._octx     = null;
+        this._margin   = 0;     // overlayがキャンバス範囲より外側に拡張されている場合のオフセット(px)
         this._layer    = null;  // 選択中レイヤー
         this._dragMode = null;  // "move"|"rotate"|"resize-tl"|"resize-tr"|"resize-br"|"resize-bl"
         this._dragStart    = null;
@@ -19,9 +20,16 @@ export class SelectTool {
         this._cursor    = "default";
     }
 
-    setCanvas(overlayCanvas) {
+    /**
+     * @param {HTMLCanvasElement} overlayCanvas
+     * @param {number} margin  overlayCanvasがキャンバス実サイズより四方にmarginだけ拡張されている場合、
+     *                         その拡張量(px)。キャンバス座標系(0,0=キャンバス左上)のまま描画・ヒットテスト
+     *                         できるよう、_drawOverlay側でctx.translate(margin, margin)を適用する。
+     */
+    setCanvas(overlayCanvas, margin = 0) {
         this._overlay = overlayCanvas;
         this._octx    = overlayCanvas.getContext("2d");
+        this._margin  = margin;
     }
 
     onChange(fn) { this._onChange = fn; }
@@ -276,6 +284,7 @@ export class SelectTool {
         const topMid = { x: (tl.x + tr.x) / 2, y: (tl.y + tr.y) / 2 };
 
         ctx.save();
+        ctx.translate(this._margin, this._margin); // overlayがキャンバスより拡張されている分のオフセットを吸収
 
         // バウンディングボックス
         ctx.setLineDash([5, 3]);

@@ -378,6 +378,7 @@ class ImageTab {
         this._panOffset     = { x: 0, y: 0 };
         this._canvasW       = 512;
         this._canvasH       = 512;
+        this._selectMargin  = 200; // ie-canvas-select-overlayがキャンバス実サイズより拡張されている量(px)。_resizeCanvasElementsで再計算
         this._baseName      = "image";
         this._undoStack     = [];
         this._redoStack     = [];
@@ -776,7 +777,8 @@ class ImageTab {
             this._text3dTool.setCanvas(drawCanvas);
             this._text3dTool.activate();
         } else if (this._activeTool === "select" && this._selectTool) {
-            this._selectTool.setCanvas(overlayCanvas);
+            const selectOverlayCanvas = document.getElementById("ie-canvas-select-overlay");
+            this._selectTool.setCanvas(selectOverlayCanvas, this._selectMargin);
             this._selectTool.activate();
         } else if (this._activeTool === "shape" && this._shapeTool) {
             this._shapeTool.setCanvas(overlayCanvas);
@@ -2383,6 +2385,7 @@ class ImageTab {
         const canvas = document.getElementById("ie-fill-ramp");
         if (!canvas) return;
         this._drawFillGradientRamp();
+        canvas.style.touchAction = "none";
 
         const t = this._fillTool;
         const hitTestStop = mx => {
@@ -2394,11 +2397,12 @@ class ImageTab {
             return best;
         };
 
-        canvas.addEventListener("mousedown", e => {
+        canvas.addEventListener("pointerdown", e => {
             const rect = canvas.getBoundingClientRect();
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const idx = hitTestStop(mx);
             if (idx < 0) return;
+            canvas.setPointerCapture(e.pointerId);
             t.selectStop(idx);
             // ドラッグ中onMove/onUpが参照し続けるcanvas要素が入れ替わらないよう、
             // DOM全体を再構築する_renderFillProps()は使わず、選択状態の見た目だけを部分更新する
@@ -2413,11 +2417,13 @@ class ImageTab {
                 this._drawFillGradientRamp();
             };
             const onUp = () => {
-                document.removeEventListener("mousemove", onMove);
-                document.removeEventListener("mouseup", onUp);
+                canvas.removeEventListener("pointermove", onMove);
+                canvas.removeEventListener("pointerup", onUp);
+                canvas.removeEventListener("pointercancel", onUp);
             };
-            document.addEventListener("mousemove", onMove);
-            document.addEventListener("mouseup", onUp);
+            canvas.addEventListener("pointermove", onMove);
+            canvas.addEventListener("pointerup", onUp);
+            canvas.addEventListener("pointercancel", onUp);
         });
     }
 
@@ -2454,6 +2460,7 @@ class ImageTab {
         const canvas = document.getElementById("ie-shape-grad-ramp");
         if (!canvas) return;
         this._drawShapeGradRamp();
+        canvas.style.touchAction = "none";
 
         const t = this._shapeTool;
         const hitTestStop = mx => {
@@ -2465,11 +2472,12 @@ class ImageTab {
             return best;
         };
 
-        canvas.addEventListener("mousedown", e => {
+        canvas.addEventListener("pointerdown", e => {
             const rect = canvas.getBoundingClientRect();
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const idx = hitTestStop(mx);
             if (idx < 0) return;
+            canvas.setPointerCapture(e.pointerId);
             t.selectedFillStopIdx = idx;
             this._drawShapeGradRamp();
             const colorInput = document.getElementById("ie-shape-grad-stop-color");
@@ -2482,11 +2490,13 @@ class ImageTab {
                 this._drawShapeGradRamp();
             };
             const onUp = () => {
-                document.removeEventListener("mousemove", onMove);
-                document.removeEventListener("mouseup", onUp);
+                canvas.removeEventListener("pointermove", onMove);
+                canvas.removeEventListener("pointerup", onUp);
+                canvas.removeEventListener("pointercancel", onUp);
             };
-            document.addEventListener("mousemove", onMove);
-            document.addEventListener("mouseup", onUp);
+            canvas.addEventListener("pointermove", onMove);
+            canvas.addEventListener("pointerup", onUp);
+            canvas.addEventListener("pointercancel", onUp);
         });
     }
 
@@ -2536,6 +2546,7 @@ class ImageTab {
         const canvas = document.getElementById("ie-fill-dir");
         if (!canvas) return;
         this._drawFillGradientDir();
+        canvas.style.touchAction = "none";
 
         const t = this._fillTool;
         const w = canvas.width, h = canvas.height, cx = w / 2, cy = h / 2;
@@ -2551,7 +2562,8 @@ class ImageTab {
             if (lbl) lbl.textContent = t.gradientStrength.toFixed(1);
         };
 
-        canvas.addEventListener("mousedown", e => {
+        canvas.addEventListener("pointerdown", e => {
+            canvas.setPointerCapture(e.pointerId);
             const rect = canvas.getBoundingClientRect();
             applyDrag((e.clientX - rect.left) * (w / rect.width), (e.clientY - rect.top) * (h / rect.height));
             const onMove = ev => {
@@ -2559,11 +2571,13 @@ class ImageTab {
                 applyDrag((ev.clientX - r.left) * (w / r.width), (ev.clientY - r.top) * (h / r.height));
             };
             const onUp = () => {
-                document.removeEventListener("mousemove", onMove);
-                document.removeEventListener("mouseup", onUp);
+                canvas.removeEventListener("pointermove", onMove);
+                canvas.removeEventListener("pointerup", onUp);
+                canvas.removeEventListener("pointercancel", onUp);
             };
-            document.addEventListener("mousemove", onMove);
-            document.addEventListener("mouseup", onUp);
+            canvas.addEventListener("pointermove", onMove);
+            canvas.addEventListener("pointerup", onUp);
+            canvas.addEventListener("pointercancel", onUp);
         });
     }
 
@@ -2873,11 +2887,28 @@ class ImageTab {
             overlay.addEventListener("pointerleave", () => this._onToolMouseLeave());
             overlay.addEventListener("dblclick", e => this._onOverlayDblClick(e, overlay));
         }
+
+        // Selectツール専用の拡張オーバーレイ（キャンバス外にはみ出たオブジェクトの操作用）
+        const selectOverlay = document.getElementById("ie-canvas-select-overlay");
+        if (selectOverlay) {
+            selectOverlay.style.touchAction = "none";
+            selectOverlay.addEventListener("pointerdown",  e => this._onToolMouseDown(e, selectOverlay));
+            selectOverlay.addEventListener("pointermove",  e => this._onToolMouseMove(e, selectOverlay));
+            selectOverlay.addEventListener("pointerup",    e => this._onToolMouseUp(e));
+            selectOverlay.addEventListener("pointerleave", () => this._onToolMouseLeave());
+            selectOverlay.addEventListener("dblclick", e => this._onOverlayDblClick(e, selectOverlay));
+        }
     }
 
     _onToolMouseDown(e, refCanvas) {
         if (!this._layerMgr || e.button !== 0 || this._spaceDown) return;
         const pos      = DrawTool.getCanvasPos(refCanvas, e);
+        // ie-canvas-select-overlayはキャンバス実サイズより四方にmarginだけ拡張されているため、
+        // キャンバス座標系(レイヤーのx/yと同じ系)に変換する
+        if (refCanvas.id === "ie-canvas-select-overlay") {
+            pos.x -= this._selectMargin;
+            pos.y -= this._selectMargin;
+        }
         // PointerEvent.pressure: pen -> actual tilt/pressure, mouse -> 0.5 while a button is held.
         const pressure = e.pressure || 0.5;
 
@@ -2966,6 +2997,10 @@ class ImageTab {
     _onToolMouseMove(e, refCanvas) {
         if (!this._layerMgr) return;
         const pos      = DrawTool.getCanvasPos(refCanvas, e);
+        if (refCanvas.id === "ie-canvas-select-overlay") {
+            pos.x -= this._selectMargin;
+            pos.y -= this._selectMargin;
+        }
         const pressure = e.pressure || 0.5;
         if (this._activeTool === "draw") {
             this._drawTool?.onMouseMove(pos.x, pos.y, pressure);
@@ -3443,13 +3478,46 @@ class ImageTab {
     _resizeCanvasElements(w, h) {
         const drawCanvas    = document.getElementById("ie-canvas-draw");
         const overlayCanvas = document.getElementById("ie-canvas-overlay");
+        const bgCanvas      = document.getElementById("ie-canvas-bg");
         if (drawCanvas) { drawCanvas.width = w; drawCanvas.height = h; }
         if (overlayCanvas) { overlayCanvas.width = w; overlayCanvas.height = h; }
+        if (bgCanvas) { bgCanvas.width = w; bgCanvas.height = h; }
+        this._drawTransparencyBg(bgCanvas);
 
         const container = document.getElementById("ie-canvas-container");
         if (container) {
             container.style.width  = w + "px";
             container.style.height = h + "px";
+        }
+
+        // Selectツール専用の拡張オーバーレイ: キャンバス外にはみ出たオブジェクトの選択枠・ハンドルも
+        // 表示・操作できるよう、四方にmarginを持たせてキャンバス実サイズより大きく確保する
+        const margin = Math.max(150, Math.min(500, Math.round(Math.max(w, h) * 0.5)));
+        this._selectMargin = margin;
+        const selectOverlay = document.getElementById("ie-canvas-select-overlay");
+        if (selectOverlay) {
+            selectOverlay.width  = w + margin * 2;
+            selectOverlay.height = h + margin * 2;
+            selectOverlay.style.left = `-${margin}px`;
+            selectOverlay.style.top  = `-${margin}px`;
+        }
+        this._selectTool?.setCanvas(selectOverlay, margin);
+    }
+
+    // キャンバス範囲内(=実際に書き出される範囲)を示す透過チェッカーパターンをie-canvas-bgに描画する。
+    // ワークスペース背景(ie-canvas-wrap、暗いグレー系の市松)とは明確に異なる配色にすることで、
+    // 「ここまでがキャンバス」という境界を視覚的に判別しやすくする
+    _drawTransparencyBg(bgCanvas) {
+        const bg = bgCanvas ?? document.getElementById("ie-canvas-bg");
+        if (!bg) return;
+        const ctx  = bg.getContext("2d");
+        const size = 16;
+        ctx.clearRect(0, 0, bg.width, bg.height);
+        for (let y = 0; y < bg.height; y += size) {
+            for (let x = 0; x < bg.width; x += size) {
+                ctx.fillStyle = ((x / size + y / size) % 2 === 0) ? "#e8e8e8" : "#c8c8c8";
+                ctx.fillRect(x, y, size, size);
+            }
         }
     }
 
@@ -3578,7 +3646,8 @@ class ImageTab {
         this._fillTool = new FillTool();
 
         this._selectTool = new SelectTool();
-        this._selectTool.setCanvas(overlayCanvas);
+        const selectOverlayCanvas = document.getElementById("ie-canvas-select-overlay");
+        this._selectTool.setCanvas(selectOverlayCanvas, this._selectMargin);
         this._selectTool.onChange(eventType => {
             if (eventType === "transformEnd") {
                 const sel = this._selectTool.getSelectedLayer();
@@ -4734,6 +4803,10 @@ class ImageTab {
     _onOverlayDblClick(e, refCanvas) {
         if (!this._layerMgr) return;
         const pos = DrawTool.getCanvasPos(refCanvas, e);
+        if (refCanvas.id === "ie-canvas-select-overlay") {
+            pos.x -= this._selectMargin;
+            pos.y -= this._selectMargin;
+        }
 
         if (this._activeTool === "select") {
             const layer = this._selectTool?.getSelectedLayer();
