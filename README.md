@@ -38,7 +38,7 @@ ComfyUI 上で動作するマンガページ作成 SPA（シングルページ�
 
 ### Image タブ（レイヤーベース Canvas 2D エディタ）
 
-- **Select / Text / 3D Text / Draw / Shape / Fill / Mask / Blur / Filter / BG Remove / Upscale** の各ツール（3D Text はレイアウトタブと同じエンジン・設定モーダルを共有、[comfyui-vrm-pose-editor](#依存関係任意) 連携）
+- **Select / Text / 3D Text / Draw / Shape / Fill / Mask / Blur / Filter / BG Remove / Upscale** の各ツール（Select ツールはキャンバス外へはみ出たオブジェクトも操作用オーバーレイで選択枠・ハンドルを表示・操作可能、透過エリアに実チェッカーパターンを描画し境界を明示。3D Text はレイアウトタブと同じエンジン・設定モーダルを共有、[comfyui-vrm-pose-editor](#依存関係任意) 連携）
 - **Select ツールのクロップ** — ドラッグ可能な範囲オーバーレイ（8 ハンドル）または X/Y/幅/高さの数値入力でクロップ範囲を指定し実行。キャンバス全体をリサイズし、各レイヤーは中身を保ったまま位置をシフト（Undo 対応）
 - **Select I2I** — Select ツール選択中は常時表示される I2I パネルから、Positive/Negative プロンプト・Denoise を設定して Run するだけで Workflow Studio 連携の I2I 生成をその場で実行できる。対象は「All」（全レイヤー合成）／「Layer」（選択中レイヤー単体）を切替可能で、結果は元レイヤーの位置・サイズ・回転を引き継いだ新規レイヤーとして追加される（[ComfyUI-Workflow-Studio](#依存関係任意) 連携）
 - **下書きキャンバス作成** — 「下書き」ボタン（New の右隣）で、サイズ入力ダイアログなしに、作業中の作品と同じ縦横比・72dpi 換算サイズのキャンバスを新規作成（ラフスケッチ用途）。「レイアウト」ボタンでレイアウトタブの下書きレイヤーへページ全面サイズで挿入される
