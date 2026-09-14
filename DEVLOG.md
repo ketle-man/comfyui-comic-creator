@@ -2,6 +2,26 @@
 
 ---
 
+## 2026-09-14（PixiJS FX が comfyUI-particle-pixijs の複数フィルター機能に対応、v1.41.0）
+
+comfyUI-particle-pixijs 側で `openFilterLibrary()` のAPIが単一 `filterSettings` オブジェクトから複数フィルターの `filterStack` 配列へ刷新されたのに伴い、Comic Creator の PixiJS FX（`static/js/pixifx.js`）が追従できておらず、モーダルを開いた瞬間にクラッシュしていた（`filterStack` 未対応のまま `filterSettings` を渡していたため、内部で `undefined` を `JSON.parse` して例外）。
+
+**修正**: `pixifx.js` を新APIに合わせて全面的に追従させた。
+- 内部状態を `filterSettings`（単一）→ `filterStack`（配列）に変更。旧形式で保存されていたlocalStorageの設定（`cccPixiFxSettings`）からの自動移行も追加し、既存ユーザーの設定を失わないようにした。
+- `applyFilter()` を、複数フィルターを順序通り適用するロジックに刷新（ComfyUI本体ノード側の `particle_widget.js` と同一ロジック。SCENE_WIDE系〔godray等〕とレイヤー系フィルターの適用先コンテナ振り分けも踏襲）。
+- `onPreview`/`onSave` が配列を受け取る新シグネチャに対応。
+- マルチフィルタープリセット（レシピ）の保存/読込/削除を追加。ComfyUI本体ノード側は ComfyUI の userdata API を使うが、このSPAは ComfyUI フロントエンド外からも使われる設計のため `localStorage`（`cccPixiFxMultiPresets`）で実装。
+
+結果として、PixiJS FX は単一フィルターだけでなく複数フィルターの重ね掛け・並び替え・プリセット保存が可能になった。
+
+**検証**: Playwrightで実機（`/ccc`、ユーザーの実データが入った編集中プロジェクト）を操作し、モーダルが正常に開くこと（旧形式のCRTフィルター設定が新形式へ自動移行され正しく復元されることを確認）、マルチタブのレシピ一覧が空状態から正常表示されること、コンソールエラーが無いことを確認した。実データへの影響を避けるため、適用（レイヤーへの反映）は行わずキャンセルで検証を完了させた。
+
+**How to apply**: comfyUI-particle-pixijs 側で `openFilterLibrary()` のAPIを変更する際は、外部SPA側の呼び出し元（`pixifx.js`）も同時に更新しないと連携が壊れる。逆にこのSPA側の `applyFilter()` の挙動を変える際も、ComfyUI本体ノード側の `particle_widget.js` の実装と重複しているため両者を同期させること。
+
+このリリースはv1.41.0としてコミット・リリース実施。
+
+---
+
 ## 2026-09-09（Imageタブ: キャンバス外オブジェクトの操作性、3Dテキスト確定時のジャギーを改善、v1.40.0）
 
 ユーザー依頼: Imageタブで①オブジェクトがキャンバスサイズ外に出ると表示が切れて配置が困難、②3Dテキストを確定すると荒くなる、の2点を改善したい。
