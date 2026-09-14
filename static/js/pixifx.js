@@ -71,6 +71,34 @@ import { t } from './i18n.js';
         try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch (_) {}
     }
 
+    // ---- マルチフィルタープリセット（レシピ）の保存/復元 ----
+    // ComfyUI 標準ノード側は userdata API を使うが、このSPAは ComfyUI フロントエンド外
+    // からも呼ばれる想定のため localStorage に保存する。
+    const MULTI_PRESET_LS_KEY = 'cccPixiFxMultiPresets';
+    function loadMultiPresetsFromStorage() {
+        try {
+            const raw = localStorage.getItem(MULTI_PRESET_LS_KEY);
+            const arr = raw ? JSON.parse(raw) : [];
+            return Array.isArray(arr) ? arr : [];
+        } catch (_) { return []; }
+    }
+    function saveMultiPresetsToStorage(list) {
+        try { localStorage.setItem(MULTI_PRESET_LS_KEY, JSON.stringify(list)); } catch (_) {}
+    }
+    async function loadMultiPresets() {
+        return loadMultiPresetsFromStorage();
+    }
+    async function saveMultiPreset(name, stack) {
+        const list = loadMultiPresetsFromStorage();
+        const idx = list.findIndex(p => p.name === name);
+        const entry = { name, stack };
+        if (idx >= 0) list[idx] = entry; else list.push(entry);
+        saveMultiPresetsToStorage(list);
+    }
+    async function deleteMultiPreset(name) {
+        saveMultiPresetsToStorage(loadMultiPresetsFromStorage().filter(p => p.name !== name));
+    }
+
     // ---- 小物UIヘルパー ----
     function el(tag, style, text) {
         const d = document.createElement(tag);
@@ -162,9 +190,12 @@ import { t } from './i18n.js';
         let filterEnabled          = saved.filterEnabled ?? true;
         let filterOnBg             = saved.filterOnBg ?? true;   // SPAでは画像加工が主目的なのでデフォルトON
         let bgVisible              = true;                        // 背景画像の表示（OFFでパーティクルのみ出力）
-        let filterSettings         = saved.filterSettings
-            ? JSON.parse(JSON.stringify(saved.filterSettings))
-            : { type: 'none', params: {} };
+        // フィルタースタック: [{type, params, enabled}, ...]。単一フィルターは要素数1の状態にすぎない。
+        let filterStack = Array.isArray(saved.filterStack) && saved.filterStack.length
+            ? JSON.parse(JSON.stringify(saved.filterStack))
+            : saved.filterSettings   // 旧形式（単一オブジェクト）からの移行
+              ? [{ type: saved.filterSettings.type ?? 'none', params: saved.filterSettings.params ?? {}, enabled: true }]
+              : [{ type: 'none', params: {}, enabled: true }];
         let colorStops = Array.isArray(saved.colorStops) && saved.colorStops.length
             ? JSON.parse(JSON.stringify(saved.colorStops))
             : [{ pos: 0.0, color: '#ffffff' }, { pos: 1.0, color: '#ffcc66' }];
@@ -236,25 +267,42 @@ import { t } from './i18n.js';
             if (bgSprite) bgSprite.filters = [];
             pixiApp.stage.filters = [];
             pixiApp.stage.filterArea = null;
-            const f = filterSettings.type;
-            if (!filterEnabled || f === 'none' || !PIXI.filters) return;
+            if (!filterEnabled || !PIXI.filters) return;
 
-            const makeFilter = () => engine.makeFilterInstance(PIXI, f, filterSettings.params, { width: W, height: H });
-            const SCENE_WIDE = engine.SCENE_WIDE_FILTERS.has(f);
+            const activeRows = filterStack.filter(row => row.enabled !== false && row.type !== 'none');
+            if (activeRows.length === 0) return;
+
+            const makeFilter = row => engine.makeFilterInstance(PIXI, row.type, row.params, { width: W, height: H });
+
             try {
-                if (particleType === 'none' || SCENE_WIDE) {
-                    const fil = makeFilter();
-                    if (!fil) return;
-                    pixiApp.stage.filters = [fil];
-                    const pad = fil.padding ?? 0;
+                if (particleType === 'none') {
+                    // particle_type=none: 全フィルターを順序通り stage にまとめて適用
+                    const fils = activeRows.map(makeFilter).filter(Boolean);
+                    if (fils.length === 0) return;
+                    pixiApp.stage.filters = fils;
+                    const pad = Math.max(0, ...fils.map(f => f.padding ?? 0));
                     pixiApp.stage.filterArea = new PIXI.Rectangle(-pad, -pad, W + pad * 2, H + pad * 2);
-                } else {
-                    const fil = makeFilter();
-                    if (!fil) return;
-                    particleLayer.filters = [fil];
+                    return;
+                }
+
+                // SCENE_WIDE系（godray等）とレイヤー系フィルターとで適用先コンテナを分ける
+                const sceneWideRows = activeRows.filter(row => engine.SCENE_WIDE_FILTERS.has(row.type));
+                const layerRows     = activeRows.filter(row => !engine.SCENE_WIDE_FILTERS.has(row.type));
+
+                if (layerRows.length > 0) {
+                    const layerFils = layerRows.map(makeFilter).filter(Boolean);
+                    if (layerFils.length > 0) particleLayer.filters = layerFils;
                     if (filterOnBg && bgSprite && bgVisible) {
-                        const filBg = makeFilter();
-                        if (filBg) bgSprite.filters = [filBg];
+                        const bgFils = layerRows.map(makeFilter).filter(Boolean);
+                        if (bgFils.length > 0) bgSprite.filters = bgFils;
+                    }
+                }
+                if (sceneWideRows.length > 0) {
+                    const stageFils = sceneWideRows.map(makeFilter).filter(Boolean);
+                    if (stageFils.length > 0) {
+                        pixiApp.stage.filters = stageFils;
+                        const pad = Math.max(0, ...stageFils.map(f => f.padding ?? 0));
+                        pixiApp.stage.filterArea = new PIXI.Rectangle(-pad, -pad, W + pad * 2, H + pad * 2);
                     }
                 }
             } catch (e) {
@@ -786,7 +834,7 @@ import { t } from './i18n.js';
                 colorStops: JSON.parse(JSON.stringify(colorStops)),
                 blendMode: currentBlendMode,
                 scatterMode, filterEnabled, filterOnBg,
-                filterSettings: JSON.parse(JSON.stringify(filterSettings)),
+                filterStack: JSON.parse(JSON.stringify(filterStack)),
                 emittersNorm: emitters.map(e => ({
                     nx: e.origin.x / W, ny: e.origin.y / H,
                     direction: e.direction, arrowLenPx: e.arrowLenPx,
@@ -813,7 +861,7 @@ import { t } from './i18n.js';
         // ============================================================
         filterLib.openFilterLibrary({
             mainCanvas: pixiCanvas,
-            filterSettings,
+            filterStack,
             particleSettings: {
                 textures:       customParticleTextures.map(t => ({ url: t.url, name: t.name })),
                 size:           currentSize,
@@ -831,12 +879,14 @@ import { t } from './i18n.js';
             topBar,
             previewElement: canvasWrap,
             saveLabel: t('pixifx.applyAndSaveLabel'),
-            onPreview: settings => {
-                filterSettings.type   = settings.type;
-                filterSettings.params = settings.params;
+            onPreview: stack => {
+                filterStack = stack;
                 applyFilter();
                 if (!animating) renderOnce();
             },
+            onLoadMultiPresets:  loadMultiPresets,
+            onSaveMultiPreset:   saveMultiPreset,
+            onDeleteMultiPreset: deleteMultiPreset,
             onParticlePreview: async (snap) => {
                 // null はキャンセル時の復元通知（統合モーダルではモーダルごと閉じるため不要）
                 if (!snap) return;
@@ -877,10 +927,9 @@ import { t } from './i18n.js';
                 rebuildParticles();
                 if (!animating) renderOnce();
             },
-            onSave: (filterSets, particleSets) => {
+            onSave: (stack, particleSets) => {
                 // 設定を確定（プレビューは既にライブ反映済み）
-                filterSettings.type   = filterSets.type;
-                filterSettings.params = filterSets.params;
+                filterStack = stack;
                 customParticleTextures = (particleSets.textures ?? []).map(t => {
                     const existing = customParticleTextures.find(ct => ct.url === t.url);
                     return { url: t.url, name: t.name, tex: existing?.tex ?? null };
