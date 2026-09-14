@@ -21,9 +21,10 @@ from urllib.parse import quote as _urlquote
 from .config import (
     PLUGIN_DIR,
     TEMPLATES_DIR, STATIC_DIR, ASSETS_DIR, ASSETS_JSON,
-    OUTPUT_NANOBANANA_DIR, GMIC_TEMP_DIR,
+    OUTPUT_NANOBANANA_DIR, GMIC_TEMP_DIR, OUTPUT_VIDEO_DIR,
     SETTINGS_FILE,
     VALID_EXTENSIONS, GMIC_SERVER_URL,
+    VALID_VIDEO_EXTENSIONS, MAX_VIDEO_UPLOAD_BYTES,
 )
 
 # ─── Security helpers ─────────────────────────────────────────────────────────
@@ -531,6 +532,45 @@ async def handle_psd_export_layers(request):
     except Exception as e:
         return _error_response(e, status=500)
 
+async def handle_upload_video(request):
+    """POST /api/ccc/video/upload - MP4ファイルをアップロードし、参照用URLを返す。
+    動画本体はIndexedDBへ複製保存せず、この保存先を唯一の永続化先としてURL参照する
+    （レイアウトタブの動画ツール、SVG側のdata-video-src属性が指すURL）。"""
+    try:
+        reader = await request.multipart()
+        field = await reader.next()
+        if field is None or field.name != 'file':
+            return web.json_response({'status': 'error', 'message': 'file field required'}, status=400)
+
+        orig_name = field.filename or 'video.mp4'
+        ext = os.path.splitext(orig_name)[1].lower()
+        if ext not in VALID_VIDEO_EXTENSIONS:
+            return web.json_response({'status': 'error', 'message': 'only .mp4 is supported'}, status=400)
+
+        OUTPUT_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+        safe_name = datetime.now().strftime('video_%Y%m%d_%H%M%S_%f')[:-3] + ext
+        dest = _safe_path(OUTPUT_VIDEO_DIR, safe_name)
+
+        # 数百MB級になり得るため、一括read()ではなくチャンク書き込みでサイズ上限超過を早期検出する
+        size = 0
+        try:
+            with open(dest, 'wb') as f:
+                while True:
+                    chunk = await field.read_chunk(1024 * 1024)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > MAX_VIDEO_UPLOAD_BYTES:
+                        raise ValueError(f'file too large (max {MAX_VIDEO_UPLOAD_BYTES // (1024 * 1024)}MB)')
+                    f.write(chunk)
+        except ValueError as e:
+            dest.unlink(missing_ok=True)
+            return web.json_response({'status': 'error', 'message': str(e)}, status=413)
+
+        return web.json_response({'status': 'ok', 'url': f'/ccc_video_assets/{dest.name}', 'filename': orig_name})
+    except Exception as e:
+        return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
 async def handle_delete_asset(request):
     try:
         data = await request.json()
@@ -936,6 +976,7 @@ def _build_dispatch_tables():
         "local-gmic/open_in_gui_b64":  handle_local_gmic_open_b64,
         "local-gmic/result_b64":       handle_local_gmic_result_b64,
         "gmic/start-server":           handle_gmic_start_server,
+        "video/upload":                handle_upload_video,
     }
 
 async def _api_get_dispatch(request):
@@ -960,7 +1001,7 @@ class ComicCreator:
         app = PromptServer.instance.app
 
         # Ensure directories exist
-        for d in [STATIC_DIR, ASSETS_DIR, OUTPUT_NANOBANANA_DIR, GMIC_TEMP_DIR]:
+        for d in [STATIC_DIR, ASSETS_DIR, OUTPUT_NANOBANANA_DIR, GMIC_TEMP_DIR, OUTPUT_VIDEO_DIR]:
             d.mkdir(parents=True, exist_ok=True)
 
         # Static mounts
@@ -968,6 +1009,7 @@ class ComicCreator:
         app.router.add_static("/ccc_assets",           str(ASSETS_DIR))
         app.router.add_static("/ccc_nanobanana_output", str(OUTPUT_NANOBANANA_DIR))
         app.router.add_static("/ccc_gmic_temp",        str(GMIC_TEMP_DIR))
+        app.router.add_static("/ccc_video_assets",     str(OUTPUT_VIDEO_DIR))
 
         # SPA entry
         app.router.add_get("/ccc", serve_index)
@@ -996,6 +1038,7 @@ class ComicCreator:
         app.router.add_post("/api/ccc/local-gmic/open_in_gui_b64", handle_local_gmic_open_b64)
         app.router.add_post("/api/ccc/local-gmic/result_b64",    handle_local_gmic_result_b64)
         app.router.add_post("/api/ccc/gmic/start-server",        handle_gmic_start_server)
+        app.router.add_post("/api/ccc/video/upload",              handle_upload_video)
         app.router.add_post("/api/ccc/gmic/{tail:.*}",           handle_proxy_gmic)
 
         # DynamicResource catch-all フォールバック

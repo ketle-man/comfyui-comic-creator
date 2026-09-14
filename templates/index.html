@@ -129,6 +129,7 @@
             <button class="subtab-btn tool-panel-btn active" data-subtab="balloon" data-i18n="layout.toolBalloon">フキダシ</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="text" data-i18n="layout.toolText">テキスト</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="gmic" data-i18n="layout.toolImage">画像</button>
+            <button class="subtab-btn tool-panel-btn" data-subtab="video" data-i18n="layout.toolVideo">動画</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="mask" data-i18n="layout.toolMask">マスク</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="pose3d" data-i18n="layout.toolPose3d">3Dポーズ</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="text3d" data-i18n="layout.toolText3d">3Dテキスト</button>
@@ -613,6 +614,28 @@
                     <span id="gmic-progress-text" style="font-size:11px; white-space:nowrap;" data-i18n="layout.processing">処理中...</span>
                     <button id="gmic-abort-btn" class="btn small danger" data-i18n="layout.abortBtn" data-i18n-title="layout.abortTitle" title="ポーリングを中断してUIをリセットします">中断</button>
                   </div>
+                </div>
+              </div>
+
+              <!-- 動画サブタブ（実験導入: MP4のみ対応。動画本体はComfyUI出力フォルダ配下に保存し、
+                   SVG側は代表フレームのサムネイル＋data-video-src属性でURL参照する） -->
+              <div id="subtab-video" class="subtab-content" style="display:none; flex:1; padding:0; margin:0;">
+                <div id="video-empty-hint" style="font-size:12px; color:var(--text-secondary); padding:6px;" data-i18n="layout.videoSelectHint">レイヤーパネルで動画オブジェクトを選択してください</div>
+                <div id="video-controls" style="display:none; flex-wrap:wrap; gap:6px; align-items:center;">
+                  <span id="video-filename" style="font-size:11px; color:var(--text-secondary); max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+                  <button type="button" id="video-play-btn" class="btn small" data-i18n-title="layout.videoPlayTitle" title="再生/一時停止">▶</button>
+                  <button type="button" id="video-stop-btn" class="btn small secondary" data-i18n-title="layout.videoStopTitle" title="停止（先頭に戻す）">■</button>
+                  <input type="range" id="video-seek" min="0" max="1000" value="0" step="1" style="width:140px;" />
+                  <span id="video-time-label" style="font-size:11px; min-width:80px;">0:00 / 0:00</span>
+                  <button type="button" id="video-mute-btn" class="btn small secondary" data-i18n-title="layout.videoMuteTitle" title="ミュート">🔊</button>
+                  <input type="range" id="video-volume" min="0" max="100" value="100" step="1" style="width:70px;" data-i18n-title="layout.videoVolumeTitle" title="音量" />
+                  <div style="border-left:1px solid var(--border-color); height:20px;"></div>
+                  <button type="button" id="video-capture-btn" class="btn small" data-i18n="layout.videoCaptureFrame" data-i18n-title="layout.videoCaptureFrameTitle" title="現在のフレームを静止画としてこのコマに追加します（元の動画はそのまま残ります）">このフレームで静止画作成</button>
+                  <label class="btn small secondary" style="cursor:pointer;">
+                    <span data-i18n="layout.videoLoadLocal">動画を追加</span>
+                    <input type="file" id="video-local-input" accept="video/mp4" class="hidden" />
+                  </label>
+                  <span id="video-status" style="font-size:11px; color:var(--text-secondary);"></span>
                 </div>
               </div>
 
@@ -2022,5 +2045,6 @@
     <script type="module" src="/ccc_static/js/main/24-sub-panels.js"></script>
     <script type="module" src="/ccc_static/js/main/25-text3d-bridge.js"></script>
     <script type="module" src="/ccc_static/js/main/26-auto-comic-bridge.js"></script>
+    <script type="module" src="/ccc_static/js/main/27-video-bridge.js"></script>
   </body>
 </html>

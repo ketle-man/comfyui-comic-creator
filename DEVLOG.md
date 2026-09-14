@@ -2,6 +2,26 @@
 
 ---
 
+## 2026-09-14（レイアウトタブに動画ツールを追加 — MP4配置・再生・音量調整・フレームキャプチャ、v1.42.0）
+
+今後の動画生成ワークフロー（ComfyUI側）の出力をマンガ制作に活用することを見据え、レイアウトタブに新規ツール「動画」を実験的に追加した。MP4動画をコマに配置し、再生・停止・音量/ミュート調整・任意フレームでの静止画キャプチャができる。
+
+**配置経路**: (1) コマへのMP4ファイルのドラッグ&ドロップ、(2) Workflow StudioのGalleryタブから「Send CC」で送信。(2)は別リポジトリ`ComfyUI-Workflow-Studio`側の`gallery-tab.js`にも動画判定分岐を追加し、動画選択時は`window.parent.insertVideoFromUrl(url, filename)`を呼ぶよう対応した（Workflow Studio側はv0.6.3として別途リリース済み）。
+
+**データ設計**: 動画本体はIndexedDBへ複製保存せず、常にComfyUIサーバー側（`output/cc_video_assets/`、新設の`POST /api/ccc/video/upload`でアップロード、チャンク書き込みで300MB上限を検出）のファイルをURL参照する方式にした。SVG側は代表フレーム（先頭フレーム）のサムネイルを通常の`<image>`要素としてbase64 hrefで埋め込み、`data-video-src`/`data-video-name`属性に参照URLを持たせる（3Dポーズ/3Dテキストの再編集用メタデータ埋め込みと同じ`data-*`属性パターン）。この設計により、同じ動画を複数コマ・複数ページで使い回してもページレコード（IndexedDBの`pages`ストア）が肥大化しない。
+
+**UI/操作**: 3Dポーズ/3Dテキストと同じ「オーバーレイ表示」パターンを踏襲し、新規ファイル`27-video-bridge.js`を作成。レイヤーパネルで動画オブジェクト（🎬アイコン）を選択した状態で「動画」ツールを開くと、そのコマの位置に実DOM要素の`<video>`をオーバーレイ表示する（`imgEl.getBoundingClientRect()`を直接使うため、3Dポーズのような手動SVG座標→CTM変換が不要でシンプルに実装できた）。▶再生/■停止/シークバー/🔊ミュート/音量スライダーをツールペインに配置し、音量・ミュート設定はlocalStorageに保存され次回も引き継がれる。「このフレームで静止画作成」ボタンは現在のフレームをcanvasに`drawImage`して新規画像オブジェクトとして同じコマに追加する——3Dポーズ/3Dテキストの「確定」と異なり、**元の動画オブジェクトは変更せずそのまま残す**（他のコマでの再利用を想定したユーザー要件）。
+
+**参考実装**: Workflow StudioのVideoタブ「Capture Frame」機能（`<video>`をcanvasに`drawImage`→`toBlob`/`toDataURL`でフレーム抽出する手法）を踏襲した。
+
+**検証**: 構文チェック（`node --check`/`python -m py_compile`）を全変更ファイルに実施。実機での一連の動作（D&D配置・再生・音量/ミュート・フレームキャプチャ・Send CC往復）はユーザーによる実機確認済み。
+
+**How to apply**: 動画のような大きいバイナリデータを、このアプリの既存の永続化設計（ページのSVG文字列に画像をbase64 data URLとして丸ごと埋め込みIndexedDBへ保存）にそのまま乗せようとすると肥大化・非効率になる。サイズが大きく複数箇所から参照されうるアセットは、サーバー側にファイルとして保存しURLで参照する設計の方が、既存の画像アセット管理（`assets/`フォルダ）とも一貫性が保てる。また、別リポジトリ（Workflow Studio）との`window.parent`/`window.opener`経由のクロスウィンドウ連携APIに新しい受け口を追加する際は、呼び出し元側の実装も同時に更新しないと機能しない（Send CCボタン等）。
+
+このリリースはv1.42.0としてコミット・リリース実施。
+
+---
+
 ## 2026-09-14（PixiJS FX が comfyUI-particle-pixijs の複数フィルター機能に対応、v1.41.0）
 
 comfyUI-particle-pixijs 側で `openFilterLibrary()` のAPIが単一 `filterSettings` オブジェクトから複数フィルターの `filterStack` 配列へ刷新されたのに伴い、Comic Creator の PixiJS FX（`static/js/pixifx.js`）が追従できておらず、モーダルを開いた瞬間にクラッシュしていた（`filterStack` 未対応のまま `filterSettings` を渡していたため、内部で `undefined` を `JSON.parse` して例外）。

@@ -36,6 +36,7 @@ import { initAutoComicBridge } from './26-auto-comic-bridge.js';
 import { initHelpTab } from './22-help-tab.js';
 import { initPose3DTab, hidePose3DCanvas } from './23-pose3d-bridge.js';
 import { initText3DTab, hideText3DCanvas } from './25-text3d-bridge.js';
+import { initVideoTab, hideVideoOverlay } from './27-video-bridge.js';
 import { initSubPanelTool } from './24-sub-panels.js';
 import { initNanobananaTab } from '../nanobanana.js';
 import { initImageTab } from '../image-tab.js';
@@ -126,7 +127,13 @@ const state = {
             shadeColor: '#999999', toony: 0.9,
             bevelThickness: 0.02, bevelSize: 0.01, bevelSegments: 2,
         },
-    }
+    },
+    video: {
+        activePanelId: null,   // 現在オーバーレイ表示中のpanelId（nullなら非表示）
+        activeImgEl: null,     // オーバーレイ対象の<image data-video-src>要素（DOM参照）
+        wrapper: null,         // DIVラッパー要素（内部に<video>を1つ持つ）
+        resizeObserver: null,  // SVGリサイズ監視
+    },
 };
 
 // ==============================
@@ -198,6 +205,7 @@ function initTabs() {
     initSubtabs();
     initPose3DTab();
     initText3DTab();
+    initVideoTab();
     initAssetPanelTabs();
     // ページタブ（旧・出力タブ）は初期表示タブのため、サブタブも起動時に初期化する
     _initOutputSubtabs();
@@ -286,6 +294,14 @@ function initSubtabs() {
             if (subtab !== 'text3d' && state.text3d.activePanelId !== null) {
                 hideText3DCanvas();
             }
+            // 動画以外のサブタブに切り替えた場合はオーバーレイを隠す
+            if (subtab !== 'video' && state.video.activePanelId !== null) {
+                hideVideoOverlay();
+            }
+            // 動画サブタブに切り替えた直後は、選択中のオブジェクトが動画なら自動でオーバーレイ表示する
+            if (subtab === 'video' && typeof window._ccVideoOnObjectSelected === 'function') {
+                window._ccVideoOnObjectSelected(state.selectedImageEl);
+            }
 
             if (subtab !== 'text') {
                 // フキダシサブタブに切り替え: テキストモードをOFF
@@ -321,6 +337,9 @@ async function switchTab(tabId) {
     }
     if (tabId !== 'layout' && state.text3d.activePanelId !== null) {
         hideText3DCanvas();
+    }
+    if (tabId !== 'layout' && state.video.activePanelId !== null) {
+        hideVideoOverlay();
     }
 
     document.querySelectorAll('.tab-btn').forEach(btn => {

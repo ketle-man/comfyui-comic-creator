@@ -28,6 +28,7 @@ import { _pageMgrGroups, renderPageMgrGrid } from './11b-page-manager-tab.js';
 import { _saveBlob } from './13-export-pdf-epub.js';
 import { state, switchTab } from './01-state.js';
 import { hidePose3DCanvas } from './23-pose3d-bridge.js';
+import { hideVideoOverlay } from './27-video-bridge.js';
 import { _layerDrawDetachOverlay, _layerDrawState, _layerDrawUpdateToggle } from './17a-layer-draw-input.js';
 import { _tmplGroups } from './06b-template-manager.js';
 
@@ -321,6 +322,7 @@ async function closeActiveWork() {
     // 開いたままのオーバーレイ編集状態を後片付けしてから閉じる
     // （3DポーズのThree.jsループ停止、マスク編集用canvasの解除、ドロー描画オーバーレイの解除）
     if (state.pose3d.activePanelId !== null) hidePose3DCanvas();
+    if (state.video.activePanelId !== null) hideVideoOverlay();
     if (_maskState.editing) await _maskSetEditing(false);
     if (_layerDrawState.active) {
         _layerDrawState.active = false;

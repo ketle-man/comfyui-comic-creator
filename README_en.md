@@ -32,6 +32,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Draft layer** — A draft-only layer that sits in front of the overlay and covers the whole page (images only). Clicks only reach it while it's selected (edit mode); otherwise clicks pass straight through to the overlay/panels/objects below. Never included in output (JPEG/PNG/WebP/SVG/PDF/EPUB). The Image tab's "Draft" button creates a canvas at the same aspect ratio as the active work at 72dpi, and the "Layout" button automatically inserts it into this layer at full page size
 - **Generate integration** (formerly I2I integration) — The "Generate" button opens a modal where you switch between three targets — a selected image, the whole page, or a single panel (picked via the prompt tabs) — and run I2I/T2I generation via Workflow Studio on the spot. Prompts are split into an "Overall" tab plus one "Panel N" tab per panel on the current page, each with its own independent Positive/Negative. A **batch** checkbox appears only when the target is the whole page: on, it batch-generates every panel on the current page (combining the "Overall" tab prompt with each panel tab's prompt) and replaces each panel's image in turn; off, it keeps the previous behavior of compositing the whole page into one flat image and always inserting the result into the overlay at full page size (for rough previews). A **T2I** checkbox next to the Run button switches to generating from text only, without an input image (the Denoise field is hidden while it's on). Default workflows to auto-load can be configured independently for I2I and T2I in the modal's collapsible "Workflow Settings" section (the I2I setting is shared with the I2I panel of the Image tab's Select tool, via [ComfyUI-Workflow-Studio](#optional-dependencies))
 - **PixiJS FX** — Apply particle/filter effects to the selected image from the "Image" sub-tab (via [comfyUI-particle-pixijs](#optional-dependencies))
+- **Video tool** (experimental) — The "Video" sub-tab lets you place an MP4 video in a panel and play/pause it, adjust volume/mute, and capture a still image from any frame. Place a video by dragging and dropping an MP4 file onto a panel, or by sending it from Workflow Studio's Gallery tab via "Send CC" (via [ComfyUI-Workflow-Studio](#optional-dependencies)). The video file itself is stored on the ComfyUI server (not duplicated into the browser database), and the original video object is left unchanged after capturing a still image, so it can be reused in other panels
 - **Manga tool** — "Halftone" (an "Convert image" mode that halftones the selected image, plus a "Create pattern" mode that generates a halftone dot pattern sized to the panel/overlay), "Manga effects" (generate and insert vignette, screentone noise, and speed lines — radial / uni flash / uni ring / linear — as transparent objects sized to the panel), and "Background Pattern" (generate stripes, dots, checks, Japanese traditional motifs — asanoha/ichimatsu/shippou/uroko — or a custom SVG as a transparent object sized to the panel; adjustable color, opacity, size, and rotation angle, with independent width/height for custom SVGs). All three modals let you switch the preview background between the selected image, a checkerboard, and white while adjusting
 
 ### Image tab (layer-based Canvas 2D editor)
@@ -131,7 +132,7 @@ Installing the following custom nodes enables the corresponding features. Nothin
 | Companion node | Feature enabled |
 |---|---|
 | **comfyui-vrm-pose-editor** | 3D Pose / 3D Text in the Layout tab and the Image tab |
-| **ComfyUI-Workflow-Studio** | I2I integration, Inpaint in the Image tab, and the embedded gallery in the workflow studio tab |
+| **ComfyUI-Workflow-Studio** | I2I integration, Inpaint in the Image tab, the embedded gallery in the workflow studio tab, and sending videos (MP4) from the Gallery tab (Video tool) |
 | **comfyUI-particle-pixijs** | PixiJS FX (particle/filter effects modal) in the Layout tab's "Image" sub-tab and the Image tab |
 
 ## Usage
@@ -212,6 +213,7 @@ comfyui-comic-creator/
 | GET | `/api/ccc/refresh-assets` | Regenerate the asset list |
 | POST | `/api/ccc/nanobanana/generate` | Generate a Nanobanana image |
 | POST | `/api/ccc/save-image-project` | Save an Image tab project |
+| POST | `/api/ccc/video/upload` | Upload a video (MP4) |
 | POST | `/api/ccc/eagle/add` | Save an image to Eagle |
 | POST | `/api/ccc/local-gmic/open_in_gui_b64` | Launch the G'MIC Qt GUI |
 | GET | `/api/ccc/local-gmic/status/{job_id}` | Get a G'MIC job's status |

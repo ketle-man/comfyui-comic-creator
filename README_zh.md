@@ -32,6 +32,7 @@
 - **草稿图层** — 位于覆盖层更前面、覆盖整个页面的草稿专用图层（仅支持图像）。只有在选中（编辑模式）时才能在预览中点击・拖动操作，其他时候点击会直接穿透到下方的覆盖层／分格／对象。不会包含在任何输出格式（JPEG/PNG/WebP/SVG/PDF/EPUB）中。Image标签的"草稿"按钮可创建与当前作品相同宽高比、72dpi换算尺寸的画布，通过"排版"按钮会自动以整页尺寸插入到该图层
 - **Generate联动**（原I2I联动） — "Generate"按钮会打开一个弹窗，可在选中图像・整页・单个分格（通过提示词标签选择）三种对象间切换，就地执行基于Workflow Studio的I2I/T2I生成。提示词分为"全体"标签，以及与当前页面分格数相同的"分格N"标签，各自拥有独立的Positive/Negative。仅当对象为整页时会出现**batch**复选框：开启后会批量生成当前页面的所有分格（合并"全体"标签与各分格标签的提示词）并逐个替换分格图像；关闭时保持原有行为，将整页合成为一张图并始终以整页尺寸插入到覆盖层（用于草稿预览）。Run按钮旁的**T2I**复选框可切换为不使用输入图像、仅根据文字生成（开启时Denoise输入框会被隐藏）。I2I与T2I各自的默认工作流可在弹窗可折叠的"工作流设置"中独立配置（I2I设置与Image标签Select工具的I2I面板共用，通过 [ComfyUI-Workflow-Studio](#可选依赖) 联动）
 - **PixiJS FX** — 在"图像"子标签中为选中图像应用粒子・滤镜效果（通过 [comfyUI-particle-pixijs](#可选依赖) 联动）
+- **视频工具**（实验性功能） — 在"视频"子标签中可将MP4视频放置到分格中进行播放/暂停、调整音量/静音、从任意帧截取静止图像。可通过将MP4文件拖放到分格中放置视频，或在Workflow Studio的图库标签中通过"Send CC"发送（通过 [ComfyUI-Workflow-Studio](#可选依赖) 联动）。视频文件本身保存在ComfyUI服务器端（不会复制到浏览器数据库中），截取静止图像后原始视频对象保持不变，因此可以在其他分格中重复使用
 - **漫画工具** — 「半调网点」（"转换图像"模式将选中图像转换为网点，"创建图案"模式仅生成分格/浮层尺寸的网点图案）、「漫画效果」（生成暗角、网点噪点、集中线（放射状／海胆闪／海胆（环）／线性 4 种）并作为分格尺寸的透明对象插入）、「背景图案」（生成条纹、圆点、格纹、日式传统纹样（麻叶纹／市松纹／七宝纹／鳞纹）或自定义SVG，作为分格尺寸的透明对象；可指定颜色、不透明度、尺寸、旋转角度，自定义SVG还可分别指定宽・高）三个弹窗。三者均可在选中图像／默认／白色之间切换预览背景，边确认效果边调整
 
 ### Image标签（基于图层的Canvas 2D编辑器）
@@ -131,7 +132,7 @@ NANOBANANA_API_KEY=你的API密钥
 | 联动节点 | 启用的功能 |
 |---|---|
 | **comfyui-vrm-pose-editor** | 排版标签・Image标签的 3D姿势／3D文字 |
-| **ComfyUI-Workflow-Studio** | I2I联动、Image标签的Inpaint、workflow studio标签的嵌入式图库 |
+| **ComfyUI-Workflow-Studio** | I2I联动、Image标签的Inpaint、workflow studio标签的嵌入式图库、从图库标签发送视频（MP4，视频工具） |
 | **comfyUI-particle-pixijs** | 排版标签"图像"子标签及Image标签的 PixiJS FX（粒子・滤镜效果弹窗） |
 
 ## 使用方法
@@ -212,6 +213,7 @@ comfyui-comic-creator/
 | GET | `/api/ccc/refresh-assets` | 重新生成素材列表 |
 | POST | `/api/ccc/nanobanana/generate` | 生成 Nanobanana 图像 |
 | POST | `/api/ccc/save-image-project` | 保存 Image 标签项目 |
+| POST | `/api/ccc/video/upload` | 上传视频（MP4） |
 | POST | `/api/ccc/eagle/add` | 保存图像到 Eagle |
 | POST | `/api/ccc/local-gmic/open_in_gui_b64` | 启动 G'MIC Qt GUI |
 | GET | `/api/ccc/local-gmic/status/{job_id}` | 获取 G'MIC 任务状态 |

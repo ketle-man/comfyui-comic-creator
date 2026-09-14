@@ -1086,6 +1086,7 @@ function initImageManipulation(svgEl, balloonSvgEl) {
         renderLayerPanel();
         const reeditBtn = document.getElementById('text3d-reedit-btn');
         if (reeditBtn) reeditBtn.disabled = !el.dataset.text3dParams;
+        if (typeof window._ccVideoOnObjectSelected === 'function') window._ccVideoOnObjectSelected(el);
     };
 
     svgEl.addEventListener('click', (e) => {
@@ -1098,6 +1099,7 @@ function initImageManipulation(svgEl, balloonSvgEl) {
             state.selectedShapeId = null;
             const reeditBtn = document.getElementById('text3d-reedit-btn');
             if (reeditBtn) reeditBtn.disabled = true;
+            if (typeof window._ccVideoOnObjectSelected === 'function') window._ccVideoOnObjectSelected(null);
         }
     });
 
@@ -1474,6 +1476,13 @@ function initDragAndDrop() {
             if (files.length === 0) return;
 
             const file = files[0];
+            const isMp4 = file.type === 'video/mp4' || file.name.toLowerCase().endsWith('.mp4');
+            if (isMp4) {
+                if (typeof window.handleInsertVideoFromLocal === 'function') {
+                    await window.handleInsertVideoFromLocal(file);
+                }
+                return;
+            }
             if (!file.type.startsWith('image/')) {
                 alert(t('layout.msgDropImageFile'));
                 return;

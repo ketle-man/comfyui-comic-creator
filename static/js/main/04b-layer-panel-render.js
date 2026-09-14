@@ -173,11 +173,14 @@ function renderLayerPanel() {
         const src = img.getAttribute('href') || img.getAttribute('xlink:href') || '';
         const isVector = src.startsWith('data:image/svg');
         const isPaintObject = img.dataset.cccPaintObject === '1';
-        const icon = isPaintObject ? '🖌' : (isVector ? '⬡' : '🖼');
+        const isVideoObj = !!img.dataset.videoSrc;
+        const icon = isVideoObj ? '🎬' : (isPaintObject ? '🖌' : (isVector ? '⬡' : '🖼'));
         if (!img.dataset.name) {
-            img.dataset.name = isPaintObject
-                ? t('layer.paintName', objIdx + 1)
-                : (isVector ? `SVG ${objIdx + 1}` : t('layer.imageName', objIdx + 1));
+            img.dataset.name = isVideoObj
+                ? t('layer.videoName', objIdx + 1)
+                : (isPaintObject
+                    ? t('layer.paintName', objIdx + 1)
+                    : (isVector ? `SVG ${objIdx + 1}` : t('layer.imageName', objIdx + 1)));
         }
         const name = img.dataset.name;
         // 下書きレイヤー内の画像はマスク機能非対応（下書きは画像の配置・移動のみをサポート）
@@ -230,6 +233,7 @@ function renderLayerPanel() {
             img.classList.add('selected');
             syncPanelSelectionToObject(img);
             renderLayerPanel();
+            if (typeof window._ccVideoOnObjectSelected === 'function') window._ccVideoOnObjectSelected(img);
         });
         item.querySelector('.lock-btn').addEventListener('click', async (e) => {
             e.stopPropagation();
