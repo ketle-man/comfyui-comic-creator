@@ -416,6 +416,11 @@ class ImageTab {
         this._cropRect      = null;           // { x, y, w, h }（キャンバス/ページ座標系、ピクセル単位）
         this._cropDragMode  = null;           // null | 'move' | 'n'|'s'|'e'|'w'|'ne'|'nw'|'se'|'sw'
         this._cropDragStart = null;           // { x, y, rect: {x,y,w,h} } ドラッグ開始時点のスナップショット
+        // Extend Canvas（Selectツールのサブ機能）: キャンバスの四辺に余白を追加してサイズを拡張する
+        this._extendMode   = false;                                     // 拡張範囲編集中か
+        this._extendPad    = { top: 0, right: 0, bottom: 0, left: 0 };  // 各辺に追加するピクセル数
+        this._extendLinked = false;                                     // true: 四辺の値を連動させる（均等に追加）
+        this._extendColor  = "transparent";                             // 'transparent' | 'white' | 'black'
         // G'MIC ツール状態
         this._gmicState = {
             lastResultJobId: null,
@@ -719,6 +724,7 @@ class ImageTab {
         if (this._activeTool === "select") {
             this._selectTool?.deactivate();
             if (this._cropMode) this._exitCropMode();
+            if (this._extendMode) this._exitExtendMode();
         }
         if (this._activeTool === "shape")  this._shapeTool?.deactivate();
         if (this._activeTool === "fill") {
@@ -822,46 +828,17 @@ class ImageTab {
                 <div style="width:1px;height:22px;background:var(--it-border);margin:0 6px;flex-shrink:0;"></div>
                 <div class="ie-opt-group">
                     <button class="it-btn it-btn-sm${this._cropMode ? " ie-opt-active" : ""}" id="ie-crop-toggle-btn" title="${t("image.cropBtnTitle")}">${t("image.cropBtn")}</button>
+                    <button class="it-btn it-btn-sm${this._extendMode ? " ie-opt-active" : ""}" id="ie-extend-toggle-btn" title="${t("image.extendBtnTitle")}">${t("image.extendBtn")}</button>
                 </div>
-                ${this._cropMode && this._cropRect ? `
-                <div class="ie-opt-group" style="margin-left:8px;">
-                    <label style="font-size:11px;color:var(--it-text-secondary);">X</label>
-                    <input type="number" id="ie-crop-x" value="${Math.round(this._cropRect.x)}" step="1" style="width:56px;" class="ie-opt-input" title="${t("image.cropXLabel")}">
-                    <label style="font-size:11px;color:var(--it-text-secondary);">Y</label>
-                    <input type="number" id="ie-crop-y" value="${Math.round(this._cropRect.y)}" step="1" style="width:56px;" class="ie-opt-input" title="${t("image.cropYLabel")}">
-                    <label style="font-size:11px;color:var(--it-text-secondary);">W</label>
-                    <input type="number" id="ie-crop-w" value="${Math.round(this._cropRect.w)}" step="1" min="1" style="width:56px;" class="ie-opt-input" title="${t("image.cropWidthLabel")}">
-                    <label style="font-size:11px;color:var(--it-text-secondary);">H</label>
-                    <input type="number" id="ie-crop-h" value="${Math.round(this._cropRect.h)}" step="1" min="1" style="width:56px;" class="ie-opt-input" title="${t("image.cropHeightLabel")}">
-                    <button class="it-btn it-btn-sm it-btn-primary" id="ie-crop-apply-btn">${t("image.cropApply")}</button>
-                    <button class="it-btn it-btn-sm" id="ie-crop-cancel-btn">${t("image.cropCancel")}</button>
-                </div>
-                ` : ""}
             `;
             document.getElementById("ie-crop-toggle-btn")?.addEventListener("click", () => {
                 if (this._cropMode) { this._exitCropMode(); this._renderToolOptions("select"); }
                 else this._enterCropMode();
             });
-            if (this._cropMode && this._cropRect) {
-                const applyCropInputs = () => {
-                    const x = parseFloat(document.getElementById("ie-crop-x").value) || 0;
-                    const y = parseFloat(document.getElementById("ie-crop-y").value) || 0;
-                    const w = parseFloat(document.getElementById("ie-crop-w").value) || 1;
-                    const h = parseFloat(document.getElementById("ie-crop-h").value) || 1;
-                    this._cropRect = this._clampCropRect({ x, y, w, h });
-                    this._cropSyncInputs();
-                    this._drawCropOverlay();
-                };
-                ["ie-crop-x", "ie-crop-y", "ie-crop-w", "ie-crop-h"].forEach(id => {
-                    document.getElementById(id)?.addEventListener("change", applyCropInputs);
-                });
-                document.getElementById("ie-crop-apply-btn")?.addEventListener("click", () => this._applyCrop());
-                document.getElementById("ie-crop-cancel-btn")?.addEventListener("click", () => {
-                    this._exitCropMode();
-                    this._renderToolOptions("select");
-                });
-                this._drawCropOverlay();
-            }
+            document.getElementById("ie-extend-toggle-btn")?.addEventListener("click", () => {
+                if (this._extendMode) { this._exitExtendMode(); this._renderToolOptions("select"); }
+                else this._enterExtendMode();
+            });
             document.getElementById("ie-select-style-btn")?.addEventListener("click", () => {
                 if (!this.hasSelectedTextLayer()) {
                     this._toast(t("image.noTextLayerSelected"), "info");
@@ -916,7 +893,9 @@ class ImageTab {
                 this._refreshLayerList();
             });
 
-            this._renderSelectI2IProps();
+            if (this._cropMode) this._renderCropProps();
+            else if (this._extendMode) this._renderExtendProps();
+            else this._renderSelectI2IProps();
 
         } else if (toolId === "draw" && this._drawTool) {
             el.innerHTML = "";
@@ -1582,11 +1561,11 @@ class ImageTab {
             </div>
             <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
                 <label>Positive Prompt</label>
-                <textarea id="ie-sel-i2i-positive" rows="3" style="width:100%;resize:vertical;font-size:12px;">${this._selectI2IPositive}</textarea>
+                <textarea id="ie-sel-i2i-positive" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;font-size:12px;">${this._selectI2IPositive}</textarea>
             </div>
             <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
                 <label>Negative Prompt</label>
-                <textarea id="ie-sel-i2i-negative" rows="3" style="width:100%;resize:vertical;font-size:12px;">${this._selectI2INegative}</textarea>
+                <textarea id="ie-sel-i2i-negative" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;font-size:12px;">${this._selectI2INegative}</textarea>
             </div>
             <div class="ie-props-row">
                 <label>Denoise</label>
@@ -1608,7 +1587,7 @@ class ImageTab {
             </div>
             <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
                 <label>Workflow file</label>
-                <input type="text" id="ie-i2i-default-wf-name" placeholder="cc_i2i_default.json" style="width:100%;">
+                <input type="text" id="ie-i2i-default-wf-name" placeholder="cc_i2i_default.json" style="width:100%;box-sizing:border-box;">
             </div>
             <div class="ie-props-row">
                 <button class="it-btn it-btn-sm" id="ie-i2i-settings-save-btn">Save</button>
@@ -3081,6 +3060,7 @@ class ImageTab {
     _enterCropMode() {
         if (!this._layerMgr) return;
         if (this._activeTool !== "select") { this._setActiveTool("select"); }
+        if (this._extendMode) this._exitExtendMode();
         const margin = Math.round(Math.min(this._canvasW, this._canvasH) * 0.1);
         this._cropMode = true;
         this._cropRect = this._clampCropRect({
@@ -3247,6 +3227,215 @@ class ImageTab {
         this._renderToolOptions("select");
         if (typeof this._fitToView === "function") this._fitToView();
         this._toast(`Cropped: ${w}×${h}`, "success");
+    }
+
+    /** クロップ範囲編集中のX/Y/W/H入力欄とApply/Cancelをツールプロパティペインに表示する */
+    _renderCropProps() {
+        const pane  = document.getElementById("ie-props-pane");
+        const body  = document.getElementById("ie-props-body");
+        const title = document.getElementById("ie-props-title");
+        if (!pane || !body || !this._cropRect) return;
+        pane.style.display = "flex";
+        if (title) title.textContent = t("image.cropPaneTitle");
+
+        body.innerHTML = `
+            <div class="ie-props-row">
+                <label>X</label>
+                <input type="number" id="ie-crop-x" value="${Math.round(this._cropRect.x)}" step="1" style="width:100%;box-sizing:border-box;" title="${t("image.cropXLabel")}">
+            </div>
+            <div class="ie-props-row">
+                <label>Y</label>
+                <input type="number" id="ie-crop-y" value="${Math.round(this._cropRect.y)}" step="1" style="width:100%;box-sizing:border-box;" title="${t("image.cropYLabel")}">
+            </div>
+            <div class="ie-props-row">
+                <label>W</label>
+                <input type="number" id="ie-crop-w" value="${Math.round(this._cropRect.w)}" step="1" min="1" style="width:100%;box-sizing:border-box;" title="${t("image.cropWidthLabel")}">
+            </div>
+            <div class="ie-props-row">
+                <label>H</label>
+                <input type="number" id="ie-crop-h" value="${Math.round(this._cropRect.h)}" step="1" min="1" style="width:100%;box-sizing:border-box;" title="${t("image.cropHeightLabel")}">
+            </div>
+            <div class="ie-props-row" style="flex-direction:row;gap:6px;">
+                <button class="it-btn it-btn-sm it-btn-primary" id="ie-crop-apply-btn" style="flex:1;">${t("image.cropApply")}</button>
+                <button class="it-btn it-btn-sm" id="ie-crop-cancel-btn" style="flex:1;">${t("image.cropCancel")}</button>
+            </div>
+        `;
+        const applyCropInputs = () => {
+            const x = parseFloat(document.getElementById("ie-crop-x").value) || 0;
+            const y = parseFloat(document.getElementById("ie-crop-y").value) || 0;
+            const w = parseFloat(document.getElementById("ie-crop-w").value) || 1;
+            const h = parseFloat(document.getElementById("ie-crop-h").value) || 1;
+            this._cropRect = this._clampCropRect({ x, y, w, h });
+            this._cropSyncInputs();
+            this._drawCropOverlay();
+        };
+        ["ie-crop-x", "ie-crop-y", "ie-crop-w", "ie-crop-h"].forEach(id => {
+            document.getElementById(id)?.addEventListener("change", applyCropInputs);
+        });
+        document.getElementById("ie-crop-apply-btn")?.addEventListener("click", () => this._applyCrop());
+        document.getElementById("ie-crop-cancel-btn")?.addEventListener("click", () => {
+            this._exitCropMode();
+            this._renderToolOptions("select");
+        });
+        this._drawCropOverlay();
+    }
+
+    // ── Extend Canvas（Selectツールのサブ機能） ────────────────
+    // キャンバスの四辺に余白を追加してサイズを拡張する。Cropの逆方向の操作で、レイヤーの
+    // ピクセルデータ自体は触らず、_canvasW/_canvasH・LayerManager.width/heightを拡大し、
+    // 各レイヤーのx/yを追加した上・左の余白分シフトするだけで実現する（Cropと同じ理屈で、
+    // レイヤーはページ座標系に独立配置されているため座標シフトだけで済む）。
+    // 透明以外の余白色を選んだ場合は、新キャンバス全体を塗りつぶす描画レイヤーを最背面に追加する
+    // （合成結果は透過背景のため、実際に書き出される画像に色を反映するにはレイヤーが必要）。
+
+    _enterExtendMode() {
+        if (!this._layerMgr) return;
+        if (this._activeTool !== "select") { this._setActiveTool("select"); }
+        if (this._cropMode) this._exitCropMode();
+        this._extendMode = true;
+        this._extendPad  = { top: 0, right: 0, bottom: 0, left: 0 };
+        this._renderToolOptions("select");
+    }
+
+    _exitExtendMode() {
+        this._extendMode = false;
+    }
+
+    /** 拡張範囲編集中の上下左右の余白入力・色選択・Apply/Cancelをツールプロパティペインに表示する */
+    _renderExtendProps() {
+        const pane  = document.getElementById("ie-props-pane");
+        const body  = document.getElementById("ie-props-body");
+        const title = document.getElementById("ie-props-title");
+        if (!pane || !body) return;
+        pane.style.display = "flex";
+        if (title) title.textContent = t("image.extendPaneTitle");
+
+        const pad  = this._extendPad;
+        const newW = this._canvasW + pad.left + pad.right;
+        const newH = this._canvasH + pad.top + pad.bottom;
+        const colorOpts = [
+            { id: "transparent", label: t("image.extendColorTransparent") },
+            { id: "white",       label: t("image.extendColorWhite") },
+            { id: "black",       label: t("image.extendColorBlack") },
+        ];
+
+        body.innerHTML = `
+            <div class="ie-props-row">
+                <label style="cursor:pointer;display:flex;align-items:flex-start;gap:4px;white-space:normal;line-height:1.4;">
+                    <input type="checkbox" id="ie-extend-linked" style="flex-shrink:0;margin-top:2px;" ${this._extendLinked ? "checked" : ""}>
+                    <span>${t("image.extendLinkedTitle")}</span>
+                </label>
+            </div>
+            <div class="ie-props-row">
+                <label>${t("image.extendTopLabel")}</label>
+                <input type="number" id="ie-extend-top" value="${pad.top}" step="1" min="0" style="width:100%;box-sizing:border-box;">
+            </div>
+            <div class="ie-props-row">
+                <label>${t("image.extendRightLabel")}</label>
+                <input type="number" id="ie-extend-right" value="${pad.right}" step="1" min="0" style="width:100%;box-sizing:border-box;">
+            </div>
+            <div class="ie-props-row">
+                <label>${t("image.extendBottomLabel")}</label>
+                <input type="number" id="ie-extend-bottom" value="${pad.bottom}" step="1" min="0" style="width:100%;box-sizing:border-box;">
+            </div>
+            <div class="ie-props-row">
+                <label>${t("image.extendLeftLabel")}</label>
+                <input type="number" id="ie-extend-left" value="${pad.left}" step="1" min="0" style="width:100%;box-sizing:border-box;">
+            </div>
+            <div class="ie-props-row">
+                <label>${t("image.extendColorLabel")}</label>
+                <div style="display:flex;gap:4px;">
+                    ${colorOpts.map(o => `<button class="it-btn it-btn-sm${this._extendColor === o.id ? " ie-opt-active" : ""}" data-color="${o.id}" style="flex:1;padding:2px 4px;">${o.label}</button>`).join("")}
+                </div>
+            </div>
+            <div style="font-size:11px;color:var(--it-text-secondary);white-space:normal;line-height:1.4;">
+                ${t("image.extendNewSizeLabelPrefix")}<br>${newW} × ${newH} px
+            </div>
+            <div class="ie-props-row" style="flex-direction:row;gap:6px;">
+                <button class="it-btn it-btn-sm it-btn-primary" id="ie-extend-apply-btn" style="flex:1;">${t("image.extendApply")}</button>
+                <button class="it-btn it-btn-sm" id="ie-extend-cancel-btn" style="flex:1;">${t("image.extendCancel")}</button>
+            </div>
+        `;
+
+        const syncFromInput = (side, value) => {
+            const v = Math.max(0, Math.round(parseFloat(value)) || 0);
+            this._extendPad = this._extendLinked
+                ? { top: v, right: v, bottom: v, left: v }
+                : { ...this._extendPad, [side]: v };
+            this._renderExtendProps();
+        };
+        document.getElementById("ie-extend-linked")?.addEventListener("change", (e) => {
+            this._extendLinked = e.target.checked;
+            if (this._extendLinked) {
+                const v = Math.max(this._extendPad.top, this._extendPad.right, this._extendPad.bottom, this._extendPad.left);
+                this._extendPad = { top: v, right: v, bottom: v, left: v };
+            }
+            this._renderExtendProps();
+        });
+        document.getElementById("ie-extend-top")?.addEventListener("change", (e) => syncFromInput("top", e.target.value));
+        document.getElementById("ie-extend-right")?.addEventListener("change", (e) => syncFromInput("right", e.target.value));
+        document.getElementById("ie-extend-bottom")?.addEventListener("change", (e) => syncFromInput("bottom", e.target.value));
+        document.getElementById("ie-extend-left")?.addEventListener("change", (e) => syncFromInput("left", e.target.value));
+        body.querySelectorAll("[data-color]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                this._extendColor = btn.dataset.color;
+                this._renderExtendProps();
+            });
+        });
+        document.getElementById("ie-extend-apply-btn")?.addEventListener("click", () => this._applyExtend());
+        document.getElementById("ie-extend-cancel-btn")?.addEventListener("click", () => {
+            this._exitExtendMode();
+            this._renderToolOptions("select");
+        });
+    }
+
+    /** 拡張を確定実行する: キャンバスサイズを拡大し、各レイヤーを追加した上・左の余白分シフトする */
+    _applyExtend() {
+        if (!this._layerMgr) return;
+        const { top, right, bottom, left } = this._extendPad;
+        if (top === 0 && right === 0 && bottom === 0 && left === 0) {
+            this._exitExtendMode();
+            this._renderToolOptions("select");
+            return;
+        }
+
+        this._saveUndo();
+
+        const newW = this._canvasW + left + right;
+        const newH = this._canvasH + top + bottom;
+
+        this._layerMgr.layers.forEach(layer => {
+            layer.x += left;
+            layer.y += top;
+        });
+
+        if (this._extendColor !== "transparent") {
+            // 合成結果は透過背景のため、余白色を実際に書き出される画像へ反映するには
+            // 新キャンバス全体を塗りつぶす描画レイヤーを最背面に追加する必要がある
+            const fillLayer = this._layerMgr.addLayer("draw", "Background Fill", {
+                contentW: newW, contentH: newH, x: 0, y: 0,
+            });
+            fillLayer.ctx.fillStyle = this._extendColor === "white" ? "#ffffff" : "#000000";
+            fillLayer.ctx.fillRect(0, 0, newW, newH);
+            const idx = this._layerMgr.layers.indexOf(fillLayer);
+            if (idx !== -1) {
+                this._layerMgr.layers.splice(idx, 1);
+                this._layerMgr.layers.push(fillLayer); // 配列末尾=最背面
+            }
+        }
+
+        this._canvasW = newW;
+        this._canvasH = newH;
+        this._layerMgr.width  = newW;
+        this._layerMgr.height = newH;
+        this._resizeCanvasElements(newW, newH);
+
+        this._exitExtendMode();
+        this._updateCompositeView();
+        this._refreshLayerList();
+        this._renderToolOptions("select");
+        if (typeof this._fitToView === "function") this._fitToView();
+        this._toast(`Extended: ${newW}×${newH}`, "success");
     }
 
     // ── 画像ロード ────────────────────────────────
@@ -4378,6 +4567,7 @@ class ImageTab {
             this._resizeCanvasElements(this._canvasW, this._canvasH);
         }
         if (this._cropMode) this._exitCropMode();
+        if (this._extendMode) this._exitExtendMode();
         this._selectTool?.clearSelection();
         this._updateCompositeView();
         this._activateCurrentTool();
