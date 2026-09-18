@@ -235,6 +235,41 @@ function initInpaintSettings() {
     }
 }
 
+// Outpaint設定（デフォルトワークフロー。Inpaint設定とは独立。OFFならWorkflow Studio側で
+// 現在読み込まれているワークフローをそのまま使う。Outpaintはマスク不要のImage Editモデル系
+// ワークフローを使うケースが多いことを想定し、Inpaint設定とは別に切り替えられるようにしている）
+const _outpaintSettings = (() => {
+    try { return JSON.parse(localStorage.getItem('ccc_outpaint_settings') || '{}'); } catch { return {}; }
+})();
+
+function _saveOutpaintSettings() {
+    localStorage.setItem('ccc_outpaint_settings', JSON.stringify(_outpaintSettings));
+}
+
+let _outpaintSettingsInited = false;
+function initOutpaintSettings() {
+    if (_outpaintSettingsInited) return;
+    _outpaintSettingsInited = true;
+    const enabledCb = document.getElementById('settings-outpaint-default-wf-enabled');
+    const nameInput = document.getElementById('settings-outpaint-default-wf-name');
+    const saveBtn   = document.getElementById('settings-outpaint-save-btn');
+    const statusEl  = document.getElementById('settings-outpaint-status');
+    if (!enabledCb) return;
+
+    enabledCb.checked = !!_outpaintSettings.defaultWorkflowEnabled;
+    if (nameInput) nameInput.value = _outpaintSettings.defaultWorkflowFile || 'cc_outpaint_default.json';
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            _outpaintSettings.defaultWorkflowEnabled = enabledCb.checked;
+            _outpaintSettings.defaultWorkflowFile    = (nameInput?.value || '').trim() || 'cc_outpaint_default.json';
+            _saveOutpaintSettings();
+            if (statusEl) statusEl.textContent = t('settings.gmicSaved');
+            setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
+        });
+    }
+}
+
 // ==============================
 // Workflow Studio ギャラリー (iframe埋め込み)
 // ==============================
@@ -406,6 +441,56 @@ async function sendInpaintToWorkflowStudio(imageBlob, maskBlob, params) {
         return await fn(imageBlob, maskBlob, params, workflowData, workflowFilename);
     } catch (e) {
         console.error('[Inpaint] sendInpaintToWorkflowStudio error:', e);
+        return { ok: false, message: e.message };
+    }
+}
+
+// ==============================
+// Outpaint連携（Workflow Studio）
+// ==============================
+
+/**
+ * Image タブの拡張済み画像(Blob、余白部分を含む)とマスク(Blob、余白部分=白/元画像部分=黒)を
+ * Workflow Studio(iframe)へ送信し、Outpaint実行結果のURLを受け取る。マスクベースの生成という
+ * 点ではInpaintと全く同じ処理のため、WFS側の受け口は_wfmReceiveInpaintRequestをそのまま再利用する
+ * （Comic Creator側の設定タブでOutpaint専用のデフォルトワークフローを指定できる点だけがInpaintと異なる）。
+ * @param {Blob} imageBlob
+ * @param {Blob} maskBlob
+ * @param {{positive:string, negative:string, growMaskBy:number, denoise:number}} params
+ * @returns {Promise<{ok:boolean, url?:string, message?:string}>}
+ */
+async function sendOutpaintToWorkflowStudio(imageBlob, maskBlob, params) {
+    const loaded = await loadWfmGalleryTab();
+    if (!loaded) {
+        return { ok: false, message: t('settings.wfmNotFound') };
+    }
+
+    const iframe = document.getElementById('wfmgallery-iframe');
+    const fn = iframe?.contentWindow?._wfmReceiveInpaintRequest;
+    if (typeof fn !== 'function') {
+        return { ok: false, message: 'Workflow Studio inpaint bridge is not ready' };
+    }
+
+    let workflowData = null;
+    let workflowFilename = null;
+    if (_outpaintSettings.defaultWorkflowEnabled && _outpaintSettings.defaultWorkflowFile) {
+        workflowFilename = _outpaintSettings.defaultWorkflowFile;
+        try {
+            const wfRes = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(workflowFilename)}`);
+            if (wfRes.ok) {
+                workflowData = await wfRes.json();
+            } else {
+                console.warn('[Outpaint] default workflow fetch failed:', wfRes.status);
+            }
+        } catch (e) {
+            console.warn('[Outpaint] default workflow fetch error:', e);
+        }
+    }
+
+    try {
+        return await fn(imageBlob, maskBlob, params, workflowData, workflowFilename);
+    } catch (e) {
+        console.error('[Outpaint] sendOutpaintToWorkflowStudio error:', e);
         return { ok: false, message: e.message };
     }
 }
@@ -705,10 +790,10 @@ async function gmicInsertResult() {
 
 export {
     _eagleSettings, saveToEagle, initEagleSettings, initGmicSettings,
-    getI2ISettingsState, saveI2ISettingsState, initInpaintSettings,
+    getI2ISettingsState, saveI2ISettingsState, initInpaintSettings, initOutpaintSettings,
     getT2ISettingsState, saveT2ISettingsState,
     initWfmGalleryTab, loadWfmGalleryTab,
-    sendImageToWorkflowStudioI2I, sendInpaintToWorkflowStudio, sendI2IRunToWorkflowStudio,
+    sendImageToWorkflowStudioI2I, sendInpaintToWorkflowStudio, sendOutpaintToWorkflowStudio, sendI2IRunToWorkflowStudio,
     requestLLMPromptFromWorkflowStudio, requestPanelImageFromWorkflowStudio,
     initGmicTab,
 };
@@ -719,6 +804,7 @@ export {
 window.initEagleSettings = initEagleSettings;
 window.initGmicSettings = initGmicSettings;
 window.initInpaintSettings = initInpaintSettings;
+window.initOutpaintSettings = initOutpaintSettings;
 window.initWfmGalleryTab = initWfmGalleryTab;
 window.loadWfmGalleryTab = loadWfmGalleryTab;
 window.initGmicTab = initGmicTab;

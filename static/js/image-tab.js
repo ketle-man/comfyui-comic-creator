@@ -20,7 +20,7 @@ import { MaskColorTool, MaskAlphaTool, MaskTextTool, MaskVectorTool, MaskShapeTo
                                 from "./image-tab/MaskEditorOneTools.js";
 import { state, switchTab } from './main/01-state.js';
 import { _fontMgrCatLabel, _fontMgrEnsureFontLoaded, _fontMgrGoogleList } from './main/19-font-manager.js';
-import { getI2ISettingsState, saveI2ISettingsState, saveToEagle, sendI2IRunToWorkflowStudio, sendImageToWorkflowStudioI2I, sendInpaintToWorkflowStudio } from './main/14-integrations.js';
+import { getI2ISettingsState, saveI2ISettingsState, saveToEagle, sendI2IRunToWorkflowStudio, sendImageToWorkflowStudioI2I, sendInpaintToWorkflowStudio, sendOutpaintToWorkflowStudio } from './main/14-integrations.js';
 import { pixiFxOpen } from './pixifx.js';
 import { loadAssets } from './main/02-assets.js';
 import { pushHistory, savePanelSvg } from './main/07-pages.js';
@@ -447,6 +447,15 @@ class ImageTab {
         this._inpaintGrowMaskBy = 6;
         this._inpaintDenoise   = 1.0;
         this._inpaintRunning   = false;
+        // Outpaint（Mask サブツール。Inpaintと対称の構成。サイズ拡張＋マスク作成をRun 1回で行う）
+        this._outpaintPositive   = "";
+        this._outpaintNegative   = "";
+        this._outpaintGrowMaskBy = 6;
+        this._outpaintDenoise    = 1.0;
+        this._outpaintRunning    = false;
+        this._outpaintPad        = { top: 0, right: 0, bottom: 0, left: 0 };
+        this._outpaintLinked     = false;
+        this._outpaintFillMode   = "extend"; // 'extend' | 'transparent' | 'white' | 'black'
         // Select→I2I（Select ツール専用の常時プロパティパネル。Inpaintと対称の構成）
         this._selectI2IMode     = "all"; // "all"（composite全体） | "layer"（選択中レイヤー単体）
         this._selectI2IPositive = "";
@@ -1304,10 +1313,11 @@ class ImageTab {
                     <button class="it-btn it-btn-sm${sub === "sam3"   ? " ie-opt-active" : ""}" id="ie-mask-sam3-btn"
                         ${sam3Disabled} title="${sam3Title}">SAM3</button>
                     ${this._wfmAvailable ? `<button class="it-btn it-btn-sm${sub === "inpaint" ? " ie-opt-active" : ""}" id="ie-mask-inpaint-btn" title="Inpaint via Workflow Studio">Inpaint</button>` : ""}
+                    ${this._wfmAvailable ? `<button class="it-btn it-btn-sm${sub === "outpaint" ? " ie-opt-active" : ""}" id="ie-mask-outpaint-btn" title="Outpaint via Workflow Studio">Outpaint</button>` : ""}
                 </div>
                 <div style="width:1px;height:22px;background:var(--it-border);margin:0 4px;flex-shrink:0;"></div>
                 ${sam3Ui}
-                ${sub !== "sam3" && sub !== "inpaint" ? `
+                ${sub !== "sam3" && sub !== "inpaint" && sub !== "outpaint" ? `
                 <div class="ie-opt-group">
                     <label style="font-size:11px;cursor:pointer;color:var(--it-text-secondary);">
                         <input type="checkbox" id="ie-mask-invert" ${this._maskInverted ? "checked" : ""}> Invert
@@ -1347,6 +1357,9 @@ class ImageTab {
             });
             document.getElementById("ie-mask-inpaint-btn")?.addEventListener("click", () => {
                 this._switchMaskSubtool("inpaint");
+            });
+            document.getElementById("ie-mask-outpaint-btn")?.addEventListener("click", () => {
+                this._switchMaskSubtool("outpaint");
             });
             document.getElementById("ie-sam3-prompt")?.addEventListener("input", e => {
                 this._sam3Prompt = e.target.value;
@@ -1910,6 +1923,105 @@ class ImageTab {
                 if (Number.isNaN(this._inpaintDenoise)) this._inpaintDenoise = 1.0;
             });
             document.getElementById("ie-inpaint-run-btn")?.addEventListener("click", () => this._runInpaint());
+        } else if (sub === "outpaint") {
+            const pad = this._outpaintPad;
+            const { newW, newH } = this._outpaintAdjustedPad(pad);
+            const fillOpts = [
+                { id: "extend",      label: t("image.extendColorExtend") },
+                { id: "transparent", label: t("image.extendColorTransparent") },
+                { id: "white",       label: t("image.extendColorWhite") },
+                { id: "black",       label: t("image.extendColorBlack") },
+            ];
+            body.innerHTML = `
+                <div class="ie-props-row">
+                    <label style="cursor:pointer;display:flex;align-items:flex-start;gap:4px;white-space:normal;line-height:1.4;">
+                        <input type="checkbox" id="ie-outpaint-linked" style="flex-shrink:0;margin-top:2px;" ${this._outpaintLinked ? "checked" : ""}>
+                        <span>${t("image.extendLinkedTitle")}</span>
+                    </label>
+                </div>
+                <div class="ie-props-row">
+                    <label>${t("image.extendTopLabel")}</label>
+                    <input type="number" id="ie-outpaint-top" value="${pad.top}" step="1" min="0" style="width:100%;box-sizing:border-box;">
+                </div>
+                <div class="ie-props-row">
+                    <label>${t("image.extendRightLabel")}</label>
+                    <input type="number" id="ie-outpaint-right" value="${pad.right}" step="1" min="0" style="width:100%;box-sizing:border-box;">
+                </div>
+                <div class="ie-props-row">
+                    <label>${t("image.extendBottomLabel")}</label>
+                    <input type="number" id="ie-outpaint-bottom" value="${pad.bottom}" step="1" min="0" style="width:100%;box-sizing:border-box;">
+                </div>
+                <div class="ie-props-row">
+                    <label>${t("image.extendLeftLabel")}</label>
+                    <input type="number" id="ie-outpaint-left" value="${pad.left}" step="1" min="0" style="width:100%;box-sizing:border-box;">
+                </div>
+                <div class="ie-props-row">
+                    <label>${t("image.extendColorLabel")}</label>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+                        ${fillOpts.map(o => `<button class="it-btn it-btn-sm${this._outpaintFillMode === o.id ? " ie-opt-active" : ""}" data-fill="${o.id}" style="padding:2px 4px;">${o.label}</button>`).join("")}
+                    </div>
+                </div>
+                <div style="font-size:11px;color:var(--it-text-secondary);white-space:normal;line-height:1.4;">
+                    ${t("image.extendNewSizeLabelPrefix")}<br>${newW} × ${newH} px<br>${t("image.outpaintSizeAdjustNote")}
+                </div>
+                <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
+                    <label>Positive Prompt</label>
+                    <textarea id="ie-outpaint-positive" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;font-size:12px;">${this._outpaintPositive}</textarea>
+                </div>
+                <div class="ie-props-row" style="flex-direction:column;align-items:stretch;">
+                    <label>Negative Prompt</label>
+                    <textarea id="ie-outpaint-negative" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;font-size:12px;">${this._outpaintNegative}</textarea>
+                </div>
+                <div class="ie-props-row">
+                    <label>Grow Mask By</label>
+                    <input type="number" id="ie-outpaint-grow-mask" min="0" max="200" step="1" value="${this._outpaintGrowMaskBy}" style="width:60px;">
+                </div>
+                <div class="ie-props-row">
+                    <label>Denoise</label>
+                    <input type="number" id="ie-outpaint-denoise" min="0" max="1" step="0.01" value="${this._outpaintDenoise}" style="width:60px;">
+                </div>
+                <div class="ie-props-row">
+                    <button class="it-btn it-btn-sm it-btn-primary" id="ie-outpaint-run-btn" style="flex:1;" ${this._outpaintRunning ? "disabled" : ""}>
+                        ${this._outpaintRunning ? "Running..." : "Run"}
+                    </button>
+                </div>
+                <span id="ie-outpaint-status" style="font-size:11px;color:var(--it-text-secondary);"></span>
+            `;
+            const syncOutpaintFromInput = (side, value) => {
+                const v = Math.max(0, Math.round(parseFloat(value)) || 0);
+                this._outpaintPad = this._outpaintLinked
+                    ? { top: v, right: v, bottom: v, left: v }
+                    : { ...this._outpaintPad, [side]: v };
+                this._renderMaskProps("outpaint");
+            };
+            document.getElementById("ie-outpaint-linked")?.addEventListener("change", (e) => {
+                this._outpaintLinked = e.target.checked;
+                if (this._outpaintLinked) {
+                    const v = Math.max(this._outpaintPad.top, this._outpaintPad.right, this._outpaintPad.bottom, this._outpaintPad.left);
+                    this._outpaintPad = { top: v, right: v, bottom: v, left: v };
+                }
+                this._renderMaskProps("outpaint");
+            });
+            document.getElementById("ie-outpaint-top")?.addEventListener("change", (e) => syncOutpaintFromInput("top", e.target.value));
+            document.getElementById("ie-outpaint-right")?.addEventListener("change", (e) => syncOutpaintFromInput("right", e.target.value));
+            document.getElementById("ie-outpaint-bottom")?.addEventListener("change", (e) => syncOutpaintFromInput("bottom", e.target.value));
+            document.getElementById("ie-outpaint-left")?.addEventListener("change", (e) => syncOutpaintFromInput("left", e.target.value));
+            body.querySelectorAll("[data-fill]").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    this._outpaintFillMode = btn.dataset.fill;
+                    this._renderMaskProps("outpaint");
+                });
+            });
+            document.getElementById("ie-outpaint-positive")?.addEventListener("input", e => { this._outpaintPositive = e.target.value; });
+            document.getElementById("ie-outpaint-negative")?.addEventListener("input", e => { this._outpaintNegative = e.target.value; });
+            document.getElementById("ie-outpaint-grow-mask")?.addEventListener("input", e => {
+                this._outpaintGrowMaskBy = parseInt(e.target.value) || 0;
+            });
+            document.getElementById("ie-outpaint-denoise")?.addEventListener("input", e => {
+                this._outpaintDenoise = Math.max(0, Math.min(1, parseFloat(e.target.value)));
+                if (Number.isNaN(this._outpaintDenoise)) this._outpaintDenoise = 1.0;
+            });
+            document.getElementById("ie-outpaint-run-btn")?.addEventListener("click", () => this._runOutpaint());
         } else if (sub === "color" && this._maskColorTool) {
             const t = this._maskColorTool;
             body.innerHTML = `
@@ -2710,6 +2822,117 @@ class ImageTab {
         }
     }
 
+    /**
+     * Outpaint用の拡張後サイズ・余白を計算する。VAEEncodeForInpaint→KSampler→VAEDecodeの
+     * 往復はVAEの8倍ダウンサンプリング＋UNet内部の複数段ダウンサンプリングの関係で、
+     * pixel寸法が64の倍数でないと、エンコード時に切り詰められた（8や64の倍数に丸められた）
+     * サイズでデコードされて返ってくることがある。この場合、結果画像が拡張後キャンバスより
+     * わずかに小さくなり、_loadFromDataUrl()のアスペクト比保持センタリングにより
+     * 上下（または左右）に透過の隙間が生じる（実機で発覚。ユーザー報告により64/8倍数との
+     * 関連を調査し確認）。これを避けるため、実際に拡張する側の辺（ユーザーが0を指定した辺は
+     * 変更しない）へ必要な分だけ追加し、新キャンバスサイズを64の倍数に丸める。
+     */
+    _outpaintAdjustedPad(pad) {
+        const origW = this._canvasW, origH = this._canvasH;
+        let { top, right, bottom, left } = pad;
+        const roundUp64 = (n) => Math.ceil(n / 64) * 64;
+        if (left > 0 || right > 0) {
+            const extraW = roundUp64(origW + left + right) - (origW + left + right);
+            if (extraW > 0) { if (right > 0) right += extraW; else left += extraW; }
+        }
+        if (top > 0 || bottom > 0) {
+            const extraH = roundUp64(origH + top + bottom) - (origH + top + bottom);
+            if (extraH > 0) { if (bottom > 0) bottom += extraH; else top += extraH; }
+        }
+        return { top, right, bottom, left, newW: origW + left + right, newH: origH + top + bottom };
+    }
+
+    // Maskツールの Outpaint サブツールから呼ばれるRunハンドラ。サイズ拡張（余白追加＋
+    // 塗り方選択）とマスク作成（余白部分=白＝生成対象、元画像部分=黒＝維持）を1回のRunで
+    // 内部的に行い、拡張後の画像とマスクをInpaintと同じWorkflow Studio連携で送信する。
+    // 成功後にキャンバスサイズを拡大・既存レイヤーをシフトし、結果を新規レイヤーとして追加する
+    // （失敗時はキャンバスに何も変更を加えない）。
+    async _runOutpaint() {
+        if (this._outpaintRunning) return;
+        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+
+        const rawPad = this._outpaintPad;
+        if (rawPad.top === 0 && rawPad.right === 0 && rawPad.bottom === 0 && rawPad.left === 0) {
+            this._toast("Set padding for at least one side", "info");
+            return;
+        }
+        const { top, right, bottom, left, newW, newH } = this._outpaintAdjustedPad(rawPad);
+
+        const runBtn   = document.getElementById("ie-outpaint-run-btn");
+        const statusEl = document.getElementById("ie-outpaint-status");
+        const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
+
+        this._outpaintRunning = true;
+        if (runBtn) { runBtn.disabled = true; runBtn.textContent = "Running..."; }
+        setStatus("Compositing...");
+
+        try {
+            const origW = this._canvasW, origH = this._canvasH;
+            const srcComposite = this._buildCompositeCanvas();
+
+            const paddedCanvas = document.createElement("canvas");
+            paddedCanvas.width = newW; paddedCanvas.height = newH;
+            const pctx = paddedCanvas.getContext("2d");
+            if (this._outpaintFillMode === "extend") {
+                pctx.drawImage(this._edgeExtendFillCanvas(srcComposite, { top, right, bottom, left }), 0, 0);
+            } else {
+                if (this._outpaintFillMode !== "transparent") {
+                    pctx.fillStyle = this._outpaintFillMode === "white" ? "#ffffff" : "#000000";
+                    pctx.fillRect(0, 0, newW, newH);
+                }
+                pctx.drawImage(srcComposite, left, top);
+            }
+            const imageBlob = await new Promise((resolve) => paddedCanvas.toBlob(resolve, "image/png"));
+
+            // マスク: 白=生成対象（追加した余白部分）、黒=維持（元画像の範囲）
+            const maskCanvas = document.createElement("canvas");
+            maskCanvas.width = newW; maskCanvas.height = newH;
+            const mctx = maskCanvas.getContext("2d");
+            mctx.fillStyle = "#fff";
+            mctx.fillRect(0, 0, newW, newH);
+            mctx.fillStyle = "#000";
+            mctx.fillRect(left, top, origW, origH);
+            const maskBlob = await new Promise((resolve) => maskCanvas.toBlob(resolve, "image/png"));
+
+            setStatus("Generating...");
+            const result = await sendOutpaintToWorkflowStudio(imageBlob, maskBlob, {
+                positive:   this._outpaintPositive,
+                negative:   this._outpaintNegative,
+                growMaskBy: this._outpaintGrowMaskBy,
+                denoise:    this._outpaintDenoise,
+            });
+
+            if (!result?.ok) throw new Error(result?.message || "Outpaint failed");
+
+            setStatus("Done");
+            this._saveUndo();
+            this._layerMgr.layers.forEach(layer => {
+                layer.x += left;
+                layer.y += top;
+            });
+            this._canvasW = newW;
+            this._canvasH = newH;
+            this._layerMgr.width  = newW;
+            this._layerMgr.height = newH;
+            this._resizeCanvasElements(newW, newH);
+
+            await this._loadFromDataUrl(result.url, "Outpaint Result");
+            if (typeof this._fitToView === "function") this._fitToView();
+            this._toast("Outpaint generation complete", "success");
+        } catch (err) {
+            setStatus("Error");
+            this._toast(`Outpaint failed: ${err.message}`, "error");
+        } finally {
+            this._outpaintRunning = false;
+            if (this._activeTool === "mask" && this._maskSubtool === "outpaint") this._renderMaskProps("outpaint");
+        }
+    }
+
     _renderMaskLayerOverlay(ctx, maskLayer) {
         const overlayColor = this._maskOverlayColor;
         const blurPx       = this._maskBlur;
@@ -3317,6 +3540,7 @@ class ImageTab {
             { id: "transparent", label: t("image.extendColorTransparent") },
             { id: "white",       label: t("image.extendColorWhite") },
             { id: "black",       label: t("image.extendColorBlack") },
+            { id: "extend",      label: t("image.extendColorExtend") },
         ];
 
         body.innerHTML = `
@@ -3344,8 +3568,8 @@ class ImageTab {
             </div>
             <div class="ie-props-row">
                 <label>${t("image.extendColorLabel")}</label>
-                <div style="display:flex;gap:4px;">
-                    ${colorOpts.map(o => `<button class="it-btn it-btn-sm${this._extendColor === o.id ? " ie-opt-active" : ""}" data-color="${o.id}" style="flex:1;padding:2px 4px;">${o.label}</button>`).join("")}
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+                    ${colorOpts.map(o => `<button class="it-btn it-btn-sm${this._extendColor === o.id ? " ie-opt-active" : ""}" data-color="${o.id}" style="padding:2px 4px;">${o.label}</button>`).join("")}
                 </div>
             </div>
             <div style="font-size:11px;color:var(--it-text-secondary);white-space:normal;line-height:1.4;">
@@ -3403,6 +3627,8 @@ class ImageTab {
 
         const newW = this._canvasW + left + right;
         const newH = this._canvasH + top + bottom;
+        // "extend"（エッジ延伸）モードは、レイヤーをシフトする前の現在の合成結果を縁のピクセル延伸に使う
+        const srcComposite = this._extendColor === "extend" ? this._buildCompositeCanvas() : null;
 
         this._layerMgr.layers.forEach(layer => {
             layer.x += left;
@@ -3415,8 +3641,12 @@ class ImageTab {
             const fillLayer = this._layerMgr.addLayer("draw", "Background Fill", {
                 contentW: newW, contentH: newH, x: 0, y: 0,
             });
-            fillLayer.ctx.fillStyle = this._extendColor === "white" ? "#ffffff" : "#000000";
-            fillLayer.ctx.fillRect(0, 0, newW, newH);
+            if (this._extendColor === "extend") {
+                fillLayer.ctx.drawImage(this._edgeExtendFillCanvas(srcComposite, { top, right, bottom, left }), 0, 0);
+            } else {
+                fillLayer.ctx.fillStyle = this._extendColor === "white" ? "#ffffff" : "#000000";
+                fillLayer.ctx.fillRect(0, 0, newW, newH);
+            }
             const idx = this._layerMgr.layers.indexOf(fillLayer);
             if (idx !== -1) {
                 this._layerMgr.layers.splice(idx, 1);
@@ -3436,6 +3666,30 @@ class ImageTab {
         this._renderToolOptions("select");
         if (typeof this._fitToView === "function") this._fitToView();
         this._toast(`Extended: ${newW}×${newH}`, "success");
+    }
+
+    /**
+     * 元画像（srcCanvas）の縁のピクセルを引き伸ばして四辺の余白を埋めた新キャンバスを返す。
+     * サイズ拡張の「エッジ延伸」モードと、Outpaintの下地画像作成の両方から使う共通ヘルパー。
+     * 単色塗りと違い、モデルに繋がりのヒントを与えられるため境界の継ぎ目が出にくい。
+     */
+    _edgeExtendFillCanvas(srcCanvas, pad) {
+        const { top, right, bottom, left } = pad;
+        const w = srcCanvas.width, h = srcCanvas.height;
+        const newW = w + left + right, newH = h + top + bottom;
+        const canvas = document.createElement("canvas");
+        canvas.width = newW; canvas.height = newH;
+        const ctx = canvas.getContext("2d");
+        if (top > 0)    ctx.drawImage(srcCanvas, 0, 0, w, 1, left, 0, w, top);
+        if (bottom > 0) ctx.drawImage(srcCanvas, 0, h - 1, w, 1, left, top + h, w, bottom);
+        if (left > 0)   ctx.drawImage(srcCanvas, 0, 0, 1, h, 0, top, left, h);
+        if (right > 0)  ctx.drawImage(srcCanvas, w - 1, 0, 1, h, left + w, top, right, h);
+        if (top > 0 && left > 0)     ctx.drawImage(srcCanvas, 0, 0, 1, 1, 0, 0, left, top);
+        if (top > 0 && right > 0)    ctx.drawImage(srcCanvas, w - 1, 0, 1, 1, left + w, 0, right, top);
+        if (bottom > 0 && left > 0)  ctx.drawImage(srcCanvas, 0, h - 1, 1, 1, 0, top + h, left, bottom);
+        if (bottom > 0 && right > 0) ctx.drawImage(srcCanvas, w - 1, h - 1, 1, 1, left + w, top + h, right, bottom);
+        ctx.drawImage(srcCanvas, left, top);
+        return canvas;
     }
 
     // ── 画像ロード ────────────────────────────────

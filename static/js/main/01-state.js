@@ -22,7 +22,7 @@ import {
 import { _initWorkMgr, renderAssetTemplateGrid } from './11a-work-manager.js';
 import {
     initWfmGalleryTab, initGmicTab, loadWfmGalleryTab,
-    initEagleSettings, initGmicSettings, initInpaintSettings,
+    initEagleSettings, initGmicSettings, initInpaintSettings, initOutpaintSettings,
 } from './14-integrations.js';
 import { initPixiFxButtons } from './15-pixifx-bridge.js';
 import { initMangaHalftoneButton, initMangaEffectsButton } from './15b-manga-tone.js';
@@ -429,6 +429,7 @@ async function switchTab(tabId) {
         initEagleSettings();
         initGmicSettings();
         initInpaintSettings();
+        initOutpaintSettings();
     } else if (tabId === 'fontmgr') {
         await initFontMgrTab();
     } else if (tabId === 'project') {
