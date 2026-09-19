@@ -91,6 +91,24 @@ def _error_response(e: Exception, status: int = 500, key: str = 'message') -> we
         payload['error_params'] = e.params
     return web.json_response(payload, status=status)
 
+_GEMINI_MODEL_RE = re.compile(r'^[A-Za-z0-9._-]{1,100}$')
+
+def _validate_gemini_model(model: str) -> str:
+    """Gemini APIのモデル名を検証する。URLパスへ直接f-string埋め込みするため、
+    '/'や'?'等を許すとリクエスト先パス・クエリを操作されAPIキーの不正流用につながる。"""
+    if not model or not _GEMINI_MODEL_RE.match(model):
+        raise CCCError('nanobanana_invalid_model', f'不正なモデル名です: {model!r}', model=model)
+    return model
+
+_FONT_WEIGHT_RE = re.compile(r'^\d{1,3}$')
+
+def _validate_font_weight(weight: str) -> str:
+    """Google Fonts CSS2 APIのweightクエリ値を検証する。URLクエリへ直接f-string埋め込みするため、
+    '&'等を許すとクエリインジェクションにつながる。"""
+    if not _FONT_WEIGHT_RE.match(weight):
+        raise CCCError('font_invalid_weight', f'不正なweightです: {weight!r}', weight=weight)
+    return weight
+
 async def _read_json_limited(request, max_bytes: int) -> dict:
     """request.json() の代替。ボディサイズを上限チェックしてからパースする。
     base64画像等を含むJSONは request.json() だと無制限に読み込まれメモリDoSになるため、
@@ -629,7 +647,7 @@ async def handle_nanobanana_generate(request):
         if not NANOBANANA_API_KEY:
             return _error_response(CCCError('nanobanana_api_key_missing', 'Gemini APIキーが設定されていません。プラグインフォルダ直下の .env に NANOBANANA_API_KEY=... を記載し、ComfyUIを再起動してください。'), status=400)
         data = await request.json()
-        model = data.get('model', 'gemini-3.1-flash-lite-image')
+        model = _validate_gemini_model(data.get('model', 'gemini-3.1-flash-lite-image'))
         prompt = data.get('prompt', '')
         negative_prompt = data.get('negative_prompt', '')
         num_images = data.get('num_images', 1)
@@ -713,6 +731,8 @@ async def handle_nanobanana_generate(request):
 
         return web.json_response({'status': 'ok', 'images': images})
 
+    except CCCError as e:
+        return _error_response(e, status=400)
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8')
         return _error_response(Exception(f'Google API Error ({e.code}): {error_body}'), status=500)
@@ -743,7 +763,10 @@ async def handle_google_font_ttf(request):
     family = request.query.get('family', '').strip()
     if not family:
         return _error_response(CCCError('font_family_required', 'family パラメータが必要です'), status=400)
-    weight = request.query.get('weight', '400')
+    try:
+        weight = _validate_font_weight(request.query.get('weight', '400'))
+    except CCCError as e:
+        return _error_response(e, status=400)
     italic = request.query.get('italic', '0') == '1'
 
     try:
