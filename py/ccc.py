@@ -913,9 +913,19 @@ async def handle_local_gmic_result_b64(request):
     except Exception as e:
         return _error_response(e, status=500, key='detail')
 
+_GMIC_SEGMENT_RE = re.compile(r'^[A-Za-z0-9._-]+$')
+
 async def handle_proxy_gmic(request):
-    sub_path = str(request.rel_url)[len('/api/ccc/gmic'):]
-    target_url = GMIC_SERVER_URL + '/api' + sub_path
+    rel = request.rel_url
+    # rel.path はパーセントデコード済み。セグメント単位で許可文字＋トラバーサル(., ..)を検証し、
+    # ローカルG'MICサーバーへの意図しないパスでの転送（open-proxy的形状）を防ぐ。
+    sub_path = rel.path[len('/api/ccc/gmic'):]
+    segments = [s for s in sub_path.split('/') if s]
+    if any(s in ('.', '..') or not _GMIC_SEGMENT_RE.match(s) for s in segments):
+        return _error_response(CCCError('gmic_invalid_path', "G'MIC API: 不正なパスです", path=sub_path), status=400, key='detail')
+    normalized_path = ('/' + '/'.join(segments)) if segments else ''
+    query = ('?' + rel.query_string) if rel.query_string else ''
+    target_url = GMIC_SERVER_URL + '/api' + normalized_path + query
     try:
         body = await request.read() if request.method == 'POST' else None
         loop = asyncio.get_event_loop()
