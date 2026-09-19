@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 597 843">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: none;
+      }
+
+      .cls-1, .cls-2, .cls-3 {
+        stroke-miterlimit: 10;
+      }
+
+      .cls-1, .cls-3 {
+        stroke: #000;
+      }
+
+      .cls-2 {
+        stroke: #231f20;
+      }
+
+      .cls-2, .cls-3 {
+        fill: #fff;
+      }
+    </style>
+  </defs>
+  <rect id="panel_0" class="cls-2" x=".5" y=".5" width="596" height="842"/>
+  <rect id="panel_1" class="cls-1" x="15" y="13" width="569" height="301"/>
+  <rect id="panel_2" class="cls-1" x="15" y="328" width="569" height="284"/>
+  <rect id="panel_3" class="cls-3" x="15" y="627" width="569" height="202"/>
+</svg>

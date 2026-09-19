@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Creator: CorelDRAW (OEM バージョン) -->
+<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="595px" height="842px" version="1.1" style="shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd"
+viewBox="0 0 595 841.5"
+ xmlns:xlink="http://www.w3.org/1999/xlink"
+ xmlns:xodm="http://www.corel.com/coreldraw/odm/2003">
+ <defs>
+  <style type="text/css">
+   <![CDATA[
+    .str0 {stroke:black;stroke-width:0.567;stroke-miterlimit:22.9256}
+    .fil0 {fill:white}
+   ]]>
+  </style>
+ </defs>
+ <g id="レイヤ_x0020_1">
+  <metadata id="CorelCorpID_0Corel-Layer"/>
+  <rect id="panel_0" class="fil0 str0" x="-0.362" y="0.055" width="595" height="841.5"/>
+  <polygon id="panel_4" class="fil0 str0" points="472.886,359.876 519.472,483.821 566.058,607.767 472.886,607.767 379.715,607.767 426.301,483.821 "/>
+  <ellipse id="panel_3" class="fil0 str0" cx="205.406" cy="561.445" rx="122.336" ry="240.201"/>
+  <rect id="panel_2" class="fil0 str0" x="282.158" y="19.888" width="298.313" height="279.352"/>
+  <rect id="panel_1" class="fil0 str0" x="13.31" y="19.889" width="254.852" height="279.351"/>
+ </g>
+</svg>
