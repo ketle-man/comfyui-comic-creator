@@ -25,6 +25,7 @@ from .config import (
     SETTINGS_FILE,
     VALID_EXTENSIONS, GMIC_SERVER_URL,
     VALID_VIDEO_EXTENSIONS, MAX_VIDEO_UPLOAD_BYTES,
+    MAX_JSON_IMAGE_UPLOAD_BYTES, MAX_PSD_UPLOAD_BYTES,
 )
 
 # ─── Security helpers ─────────────────────────────────────────────────────────
@@ -89,6 +90,17 @@ def _error_response(e: Exception, status: int = 500, key: str = 'message') -> we
         payload['error_code'] = e.code
         payload['error_params'] = e.params
     return web.json_response(payload, status=status)
+
+async def _read_json_limited(request, max_bytes: int) -> dict:
+    """request.json() の代替。ボディサイズを上限チェックしてからパースする。
+    base64画像等を含むJSONは request.json() だと無制限に読み込まれメモリDoSになるため、
+    base64.b64decode する全ハンドラはこれを経由すること。"""
+    if request.content_length is not None and request.content_length > max_bytes:
+        raise CCCError('payload_too_large', f'リクエストサイズが大きすぎます（上限 {max_bytes // (1024 * 1024)}MB）', max_mb=max_bytes // (1024 * 1024))
+    raw = await request.read()
+    if len(raw) > max_bytes:
+        raise CCCError('payload_too_large', f'リクエストサイズが大きすぎます（上限 {max_bytes // (1024 * 1024)}MB）', max_mb=max_bytes // (1024 * 1024))
+    return json.loads(raw)
 
 # ─── Jinja2 ──────────────────────────────────────────────────────────────────
 
@@ -405,7 +417,7 @@ async def handle_nanobanana_key(request):
 
 async def handle_save_nanobanana_image(request):
     try:
-        data = await request.json()
+        data = await _read_json_limited(request, MAX_JSON_IMAGE_UPLOAD_BYTES)
         img_b64 = data.get('image', '')
         filename = data.get('filename', '')
         if not img_b64:
@@ -419,6 +431,8 @@ async def handle_save_nanobanana_image(request):
         dest = _safe_path(OUTPUT_NANOBANANA_DIR, filename)
         dest.write_bytes(img_bytes)
         return web.json_response({'status': 'ok', 'url': f'/ccc_nanobanana_output/{dest.name}'})
+    except CCCError as e:
+        return _error_response(e, status=413)
     except Exception as e:
         return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
@@ -458,7 +472,7 @@ async def handle_save_image_project(request):
     assets/image/ に保存する。assets.json 生成時にこのペアが projectPath 付きの
     プロジェクトアセットとして認識される（_generate_assets_json 参照）。"""
     try:
-        data = await request.json()
+        data = await _read_json_limited(request, MAX_JSON_IMAGE_UPLOAD_BYTES)
         filename    = (data.get('filename') or '').strip()
         thumb_b64   = data.get('thumbnail', '')
         project_str = data.get('project', '')
@@ -483,6 +497,8 @@ async def handle_save_image_project(request):
 
         _generate_assets_json()
         return web.json_response({'status': 'ok', 'path': f'ccc_assets/image/{safe_name}.png'})
+    except CCCError as e:
+        return _error_response(e, status=413)
     except Exception as e:
         return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
@@ -493,7 +509,19 @@ async def handle_psd_import_layers(request):
         field = await reader.next()
         if field is None:
             return web.json_response({'status': 'error', 'message': 'file field required'}, status=400)
-        psd_bytes = await field.read(decode=False)
+
+        # 数十MBになり得るため、一括read()ではなくチャンク読み込みでサイズ上限超過を早期検出する
+        chunks = []
+        size = 0
+        while True:
+            chunk = await field.read_chunk(1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > MAX_PSD_UPLOAD_BYTES:
+                return _error_response(CCCError('psd_too_large', f'PSDファイルが大きすぎます（上限 {MAX_PSD_UPLOAD_BYTES // (1024 * 1024)}MB）'), status=413)
+            chunks.append(chunk)
+        psd_bytes = b''.join(chunks)
 
         # PSDのラスタ化はCPU負荷が高く同期実行するとイベントループ全体をブロックするため
         # executorで実行する
@@ -820,7 +848,7 @@ async def handle_post_local_gmic_settings(request):
 async def handle_local_gmic_open_b64(request):
     import mimetypes
     try:
-        data = await request.json()
+        data = await _read_json_limited(request, MAX_JSON_IMAGE_UPLOAD_BYTES)
         image_b64 = data.get('image_b64', '')
         if not image_b64:
             return _error_response(CCCError('gmic_image_required', 'image_b64 フィールドがありません'), status=400, key='detail')
@@ -867,6 +895,8 @@ async def handle_local_gmic_open_b64(request):
         t = threading.Thread(target=_gmic_run_gui, args=(job_id, input_path, output_path), daemon=True)
         t.start()
         return web.json_response({'job_id': job_id, 'status': 'pending', 'message': '起動中'})
+    except CCCError as e:
+        return _error_response(e, status=413, key='detail')
     except Exception as e:
         return _error_response(e, status=500, key='detail')
 

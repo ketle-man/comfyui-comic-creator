@@ -24,4 +24,10 @@ VALID_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.webp', '.svg')
 VALID_VIDEO_EXTENSIONS = ('.mp4',)
 MAX_VIDEO_UPLOAD_BYTES = 300 * 1024 * 1024  # 300MB（暫定値。実運用のファイルサイズに応じて調整）
 
+# base64画像を含むJSONボディ（nanobanana画像保存、Imageプロジェクトサムネイル、G'MIC入力画像）の上限。
+# 無制限のbase64.b64decodeによるメモリDoSを防ぐ。高解像度PNGでも十分な余裕を見込んだ値。
+MAX_JSON_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB
+# PSDインポート（multipart）の上限。レイヤー数の多い実用PSDは数十MBになり得るため画像系より大きめ。
+MAX_PSD_UPLOAD_BYTES = 50 * 1024 * 1024  # 50MB
+
 GMIC_SERVER_URL = 'http://127.0.0.1:8005'
