@@ -913,25 +913,8 @@ async def handle_local_gmic_result_b64(request):
     except Exception as e:
         return _error_response(e, status=500, key='detail')
 
-async def handle_gmic_start_server(request):
-    try:
-        bat_path = PLUGIN_DIR / 'app_server' / 'start_gmic_server.bat'
-        if not bat_path.exists():
-            return web.json_response({'detail': f'バッチファイルが見つかりません: {bat_path}'}, status=404)
-        subprocess.Popen(
-            ['cmd.exe', '/c', str(bat_path)],
-            cwd=str(bat_path.parent),
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
-        return web.json_response({'status': 'ok', 'message': "G'MICサーバーを起動しました"})
-    except Exception as e:
-        return web.json_response({'detail': str(e)}, status=500)
-
 async def handle_proxy_gmic(request):
     sub_path = str(request.rel_url)[len('/api/ccc/gmic'):]
-    # start-server はプロキシではなくローカル処理
-    if sub_path.startswith('/start-server'):
-        return await handle_gmic_start_server(request)
     target_url = GMIC_SERVER_URL + '/api' + sub_path
     try:
         body = await request.read() if request.method == 'POST' else None
@@ -975,7 +958,6 @@ def _build_dispatch_tables():
         "local-gmic/settings":         handle_post_local_gmic_settings,
         "local-gmic/open_in_gui_b64":  handle_local_gmic_open_b64,
         "local-gmic/result_b64":       handle_local_gmic_result_b64,
-        "gmic/start-server":           handle_gmic_start_server,
         "video/upload":                handle_upload_video,
     }
 
@@ -1037,7 +1019,6 @@ class ComicCreator:
         app.router.add_post("/api/ccc/local-gmic/settings",      handle_post_local_gmic_settings)
         app.router.add_post("/api/ccc/local-gmic/open_in_gui_b64", handle_local_gmic_open_b64)
         app.router.add_post("/api/ccc/local-gmic/result_b64",    handle_local_gmic_result_b64)
-        app.router.add_post("/api/ccc/gmic/start-server",        handle_gmic_start_server)
         app.router.add_post("/api/ccc/video/upload",              handle_upload_video)
         app.router.add_post("/api/ccc/gmic/{tail:.*}",           handle_proxy_gmic)
 
