@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-09-19（セキュリティチェック指摘への対応、v1.44.1）
+
+外部のセキュリティチェック（レジストリのYARAスキャンを想定した指摘）を受け、機能に影響のない範囲でバックエンドの修正を4件実施した。
+
+**未使用コード削除 + .comfyignore 追加**: `handle_gmic_start_server`（存在しない`app_server/start_gmic_server.bat`を`subprocess.Popen`で起動するハンドラ）は、フロントエンドのどこからも呼ばれていない到達不能コードだったため削除した（ハンドラ本体・`handle_proxy_gmic`内の分岐・dispatchテーブル登録・ルート登録の計4箇所）。あわせて`.comfyignore`を新規追加し、`DEVLOG.md`・`PLAN_*.md`・`sample_svg/`・`docs/`・`output/`をレジストリパッケージング対象から除外した（`pyproject.toml`の`Icon`が参照する`docs/thumb.png`はGitHub raw URL経由で取得されるため影響なし）。
+
+**G'MICプロキシのパストラバーサル対策**: `handle_proxy_gmic`が`/api/ccc/gmic/{tail}`のtail部分を未検証のまま`GMIC_SERVER_URL`（`http://127.0.0.1:8005`）へ文字列連結しており、`..`や不正文字を含むパスがそのまま転送される open-proxy 的形状だった。セグメント単位で`[A-Za-z0-9._-]+`のホワイトリスト検証を追加し、`.`/`..`単体セグメントや不正文字を含むリクエストは400で拒否するようにした。
+
+**保存系APIのペイロードサイズ上限**: `save-nanobanana-image`・`save-image-project`・`local-gmic/open_in_gui_b64`（いずれもbase64画像を含むJSONを`request.json()`で無制限に読み込んでいた）に共通ヘルパー`_read_json_limited()`を追加し、上限20MBでContent-Length・実バイト長の両方をチェックしてから413を返すようにした。`psd/import-layers`（multipart）も一括`field.read()`を動画アップロードと同様のチャンク読み込みに変更し、読み込み中にサイズ超過を早期検出する（上限50MB）。
+
+**model名・font weightのURL組み立て検証**: Gemini API呼び出しの`model`パラメータとGoogle Fonts CSS2 APIの`weight`パラメータが、いずれも未検証のままf-stringでURLパス/クエリへ直接埋め込まれていた（`/`や`?`、`&`を含む値でリクエスト先パス・クエリを操作できる形状。APIキーはヘッダー送信のため、パス操作によるキー不正流用につながりうる）。`_validate_gemini_model`（`[A-Za-z0-9._-]{1,100}`）と`_validate_font_weight`（`\d{1,3}`）を追加し、不正な値は400で拒否する。
+
+**検証**: 全項目を実機（curl／Kapture）で検証した。G'MICプロキシは`curl --path-as-is`で生のパストラバーサル文字列（`../../../../etc/passwd`等）を送信し拒否（400）を確認、ブラウザの`fetch()`はURLを自動正規化してしまうため素のcurlでの検証が必須だった。保存系APIはダミーの大容量JSON/PSDファイル（21MB／51MB）で上限超過時413・正常サイズ時200/400（PSDは解析失敗の400=サイズチェック通過の証跡）を確認（テスト生成物は削除済み）。font weightはcurlで不正値の拒否（400）と正常値（400/700）でのttf取得成功を確認。model名検証はこの環境が`NANOBANANA_API_KEY`未設定のため実サーバー経由では検証できず（APIキーチェックが先に働く安全側の動作）、正規表現ロジックを単体テストで確認した。
+
+**副次的な修正漏れの発見**: 今回の作業とは別に、v1.41.0（PixiJS FXの複数フィルター機能対応）のリリース時にヘルプ（22-help-tab.js）は3言語とも更新済みだったが、READMEの機能一覧説明文とスクリーンショット（`docs/11_pixifx.png`）のalt文言が単一フィルタ時代の文言のまま反映漏れになっていたため、あわせて3言語×2箇所（計6箇所）を更新した。
+
+**How to apply**: [[comic-creator-workflow]]同様、`py/`配下のPythonバックエンド変更は実機検証前にComfyUIサーバーの再起動が必要（JS/CSSと異なりリロードだけでは反映されない）。セキュリティ目的でリクエストサイズ上限やホワイトリスト検証を追加する際は、正常系が壊れていないことをcurl等で明示的に確認すること。また、パストラバーサル等の悪意ある入力を検証する際はブラウザの`fetch()`ではなくraw HTTPリクエスト（`curl --path-as-is`）を使うこと（ブラウザ側のURL正規化により`..`等が検証前に解決されてしまい、意図したテストにならない）。
+
+ヘルプ（22-help-tab.js、日本語・英語・中国語）・README（3言語、PixiJS FX説明文の反映漏れ修正込み）に反映済み。このリリースはv1.44.1としてコミット・リリース実施。
+
+---
+
 ## 2026-09-19（Imageタブ Mask ツールに Outpaint を追加、サイズ拡張に「拡張ピクセル」方式を追加、v1.44.0）
 
 前回（v1.43.0）実装したサイズ拡張機能をベースに、Maskツールへ生成AIによる画像拡張（Outpaint）機能を追加した。既存のInpaint連携をそのまま流用できる設計にしたため、Workflow Studio側（別リポジトリ）の変更は一切不要だった。
