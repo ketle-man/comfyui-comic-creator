@@ -274,3 +274,53 @@ export const SAMPLE_SCRIPT = {
 export function cloneSampleScript() {
     return JSON.parse(JSON.stringify(SAMPLE_SCRIPT));
 }
+
+// ============================================
+// Chat（ストーリー・脚本の相談・編集）
+// ============================================
+
+const SCRIPT_JSON_SCHEMA = '{"pages":[{"page":1,"panels":[{"importance":"High","action":"背景描写・演技指示","dialogues":[{"character":"話者名","text":"セリフ","bubbleType":"speech"}]}]}]}';
+
+// includeContext が true のとき、現在のお題・ストーリー・脚本をシステムプロンプトへ含める。
+// 脚本はJSONで渡す（Chatが返した修正版をそのまま「脚本に反映」できるよう、往復で同じ形式を保つため）。
+export function buildChatSystemMessage({ theme, pageCount, story, script, includeContext }) {
+    const lines = [
+        'あなたはマンガ制作を手伝うアシスタントです。ユーザーと相談しながら、ストーリーや脚本（ネーム）を作り、直します。',
+        '- ストーリーを直すときは、修正後のストーリー【全文】だけを返してください（【タイトル】【登場人物】【あらすじ】【ページ配分】の形式）。',
+        `- 脚本を直すときは、修正後の脚本【全体】を次のJSON形式のコードブロック（\`\`\`json）で返してください。${SCRIPT_JSON_SCHEMA}`,
+        '- 相談や質問には、簡潔な日本語で答えてください。',
+    ];
+    if (includeContext) {
+        lines.push('', '【現在の内容】');
+        if (theme) lines.push(`お題: ${theme}`);
+        lines.push(`ページ数: ${pageCount}`);
+        lines.push('ストーリー:', story?.trim() ? story.trim() : '（まだありません）');
+        lines.push('脚本(JSON):', script?.pages?.length ? JSON.stringify({ pages: script.pages }) : '（まだありません）');
+    }
+    return { role: 'system', content: lines.join('\n') };
+}
+
+// Auto向けツール（登録式）。id・ラベル用の言語キー・チャットへ送る依頼文。
+// 新しいツールはここへ追加するだけでよい（UIは AUTO_TOOLS を並べる）。
+export const AUTO_TOOLS = [
+    {
+        id: 'story-to-script',
+        labelKey: 'auto.tool.storyToScript',
+        prompt: '現在のストーリーを、ページとコマに分けた脚本にしてください。脚本全体をJSONのコードブロックで返してください。',
+    },
+    {
+        id: 'dialogue-polish',
+        labelKey: 'auto.tool.dialoguePolish',
+        prompt: '現在の脚本のセリフを、キャラクターの口調を保ちつつ、自然で簡潔に推敲してください。セリフ以外は変えず、脚本全体をJSONのコードブロックで返してください。',
+    },
+    {
+        id: 'story-refine',
+        labelKey: 'auto.tool.storyRefine',
+        prompt: '現在のストーリーを、起承転結が分かりやすくなるように整えてください。修正後のストーリー全文を返してください。',
+    },
+    {
+        id: 'character-sheet',
+        labelKey: 'auto.tool.characterSheet',
+        prompt: '現在のストーリーの登場人物について、性格・口調・見た目の特徴（髪型・服装・体型・色など、作画の指示に使える具体的な内容）を、人物ごとに箇条書きでまとめてください。',
+    },
+];

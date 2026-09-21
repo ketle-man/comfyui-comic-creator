@@ -1574,7 +1574,20 @@
                       <button class="comfyui-subtab-btn" data-auto-right="settings" data-i18n="auto.tabSettings">設定</button>
                     </div>
                     <div id="auto-right-chat" class="auto-right-content">
-                      <p class="auto-hint" data-i18n="auto.chatPlaceholder">Chatは次のステップで追加します。</p>
+                      <div class="auto-row">
+                        <label class="auto-label auto-label-fixed" for="auto-chat-tool" data-i18n="auto.chatToolLabel">ツール</label>
+                        <select id="auto-chat-tool" class="comfyui-select auto-grow"></select>
+                        <button id="auto-chat-tool-run-btn" class="btn small secondary" data-i18n="auto.chatToolRun">実行</button>
+                      </div>
+                      <div id="auto-chat-messages" class="auto-chat-messages"></div>
+                      <label class="auto-check"><input id="auto-chat-context" type="checkbox" checked /> <span data-i18n="auto.chatContext">現在のストーリー・脚本を文脈に含める</span></label>
+                      <textarea id="auto-chat-input" class="comfyui-textarea auto-chat-input" rows="3" data-i18n-placeholder="auto.chatInputPlaceholder"></textarea>
+                      <div class="auto-row auto-row-buttons">
+                        <button id="auto-chat-send-btn" class="btn primary auto-grow" data-i18n="auto.chatSend">送信</button>
+                        <button id="auto-chat-undo-btn" class="btn small secondary" data-i18n="auto.chatUndo" disabled>反映を元に戻す</button>
+                        <button id="auto-chat-clear-btn" class="btn small secondary" data-i18n="auto.chatClear">履歴を消去</button>
+                      </div>
+                      <div id="auto-chat-status" class="auto-status" role="status"></div>
                     </div>
                     <div id="auto-right-settings" class="auto-right-content auto-settings" style="display:none">
                       <div class="auto-set-section">

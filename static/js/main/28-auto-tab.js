@@ -17,13 +17,17 @@ import {
 import {
     IMPORTANCE_LEVELS, BUBBLE_TYPES, blankScript, blankPanel, blankDialogue, normalizeScript, parseScriptResponse,
     buildStoryMessages, buildScriptMessages, cloneSampleScript, SAMPLE_THEME, SAMPLE_STORY,
+    AUTO_TOOLS, buildChatSystemMessage,
 } from '../auto-story-core.js';
 
 const CURRENT_KEY = 'ccc_auto_current';   // 作業中の作品（オートセーブ）
 const WORKS_KEY = 'ccc_auto_works';       // 保存済みの作品一覧（スクリプトタブの作品とは別キー）
 
 const $ = (id) => document.getElementById(id);
-const auto = { work: null, inited: false, busy: false, settingsOpened: false };
+const CHAT_MAX_MESSAGES = 60;             // 作品に保存するチャット履歴の上限（古いものから捨てる）
+const UNDO_MAX = 10;                      // 「Chatの返答を反映」の取り消し履歴の上限
+
+const auto = { work: null, inited: false, busy: false, settingsOpened: false, undo: [] };
 
 function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -38,7 +42,7 @@ function newId() {
 }
 
 function blankWork() {
-    return { id: newId(), name: '', theme: '', pageCount: 2, story: '', script: blankScript(), memo: '', updatedAt: Date.now() };
+    return { id: newId(), name: '', theme: '', pageCount: 2, story: '', script: blankScript(), memo: '', chat: [], updatedAt: Date.now() };
 }
 
 function clampPageCount(v) {
@@ -57,6 +61,9 @@ function normalizeWork(data) {
         story: typeof data.story === 'string' ? data.story : '',
         script: normalizeScript(data.script) || blankScript(),
         memo: typeof data.memo === 'string' ? data.memo : '',
+        chat: Array.isArray(data.chat)
+            ? data.chat.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string').slice(-CHAT_MAX_MESSAGES)
+            : [],
         updatedAt: Number(data.updatedAt) || Date.now(),
     };
 }
@@ -93,7 +100,7 @@ function isDirty() {
     const saved = getWorks().find((w) => w.id === auto.work.id);
     if (saved) return serializeForCompare(saved) !== serializeForCompare(auto.work);
     const w = auto.work;
-    return !!(w.name || w.theme || w.story || w.memo || w.script.pages.length);
+    return !!(w.name || w.theme || w.story || w.memo || w.script.pages.length || w.chat.length);
 }
 
 // ============================================================
@@ -125,6 +132,7 @@ function updateButtons() {
     if (create) create.disabled = auto.busy;
     if (sample) sample.disabled = auto.busy;
     if (script) script.disabled = auto.busy || !hasStory;   // ストーリーが空の間は脚本を作成できない（2段階の徹底）
+    ['auto-chat-send-btn', 'auto-chat-tool-run-btn'].forEach((id) => { const b = $(id); if (b) b.disabled = auto.busy; });
 }
 
 async function runBusy(statusId, busyText, fn) {
@@ -160,6 +168,7 @@ function renderWorkBar() {
 
 function loadWork(work) {
     auto.work = normalizeWork(work);
+    auto.undo = [];
     saveCurrent();
     renderAll();
 }
@@ -510,6 +519,149 @@ function switchRightTab(name) {
 }
 
 // ============================================================
+// 右ペイン: Chat（ストーリー・脚本の相談と編集、Auto向けツール）
+// 返答は自動では反映せず、返答の下の「ストーリーに反映」「脚本に反映」ボタンで中央ペインへ反映する
+// （反映前に確認でき、直前の状態へ戻せる）。ツール呼び出し（LLMによる直接編集）には依存しない。
+// ============================================================
+
+// Chatの本文を表示用HTMLにする。``` で囲まれたコードブロック（脚本JSON等）は長くなりがちなので折りたたむ。
+function chatBodyHtml(content) {
+    const fence = /```[A-Za-z]*\s*([\s\S]*?)```/g;
+    let html = '';
+    let last = 0;
+    let m;
+    while ((m = fence.exec(content)) !== null) {
+        html += esc(content.slice(last, m.index));
+        html += `<details class="auto-chat-code"><summary>${esc(t('auto.chatCodeBlock'))}</summary><pre>${esc(m[1].trim())}</pre></details>`;
+        last = fence.lastIndex;
+    }
+    return html + esc(content.slice(last));
+}
+
+function renderChat() {
+    const box = $('auto-chat-messages');
+    const msgs = auto.work.chat;
+    if (!msgs.length) {
+        box.innerHTML = `<div class="auto-empty">${esc(t('auto.chatEmpty'))}</div>`;
+        return;
+    }
+    box.innerHTML = msgs.map((m, i) => {
+        const isAi = m.role === 'assistant';
+        const actions = isAi ? `
+            <div class="auto-chat-actions">
+                <button class="auto-mini-btn" data-act="apply-story">${esc(t('auto.chatApplyStory'))}</button>
+                <button class="auto-mini-btn" data-act="apply-script">${esc(t('auto.chatApplyScript'))}</button>
+                <button class="auto-mini-btn" data-act="copy">${esc(t('auto.chatCopy'))}</button>
+            </div>` : '';
+        return `
+            <div class="auto-chat-msg ${m.role}" data-i="${i}">
+                <div class="auto-chat-role">${esc(t(isAi ? 'auto.chatRoleAssistant' : 'auto.chatRoleUser'))}</div>
+                <div class="auto-chat-body">${chatBodyHtml(m.content)}</div>${actions}
+            </div>`;
+    }).join('');
+    box.scrollTop = box.scrollHeight;
+}
+
+function updateUndoButton() {
+    $('auto-chat-undo-btn').disabled = auto.undo.length === 0;
+}
+
+function pushUndo() {
+    auto.undo.push({ story: auto.work.story, script: JSON.parse(JSON.stringify(auto.work.script)) });
+    if (auto.undo.length > UNDO_MAX) auto.undo.shift();
+    updateUndoButton();
+}
+
+function onChatUndo() {
+    const snap = auto.undo.pop();
+    if (!snap) return;
+    auto.work.story = snap.story;
+    auto.work.script = snap.script;
+    saveCurrent();
+    renderLeftAndStory();
+    renderScript();
+    updateButtons();
+    updateUndoButton();
+    setStatus('auto-chat-status', 'ok', t('auto.chatUndone'));
+}
+
+async function sendChat(text, { forceContext = false } = {}) {
+    const content = (text || '').trim();
+    if (!content || auto.busy) return;
+    const settings = loadAiSettings();
+    const problem = validateAiSettings(settings);
+    if (problem) { setStatus('auto-chat-status', 'error', settingsProblemMessage(problem)); return; }
+
+    const work = auto.work;
+    work.chat = [...work.chat, { role: 'user', content }].slice(-CHAT_MAX_MESSAGES);
+    saveCurrent();
+    renderChat();
+    $('auto-chat-input').value = '';
+
+    const includeContext = forceContext || $('auto-chat-context').checked;
+    const messages = [
+        buildChatSystemMessage({ theme: work.theme, pageCount: work.pageCount, story: work.story, script: work.script, includeContext }),
+        ...work.chat.map((m) => ({ role: m.role, content: m.content })),
+    ];
+    await runBusy('auto-chat-status', t('auto.chatThinking'), async () => {
+        const { content: reply } = await aiChat(settings, messages);
+        const answer = (reply || '').trim();
+        if (!answer) throw new Error(t('auto.errEmptyResponse'));
+        if (auto.work !== work) return;   // 応答待ちの間に別の作品へ切り替えた場合は、返答を捨てる
+        work.chat = [...work.chat, { role: 'assistant', content: answer }].slice(-CHAT_MAX_MESSAGES);
+        saveCurrent();
+        renderChat();
+        setStatus('auto-chat-status', '', '');
+    });
+}
+
+function onChatToolRun() {
+    const tool = AUTO_TOOLS.find((x) => x.id === $('auto-chat-tool').value);
+    if (!tool) return;
+    if (tool.id === 'dialogue-polish') {
+        if (!auto.work.script.pages.length) { setStatus('auto-chat-status', 'error', t('auto.errScriptEmpty')); return; }
+    } else if (!auto.work.story.trim()) {
+        setStatus('auto-chat-status', 'error', t('auto.errStoryEmpty'));
+        return;
+    }
+    sendChat(tool.prompt, { forceContext: true });   // ツールは現在のストーリー・脚本が前提のため、文脈は常に含める
+}
+
+function onChatClick(e) {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const msg = auto.work.chat[Number(btn.closest('.auto-chat-msg')?.dataset.i)];
+    if (!msg) return;
+    const act = btn.dataset.act;
+    if (act === 'copy') {
+        navigator.clipboard?.writeText(msg.content).then(() => setStatus('auto-chat-status', 'ok', t('auto.chatCopied'))).catch(() => {});
+    } else if (act === 'apply-story') {
+        if (auto.work.story.trim() && !confirm(t('auto.confirmOverwriteStory'))) return;
+        pushUndo();
+        auto.work.story = msg.content.trim();
+        saveCurrent();
+        renderLeftAndStory();
+        updateButtons();
+        switchCenterTab('story');
+        setStatus('auto-chat-status', 'ok', t('auto.chatAppliedStory'));
+    } else if (act === 'apply-script') {
+        const parsed = parseScriptResponse(msg.content);
+        if (!parsed) { setStatus('auto-chat-status', 'error', t('auto.chatApplyScriptFailed')); return; }
+        if (auto.work.script.pages.length && !confirm(t('auto.confirmOverwriteScript'))) return;
+        pushUndo();
+        auto.work.script = parsed.script;
+        saveCurrent();
+        renderScript();
+        switchCenterTab('script');
+        setStatus('auto-chat-status', 'ok', t('auto.chatAppliedScript', parsed.script.pages.length));
+    }
+}
+
+function fillToolSelect() {
+    $('auto-chat-tool').innerHTML = AUTO_TOOLS.map((tool) => `<option value="${esc(tool.id)}">${esc(t(tool.labelKey))}</option>`).join('');
+}
+
+// ============================================================
 // 初期化
 // ============================================================
 
@@ -517,9 +669,12 @@ function renderAll() {
     renderWorkBar();
     renderLeftAndStory();
     renderScript();
+    renderChat();
+    updateUndoButton();
     showRawOutput('');
     setStatus('auto-status', '', '');
     setStatus('auto-script-status', '', '');
+    setStatus('auto-chat-status', '', '');
     updateButtons();
 }
 
@@ -559,6 +714,25 @@ function bindEvents() {
     list.addEventListener('change', onScriptFieldChange);
     list.addEventListener('click', onScriptClick);
 
+    // 右ペイン: Chat
+    $('auto-chat-send-btn').addEventListener('click', () => sendChat($('auto-chat-input').value));
+    $('auto-chat-input').addEventListener('keydown', (e) => {
+        // 日本語IMEの変換確定のEnterでは送信しない
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+            e.preventDefault();
+            sendChat(e.target.value);
+        }
+    });
+    $('auto-chat-tool-run-btn').addEventListener('click', onChatToolRun);
+    $('auto-chat-undo-btn').addEventListener('click', onChatUndo);
+    $('auto-chat-clear-btn').addEventListener('click', () => {
+        if (auto.work.chat.length && !confirm(t('auto.chatConfirmClear'))) return;
+        auto.work.chat = [];
+        saveCurrent();
+        renderChat();
+    });
+    $('auto-chat-messages').addEventListener('click', onChatClick);
+
     // 右ペイン: 設定
     document.querySelectorAll('input[name="auto-engine"]').forEach((r) => r.addEventListener('change', () => {
         updateEngineSections();
@@ -581,6 +755,7 @@ export function initAutoTab() {
     if (!auto.inited) {
         auto.inited = true;
         auto.work = normalizeWork(readJson(CURRENT_KEY, null));
+        fillToolSelect();
         bindEvents();
         renderSettings();
     }
