@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/ccc_static/css/style.css" />
     <link rel="stylesheet" href="/ccc_static/css/comfyui.css" />
     <link rel="stylesheet" href="/ccc_static/css/image-tab.css" />
+    <link rel="stylesheet" href="/ccc_static/css/auto-tab.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -29,6 +30,7 @@
           <button class="tab-btn" data-tab="fontmgr" data-i18n="nav.font">フォント</button>
           <button class="tab-btn wfm-gallery-tab-btn" data-tab="wfmgallery" data-i18n="nav.wfmgallery">workflow studio</button>
           <button class="tab-btn" data-tab="nanobanana" data-i18n="nav.nanobanana">Nanobanana</button>
+          <button class="tab-btn" data-tab="auto" data-i18n="nav.auto">Auto</button>
           <button class="tab-btn" data-tab="project" data-i18n="nav.script">スクリプト</button>
           <button class="tab-btn" data-tab="settings" data-i18n="nav.settings">設定</button>
           <button class="tab-btn" data-tab="help" data-i18n="nav.help">ヘルプ</button>
@@ -1503,6 +1505,155 @@
             <canvas id="render-canvas" class="hidden"></canvas>
           </section>
 
+          <!-- Auto Tab（AIマンガ自動作成） -->
+          <section id="auto-tab" class="tab-content">
+            <div class="auto-root">
+              <div class="comfyui-subtab-nav">
+                <button class="comfyui-subtab-btn active" data-auto-subtab="story" data-i18n="auto.subtabStory">ストーリー・脚本</button>
+                <button class="comfyui-subtab-btn" data-auto-subtab="layout" data-i18n="auto.subtabLayout">レイアウト</button>
+              </div>
+
+              <!-- サブタブ: ストーリー・脚本 -->
+              <div id="auto-subtab-story" class="auto-subtab-content">
+                <div class="auto-work-bar">
+                  <input id="auto-work-name" type="text" class="comfyui-input auto-work-name" data-i18n-placeholder="auto.workNamePlaceholder" placeholder="作品名" />
+                  <select id="auto-work-select" class="comfyui-select auto-work-select"></select>
+                  <button id="auto-work-new-btn" class="btn small secondary" data-i18n="auto.workNew">新規</button>
+                  <button id="auto-work-save-btn" class="btn small primary" data-i18n="auto.workSave">保存</button>
+                  <button id="auto-work-delete-btn" class="btn small danger" data-i18n="auto.workDelete">削除</button>
+                </div>
+
+                <div class="auto-3pane">
+                  <!-- 左ペイン: お題・ページ数・作成 -->
+                  <div class="auto-pane auto-pane-left">
+                    <label class="auto-label" for="auto-theme" data-i18n="auto.themeLabel">お題・プロンプトを入力</label>
+                    <textarea id="auto-theme" class="comfyui-textarea auto-theme" data-i18n-placeholder="auto.themePlaceholder"></textarea>
+                    <div class="auto-row">
+                      <label class="auto-label" for="auto-page-count" data-i18n="auto.pageCountLabel">ページ数</label>
+                      <input id="auto-page-count" type="number" min="1" max="50" value="2" class="comfyui-input auto-page-count" />
+                    </div>
+                    <div class="auto-row auto-row-buttons">
+                      <button id="auto-create-btn" class="btn primary auto-grow" data-i18n="auto.createBtn">作成</button>
+                      <button id="auto-sample-btn" class="btn secondary" data-i18n="auto.sampleBtn">サンプル</button>
+                    </div>
+                    <p class="auto-hint" data-i18n="auto.createHint">「作成」でストーリーを生成します。</p>
+                    <div id="auto-status" class="auto-status" role="status"></div>
+                  </div>
+
+                  <!-- 中央ペイン: ストーリー / 脚本 / メモ -->
+                  <div class="auto-pane auto-pane-center">
+                    <div class="comfyui-subtab-nav">
+                      <button class="comfyui-subtab-btn active" data-auto-center="story" data-i18n="auto.tabStory">ストーリー</button>
+                      <button class="comfyui-subtab-btn" data-auto-center="script" data-i18n="auto.tabScript">脚本</button>
+                      <button class="comfyui-subtab-btn" data-auto-center="memo" data-i18n="auto.tabMemo">メモ</button>
+                    </div>
+                    <div id="auto-center-story" class="auto-center-content">
+                      <textarea id="auto-story" class="comfyui-textarea auto-fill-textarea" data-i18n-placeholder="auto.storyPlaceholder"></textarea>
+                    </div>
+                    <div id="auto-center-script" class="auto-center-content" style="display:none">
+                      <div class="auto-script-toolbar">
+                        <button id="auto-script-create-btn" class="btn primary" data-i18n="auto.scriptCreateBtn">ストーリーから脚本を作成</button>
+                        <button id="auto-script-add-page-btn" class="btn secondary" data-i18n="auto.scriptAddPage">＋ ページを追加</button>
+                      </div>
+                      <div id="auto-script-status" class="auto-status" role="status"></div>
+                      <details id="auto-raw-output" class="auto-raw-output" style="display:none">
+                        <summary data-i18n="auto.rawOutputTitle">LLMの生の出力</summary>
+                        <pre id="auto-raw-output-text"></pre>
+                      </details>
+                      <div id="auto-script-list" class="auto-script-list"></div>
+                    </div>
+                    <div id="auto-center-memo" class="auto-center-content" style="display:none">
+                      <textarea id="auto-memo" class="comfyui-textarea auto-fill-textarea" data-i18n-placeholder="auto.memoPlaceholder"></textarea>
+                    </div>
+                  </div>
+
+                  <!-- 右ペイン: Chat / 設定 -->
+                  <div class="auto-pane auto-pane-right">
+                    <div class="comfyui-subtab-nav">
+                      <button class="comfyui-subtab-btn active" data-auto-right="chat" data-i18n="auto.tabChat">Chat</button>
+                      <button class="comfyui-subtab-btn" data-auto-right="settings" data-i18n="auto.tabSettings">設定</button>
+                    </div>
+                    <div id="auto-right-chat" class="auto-right-content">
+                      <p class="auto-hint" data-i18n="auto.chatPlaceholder">Chatは次のステップで追加します。</p>
+                    </div>
+                    <div id="auto-right-settings" class="auto-right-content auto-settings" style="display:none">
+                      <div class="auto-set-section">
+                        <div class="auto-set-title" data-i18n="auto.setEngine">AIエンジン</div>
+                        <div class="auto-radio-row">
+                          <label><input type="radio" name="auto-engine" value="local" /> <span data-i18n="auto.engineLocal">ローカルLLM</span></label>
+                          <label><input type="radio" name="auto-engine" value="gemini" /> <span data-i18n="auto.engineGemini">Gemini</span></label>
+                        </div>
+                      </div>
+
+                      <!-- ローカルLLM -->
+                      <div id="auto-set-local">
+                        <div class="auto-set-section">
+                          <div class="auto-set-title" data-i18n="auto.setBackend">BACKEND</div>
+                          <div class="auto-radio-row auto-radio-wrap">
+                            <label><input type="radio" name="auto-backend" value="ollama" /> Ollama</label>
+                            <label><input type="radio" name="auto-backend" value="lmstudio" /> LM Studio</label>
+                            <label><input type="radio" name="auto-backend" value="lemonade" /> Lemonade</label>
+                            <label><input type="radio" name="auto-backend" value="unsloth" /> Unsloth</label>
+                          </div>
+                        </div>
+                        <div class="auto-set-section">
+                          <div class="auto-set-title" data-i18n="auto.setConnection">CONNECTION</div>
+                          <div class="auto-row">
+                            <label class="auto-label auto-label-fixed" for="auto-backend-url" data-i18n="auto.setUrl">URL</label>
+                            <input id="auto-backend-url" type="text" class="comfyui-input" />
+                          </div>
+                          <div class="auto-row auto-row-buttons">
+                            <button id="auto-test-btn" class="btn small secondary" data-i18n="auto.testConnection">接続テスト</button>
+                            <button id="auto-unload-btn" class="btn small secondary" data-i18n="auto.unloadModel">モデルをアンロード</button>
+                          </div>
+                        </div>
+                        <div class="auto-set-section">
+                          <div class="auto-set-title" data-i18n="auto.setModel">MODEL</div>
+                          <div class="auto-row">
+                            <select id="auto-model-select" class="comfyui-select auto-grow"></select>
+                            <button id="auto-model-refresh-btn" class="btn small secondary" data-i18n="auto.refresh">更新</button>
+                          </div>
+                        </div>
+                        <div class="auto-set-section">
+                          <div class="auto-set-title" data-i18n="auto.setGeneration">GENERATION</div>
+                          <label class="auto-check"><input id="auto-thinking" type="checkbox" /> <span data-i18n="auto.thinkingMode">Thinking mode</span></label>
+                          <div class="auto-row">
+                            <label class="auto-label auto-label-fixed" for="auto-max-tokens" data-i18n="auto.maxTokens">Max tokens</label>
+                            <input id="auto-max-tokens" type="number" min="0" step="256" class="comfyui-input" />
+                          </div>
+                          <p class="auto-hint" data-i18n="auto.maxTokensHint">0 = バックエンド任せ</p>
+                        </div>
+                      </div>
+
+                      <!-- Gemini -->
+                      <div id="auto-set-gemini" style="display:none">
+                        <div class="auto-set-section">
+                          <div class="auto-set-title" data-i18n="auto.geminiModel">Geminiモデル</div>
+                          <div class="auto-row">
+                            <select id="auto-gemini-model-select" class="comfyui-select auto-grow"></select>
+                            <button id="auto-gemini-refresh-btn" class="btn small secondary" data-i18n="auto.refresh">更新</button>
+                          </div>
+                          <div id="auto-gemini-key-status" class="auto-hint"></div>
+                          <p class="auto-hint" data-i18n="auto.geminiHint">APIキーはNanobananaタブと共通です。</p>
+                        </div>
+                      </div>
+
+                      <div class="auto-set-section">
+                        <button id="auto-settings-save-btn" class="btn primary auto-full" data-i18n="auto.saveSettings">設定を保存</button>
+                        <div id="auto-settings-status" class="auto-status" role="status"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- サブタブ: レイアウト（ストーリー・脚本の完成後に実装） -->
+              <div id="auto-subtab-layout" class="auto-subtab-content" style="display:none">
+                <p class="auto-hint" data-i18n="auto.layoutPlaceholder">レイアウト機能は、ストーリー・脚本の完成後に追加します。</p>
+              </div>
+            </div>
+          </section>
+
           <!-- Nanobanana Tab -->
           <section id="nanobanana-tab" class="tab-content">
             <div class="comfyui-header-row">
@@ -2063,5 +2214,6 @@
     <script type="module" src="/ccc_static/js/main/25-text3d-bridge.js"></script>
     <script type="module" src="/ccc_static/js/main/26-auto-comic-bridge.js"></script>
     <script type="module" src="/ccc_static/js/main/27-video-bridge.js"></script>
+    <script type="module" src="/ccc_static/js/main/28-auto-tab.js"></script>
   </body>
 </html>

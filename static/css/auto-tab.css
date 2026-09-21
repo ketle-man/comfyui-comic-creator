@@ -1,0 +1,338 @@
+/* ==============================
+   Autoタブ（AIマンガ自動作成）
+   ============================== */
+
+.auto-root {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+#auto-tab.tab-content.active {
+  display: block;
+  height: 100%;
+}
+
+.auto-subtab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.auto-work-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.auto-work-name {
+  width: 220px !important;
+}
+
+.auto-work-select {
+  width: 220px !important;
+}
+
+/* 3ペイン */
+.auto-3pane {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 380px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.auto-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.auto-pane-center,
+.auto-pane-right {
+  padding-top: 0;
+}
+
+.auto-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.auto-label-fixed {
+  flex: 0 0 84px;
+}
+
+.auto-theme {
+  width: 100%;
+  min-height: 160px;
+  flex: 1;
+  box-sizing: border-box;
+  resize: none;
+  background: #111;
+  color: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 13px;
+}
+
+.auto-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.auto-row-buttons {
+  flex-wrap: wrap;
+}
+
+.auto-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.auto-full {
+  width: 100%;
+}
+
+.auto-page-count {
+  width: 72px !important;
+}
+
+.auto-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.auto-status {
+  font-size: 12px;
+  min-height: 1.2em;
+  padding: 0;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.auto-status.error {
+  color: #e57373;
+}
+
+.auto-status.ok {
+  color: #81c784;
+}
+
+.auto-status.busy {
+  color: #64b5f6;
+}
+
+/* 中央ペイン */
+.auto-center-content,
+.auto-right-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  padding-top: 10px;
+}
+
+.auto-fill-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  resize: none;
+  background: #111;
+  color: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.auto-script-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.auto-raw-output {
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.auto-raw-output pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+  margin: 6px 0 0;
+}
+
+.auto-script-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.auto-page {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auto-page-head,
+.auto-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.auto-page-title {
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.auto-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auto-panel-title {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.auto-panel textarea,
+.auto-panel input[type="text"],
+.auto-panel select {
+  background: #111;
+  color: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.auto-panel textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 44px;
+}
+
+.auto-field-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.auto-dialogue-row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) 96px 26px;
+  gap: 4px;
+  align-items: center;
+}
+
+.auto-mini-btn {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.auto-mini-btn:hover {
+  color: #fff;
+  background: var(--hover-color);
+}
+
+.auto-mini-btn.danger:hover {
+  color: #e57373;
+}
+
+.auto-empty {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 16px 4px;
+  line-height: 1.6;
+}
+
+/* 設定タブ */
+.auto-settings {
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.auto-set-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.auto-set-title {
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.auto-radio-row {
+  display: flex;
+  gap: 14px;
+  font-size: 13px;
+}
+
+.auto-radio-wrap {
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.auto-radio-row label,
+.auto-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.auto-check {
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .auto-3pane {
+    grid-template-columns: 240px minmax(0, 1fr) 320px;
+  }
+}

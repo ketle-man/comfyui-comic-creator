@@ -37,6 +37,7 @@ import { initHelpTab } from './22-help-tab.js';
 import { initPose3DTab, hidePose3DCanvas } from './23-pose3d-bridge.js';
 import { initText3DTab, hideText3DCanvas } from './25-text3d-bridge.js';
 import { initVideoTab, hideVideoOverlay } from './27-video-bridge.js';
+import { initAutoTab } from './28-auto-tab.js';
 import { initSubPanelTool } from './24-sub-panels.js';
 import { initNanobananaTab } from '../nanobanana.js';
 import { initImageTab } from '../image-tab.js';
@@ -357,7 +358,7 @@ async function switchTab(tabId) {
     updateTemplateSidePanel(tabId === 'layout');
 
     // アセットパネル（左サイドバー）を非表示にするタブ
-    const _hideAssetPanelTabs = ['output', 'wfmgallery', 'nanobanana', 'settings', 'fontmgr', 'help'];
+    const _hideAssetPanelTabs = ['output', 'wfmgallery', 'nanobanana', 'auto', 'settings', 'fontmgr', 'help'];
     const assetPanel = document.getElementById('asset-panel');
     if (assetPanel) assetPanel.style.display = _hideAssetPanelTabs.includes(tabId) ? 'none' : '';
 
@@ -435,6 +436,8 @@ async function switchTab(tabId) {
     } else if (tabId === 'project') {
         initProjectTab();
         initAutoComicBridge();
+    } else if (tabId === 'auto') {
+        initAutoTab();
     } else if (tabId === 'help') {
         initHelpTab();
     }

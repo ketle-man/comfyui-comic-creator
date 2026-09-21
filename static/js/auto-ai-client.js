@@ -16,15 +16,37 @@ import { resolveBackendError } from './i18n.js';
 
 export const LOCAL_BACKENDS = ['ollama', 'lmstudio', 'lemonade', 'unsloth'];
 
-const BACKEND_DEFAULT_URLS = {
-    ollama: 'http://localhost:11434',
-    lmstudio: 'http://localhost:1234',
-    lemonade: 'http://localhost:13305',
-    unsloth: 'http://localhost:8888',
+const BACKEND_DEFAULT_PORTS = {
+    ollama: 11434,
+    lmstudio: 1234,
+    lemonade: 13305,
+    unsloth: 8888,
 };
 
+// ブラウザは、ページのホスト名（127.0.0.1 と localhost）と接続先のホスト名が異なると、
+// ローカルLLMへのfetchをブロックすることがある（CORSヘッダーが正しくても "Failed to fetch" になる）。
+// そのため既定の接続先は、ページを開いているホスト名に合わせる。
+export function getPageLoopbackHost() {
+    const h = globalThis.location?.hostname;
+    return h === '127.0.0.1' || h === 'localhost' ? h : 'localhost';
+}
+
 export function getBackendDefaultUrl(backend) {
-    return BACKEND_DEFAULT_URLS[backend] || BACKEND_DEFAULT_URLS.ollama;
+    return `http://${getPageLoopbackHost()}:${BACKEND_DEFAULT_PORTS[backend] || BACKEND_DEFAULT_PORTS.ollama}`;
+}
+
+// 接続先がループバックで、ページのホスト名と異なる場合、ホスト名を合わせたURLを返す。該当しなければ ''。
+export function suggestHostMatchedUrl(url) {
+    try {
+        const u = new URL(url);
+        const pageHost = getPageLoopbackHost();
+        const loopback = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+        if (!loopback || u.hostname === pageHost || globalThis.location?.hostname !== pageHost) return '';
+        u.hostname = pageHost;
+        return u.origin;
+    } catch {
+        return '';
+    }
 }
 
 // ============================================
