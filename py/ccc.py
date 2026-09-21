@@ -21,7 +21,7 @@ from urllib.parse import quote as _urlquote
 from .config import (
     PLUGIN_DIR,
     TEMPLATES_DIR, STATIC_DIR, ASSETS_DIR, ASSETS_JSON,
-    OUTPUT_NANOBANANA_DIR, GMIC_TEMP_DIR, OUTPUT_VIDEO_DIR,
+    OUTPUT_NANOBANANA_DIR, OUTPUT_AUTO_DIR, GMIC_TEMP_DIR, OUTPUT_VIDEO_DIR,
     SETTINGS_FILE,
     VALID_EXTENSIONS, GMIC_SERVER_URL,
     VALID_VIDEO_EXTENSIONS, MAX_VIDEO_UPLOAD_BYTES,
@@ -754,6 +754,131 @@ async def handle_nanobanana_list_models(request):
     except Exception as e:
         return _error_response(e, status=500)
 
+# ─── Autoタブ（AIマンガ自動作成） ──────────────────────────────────────────────
+
+async def handle_save_auto_image(request):
+    """Autoタブで生成した画像を output/cc_auto に保存する（構成は cc_nanobanana の保存APIと同じ）。"""
+    try:
+        data = await _read_json_limited(request, MAX_JSON_IMAGE_UPLOAD_BYTES)
+        img_b64 = data.get('image', '')
+        filename = data.get('filename', '')
+        if not img_b64:
+            return web.json_response({'status': 'error', 'message': 'image field required'}, status=400)
+        if img_b64.startswith('data:'):
+            img_b64 = img_b64.split(',', 1)[1]
+        img_bytes = base64.b64decode(img_b64)
+        OUTPUT_AUTO_DIR.mkdir(parents=True, exist_ok=True)
+        if not filename:
+            filename = datetime.now().strftime('Auto_%Y%m%d_%H%M%S_%f')[:-3] + '.png'
+        dest = _safe_path(OUTPUT_AUTO_DIR, filename)
+        dest.write_bytes(img_bytes)
+        return web.json_response({'status': 'ok', 'url': f'/ccc_auto_output/{dest.name}', 'filename': dest.name})
+    except CCCError as e:
+        return _error_response(e, status=413)
+    except Exception as e:
+        return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
+async def handle_auto_gemini_text(request):
+    """Gemini APIでテキストを生成する（Autoタブのストーリー・脚本生成とChat用）。
+    APIキーはサーバー側（NANOBANANA_API_KEY、Nanobananaタブと共通）にのみ置き、ブラウザへは出さない。
+    body: { model, messages:[{role:'system'|'user'|'assistant', content}], json?:bool, temperature?, max_tokens? }"""
+    try:
+        if not NANOBANANA_API_KEY:
+            return _error_response(CCCError('nanobanana_api_key_missing', 'Gemini APIキーが設定されていません。プラグインフォルダ直下の .env に NANOBANANA_API_KEY=... を記載し、ComfyUIを再起動してください。'), status=400)
+        data = await request.json()
+        model = _validate_gemini_model(data.get('model', ''))
+        system_parts = []
+        contents = []
+        for m in (data.get('messages') or []):
+            text = str(m.get('content', ''))
+            role = m.get('role')
+            if role == 'system':
+                system_parts.append({'text': text})
+            else:
+                contents.append({'role': 'model' if role == 'assistant' else 'user', 'parts': [{'text': text}]})
+        if not contents:
+            return _error_response(CCCError('auto_gemini_no_messages', 'メッセージが空です'), status=400)
+
+        generation_config = {}
+        temperature = data.get('temperature')
+        if isinstance(temperature, (int, float)):
+            generation_config['temperature'] = temperature
+        max_tokens = data.get('max_tokens')
+        if isinstance(max_tokens, int) and max_tokens > 0:
+            generation_config['maxOutputTokens'] = max_tokens
+        if data.get('json'):
+            generation_config['responseMimeType'] = 'application/json'
+        payload = {'contents': contents}
+        if system_parts:
+            payload['systemInstruction'] = {'parts': system_parts}
+        if generation_config:
+            payload['generationConfig'] = generation_config
+
+        # APIキーはURLクエリではなくヘッダーで送る（URLはログ・プロキシに残りやすいため）
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        req_body = json.dumps(payload).encode('utf-8')
+        def _call():
+            req = urllib.request.Request(api_url, data=req_body, headers={'Content-Type': 'application/json', 'x-goog-api-key': NANOBANANA_API_KEY}, method='POST')
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                return json.loads(resp.read().decode('utf-8'))
+        loop = asyncio.get_event_loop()
+        rd = await loop.run_in_executor(None, _call)
+        texts = []
+        for cand in rd.get('candidates', [])[:1]:
+            for part in cand.get('content', {}).get('parts', []):
+                if part.get('text') and not part.get('thought'):
+                    texts.append(part['text'])
+        return web.json_response({'status': 'ok', 'text': ''.join(texts)})
+    except CCCError as e:
+        return _error_response(e, status=400)
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        return _error_response(Exception(f'Google API Error ({e.code}): {error_body}'), status=500)
+    except Exception as e:
+        return _error_response(e, status=500)
+
+# Unslothはローカルでも常にAPIキー(UNSLOTH_API_KEY、.envから読込)が必要なため、ブラウザから直接叩かず
+# サーバーが中継してAuthorizationヘッダーを付与する（キーをフロントへ渡さない）。
+# キーを含むリクエストを任意ホストへ送らせないため、宛先はループバックに限定する（SSRF対策）。
+_AUTO_UNSLOTH_ALLOWED_PATHS = {'/v1/models', '/v1/chat/completions'}
+_AUTO_UNSLOTH_ALLOWED_HOSTS = {'localhost', '127.0.0.1', '::1'}
+
+async def handle_auto_unsloth_proxy(request):
+    """body: { baseUrl, path: '/v1/models'|'/v1/chat/completions', method: 'GET'|'POST', payload }"""
+    try:
+        body = await request.json()
+        base_url = (body.get('baseUrl') or 'http://localhost:8888').rstrip('/')
+        path = body.get('path') or '/v1/models'
+        method = (body.get('method') or 'GET').upper()
+        payload = body.get('payload')
+        if path not in _AUTO_UNSLOTH_ALLOWED_PATHS or method not in ('GET', 'POST'):
+            return web.json_response({'message': 'Unsupported proxy target'}, status=400)
+        parsed = _urlparse(base_url)
+        if parsed.scheme not in ('http', 'https') or parsed.hostname not in _AUTO_UNSLOTH_ALLOWED_HOSTS:
+            return web.json_response({'message': 'Unsloth backend URL must point to localhost/127.0.0.1/::1'}, status=400)
+        api_key = os.environ.get('UNSLOTH_API_KEY', '').strip()
+        if not api_key:
+            return web.json_response({'message': 'UNSLOTH_API_KEY is not set. Add UNSLOTH_API_KEY=... to the .env file in the plugin folder and restart ComfyUI.'}, status=401)
+
+        def _fetch():
+            data = json.dumps(payload).encode('utf-8') if payload is not None else None
+            headers = {'Authorization': f'Bearer {api_key}'}
+            if data is not None:
+                headers['Content-Type'] = 'application/json'
+            req = urllib.request.Request(f'{base_url}{path}', data=data, headers=headers, method=method)
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                return json.loads(resp.read().decode('utf-8'))
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _fetch)
+        return web.json_response(result)
+    except urllib.error.HTTPError as e:
+        return web.json_response({'message': f'Unsloth API error: HTTP {e.code}'}, status=e.code)
+    except urllib.error.URLError as e:
+        return web.json_response({'message': f'Could not reach Unsloth: {e.reason}'}, status=502)
+    except Exception as e:
+        return web.json_response({'message': str(e)}, status=500)
+
+
 async def handle_google_font_ttf(request):
     """Google Fonts の指定ファミリーのフォントバイナリを取得してそのまま返す。
     Google Fonts CSS2 API はリクエストの User-Agent によって返す形式を切り替えており、
@@ -1010,6 +1135,9 @@ def _build_dispatch_tables():
     }
     _DISPATCH_POST = {
         "save-nanobanana-image":       handle_save_nanobanana_image,
+        "save-auto-image":             handle_save_auto_image,
+        "auto/gemini-text":            handle_auto_gemini_text,
+        "auto/unsloth-proxy":          handle_auto_unsloth_proxy,
         "save-group-asset":            handle_save_group_asset,
         "save-image-project":          handle_save_image_project,
         "delete-asset":                handle_delete_asset,
@@ -1046,13 +1174,14 @@ class ComicCreator:
         app = PromptServer.instance.app
 
         # Ensure directories exist
-        for d in [STATIC_DIR, ASSETS_DIR, OUTPUT_NANOBANANA_DIR, GMIC_TEMP_DIR, OUTPUT_VIDEO_DIR]:
+        for d in [STATIC_DIR, ASSETS_DIR, OUTPUT_NANOBANANA_DIR, OUTPUT_AUTO_DIR, GMIC_TEMP_DIR, OUTPUT_VIDEO_DIR]:
             d.mkdir(parents=True, exist_ok=True)
 
         # Static mounts
         app.router.add_static("/ccc_static",           str(STATIC_DIR))
         app.router.add_static("/ccc_assets",           str(ASSETS_DIR))
         app.router.add_static("/ccc_nanobanana_output", str(OUTPUT_NANOBANANA_DIR))
+        app.router.add_static("/ccc_auto_output",       str(OUTPUT_AUTO_DIR))
         app.router.add_static("/ccc_gmic_temp",        str(GMIC_TEMP_DIR))
         app.router.add_static("/ccc_video_assets",     str(OUTPUT_VIDEO_DIR))
 
@@ -1071,6 +1200,9 @@ class ComicCreator:
 
         # POST APIs
         app.router.add_post("/api/ccc/save-nanobanana-image",    handle_save_nanobanana_image)
+        app.router.add_post("/api/ccc/save-auto-image",          handle_save_auto_image)
+        app.router.add_post("/api/ccc/auto/gemini-text",         handle_auto_gemini_text)
+        app.router.add_post("/api/ccc/auto/unsloth-proxy",       handle_auto_unsloth_proxy)
         app.router.add_post("/api/ccc/save-group-asset",         handle_save_group_asset)
         app.router.add_post("/api/ccc/save-image-project",       handle_save_image_project)
         app.router.add_post("/api/ccc/delete-asset",             handle_delete_asset)
