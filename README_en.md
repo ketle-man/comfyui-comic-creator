@@ -59,6 +59,15 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - Generate images via the Gemini API (Positive/Negative prompts, model, and resolution)
 - Generated images are automatically saved to ComfyUI's own `output/cc_nanobanana` folder
 
+### Auto (AI manga auto-creation)
+
+- Creates a **story and then a script** with AI from a theme and page count (assumes a person edits and finishes the result; independent of the Script tab as a new work)
+- The script is edited as a page → panel → dialogue table (importance, background / acting direction, speaker, balloon type). Malformed AI output is recovered as far as possible
+- AI engine: local LLM (Ollama / LM Studio / Lemonade / Unsloth) or Gemini (API key shared with Nanobanana). Settings are stored in this app (Unsloth uses `UNSLOTH_API_KEY` in `.env`)
+- Talk about and edit the story and script in Chat (apply replies with "Apply to story" / "Apply to script", undoable), plus Auto tools (story to script, dialogue polish, story refinement, character sheets)
+- Image generation from Chat (choose Local (Workflow Studio) or Gemini with radio buttons, with AI-written image prompts). Generated images are saved to `output/cc_auto`
+- A "Layout" sub-tab (panel layout from the script) will be added later
+
 ### Script tab
 - Manage the screenplay in a hierarchy of Title → Synopsis → Plot [Pages → Panel breakdown (scene, image prompt, elements, dialogue/description, etc.)]
 - Insert any plot cell's content into the Layout tab as text with one click
@@ -197,6 +206,8 @@ comfyui-comic-creator/
 │   │   ├── image-tab/           # Image-tab-specific tools (DrawTool/ShapeTool/FillTool/MaskTool, etc.)
 │   │   ├── i18n.js              # Multilingual dictionary (ja/en/zh) + t()
 │   │   ├── nanobanana.js        # Nanobanana (Gemini API) integration
+│   │   ├── auto-ai-client.js    # Auto tab LLM client (local LLM / Gemini)
+│   │   ├── auto-story-core.js   # Auto tab script prompts and parsing (DOM-free)
 │   │   ├── pixifx.js            # PixiJS FX integration
 │   │   └── vendor/              # Bundled libraries (jsPDF/JSZip, for offline use)
 │   └── css/
@@ -213,6 +224,9 @@ comfyui-comic-creator/
 | GET | `/ccc` | SPA entry point |
 | GET | `/api/ccc/refresh-assets` | Regenerate the asset list |
 | POST | `/api/ccc/nanobanana/generate` | Generate a Nanobanana image |
+| POST | `/api/ccc/auto/gemini-text` | Gemini text generation for the Auto tab |
+| POST | `/api/ccc/auto/unsloth-proxy` | Unsloth relay for the Auto tab |
+| POST | `/api/ccc/save-auto-image` | Save an image generated in the Auto tab |
 | POST | `/api/ccc/save-image-project` | Save an Image tab project |
 | POST | `/api/ccc/video/upload` | Upload a video (MP4) |
 | POST | `/api/ccc/eagle/add` | Save an image to Eagle |

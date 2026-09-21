@@ -64,6 +64,15 @@ ComfyUI 上で動作するマンガページ作成 SPA（シングルページ�
 - Gemini API を使った画像生成（Positive/Negative プロンプト・モデル・解像度指定）
 - 生成画像は ComfyUI 本体の `output/cc_nanobanana` フォルダへ自動保存
 
+### Auto（AI マンガ自動作成）
+
+- お題とページ数から、AI で**ストーリー → 脚本**の 2 段階で自動作成（作成後に人が編集して仕上げる前提。既存のスクリプトタブとは独立した新規作品）
+- 脚本はページ→コマ→セリフの表で編集（重要度・背景描写／演技指示・話者・フキダシ種別）。AI の出力が崩れても可能な範囲で復元
+- AI エンジンはローカル LLM（Ollama / LM Studio / Lemonade / Unsloth）または Gemini（Nanobanana と API キー共通）。設定はこのアプリ内に保存（Unsloth は `.env` の `UNSLOTH_API_KEY`）
+- Chat でストーリー・脚本を相談・編集（返答を「ストーリーに反映」「脚本に反映」、元に戻せる）。Auto 向けツール（脚本化・セリフ推敲・ストーリー整理・キャラクター設定）
+- Chat 内から画像生成（ローカル（Workflow Studio）／ Gemini をラジオボタンで選択、AI による画像プロンプト作成）。生成画像は `output/cc_auto` に保存
+- 「レイアウト」サブタブ（脚本からのコマ割り連携）は今後追加予定
+
 ### スクリプトタブ
 
 - 作品名 → あらすじ → プロット［ページ → コマワリ（シーン・画像プロンプト・要素・セリフ/説明等）］の階層構造で脚本を管理
@@ -205,6 +214,8 @@ comfyui-comic-creator/
 │   │   ├── image-tab/         # Imageタブ専用ツール（DrawTool/ShapeTool/FillTool/MaskTool 等）
 │   │   ├── i18n.js            # 多言語辞書（ja/en/zh）+ t()
 │   │   ├── nanobanana.js      # Nanobanana（Gemini API）連携
+│   │   ├── auto-ai-client.js  # Autoタブ LLM クライアント（ローカル LLM / Gemini）
+│   │   ├── auto-story-core.js # Autoタブ 脚本のプロンプト生成・パース（DOM 非依存）
 │   │   ├── pixifx.js          # PixiJS FX連携
 │   │   └── vendor/            # 同梱ライブラリ（jsPDF/JSZip、オフライン対応）
 │   └── css/
@@ -221,6 +232,9 @@ comfyui-comic-creator/
 | GET      | `/ccc`                                | SPA エントリポイント         |
 | GET      | `/api/ccc/refresh-assets`             | アセット一覧の再生成         |
 | POST     | `/api/ccc/nanobanana/generate`        | Nanobanana 画像生成          |
+| POST     | `/api/ccc/auto/gemini-text`           | Auto タブの Gemini テキスト生成 |
+| POST     | `/api/ccc/auto/unsloth-proxy`         | Auto タブの Unsloth 中継     |
+| POST     | `/api/ccc/save-auto-image`            | Auto タブの生成画像保存      |
 | POST     | `/api/ccc/save-image-project`         | Image タブのプロジェクト保存 |
 | POST     | `/api/ccc/video/upload`               | 動画（MP4）のアップロード    |
 | POST     | `/api/ccc/eagle/add`                  | Eagle への画像保存           |

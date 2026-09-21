@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-09-21（Autoタブ「ストーリー・脚本」を追加、未リリース）
+
+参考プロトタイプ`now_work/manga_panel`（AIで脚本を自動生成してコマ割りに反映する荒い試作）の機能を参考に、AIでマンガのストーリー・脚本を自動作成する新タブ「Auto」を追加した。以前の方針「コマ割りの自動生成は行わない」は撤回し、「自動作成 → 人が編集して仕上げる」フローを前提とした。今回は第1弾として「ストーリー・脚本」サブタブまでを実装（「レイアウト」サブタブは枠のみ、脚本からのコマ割り連携は次段階）。計画・仕様は`PLAN_auto_tab.md`、UIモックアップは`docs/plan/auto_tab_mockup.png`。ブランチ`feature/auto-tab`。
+
+**構成**: 3ペイン（左=お題・ページ数・作成・サンプル／中央=ストーリー・脚本・メモ／右=Chat・設定）。作成は2段階（お題→ストーリー→編集→脚本）で、ストーリーが空の間は脚本を作成できない。脚本はページ→コマ→複数セリフの構造化された表で編集する（重要度・背景描写／演技指示・話者・フキダシ種別。重要度は将来のコマサイズ自動配分用）。既存のスクリプトタブとは連携せず、作品データは別キー（`ccc_auto_current`／`ccc_auto_works`）でlocalStorageに保存する。
+
+**AIエンジン**: ローカルLLM（Ollama／LM Studio／Lemonade／Unsloth）とGemini。設定項目はWorkflow Studio（WFS）のAI TOOL設定と同じで、保存先はCC側（`ccc_auto_ai_settings`。WFSの設定とは共有しない）。LLMクライアントはWFSの`ai-tab.js`から必要部分を`static/js/auto-ai-client.js`へ**移植**した（CC単体で動かすため。WFS側は無変更）。既存の橋渡し`_wfmReceiveLLMPromptRequest`は`callLLM`に設定を渡さずThinking mode・Max tokensが効かないため、移植側では設定を必ず渡す。Geminiのキー（`NANOBANANA_API_KEY`）はサーバー側にしか無いため、`py/ccc.py`に`/api/ccc/auto/gemini-text`（複数ターン・システムプロンプト対応）を新設。Unslothはキー付き中継`/api/ccc/auto/unsloth-proxy`（宛先はループバックに限定）を新設。
+
+**脚本のパース**: LLM出力は「JSON抽出→行ベース復元」の二段構え（`static/js/auto-story-core.js`、DOM非依存）。ページ配列／pages付きオブジェクト／pageNum付きフラット配列のどれでも受け付ける。
+
+**Chat**: 現在のストーリー・脚本を文脈に含められる。返答は自動反映せず、返答の下の「ストーリーに反映」「脚本に反映」ボタンで反映し（確認あり）、「反映を元に戻す」で戻せる（最大10回）。ツール呼び出しには依存しないため、対応していないローカルモデルでも動く。Auto向けツール（脚本化・セリフ推敲・ストーリーを整える・キャラクター設定）は`AUTO_TOOLS`の登録式で、追加しやすい。履歴は作品に保存（最新60件）。
+
+**画像生成**: Chat内でローカル（Workflow Studio経由、既存の`requestPanelImageFromWorkflowStudio`）／Gemini（Nanobanana、既存の`requestNanobananaGenerate`）をラジオボタンで選び、AIによる画像プロンプト作成→生成。各エンジンの設定は設定タブの「画像生成」欄。生成画像はComfyUIのoutput配下`cc_auto/`に保存（`py/config.py`の`OUTPUT_AUTO_DIR`、`/api/ccc/save-auto-image`、静的配信`/ccc_auto_output`。`cc_nanobanana`と同構成）。WFS経由の結果はblob URLのため、保存前にdata URLへ変換する。
+
+**実機検証（Kapture）**: ローカルLLM（Ollama `gemma4:e4b`）でストーリー生成→脚本生成（JSONを正しく解析）→Chatで脚本修正→反映→取り消し、作品の保存・読込・削除、非JSON返答での反映エラー、ローカル画像生成（`zimage_turbo_t2i.json`、output/cc_autoへ保存・ギャラリー表示）、AIによる画像プロンプト作成、Gemini画像生成（`gemini-3.1-flash-image`、1024x1024、JPEGで保存）を確認。Ollama以外のローカルLLMとGeminiのテキスト生成はユーザーが確認済み。Unsloth中継は未検証。
+
+**実機で見つけた問題**: ブラウザをComfyUIの`127.0.0.1`で開いていると、`localhost:11434`のOllamaへのfetchがCORSヘッダーが正しくても"Failed to fetch"でブロックされる（`127.0.0.1:11434`なら通る）。既定の接続先をページのホスト名に合わせ、失敗時にURLの変更を提案するメッセージを出すようにした。また、ComfyUIの`custom_nodes`側のCCは作業リポジトリとは別コピーのため、変更ファイルの手動同期が必要だった。`ernie_t2i.json`はComfyUI側のCLIP不整合エラー（`mat1 and mat2 shapes cannot be multiplied`）になったが、エラーは画面に正しく表示された（Auto側の不具合ではない）。
+
+**未対応・次の予定**: 「レイアウト」サブタブ（脚本からのコマ割り自動生成、重要度によるコマサイズ按分、既存レイアウトタブ／スクリプトタブとの連携）、WFSの翻訳・VLMツール（レイアウトタブ作業後に検討）、I2I（初版はT2Iのみ）。バージョン更新・リリースは未実施。ヘルプ（ja/en/zh）・README（3言語）に反映済み。
+
+---
+
 ## 2026-09-19（セキュリティチェック指摘への対応、v1.44.1）
 
 外部のセキュリティチェック（レジストリのYARAスキャンを想定した指摘）を受け、機能に影響のない範囲でバックエンドの修正を4件実施した。

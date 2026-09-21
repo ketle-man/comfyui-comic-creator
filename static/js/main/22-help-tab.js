@@ -24,7 +24,7 @@ const _HELP_DATA = [
         sections: [
             { heading: 'ComfyUI Comic Creator について', body: 'ComfyUI 上で動作するマンガページ作成アプリです。作品（ページグループ）単位でページを管理し、テンプレートからページを作成してコマに画像・フキダシ・テキストを配置し、JPEG/PNG/WebP/SVG/PDF/EPUB形式で出力できます。' },
             { heading: '基本ワークフロー', body: '<ol><li>ページタブ「作品管理」で作品名とサイズを入力して「新規作成」（レイアウトタブへ自動遷移します）。</li><li>レイアウトタブ左のアセットパネル「テンプレート」からテンプレートを選び「ページとして挿入」。</li><li>コマに画像・フキダシ・テキストを配置して編集し、「保存」。</li><li>◀▶のページ送りとテンプレート挿入を繰り返して複数ページを作成。</li><li>ページタブ「出力」（または作品管理の「出力」ボタン）で形式・範囲を指定して保存。</li></ol>' },
-            { heading: '画面構成', body: '<ul><li><b>タブバー</b>: ページ / レイアウト / Image / フォント / workflow studio / Nanobanana / スクリプト / 設定 / ヘルプ。</li><li><b>アセットパネル</b>（左サイドバー）: タブに応じて表示されるタブ構成が切り替わります。レイアウトタブ＝A/P/T/F（素材・ページ・テンプレート・フォントスタイル/プリセット）、Imageタブ＝A/F/I（素材・フォント・画像プロジェクト）、スクリプトタブ＝S（保存済み作品・ページ作品）。</li><li><b>ツールペイン</b>（アセットパネルの右隣）: ドロー/フキダシ/テキスト/画像/動画/マスク/3Dポーズ/3Dテキストを切り替えるボタン列（レイアウトタブでのみ表示）。</li><li><b>レイヤーパネル</b>（レイアウトタブ右）: オブジェクトの重ね順・グループ・表示サイズの管理。</li></ul>' },
+            { heading: '画面構成', body: '<ul><li><b>タブバー</b>: ページ / レイアウト / Image / フォント / workflow studio / Nanobanana / Auto / スクリプト / 設定 / ヘルプ。</li><li><b>アセットパネル</b>（左サイドバー）: タブに応じて表示されるタブ構成が切り替わります。レイアウトタブ＝A/P/T/F（素材・ページ・テンプレート・フォントスタイル/プリセット）、Imageタブ＝A/F/I（素材・フォント・画像プロジェクト）、スクリプトタブ＝S（保存済み作品・ページ作品）。</li><li><b>ツールペイン</b>（アセットパネルの右隣）: ドロー/フキダシ/テキスト/画像/動画/マスク/3Dポーズ/3Dテキストを切り替えるボタン列（レイアウトタブでのみ表示）。</li><li><b>レイヤーパネル</b>（レイアウトタブ右）: オブジェクトの重ね順・グループ・表示サイズの管理。</li></ul>' },
         ],
     },
     {
@@ -80,6 +80,21 @@ const _HELP_DATA = [
             { heading: '使い方', body: '<ol><li>生成設定サブタブでPositive/Negativeプロンプト・モデル・解像度を設定します。</li><li>「生成」ボタンで画像を生成します。</li><li>生成完了後、サムネイルを選択して「挿入」ボタンでレイアウトに追加します。</li></ol>' },
             { heading: '2K', body: '解像度セレクトの隣にある「2K」チェックボックスをONにすると、選択したアスペクト比を維持したまま、生成解像度を約2倍相当（Gemini APIのImageConfig.imageSize: "2K"）で生成します。対応していないモデル（gemini-3.1-flash-lite-image等）では既定の解像度のまま生成されることがあります。なお、Gemini画像生成APIにはI2Iの変化度合いを数値で指定するパラメータ（denoising strength等）が存在しないため、変化の強さはPositiveプロンプトの文章でのみ調整できます。' },
             { heading: '生成画像の保存先', body: '生成した画像はComfyUI本体のoutputフォルダ配下の <code>cc_nanobanana</code> フォルダ（例: <code>ComfyUI/output/cc_nanobanana</code>）に自動保存されます。フォルダが存在しない場合はComfyUI起動時に自動作成されます。' },
+        ],
+    },
+    {
+        id: 'auto',
+        label: 'Auto',
+        tab: 'auto',
+        kana: 'おーと',
+        sections: [
+            { heading: '概要', body: 'AIでマンガのストーリーと脚本を自動作成するタブです。自動で作ったものをそのまま使うのではなく、<b>作成後に人が編集して仕上げる</b>ことを前提にしています。既存のスクリプトタブとは連携せず、Autoタブ専用の新規作品として管理します。サブタブ「ストーリー・脚本」と「レイアウト」があり、現在使えるのは「ストーリー・脚本」です（「レイアウト」は今後追加予定）。' },
+            { heading: '基本の流れ', body: '<ol><li>右ペインの「設定」タブでAIエンジン（ローカルLLMまたはGemini）を設定し、「設定を保存」を押します。</li><li>左ペインにお題を入力し、ページ数を指定して「作成」を押すと、<b>ストーリー</b>が中央ペインの「ストーリー」タブに作成されます。「サンプル」ボタンでLLMなしでも流れを試せます。</li><li>ストーリーを確認し、直接編集するか、右ペインのChatに相談して整えます。</li><li>中央ペインの「脚本」タブで「ストーリーから脚本を作成」を押すと、ストーリーからページ・コマ単位の<b>脚本</b>が作成されます（ストーリーが空の間は押せません）。</li><li>脚本を表上で編集します。</li><li>作品名を付けて「保存」します。</li></ol>' },
+            { heading: 'AIエンジンの設定（右ペイン「設定」タブ）', body: '<ul><li><b>ローカルLLM</b>: Ollama / LM Studio / Lemonade / Unsloth から選び、接続先URL・モデル・Thinking mode・Max tokens を指定します。「接続テスト」「モデルをアンロード」も使えます。Unslothを使う場合は、プラグインフォルダの <code>.env</code> に <code>UNSLOTH_API_KEY=...</code> を記載してComfyUIを再起動してください。</li><li><b>Gemini</b>: APIキーはNanobananaタブと共通です（<code>.env</code> の <code>NANOBANANA_API_KEY</code>）。使うモデルを選びます。Geminiは従量課金です。</li><li>設定はこのアプリ内（ブラウザ）に保存され、Workflow Studioの設定とは共有されません。</li><li>接続先URLのホスト名は、ブラウザで開いているアドレスに合わせてください（<code>127.0.0.1</code> で開いているときは <code>http://127.0.0.1:11434</code>）。異なると、ブラウザにブロックされて「Failed to fetch」になることがあります（初期値は開いているアドレスに合わせて自動設定されます）。</li></ul>' },
+            { heading: '脚本タブ', body: '<ul><li>脚本はページ→コマ→セリフの構造で表示されます。コマごとに「重要度」（高／中／低。将来のコマ割り自動配分で使用）、「背景描写・演技指示」（下描きガイド）、セリフ（話者・本文・フキダシ種別）を編集できます。</li><li>ページ・コマ・セリフの追加や削除ができます。</li><li>AIの出力が崩れていても、読み取れる範囲で脚本を復元します。復元したとき、または読み取れなかったときは「LLMの生の出力」を確認して再試行できます。</li></ul>' },
+            { heading: 'Chat（右ペイン）', body: '<ul><li>ストーリーや脚本について相談できます。「現在のストーリー・脚本を文脈に含める」をONにすると、編集中の内容をAIが踏まえて答えます。</li><li>「ツール」から、ストーリーから脚本化／セリフ推敲／ストーリーを整える／キャラクター設定を作成、を実行できます。</li><li>AIの返答の下のボタンで、返答を中央ペインへ反映します。<b>「ストーリーに反映」</b>（返答全文をストーリーへ）、<b>「脚本に反映」</b>（返答のJSONコードブロックを脚本へ）、「画像プロンプトへ」、「コピー」。反映前に確認が出ます。「反映を元に戻す」で直前の状態へ戻せます（最大10回）。</li><li>チャット履歴は作品と一緒に保存されます（最新60件）。「履歴を消去」で消去できます。</li></ul>' },
+            { heading: '画像生成（Chat内）', body: '<ul><li>Chat内の「画像生成」で、生成エンジン（<b>ローカル（Workflow Studio）</b> または <b>Gemini（Nanobanana）</b>）をラジオボタンで選びます。</li><li>場面の説明を入力して「プロンプトを作成」を押すと、AIが画像プロンプトを作ります（入力欄が空のときは直近のAIの返答やストーリーを元にします）。内容を確認・編集してから「画像を生成」を押します。</li><li>各エンジンの設定は右ペイン「設定」タブの「画像生成」欄で行います。ローカルは、専用ワークフローの指定・サイズ・ネガティブ、Geminiはモデル・解像度・2Kです。</li><li>ローカル生成は、この画面に埋め込まれた「workflow studio」タブを使います。専用ワークフローを使わない場合は、そのタブにロード中のワークフローで生成します。</li><li>生成した画像は ComfyUI 本体の output フォルダ配下の <code>cc_auto</code> フォルダに保存され、Chat内にサムネイルが並びます（クリックで開く）。</li></ul>' },
+            { heading: '作品の保存', body: '<ul><li>作業内容は自動保存され、次に開いたときも続きから作業できます。「保存」で作品として名前を付けて保存し、「新規」「保存済みの作品を開く」「削除」で管理します。保存していない変更がある状態で作品を切り替えるときは確認が出ます。</li><li>作品はブラウザ内に保存されるため、別のブラウザやPCとは共有されません。生成した画像ファイルは output/cc_auto にあります。</li></ul>' },
         ],
     },
     {
@@ -380,7 +395,7 @@ const _HELP_I18N = {
             sections: [
                 { heading: 'About ComfyUI Comic Creator', body: 'A manga page creation app that runs on top of ComfyUI. Pages are managed in units of "works" (page groups); you create pages from templates, place images, speech balloons, and text into panels, and export as JPEG/PNG/WebP/SVG/PDF/EPUB.' },
                 { heading: 'Basic Workflow', body: '<ol><li>In the Page tab "Work Management", enter a work name and size, then click "New" (this automatically switches to the Layout tab).</li><li>Choose a template from the "Template" asset panel on the left of the Layout tab and click "Insert as Page".</li><li>Place and edit images, speech balloons, and text in the panels, then click "Save".</li><li>Repeat page navigation (◀▶) and template insertion to create multiple pages.</li><li>In the Page tab "Export" (or the "Export" button in Work Management), specify the format and range, then save.</li></ol>' },
-                { heading: 'Screen Layout', body: '<ul><li><b>Tab bar</b>: Page / Layout / Image / Font / workflow studio / Nanobanana / Script / Settings / Help.</li><li><b>Asset panel</b> (left sidebar): The set of sub-tabs shown depends on the active tab. Layout tab = A/P/T/F (Assets / Pages / Templates / Font styles &amp; presets), Image tab = A/F/I (Assets / Fonts / Image projects), Script tab = S (Saved works / Page works).</li><li><b>Tool pane</b> (next to the asset panel): A column of buttons for switching between Draw / Balloon / Text / Image / Video / Mask / 3D Pose / 3D Text (shown only in the Layout tab).</li><li><b>Layer panel</b> (right side of the Layout tab): Manages stacking order, groups, and display size of objects.</li></ul>' },
+                { heading: 'Screen Layout', body: '<ul><li><b>Tab bar</b>: Page / Layout / Image / Font / workflow studio / Nanobanana / Auto / Script / Settings / Help.</li><li><b>Asset panel</b> (left sidebar): The set of sub-tabs shown depends on the active tab. Layout tab = A/P/T/F (Assets / Pages / Templates / Font styles &amp; presets), Image tab = A/F/I (Assets / Fonts / Image projects), Script tab = S (Saved works / Page works).</li><li><b>Tool pane</b> (next to the asset panel): A column of buttons for switching between Draw / Balloon / Text / Image / Video / Mask / 3D Pose / 3D Text (shown only in the Layout tab).</li><li><b>Layer panel</b> (right side of the Layout tab): Manages stacking order, groups, and display size of objects.</li></ul>' },
             ],
         },
         'page-template': {
@@ -446,6 +461,18 @@ const _HELP_I18N = {
                 { heading: 'Overview', body: 'Embeds and displays the ComfyUI-Workflow-Studio gallery within this tab (requires ComfyUI-Workflow-Studio to be installed).' },
                 { heading: 'Operations', body: '<ul><li>The "ws Reload" button in the top navigation reloads the embedded view.</li><li>The "ws Open in New Tab" button opens Workflow Studio directly in a separate tab.</li></ul>' },
                 { heading: 'If Nothing Is Displayed', body: 'If the ComfyUI-Workflow-Studio custom node is not installed, or ComfyUI is not running, a "Not found" message is shown. Please install the custom node and restart ComfyUI.' },
+            ],
+        },
+        auto: {
+            label: 'Auto',
+            sections: [
+                { heading: 'Overview', body: 'A tab that creates a manga story and script with AI. It assumes that <b>a person edits and finishes the result</b> rather than using the automatic output as is. It is independent of the Script tab and manages its own new works. It has the sub-tabs "Story &amp; Script" and "Layout"; currently only "Story &amp; Script" is available ("Layout" will be added later).' },
+                { heading: 'Basic Workflow', body: '<ol><li>In the "Settings" tab in the right pane, set up the AI engine (local LLM or Gemini) and click "Save Settings".</li><li>Enter a theme in the left pane, set the page count and click "Create" to generate the <b>story</b> in the center pane "Story" tab. The "Sample" button lets you try the flow without an LLM.</li><li>Review the story and edit it directly, or refine it by talking to the Chat in the right pane.</li><li>In the center pane "Script" tab, click "Create script from story" to generate a page-and-panel <b>script</b> from the story (disabled while the story is empty).</li><li>Edit the script in the table.</li><li>Give the work a name and click "Save".</li></ol>' },
+                { heading: 'AI Engine Settings (right pane "Settings" tab)', body: '<ul><li><b>Local LLM</b>: choose Ollama / LM Studio / Lemonade / Unsloth and set the URL, model, Thinking mode and Max tokens. "Test Connection" and "Unload Model" are also available. To use Unsloth, add <code>UNSLOTH_API_KEY=...</code> to the <code>.env</code> file in the plugin folder and restart ComfyUI.</li><li><b>Gemini</b>: the API key is shared with the Nanobanana tab (<code>NANOBANANA_API_KEY</code> in <code>.env</code>). Choose the model to use. Gemini is pay-per-use.</li><li>Settings are stored inside this app (in the browser) and are not shared with Workflow Studio.</li><li>Match the host name of the backend URL to the address you opened this page with (when opened at <code>127.0.0.1</code>, use <code>http://127.0.0.1:11434</code>). A mismatch can be blocked by the browser and shows "Failed to fetch" (the default is set automatically to match the address you opened).</li></ul>' },
+                { heading: 'Script Tab', body: '<ul><li>The script is shown as pages, panels and dialogues. For each panel you can edit the "Importance" (High / Medium / Low; to be used for automatic panel sizing later), the "Background / acting direction" (sketch guide) and the dialogues (speaker, text, balloon type).</li><li>You can add and delete pages, panels and dialogues.</li><li>Even if the AI output is malformed, the script is recovered as far as possible. When it was recovered, or could not be read, check "Raw LLM output" and retry.</li></ul>' },
+                { heading: 'Chat (right pane)', body: '<ul><li>Talk about your story or script. With "Include the current story and script as context" ON, the AI answers with the content you are editing in mind.</li><li>The "Tool" list runs: Story to script / Polish dialogue / Refine the story / Create character sheets.</li><li>The buttons under an AI reply apply it to the center pane: <b>"Apply to story"</b> (the whole reply becomes the story), <b>"Apply to script"</b> (the JSON code block in the reply becomes the script), "To image prompt" and "Copy". A confirmation appears before applying. "Undo apply" returns to the previous state (up to 10 times).</li><li>The chat history is saved with the work (latest 60 messages). "Clear history" removes it.</li></ul>' },
+                { heading: 'Image Generation (in Chat)', body: '<ul><li>In "Image generation" inside Chat, choose the engine with the radio buttons: <b>Local (Workflow Studio)</b> or <b>Gemini (Nanobanana)</b>.</li><li>Describe a scene and click "Create prompt" and the AI writes an image prompt (when the box is empty, it uses the latest AI reply or the story). Review and edit it, then click "Generate image".</li><li>Each engine is configured in the "Image generation" section of the right pane "Settings" tab: for local, a dedicated workflow, size and negative prompt; for Gemini, model, resolution and 2K.</li><li>Local generation uses the "workflow studio" tab embedded in this screen. Without a dedicated workflow, it generates with the workflow currently loaded in that tab.</li><li>Generated images are saved to the <code>cc_auto</code> folder under the ComfyUI output folder, and thumbnails appear in Chat (click to open).</li></ul>' },
+                { heading: 'Saving Works', body: '<ul><li>Your work is saved automatically and you can continue where you left off. "Save" stores it as a named work; manage works with "New", "Open a saved work" and "Delete". A confirmation appears when switching works with unsaved changes.</li><li>Works are stored in the browser, so they are not shared with other browsers or PCs. Generated image files are in output/cc_auto.</li></ul>' },
             ],
         },
         font: {
@@ -639,7 +666,7 @@ const _HELP_I18N = {
             sections: [
                 { heading: '关于 ComfyUI Comic Creator', body: '一款运行在 ComfyUI 之上的漫画页面制作应用。以"作品"（页面组）为单位管理页面，可从模板创建页面，在分格中放置图像、对话气泡和文字，并可导出为 JPEG/PNG/WebP/SVG/PDF/EPUB 格式。' },
                 { heading: '基本工作流程', body: '<ol><li>在页面标签页的"作品管理"中输入作品名称和尺寸，点击"新建"（会自动跳转到排版标签页）。</li><li>在排版标签页左侧的素材面板"模板"中选择模板，点击"作为页面插入"。</li><li>在分格中放置并编辑图像、对话气泡和文字，然后点击"保存"。</li><li>重复使用◀▶翻页和插入模板来创建多个页面。</li><li>在页面标签页的"输出"（或作品管理中的"输出"按钮）中指定格式和范围后保存。</li></ol>' },
-                { heading: '界面结构', body: '<ul><li><b>标签栏</b>：页面 / 排版 / Image / 字体 / workflow studio / Nanobanana / 脚本 / 设置 / 帮助。</li><li><b>素材面板</b>（左侧边栏）：显示的子标签会根据当前标签切换。排版标签 = A/P/T/F（素材・页面・模板・字体样式/预设），Image标签 = A/F/I（素材・字体・图像项目），脚本标签 = S（已保存的作品・页面作品）。</li><li><b>工具面板</b>（素材面板右侧）：用于切换绘制/对话气泡/文字/图像/视频/蒙版/3D姿势/3D文字的按钮列（仅在排版标签中显示）。</li><li><b>图层面板</b>（排版标签右侧）：管理对象的层叠顺序、分组和显示尺寸。</li></ul>' },
+                { heading: '界面结构', body: '<ul><li><b>标签栏</b>：页面 / 排版 / Image / 字体 / workflow studio / Nanobanana / Auto / 脚本 / 设置 / 帮助。</li><li><b>素材面板</b>（左侧边栏）：显示的子标签会根据当前标签切换。排版标签 = A/P/T/F（素材・页面・模板・字体样式/预设），Image标签 = A/F/I（素材・字体・图像项目），脚本标签 = S（已保存的作品・页面作品）。</li><li><b>工具面板</b>（素材面板右侧）：用于切换绘制/对话气泡/文字/图像/视频/蒙版/3D姿势/3D文字的按钮列（仅在排版标签中显示）。</li><li><b>图层面板</b>（排版标签右侧）：管理对象的层叠顺序、分组和显示尺寸。</li></ul>' },
             ],
         },
         'page-template': {
@@ -705,6 +732,18 @@ const _HELP_I18N = {
                 { heading: '概述', body: '在此标签内嵌入显示ComfyUI-Workflow-Studio的图库（需要安装ComfyUI-Workflow-Studio）。' },
                 { heading: '操作', body: '<ul><li>顶部导航的"ws重新加载"按钮可重新加载内嵌显示内容。</li><li>"ws在新标签中打开"按钮可在单独的标签中直接打开Workflow Studio。</li></ul>' },
                 { heading: '未显示内容时', body: '若未安装ComfyUI-Workflow-Studio自定义节点，或ComfyUI未启动，会显示"未找到"的提示信息。请安装该自定义节点并重启ComfyUI。' },
+            ],
+        },
+        auto: {
+            label: 'Auto',
+            sections: [
+                { heading: '概述', body: '用AI自动创作漫画故事和脚本的标签页。它以<b>由人对成果进行编辑并完成</b>为前提，而不是直接使用自动生成的内容。与脚本标签页不联动，作为Auto专用的新作品进行管理。包含子标签页"故事・脚本"和"布局"，目前可用的是"故事・脚本"（"布局"将于日后添加）。' },
+                { heading: '基本流程', body: '<ol><li>在右侧窗格的"设置"标签页设置AI引擎（本地LLM或Gemini），然后点击"保存设置"。</li><li>在左侧窗格输入主题、指定页数并点击"创建"，中间窗格的"故事"标签页会生成<b>故事</b>。点击"示例"按钮可在没有LLM的情况下体验流程。</li><li>确认故事，直接编辑，或通过右侧窗格的Chat商量后整理。</li><li>在中间窗格的"脚本"标签页点击"根据故事创建脚本"，即可根据故事生成按页面・分格划分的<b>脚本</b>（故事为空时无法点击）。</li><li>在表格中编辑脚本。</li><li>为作品命名并点击"保存"。</li></ol>' },
+                { heading: 'AI引擎设置（右侧窗格"设置"标签页）', body: '<ul><li><b>本地LLM</b>：从Ollama / LM Studio / Lemonade / Unsloth中选择，并指定连接URL、模型、Thinking mode和Max tokens。还可使用"连接测试"和"卸载模型"。使用Unsloth时，请在插件文件夹的<code>.env</code>中添加<code>UNSLOTH_API_KEY=...</code>并重启ComfyUI。</li><li><b>Gemini</b>：API密钥与Nanobanana标签页共用（<code>.env</code>中的<code>NANOBANANA_API_KEY</code>）。选择要使用的模型。Gemini按用量计费。</li><li>设置保存在本应用内（浏览器），不与Workflow Studio的设置共享。</li><li>连接URL的主机名请与浏览器中打开的地址保持一致（以<code>127.0.0.1</code>打开时使用<code>http://127.0.0.1:11434</code>）。不一致时可能被浏览器拦截而显示"Failed to fetch"（默认值会根据打开的地址自动设置）。</li></ul>' },
+                { heading: '脚本标签页', body: '<ul><li>脚本以页面→分格→台词的结构显示。可为每个分格编辑"重要度"（高／中／低，将来用于自动分配分格大小）、"背景描写・演技指示"（草稿指引）和台词（说话人・正文・气泡类型）。</li><li>可以添加或删除页面、分格和台词。</li><li>即使AI的输出格式有误，也会尽可能恢复脚本。恢复后或无法读取时，可查看"LLM原始输出"并重试。</li></ul>' },
+                { heading: 'Chat（右侧窗格）', body: '<ul><li>可以就故事和脚本进行讨论。开启"将当前故事・脚本作为上下文"后，AI会结合正在编辑的内容回答。</li><li>可从"工具"执行：将故事转为脚本／台词润色／整理故事／创建角色设定。</li><li>AI回复下方的按钮可将回复应用到中间窗格：<b>"应用到故事"</b>（整个回复作为故事）、<b>"应用到脚本"</b>（回复中的JSON代码块作为脚本）、"转到图像提示词"和"复制"。应用前会显示确认。"撤销应用"可还原到上一个状态（最多10次）。</li><li>聊天历史会与作品一起保存（最新60条）。可用"清除历史"清除。</li></ul>' },
+                { heading: '图像生成（Chat内）', body: '<ul><li>在Chat内的"图像生成"中，用单选按钮选择生成引擎：<b>本地（Workflow Studio）</b>或<b>Gemini（Nanobanana）</b>。</li><li>输入场景描述并点击"创建提示词"，AI会生成图像提示词（输入框为空时，以最近的AI回复或故事为依据）。确认并编辑后点击"生成图像"。</li><li>各引擎的设置在右侧窗格"设置"标签页的"图像生成"栏中进行：本地为专用工作流、尺寸和负面提示词，Gemini为模型、分辨率和2K。</li><li>本地生成使用嵌入本界面的"workflow studio"标签页。不使用专用工作流时，使用该标签页中当前加载的工作流生成。</li><li>生成的图像保存到ComfyUI本体output文件夹下的<code>cc_auto</code>文件夹，缩略图会显示在Chat中（点击可打开）。</li></ul>' },
+                { heading: '保存作品', body: '<ul><li>工作内容会自动保存，下次打开时可接着继续。点击"保存"可命名保存为作品，并用"新建"、"打开已保存的作品"、"删除"进行管理。在有未保存的更改时切换作品会显示确认。</li><li>作品保存在浏览器内，因此不会与其他浏览器或电脑共享。生成的图像文件位于output/cc_auto。</li></ul>' },
             ],
         },
         font: {
@@ -911,7 +950,7 @@ const _HELP_ORDER = [
     'about',
     'page-work', 'page-template', 'page-export',
     'layout', 'image-tab', 'assetpanel',
-    'font', 'wfmgallery', 'nanobanana', 'project', 'settings',
+    'font', 'wfmgallery', 'nanobanana', 'auto', 'project', 'settings',
     'appendix-svg-template', 'appendix-balloon', 'appendix-inkscape-template', 'appendix-inkscape-balloon',
 ];
 

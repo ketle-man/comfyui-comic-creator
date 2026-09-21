@@ -59,6 +59,15 @@
 - 使用 Gemini API 生成图像（正向/负向提示词、模型、分辨率）
 - 生成的图像会自动保存到 ComfyUI 本体的 `output/cc_nanobanana` 文件夹
 
+### Auto（AI漫画自动创作）
+
+- 根据主题和页数，用AI分两步自动创作**故事 → 脚本**（以创作后由人编辑完成为前提；与脚本标签页无关联，作为新作品独立管理）
+- 脚本以页面→分格→台词的表格进行编辑（重要度・背景描写／演技指示・说话人・气泡类型）。AI输出格式有误时也会尽可能恢复
+- AI引擎可选本地LLM（Ollama / LM Studio / Lemonade / Unsloth）或Gemini（API密钥与Nanobanana共用）。设置保存在本应用内（Unsloth使用`.env`中的`UNSLOTH_API_KEY`）
+- 在Chat中讨论并编辑故事和脚本（可通过"应用到故事""应用到脚本"应用回复，且可撤销），并提供Auto专用工具（故事转脚本・台词润色・整理故事・角色设定）
+- 在Chat内生成图像（用单选按钮选择本地（Workflow Studio）或Gemini，并由AI撰写图像提示词）。生成的图像保存到`output/cc_auto`
+- "布局"子标签页（根据脚本联动分格）将于日后添加
+
 ### 脚本标签
 - 以 作品名 → 大纲 → 剧情［页面 → 分镜（场景、图像提示词、要素、台词/说明等）］的层级结构管理脚本
 - 可一键将分镜内容作为文字插入到排版标签中
@@ -197,6 +206,8 @@ comfyui-comic-creator/
 │   │   ├── image-tab/           # Image标签专用工具（DrawTool/ShapeTool/FillTool/MaskTool等）
 │   │   ├── i18n.js              # 多语言词典（ja/en/zh）+ t()
 │   │   ├── nanobanana.js        # Nanobanana（Gemini API）联动
+│   │   ├── auto-ai-client.js    # Auto标签页 LLM客户端（本地LLM / Gemini）
+│   │   ├── auto-story-core.js   # Auto标签页 脚本提示词与解析（不依赖DOM）
 │   │   ├── pixifx.js            # PixiJS FX联动
 │   │   └── vendor/              # 随应用打包的库（jsPDF/JSZip，用于离线环境）
 │   └── css/
@@ -213,6 +224,9 @@ comfyui-comic-creator/
 | GET | `/ccc` | SPA 入口 |
 | GET | `/api/ccc/refresh-assets` | 重新生成素材列表 |
 | POST | `/api/ccc/nanobanana/generate` | 生成 Nanobanana 图像 |
+| POST | `/api/ccc/auto/gemini-text` | Auto标签页的Gemini文本生成 |
+| POST | `/api/ccc/auto/unsloth-proxy` | Auto标签页的Unsloth转发 |
+| POST | `/api/ccc/save-auto-image` | 保存Auto标签页生成的图像 |
 | POST | `/api/ccc/save-image-project` | 保存 Image 标签项目 |
 | POST | `/api/ccc/video/upload` | 上传视频（MP4） |
 | POST | `/api/ccc/eagle/add` | 保存图像到 Eagle |
