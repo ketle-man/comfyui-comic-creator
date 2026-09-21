@@ -31,19 +31,26 @@ body {
   height: 100%;
 }
 
+/* タイトルはタブ行の左端に置き、ヘッダーの高さを1行分に抑える（作業領域の高さ確保のため） */
 header {
   background-color: var(--secondary-color);
-  padding: 10px 20px;
+  padding: 4px 20px;
   border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 
 h1 {
-  font-size: 18px;
-  margin: 0 0 10px 0;
+  font-size: 16px;
+  margin: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 5px;
 }
 
