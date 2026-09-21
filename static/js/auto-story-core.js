@@ -324,3 +324,26 @@ export const AUTO_TOOLS = [
         prompt: '現在のストーリーの登場人物について、性格・口調・見た目の特徴（髪型・服装・体型・色など、作画の指示に使える具体的な内容）を、人物ごとに箇条書きでまとめてください。',
     },
 ];
+
+// ============================================
+// 画像プロンプトの作成（Chatの画像生成用）
+// ============================================
+
+const IMAGE_PROMPT_SYSTEM_LOCAL = [
+    'あなたは画像生成AI（Stable Diffusion系）向けのプロンプト作成者です。',
+    'ユーザーが示すマンガの場面の説明から、英語のカンマ区切りのタグ・短いフレーズで、構図・キャラクターの外見・動作・背景・雰囲気を具体的に表すプロンプトを作ってください。',
+    '出力はプロンプト本文のみとし、説明や前置きは書かないでください。',
+].join(' ');
+
+const IMAGE_PROMPT_SYSTEM_GEMINI = [
+    'あなたは画像生成AI（Gemini）向けのプロンプト作成者です。',
+    'ユーザーが示すマンガの場面の説明から、構図・キャラクターの外見・動作・背景・雰囲気を具体的に描写した、英語の短い文章（2〜4文）を作ってください。',
+    '出力はプロンプト本文のみとし、説明や前置きは書かないでください。',
+].join(' ');
+
+export function buildImagePromptMessages({ description, engine }) {
+    return [
+        { role: 'system', content: engine === 'gemini' ? IMAGE_PROMPT_SYSTEM_GEMINI : IMAGE_PROMPT_SYSTEM_LOCAL },
+        { role: 'user', content: description },
+    ];
+}

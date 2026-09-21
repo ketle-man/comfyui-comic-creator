@@ -1580,6 +1580,20 @@
                         <button id="auto-chat-tool-run-btn" class="btn small secondary" data-i18n="auto.chatToolRun">実行</button>
                       </div>
                       <div id="auto-chat-messages" class="auto-chat-messages"></div>
+                      <details id="auto-img-panel" class="auto-img-panel">
+                        <summary data-i18n="auto.imgTitle">画像生成</summary>
+                        <div class="auto-radio-row auto-radio-wrap">
+                          <label><input type="radio" name="auto-imggen-engine" value="local" /> <span data-i18n="auto.imgEngineLocal">ローカル（Workflow Studio）</span></label>
+                          <label><input type="radio" name="auto-imggen-engine" value="gemini" /> <span data-i18n="auto.imgEngineGemini">Gemini（Nanobanana）</span></label>
+                        </div>
+                        <textarea id="auto-img-prompt" class="comfyui-textarea auto-chat-input" rows="3" data-i18n-placeholder="auto.imgPromptPlaceholder"></textarea>
+                        <div class="auto-row auto-row-buttons">
+                          <button id="auto-img-make-prompt-btn" class="btn small secondary" data-i18n="auto.imgMakePrompt">プロンプトを作成</button>
+                          <button id="auto-img-generate-btn" class="btn small primary auto-grow" data-i18n="auto.imgGenerate">画像を生成</button>
+                        </div>
+                        <div id="auto-img-status" class="auto-status" role="status"></div>
+                        <div id="auto-img-gallery" class="auto-img-gallery"></div>
+                      </details>
                       <label class="auto-check"><input id="auto-chat-context" type="checkbox" checked /> <span data-i18n="auto.chatContext">現在のストーリー・脚本を文脈に含める</span></label>
                       <textarea id="auto-chat-input" class="comfyui-textarea auto-chat-input" rows="3" data-i18n-placeholder="auto.chatInputPlaceholder"></textarea>
                       <div class="auto-row auto-row-buttons">
@@ -1648,6 +1662,47 @@
                           </div>
                           <div id="auto-gemini-key-status" class="auto-hint"></div>
                           <p class="auto-hint" data-i18n="auto.geminiHint">APIキーはNanobananaタブと共通です。</p>
+                        </div>
+                      </div>
+
+                      <div class="auto-set-section">
+                        <div class="auto-set-title" data-i18n="auto.setImageGen">画像生成</div>
+                        <div class="auto-set-sub" data-i18n="auto.setImgLocal">ローカル（Workflow Studio）</div>
+                        <label class="auto-check"><input id="auto-img-wf-enabled" type="checkbox" /> <span data-i18n="auto.setImgUseWorkflow">専用ワークフローを使う</span></label>
+                        <div class="auto-row">
+                          <select id="auto-img-wf-select" class="comfyui-select auto-grow"></select>
+                          <button id="auto-img-wf-refresh-btn" class="btn small secondary" data-i18n="auto.refresh">更新</button>
+                        </div>
+                        <div class="auto-row">
+                          <label class="auto-label auto-label-fixed" data-i18n="auto.setImgSize">サイズ（幅×高さ）</label>
+                          <input id="auto-img-width" type="number" min="64" step="64" class="comfyui-input" />
+                          <span>×</span>
+                          <input id="auto-img-height" type="number" min="64" step="64" class="comfyui-input" />
+                        </div>
+                        <div class="auto-row">
+                          <label class="auto-label auto-label-fixed" for="auto-img-negative" data-i18n="auto.setImgNegative">ネガティブ</label>
+                          <input id="auto-img-negative" type="text" class="comfyui-input" />
+                        </div>
+                        <p class="auto-hint" data-i18n="auto.setImgLocalHint">専用ワークフローを使わない場合は、Workflow Studioタブにロード中のワークフローを使います。</p>
+                        <div class="auto-set-sub" data-i18n="auto.setImgGemini">Gemini（Nanobanana）</div>
+                        <div class="auto-row">
+                          <label class="auto-label auto-label-fixed" for="auto-img-gemini-model" data-i18n="auto.setImgModel">モデル</label>
+                          <select id="auto-img-gemini-model" class="comfyui-select auto-grow">
+                            <option value="gemini-3.1-flash-lite-image">gemini-3.1-flash-lite-image</option>
+                            <option value="gemini-3.1-flash-image">gemini-3.1-flash-image</option>
+                            <option value="gemini-3-pro-image">gemini-3-pro-image</option>
+                          </select>
+                        </div>
+                        <div class="auto-row">
+                          <label class="auto-label auto-label-fixed" for="auto-img-gemini-res" data-i18n="auto.setImgResolution">解像度</label>
+                          <select id="auto-img-gemini-res" class="comfyui-select auto-grow">
+                            <option value="1024x1024">1024 x 1024 (1:1)</option>
+                            <option value="832x1216">832 x 1216 (2:3)</option>
+                            <option value="1216x832">1216 x 832 (3:2)</option>
+                            <option value="768x1344">768 x 1344 (9:16)</option>
+                            <option value="1344x768">1344 x 768 (16:9)</option>
+                          </select>
+                          <label class="auto-check"><input id="auto-img-gemini-2k" type="checkbox" /> 2K</label>
                         </div>
                       </div>
 

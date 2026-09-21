@@ -63,6 +63,16 @@ export const DEFAULT_AI_SETTINGS = Object.freeze({
     thinkingMode: false,
     maxTokens: 0,           // 0=バックエンド任せ
     geminiModel: '',
+    // 画像生成（Chatの画像生成ボタン）。エンジンの選択はChat側、各エンジンの設定は設定タブ
+    imageEngine: 'local',            // 'local'（Workflow Studio経由）| 'gemini'（Nanobanana）
+    imgLocalWfEnabled: false,        // 専用ワークフローを使う
+    imgLocalWfFile: '',
+    imgLocalWidth: 1024,
+    imgLocalHeight: 1024,
+    imgLocalNegative: '',
+    imgGeminiModel: 'gemini-3.1-flash-image',
+    imgGeminiResolution: '1024x1024',
+    imgGemini2k: false,
 });
 
 export function loadAiSettings() {

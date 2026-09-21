@@ -17,8 +17,9 @@ import {
 import {
     IMPORTANCE_LEVELS, BUBBLE_TYPES, blankScript, blankPanel, blankDialogue, normalizeScript, parseScriptResponse,
     buildStoryMessages, buildScriptMessages, cloneSampleScript, SAMPLE_THEME, SAMPLE_STORY,
-    AUTO_TOOLS, buildChatSystemMessage,
+    AUTO_TOOLS, buildChatSystemMessage, buildImagePromptMessages,
 } from '../auto-story-core.js';
+import { generateAutoImage, listWorkflowFilenames } from './28a-auto-image.js';
 
 const CURRENT_KEY = 'ccc_auto_current';   // 作業中の作品（オートセーブ）
 const WORKS_KEY = 'ccc_auto_works';       // 保存済みの作品一覧（スクリプトタブの作品とは別キー）
@@ -26,6 +27,7 @@ const WORKS_KEY = 'ccc_auto_works';       // 保存済みの作品一覧（ス�
 const $ = (id) => document.getElementById(id);
 const CHAT_MAX_MESSAGES = 60;             // 作品に保存するチャット履歴の上限（古いものから捨てる）
 const UNDO_MAX = 10;                      // 「Chatの返答を反映」の取り消し履歴の上限
+const IMAGES_MAX = 30;                    // 作品に記録する生成画像の上限（ファイル自体は output/cc_auto/ に残る）
 
 const auto = { work: null, inited: false, busy: false, settingsOpened: false, undo: [] };
 
@@ -42,7 +44,7 @@ function newId() {
 }
 
 function blankWork() {
-    return { id: newId(), name: '', theme: '', pageCount: 2, story: '', script: blankScript(), memo: '', chat: [], updatedAt: Date.now() };
+    return { id: newId(), name: '', theme: '', pageCount: 2, story: '', script: blankScript(), memo: '', chat: [], images: [], updatedAt: Date.now() };
 }
 
 function clampPageCount(v) {
@@ -63,6 +65,9 @@ function normalizeWork(data) {
         memo: typeof data.memo === 'string' ? data.memo : '',
         chat: Array.isArray(data.chat)
             ? data.chat.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string').slice(-CHAT_MAX_MESSAGES)
+            : [],
+        images: Array.isArray(data.images)
+            ? data.images.filter((im) => im && typeof im.url === 'string' && im.url.startsWith('/ccc_auto_output/')).slice(-IMAGES_MAX)
             : [],
         updatedAt: Number(data.updatedAt) || Date.now(),
     };
@@ -100,7 +105,7 @@ function isDirty() {
     const saved = getWorks().find((w) => w.id === auto.work.id);
     if (saved) return serializeForCompare(saved) !== serializeForCompare(auto.work);
     const w = auto.work;
-    return !!(w.name || w.theme || w.story || w.memo || w.script.pages.length || w.chat.length);
+    return !!(w.name || w.theme || w.story || w.memo || w.script.pages.length || w.chat.length || w.images.length);
 }
 
 // ============================================================
@@ -132,7 +137,7 @@ function updateButtons() {
     if (create) create.disabled = auto.busy;
     if (sample) sample.disabled = auto.busy;
     if (script) script.disabled = auto.busy || !hasStory;   // ストーリーが空の間は脚本を作成できない（2段階の徹底）
-    ['auto-chat-send-btn', 'auto-chat-tool-run-btn'].forEach((id) => { const b = $(id); if (b) b.disabled = auto.busy; });
+    ['auto-chat-send-btn', 'auto-chat-tool-run-btn', 'auto-img-make-prompt-btn', 'auto-img-generate-btn'].forEach((id) => { const b = $(id); if (b) b.disabled = auto.busy; });
 }
 
 async function runBusy(statusId, busyText, fn) {
@@ -428,6 +433,24 @@ function renderSettings() {
     $('auto-max-tokens').value = s.maxTokens || 0;
     fillSelect('auto-gemini-model-select', [], s.geminiModel);
     updateEngineSections();
+    // 画像生成: エンジンの選択（Chat側）と、各エンジンの設定
+    setRadio('auto-imggen-engine', s.imageEngine);
+    $('auto-img-wf-enabled').checked = !!s.imgLocalWfEnabled;
+    fillSelect('auto-img-wf-select', [], s.imgLocalWfFile);
+    $('auto-img-width').value = s.imgLocalWidth;
+    $('auto-img-height').value = s.imgLocalHeight;
+    $('auto-img-negative').value = s.imgLocalNegative;
+    $('auto-img-gemini-model').value = s.imgGeminiModel;
+    $('auto-img-gemini-res').value = s.imgGeminiResolution;
+    $('auto-img-gemini-2k').checked = !!s.imgGemini2k;
+}
+
+async function refreshWorkflowList(silent) {
+    const names = await listWorkflowFilenames();
+    fillSelect('auto-img-wf-select', names, $('auto-img-wf-select').value);
+    if (silent) return;
+    if (names.length) setStatus('auto-settings-status', 'ok', t('auto.msgWorkflowsLoaded', names.length));
+    else setStatus('auto-settings-status', 'error', t('auto.msgWorkflowsFailed'));
 }
 
 function currentUrlAndBackend() {
@@ -503,6 +526,14 @@ function onSaveSettings() {
         thinkingMode: $('auto-thinking').checked,
         maxTokens: Math.max(0, parseInt($('auto-max-tokens').value, 10) || 0),
         geminiModel: $('auto-gemini-model-select').value,
+        imgLocalWfEnabled: $('auto-img-wf-enabled').checked,
+        imgLocalWfFile: $('auto-img-wf-select').value,
+        imgLocalWidth: Math.max(64, parseInt($('auto-img-width').value, 10) || 1024),
+        imgLocalHeight: Math.max(64, parseInt($('auto-img-height').value, 10) || 1024),
+        imgLocalNegative: $('auto-img-negative').value,
+        imgGeminiModel: $('auto-img-gemini-model').value,
+        imgGeminiResolution: $('auto-img-gemini-res').value,
+        imgGemini2k: $('auto-img-gemini-2k').checked,
     });
     setStatus('auto-settings-status', 'ok', t('auto.msgSettingsSaved'));
 }
@@ -515,6 +546,7 @@ function switchRightTab(name) {
         // 初回に開いたとき、保存済みの接続先からモデル一覧を静かに更新する
         if (checkedValue('auto-engine') === 'gemini') refreshGeminiModels(true);
         else refreshLocalModels(true);
+        refreshWorkflowList(true);
     }
 }
 
@@ -551,6 +583,7 @@ function renderChat() {
             <div class="auto-chat-actions">
                 <button class="auto-mini-btn" data-act="apply-story">${esc(t('auto.chatApplyStory'))}</button>
                 <button class="auto-mini-btn" data-act="apply-script">${esc(t('auto.chatApplyScript'))}</button>
+                <button class="auto-mini-btn" data-act="to-image">${esc(t('auto.imgToPrompt'))}</button>
                 <button class="auto-mini-btn" data-act="copy">${esc(t('auto.chatCopy'))}</button>
             </div>` : '';
         return `
@@ -635,6 +668,11 @@ function onChatClick(e) {
     const act = btn.dataset.act;
     if (act === 'copy') {
         navigator.clipboard?.writeText(msg.content).then(() => setStatus('auto-chat-status', 'ok', t('auto.chatCopied'))).catch(() => {});
+    } else if (act === 'to-image') {
+        // 返答（場面の説明など）を画像プロンプト欄へ移す。「プロンプトを作成」で画像向けに書き直せる
+        $('auto-img-prompt').value = msg.content.replace(/```[A-Za-z]*\s*[\s\S]*?```/g, '').trim();
+        $('auto-img-panel').open = true;
+        $('auto-img-prompt').focus();
     } else if (act === 'apply-story') {
         if (auto.work.story.trim() && !confirm(t('auto.confirmOverwriteStory'))) return;
         pushUndo();
@@ -657,6 +695,56 @@ function onChatClick(e) {
     }
 }
 
+// ------------------------------------------------------------
+// Chat内の画像生成（エンジン選択は Chat 側、各エンジンの設定は設定タブ）
+// LLMの返答から画像プロンプトを作り、生成ボタンで output/cc_auto/ へ保存する。
+// ------------------------------------------------------------
+
+function renderImages() {
+    const box = $('auto-img-gallery');
+    box.innerHTML = auto.work.images.map((im) =>
+        `<a href="${esc(im.url)}" target="_blank" rel="noopener" title="${esc(im.prompt || '')}"><img src="${esc(im.url)}" alt="${esc(t('auto.imgOpen'))}" loading="lazy" /></a>`
+    ).join('');
+}
+
+// 画像プロンプトの元になる説明: 入力欄 → 直近のAIの返答 → ストーリー の順に採用する
+function imagePromptSource() {
+    const typed = $('auto-img-prompt').value.trim();
+    if (typed) return typed;
+    const lastAi = [...auto.work.chat].reverse().find((m) => m.role === 'assistant');
+    return (lastAi?.content || auto.work.story || '').replace(/```[A-Za-z]*\s*[\s\S]*?```/g, '').trim();
+}
+
+async function onMakeImagePrompt() {
+    const description = imagePromptSource();
+    if (!description) { setStatus('auto-img-status', 'error', t('auto.errImageNoSource')); return; }
+    const settings = loadAiSettings();
+    const problem = validateAiSettings(settings);
+    if (problem) { setStatus('auto-img-status', 'error', settingsProblemMessage(problem)); return; }
+    await runBusy('auto-img-status', t('auto.imgPromptMaking'), async () => {
+        const { content } = await aiChat(settings, buildImagePromptMessages({ description, engine: settings.imageEngine }));
+        const prompt = (content || '').trim().replace(/^["'`]+|["'`]+$/g, '');
+        if (!prompt) throw new Error(t('auto.errEmptyResponse'));
+        $('auto-img-prompt').value = prompt;
+        setStatus('auto-img-status', 'ok', t('auto.imgPromptDone'));
+    });
+}
+
+async function onGenerateImage() {
+    const prompt = $('auto-img-prompt').value.trim();
+    if (!prompt) { setStatus('auto-img-status', 'error', t('auto.errImagePromptEmpty')); return; }
+    const settings = loadAiSettings();
+    const work = auto.work;
+    await runBusy('auto-img-status', t('auto.imgGenerating'), async () => {
+        const image = await generateAutoImage(settings, prompt);
+        if (auto.work !== work) return;   // 生成待ちの間に別の作品へ切り替えた場合は記録しない（ファイルは保存済み）
+        work.images = [...work.images, { url: image.url, filename: image.filename, prompt, engine: image.engine }].slice(-IMAGES_MAX);
+        saveCurrent();
+        renderImages();
+        setStatus('auto-img-status', 'ok', t('auto.imgDone', image.filename));
+    });
+}
+
 function fillToolSelect() {
     $('auto-chat-tool').innerHTML = AUTO_TOOLS.map((tool) => `<option value="${esc(tool.id)}">${esc(t(tool.labelKey))}</option>`).join('');
 }
@@ -670,11 +758,13 @@ function renderAll() {
     renderLeftAndStory();
     renderScript();
     renderChat();
+    renderImages();
     updateUndoButton();
     showRawOutput('');
     setStatus('auto-status', '', '');
     setStatus('auto-script-status', '', '');
     setStatus('auto-chat-status', '', '');
+    setStatus('auto-img-status', '', '');
     updateButtons();
 }
 
@@ -732,6 +822,14 @@ function bindEvents() {
         renderChat();
     });
     $('auto-chat-messages').addEventListener('click', onChatClick);
+
+    // 右ペイン: 画像生成
+    document.querySelectorAll('input[name="auto-imggen-engine"]').forEach((r) => r.addEventListener('change', () => {
+        saveAiSettings({ imageEngine: checkedValue('auto-imggen-engine') });   // エンジンの選択だけは即時に保存する
+    }));
+    $('auto-img-make-prompt-btn').addEventListener('click', onMakeImagePrompt);
+    $('auto-img-generate-btn').addEventListener('click', onGenerateImage);
+    $('auto-img-wf-refresh-btn').addEventListener('click', () => refreshWorkflowList(false));
 
     // 右ペイン: 設定
     document.querySelectorAll('input[name="auto-engine"]').forEach((r) => r.addEventListener('change', () => {
