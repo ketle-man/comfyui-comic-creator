@@ -16,9 +16,9 @@
 
 **画像生成**: Chat内でローカル（Workflow Studio経由、既存の`requestPanelImageFromWorkflowStudio`）／Gemini（Nanobanana、既存の`requestNanobananaGenerate`）をラジオボタンで選び、AIによる画像プロンプト作成→生成。各エンジンの設定は設定タブの「画像生成」欄。生成画像はComfyUIのoutput配下`cc_auto/`に保存（`py/config.py`の`OUTPUT_AUTO_DIR`、`/api/ccc/save-auto-image`、静的配信`/ccc_auto_output`。`cc_nanobanana`と同構成）。WFS経由の結果はblob URLのため、保存前にdata URLへ変換する。
 
-**実機検証（Kapture）**: ローカルLLM（Ollama `gemma4:e4b`）でストーリー生成→脚本生成（JSONを正しく解析）→Chatで脚本修正→反映→取り消し、作品の保存・読込・削除、非JSON返答での反映エラー、ローカル画像生成（`zimage_turbo_t2i.json`、output/cc_autoへ保存・ギャラリー表示）、AIによる画像プロンプト作成、Gemini画像生成（`gemini-3.1-flash-image`、1024x1024、JPEGで保存）を確認。Ollama以外のローカルLLMとGeminiのテキスト生成はユーザーが確認済み。Unsloth中継も、ユーザーがUnslothのモデルで動作を確認済み（Unslothバックエンドに対してOllamaのモデルを指定するとエラーになる件は、ユーザーが別途調査する）。
+**実機検証（Kapture）**: ローカルLLM（Ollama `gemma4:e4b`）でストーリー生成→脚本生成（JSONを正しく解析）→Chatで脚本修正→反映→取り消し、作品の保存・読込・削除、非JSON返答での反映エラー、ローカル画像生成（`zimage_turbo_t2i.json`、output/cc_autoへ保存・ギャラリー表示）、AIによる画像プロンプト作成、Gemini画像生成（`gemini-3.1-flash-image`、1024x1024、JPEGで保存）を確認。Ollama以外のローカルLLMとGeminiのテキスト生成はユーザーが確認済み。Unsloth中継も、ユーザーがUnslothのモデルで動作を確認済み（Unslothバックエンドに対してOllamaのモデルを指定するとエラーになる件は、後日Chromeの設定リセットで解消したとユーザーより報告あり、2026-09-22）。
 
-**実機で見つけた問題**: ブラウザをComfyUIの`127.0.0.1`で開いていると、`localhost:11434`のOllamaへのfetchがCORSヘッダーが正しくても"Failed to fetch"でブロックされる（`127.0.0.1:11434`なら通る）。既定の接続先をページのホスト名に合わせ、失敗時にURLの変更を提案するメッセージを出すようにした。なお、この現象は前日からのPC側の設定変更または不具合が原因の可能性があり、ユーザー判断で様子見とした（コード側の対策は上記のヒント表示にとどめる）。また、ComfyUIの`custom_nodes`側のCCは作業リポジトリとは別コピーのため、変更ファイルの手動同期が必要だった。`ernie_t2i.json`はComfyUI側のCLIP不整合エラー（`mat1 and mat2 shapes cannot be multiplied`）になったが、エラーは画面に正しく表示された（Auto側の不具合ではない）。
+**実機で見つけた問題**: ブラウザをComfyUIの`127.0.0.1`で開いていると、`localhost:11434`のOllamaへのfetchがCORSヘッダーが正しくても"Failed to fetch"でブロックされる（`127.0.0.1:11434`なら通る）。既定の接続先をページのホスト名に合わせ、失敗時にURLの変更を提案するメッセージを出すようにした。なお、この現象は前日からのPC側の設定変更または不具合が原因の可能性があり、ユーザー判断で様子見としていたが、Chromeの設定リセットで改善したとの報告あり（2026-09-22）。コード側の対策（上記のヒント表示）は残置し、追加対応は不要と判断。また、ComfyUIの`custom_nodes`側のCCは作業リポジトリとは別コピーのため、変更ファイルの手動同期が必要だった。`ernie_t2i.json`はComfyUI側のCLIP不整合エラー（`mat1 and mat2 shapes cannot be multiplied`）になったが、エラーは画面に正しく表示された（Auto側の不具合ではない）。
 
 **未対応・次の予定**: 「レイアウト」サブタブ（脚本からのコマ割り自動生成、重要度によるコマサイズ按分、既存レイアウトタブ／スクリプトタブとの連携）、WFSの翻訳・VLMツール（レイアウトタブ作業後に検討）、I2I（初版はT2Iのみ）。バージョン更新・リリースは未実施。ヘルプ（ja/en/zh）・README（3言語）に反映済み。
 
