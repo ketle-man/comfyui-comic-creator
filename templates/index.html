@@ -395,6 +395,7 @@
                     <select id="h2-shape-type" data-i18n-title="layout.balloonTypeTitle" title="フキダシの種類を選択">
                       <option value="normal" data-i18n="layout.balloonNormal">通常 (楕円)</option>
                       <option value="rect" data-i18n="layout.balloonRect">角丸矩形</option>
+                      <option value="caption" data-i18n="layout.balloonCaption">キャプション (直角・尻尾なし)</option>
                       <option value="thought" data-i18n="layout.balloonThought">思考 (泡)</option>
                       <option value="bomb" data-i18n="layout.balloonBomb">バクダン</option>
                       <option value="cloudpuffy" data-i18n="layout.balloonCloudPuffy">雲 (もこもこ)</option>
@@ -1197,6 +1198,13 @@
                   選択テキストに適用
                 </button>
 
+                <!-- オートレイアウト連携: 詳細設定の既定フォントをここからも設定できる（自動保存） -->
+                <div class="fontmgr-section-header" data-i18n="font.autoLayoutSectionHeader">オートレイアウト</div>
+                <button id="fontmgr-alo-default-font-btn" class="btn secondary" style="width:100%; margin-bottom:4px;" disabled data-i18n="font.setAsAutoLayoutDefaultFont">
+                  既定フォントに設定
+                </button>
+                <div id="fontmgr-alo-default-font-status" class="auto-status" style="margin-bottom:12px;"></div>
+
                 <!-- プロパティ表示: 選択中フォントのタグ -->
                 <div id="fontmgr-tag-chips" class="fontmgr-tag-chips"></div>
 
@@ -1351,6 +1359,7 @@
                   <option value="" data-i18n="layout.fontCatAll">すべて</option>
                 </select>
                 <button id="template-insert-page-btn" class="btn secondary" disabled data-i18n="asset.insertAsPage" data-i18n-title="asset.insertAsPageTitle" title="選択したテンプレートを作品サイズにリサイズして新規ページとして追加します">ページとして挿入</button>
+                <button id="template-send-auto-btn" class="btn secondary" disabled data-i18n="page.tmplSendAuto" data-i18n-title="page.tmplSendAutoTitle" title="選択したテンプレートをオートレイアウトへ送信します（送信できるのは常に1件、送信し直すと置き換わります）">オートレイアウトへ送信</button>
               </div>
               <div style="display:flex; gap:0; flex:1; overflow:hidden;">
                 <div id="template-list" class="template-grid" style="flex:1; overflow-y:auto;">
@@ -1510,7 +1519,7 @@
             <div class="auto-root">
               <div class="comfyui-subtab-nav">
                 <button class="comfyui-subtab-btn active" data-auto-subtab="story" data-i18n="auto.subtabStory">ストーリー・脚本</button>
-                <button class="comfyui-subtab-btn" data-auto-subtab="layout" data-i18n="auto.subtabLayout">レイアウト</button>
+                <button class="comfyui-subtab-btn" data-auto-subtab="layout" data-i18n="auto.subtabLayout">オートレイアウト</button>
               </div>
 
               <!-- サブタブ: ストーリー・脚本 -->
@@ -1545,6 +1554,8 @@
                     <div class="comfyui-subtab-nav">
                       <button class="comfyui-subtab-btn active" data-auto-center="story" data-i18n="auto.tabStory">ストーリー</button>
                       <button class="comfyui-subtab-btn" data-auto-center="script" data-i18n="auto.tabScript">脚本</button>
+                      <button class="comfyui-subtab-btn" data-auto-center="preview-h" data-i18n="auto.tabPreviewH">プレビュー横</button>
+                      <button class="comfyui-subtab-btn" data-auto-center="preview-v" data-i18n="auto.tabPreviewV">プレビュー縦</button>
                       <button class="comfyui-subtab-btn" data-auto-center="memo" data-i18n="auto.tabMemo">メモ</button>
                     </div>
                     <div id="auto-center-story" class="auto-center-content">
@@ -1561,6 +1572,18 @@
                         <pre id="auto-raw-output-text"></pre>
                       </details>
                       <div id="auto-script-list" class="auto-script-list"></div>
+                    </div>
+                    <div id="auto-center-preview-h" class="auto-center-content" style="display:none">
+                      <div class="auto-row">
+                        <label class="auto-check"><input type="checkbox" id="auto-preview-show-action-h" /> <span data-i18n="auto.previewShowAction">背景描写・演技指示を表示</span></label>
+                      </div>
+                      <div id="auto-preview-h-container" class="auto-preview-h"></div>
+                    </div>
+                    <div id="auto-center-preview-v" class="auto-center-content" style="display:none">
+                      <div class="auto-row">
+                        <label class="auto-check"><input type="checkbox" id="auto-preview-show-action-v" /> <span data-i18n="auto.previewShowAction">背景描写・演技指示を表示</span></label>
+                      </div>
+                      <div id="auto-preview-v-container" class="auto-preview-v"></div>
                     </div>
                     <div id="auto-center-memo" class="auto-center-content" style="display:none">
                       <textarea id="auto-memo" class="comfyui-textarea auto-fill-textarea" data-i18n-placeholder="auto.memoPlaceholder"></textarea>
@@ -1715,9 +1738,156 @@
                 </div>
               </div>
 
-              <!-- サブタブ: レイアウト（ストーリー・脚本の完成後に実装） -->
+              <!-- サブタブ: オートレイアウト（脚本からのコマ割り自動生成・レイアウトタブへの転送） -->
               <div id="auto-subtab-layout" class="auto-subtab-content" style="display:none">
-                <p class="auto-hint" data-i18n="auto.layoutPlaceholder">レイアウト機能は、ストーリー・脚本の完成後に追加します。</p>
+                <p class="auto-hint" data-i18n="alo.hint">脚本のコマ割りを自動生成し、フキダシ・画像を割り当ててから「詳細編集」でレイアウトタブへ転送します。緻密な作画・仕上げは転送後のレイアウトタブで行います。</p>
+                <div class="auto-3pane alo-3pane">
+
+                  <!-- 左ペイン -->
+                  <div class="auto-pane alo-pane-left">
+                    <div class="comfyui-subtab-nav">
+                      <button class="comfyui-subtab-btn active" data-alo-left="page" data-i18n="alo.tabPage">ページ設定</button>
+                      <button class="comfyui-subtab-btn" data-alo-left="template" data-i18n="alo.tabTemplate">テンプレート</button>
+                      <button class="comfyui-subtab-btn" data-alo-left="detail" data-i18n="alo.tabDetail">詳細設定</button>
+                    </div>
+
+                    <div id="alo-left-page" class="alo-left-content">
+                      <div class="auto-row"><span class="auto-label auto-label-fixed" data-i18n="layout.sizeLabel">サイズ:</span>
+                        <select id="alo-size-preset" class="comfyui-select auto-grow"></select>
+                        <button id="alo-size-preset-delete" class="btn small danger" data-i18n-title="dialog.presetDeleteTitle" title="選択中のカスタムプリセットを削除" style="display:none;">✕</button>
+                      </div>
+                      <div class="auto-row"><span class="auto-label auto-label-fixed" data-i18n="dialog.widthHeightLabel">幅×高さ:</span>
+                        <input id="alo-page-width" type="number" min="200" step="10" class="comfyui-input auto-grow" />
+                        <span>×</span>
+                        <input id="alo-page-height" type="number" min="200" step="10" class="comfyui-input auto-grow" />
+                      </div>
+                      <div class="auto-row"><span class="auto-grow"></span><button id="alo-size-preset-save" class="btn small secondary" data-i18n="dialog.presetSaveBtn" data-i18n-title="dialog.presetSaveTitle" title="現在の幅・高さをカスタムプリセットとして保存します">プリセット保存</button></div>
+                      <p class="auto-hint" data-i18n="alo.pageSizeHint">作品内の全ページに共通で使う設定です。単位はページタブの作品と同じSVG座標です。</p>
+
+                      <div class="auto-row"><span class="auto-label auto-label-fixed" data-i18n="alo.style">スタイル</span>
+                        <select id="alo-style-select" class="comfyui-select auto-grow">
+                          <option value="balanced" data-i18n="alo.styleBalanced">バランス</option>
+                          <option value="asymmetric" data-i18n="alo.styleAsymmetric">非対称</option>
+                          <option value="diagonal" data-i18n="alo.styleDiagonal">斜め継ぎ目</option>
+                          <option value="vertical-strip" data-i18n="alo.styleVerticalStrip">縦1列</option>
+                          <option value="horizontal-strip" data-i18n="alo.styleHorizontalStrip">横1列</option>
+                        </select>
+                      </div>
+                      <div class="auto-row"><span class="auto-label auto-label-fixed" data-i18n="alo.readingOrder">読み順</span>
+                        <label class="auto-check"><input type="radio" name="alo-reading-order" value="rtl" /> <span data-i18n="alo.readingRtl">右から左</span></label>
+                        <label class="auto-check"><input type="radio" name="alo-reading-order" value="ltr" /> <span data-i18n="alo.readingLtr">左から右</span></label>
+                      </div>
+                      <div class="auto-row"><span class="auto-label auto-label-fixed" data-i18n="alo.gap">コマ間余白(px)</span><input id="alo-gap" type="number" min="0" step="1" class="comfyui-input auto-grow" /></div>
+
+                      <div class="auto-row"><span class="auto-set-title auto-grow" data-i18n="alo.marginSection">外側余白</span>
+                        <label class="auto-check"><input type="checkbox" id="alo-margin-uniform" /> <span data-i18n="alo.marginUniform">均等</span></label>
+                      </div>
+                      <div class="auto-row alo-margin-row">
+                        <span class="alo-margin-label" data-i18n="alo.marginTop">上</span><input id="alo-margin-top" type="number" min="0" step="10" class="comfyui-input alo-margin-input" />
+                        <span class="alo-margin-label" data-i18n="alo.marginBottom">下</span><input id="alo-margin-bottom" type="number" min="0" step="10" class="comfyui-input alo-margin-input" />
+                      </div>
+                      <div class="auto-row alo-margin-row">
+                        <span class="alo-margin-label" data-i18n="alo.marginLeft">左</span><input id="alo-margin-left" type="number" min="0" step="10" class="comfyui-input alo-margin-input" />
+                        <span class="alo-margin-label" data-i18n="alo.marginRight">右</span><input id="alo-margin-right" type="number" min="0" step="10" class="comfyui-input alo-margin-input" />
+                      </div>
+
+                      <div class="auto-row">
+                        <button id="alo-generate-btn" class="btn primary auto-grow" data-i18n="alo.generateBtn">生成（全ページ）</button>
+                      </div>
+                      <span id="alo-generate-status" class="auto-status"></span>
+                    </div>
+
+                    <div id="alo-left-template" class="alo-left-content" style="display:none">
+                      <div class="auto-row"><button id="alo-template-save-page-btn" class="btn small secondary auto-grow" data-i18n="alo.templateSavePageBtn">テンプレートとして保存</button></div>
+                      <p class="auto-hint" data-i18n="alo.templateSaveHint">現在オートレイアウトに表示中のページ（このページのコマ割り）を、ページタブのテンプレートとして保存します。</p>
+                      <hr style="border:none; border-top:1px solid var(--border-color); margin:4px 0;">
+                      <div class="auto-row"><button id="alo-template-refresh-btn" class="btn small secondary" data-i18n="alo.templateRefresh">表示を更新</button></div>
+                      <div id="alo-template-staged" class="alo-template-list"></div>
+                      <p class="auto-hint" data-i18n="alo.templateStagedHint">ページタブのテンプレート一覧で「オートレイアウトへ送信」を押すとここに表示されます（送信できるのは常に1件）。</p>
+                      <button id="alo-template-clear-btn" class="btn small secondary" data-i18n="alo.templateClear" data-i18n-title="alo.templateClearTitle" title="このページのテンプレート指定を解除し、自動生成のコマ割りに戻します（送信済みテンプレートの指定も解除されます）">選択解除</button>
+                      <span id="alo-template-status" class="auto-status"></span>
+                    </div>
+
+                    <div id="alo-left-detail" class="alo-left-content" style="display:none">
+                      <div class="auto-row"><span class="auto-label auto-label-fixed" data-i18n="alo.fontFamily">既定フォント</span><input id="alo-font-family" type="text" class="comfyui-input auto-grow" /></div>
+                      <div class="auto-row"><span class="auto-label auto-label-fixed" data-i18n="alo.fontSize">既定サイズ(pt)</span><input id="alo-font-size" type="number" min="6" step="1" class="comfyui-input auto-grow" /></div>
+                      <p class="auto-hint" data-i18n="alo.detailHint">フォント/サイズは転送時にフキダシへ自動生成される文字の既定値です（手動・自動配置どちらにも使われます）。</p>
+                      <div class="auto-row"><span class="auto-label auto-label-fixed" data-i18n="alo.strokeWidth">コマ枠線幅</span><input id="alo-stroke-width" type="number" min="0" step="1" class="comfyui-input auto-grow" /></div>
+                      <p class="auto-hint" data-i18n="alo.strokeWidthHint">生成・転送されるコマの枠線の太さです。</p>
+
+                      <div class="auto-row">
+                        <button id="alo-detail-save-btn" class="btn primary auto-grow" data-i18n="common.save">保存</button>
+                      </div>
+                      <span id="alo-detail-status" class="auto-status"></span>
+                    </div>
+                  </div>
+
+                  <!-- 中央ペイン -->
+                  <div class="auto-pane auto-pane-center alo-pane-center">
+                    <div class="auto-row alo-toolbar">
+                      <span class="auto-label" data-i18n="alo.tools">ツール</span>
+                      <button class="btn small secondary alo-tool-btn active" data-alo-tool="select" data-i18n="alo.toolSelect">選択</button>
+                      <button class="btn small secondary alo-tool-btn" data-alo-tool="split-v" data-i18n="alo.toolSplitV">分割(縦)</button>
+                      <button class="btn small secondary alo-tool-btn" data-alo-tool="split-h" data-i18n="alo.toolSplitH">分割(横)</button>
+                      <span class="auto-grow"></span>
+                      <span class="auto-label" data-i18n="alo.zoom">ズーム</span>
+                      <input id="alo-zoom" type="range" min="0.3" max="2" step="0.1" value="1" />
+                    </div>
+                    <div class="auto-row alo-pagenav">
+                      <button id="alo-page-prev-btn" class="btn small secondary">◀</button>
+                      <span id="alo-page-label" class="auto-label">1/1</span>
+                      <button id="alo-page-next-btn" class="btn small secondary">▶</button>
+                      <span id="alo-panel-count-label" class="auto-label"></span>
+                    </div>
+                    <div id="alo-canvas-wrap" class="alo-canvas-wrap">
+                      <svg id="alo-canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+                    </div>
+                  </div>
+
+                  <!-- 右ペイン -->
+                  <div class="auto-pane auto-pane-right alo-pane-right">
+                    <div class="auto-label" data-i18n="alo.propTitle">プロパティ</div>
+                    <div id="alo-prop-title" class="alo-prop-title" data-i18n="alo.propNoSelection">選択コマなし</div>
+
+                    <div id="alo-prop-body" style="display:none">
+                      <div class="auto-set-title" data-i18n="alo.propBubble">フキダシ</div>
+                      <div class="auto-row">
+                        <select id="alo-prop-dialogue-select" class="comfyui-select auto-grow"></select>
+                      </div>
+                      <div class="auto-row">
+                        <button id="alo-prop-dialogue-edit-btn" class="btn small secondary auto-grow" data-i18n="alo.propChange">変更</button>
+                        <button id="alo-prop-dialogue-add-btn" class="btn small secondary auto-grow" data-i18n="alo.propAdd">追加</button>
+                      </div>
+                      <div id="alo-prop-dialogue-edit" class="alo-prop-edit" style="display:none">
+                        <input id="alo-prop-dialogue-character" type="text" class="comfyui-input auto-full" data-i18n-placeholder="auto.characterPlaceholder" />
+                        <textarea id="alo-prop-dialogue-text" class="comfyui-input auto-full" rows="2" data-i18n-placeholder="auto.dialoguePlaceholder"></textarea>
+                        <select id="alo-prop-dialogue-bubbletype" class="comfyui-select auto-full"></select>
+                        <div class="auto-row">
+                          <button id="alo-prop-dialogue-save-btn" class="btn small primary" data-i18n="common.save">保存</button>
+                          <button id="alo-prop-dialogue-del-btn" class="btn small danger" data-i18n="common.delete">削除</button>
+                          <button id="alo-prop-dialogue-cancel-btn" class="btn small secondary" data-i18n="common.cancel">キャンセル</button>
+                        </div>
+                      </div>
+
+                      <div class="auto-set-title" data-i18n="alo.propImage">画像</div>
+                      <img id="alo-prop-image-preview" class="alo-prop-image-preview" style="display:none" />
+                      <textarea id="alo-prop-image-prompt" class="comfyui-input auto-full" rows="7" style="resize:vertical;" data-i18n-placeholder="alo.propImagePromptPlaceholder"></textarea>
+                      <div class="auto-row">
+                        <button id="alo-prop-image-generate-btn" class="btn small primary auto-grow" data-i18n="alo.propImageGenerate">生成して割り当て</button>
+                        <button id="alo-prop-image-clear-btn" class="btn small secondary" data-i18n="alo.propImageClear">解除</button>
+                      </div>
+                      <span id="alo-prop-image-status" class="auto-status"></span>
+                      <div class="auto-label" data-i18n="alo.propImageGallery">生成済み画像から選ぶ</div>
+                      <div id="alo-prop-image-gallery" class="auto-img-gallery"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="auto-row">
+                  <span class="auto-grow"></span>
+                  <span id="alo-transfer-status" class="auto-status"></span>
+                  <button id="alo-transfer-btn" class="btn primary" data-i18n="alo.transferBtn">詳細編集（レイアウトタブへ転送）</button>
+                </div>
               </div>
             </div>
           </section>

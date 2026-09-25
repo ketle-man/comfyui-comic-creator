@@ -215,6 +215,7 @@
 .auto-page-title {
   font-weight: bold;
   font-size: 13px;
+  color: #64b5f6;
 }
 
 .auto-panel {
@@ -455,4 +456,213 @@
   font-size: 12px;
   font-weight: bold;
   margin-top: 4px;
+}
+
+/* ==============================
+   オートレイアウトサブタブ
+   ============================== */
+
+.alo-3pane {
+  grid-template-columns: 260px minmax(0, 1fr) 300px;
+}
+
+.alo-pane-left {
+  overflow-y: auto;
+}
+
+.alo-left-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.alo-template-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.alo-template-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.alo-template-item:hover {
+  background: var(--hover-color);
+}
+
+.alo-template-item.active {
+  border-color: #64b5f6;
+}
+
+.alo-template-item.mismatch {
+  color: var(--text-secondary);
+}
+
+.alo-toolbar,
+.alo-pagenav {
+  flex-wrap: wrap;
+}
+
+.alo-tool-btn.active {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+.alo-canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: #1a1a1a;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12px;
+}
+
+#alo-canvas {
+  background: #fff;
+}
+
+/* vector-effect: non-scaling-stroke により、ページの実寸（0.01mm単位、数万オーダー）に
+   対してviewBoxが大きくても、線幅は常に画面上で一定のCSS px幅で表示される */
+#alo-canvas .alo-panel-rect {
+  fill: rgba(100, 181, 246, 0.08);
+  stroke: #333;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+#alo-canvas .alo-panel-rect:hover {
+  fill: rgba(100, 181, 246, 0.2);
+}
+
+#alo-canvas .alo-panel-rect.selected {
+  fill: rgba(100, 181, 246, 0.35);
+  stroke: #1976d2;
+  stroke-width: 3;
+}
+
+/* font-sizeはJS側（renderCanvas）でページ幅に応じた実寸値をtext要素に直接指定するため、
+   ここでは指定しない（実寸ページに対して固定pxを指定すると極端に小さく見えてしまうため） */
+#alo-canvas .alo-panel-num {
+  fill: #666;
+  pointer-events: none;
+  user-select: none;
+}
+
+.alo-pane-right {
+  overflow-y: auto;
+}
+
+.alo-prop-title {
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.alo-prop-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px;
+}
+
+.alo-prop-image-preview {
+  width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: #111;
+}
+
+/* 外側余白（上下左右）: ラベルが1文字なので auto-label-fixed（84px）だと
+   入力欄がほぼ潰れてしまうため、専用の狭いラベル幅を使う */
+.alo-margin-row {
+  gap: 4px;
+}
+
+.alo-margin-label {
+  flex: 0 0 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.alo-margin-input {
+  flex: 1 1 0;
+  min-width: 56px;
+}
+
+.alo-margin-input:disabled {
+  opacity: 0.6;
+}
+
+/* Autoタブ「ストーリー・脚本」プレビュー横／縦（スクリプトタブの.script-preview-h/vと同様のスタイル。
+   脚本のaction＝背景描写・演技指示はON/OFFで表示切替できるため専用クラスを設ける） */
+.auto-preview-h {
+  padding: 12px;
+  border: 1px solid var(--border-color, #555);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  writing-mode: horizontal-tb;
+}
+.auto-preview-h-line {
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.auto-preview-h-action {
+  color: var(--text-secondary);
+}
+.auto-preview-h-dialogue {
+  color: var(--text-primary);
+  padding-left: 1em;
+}
+.auto-preview-h-page-start {
+  margin-top: 14px;
+}
+
+.auto-preview-v {
+  writing-mode: vertical-rl;
+  height: 60vh;
+  padding: 12px;
+  border: 1px solid var(--border-color, #555);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.auto-preview-v-line {
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.auto-preview-v-action {
+  color: var(--text-secondary);
+}
+.auto-preview-v-dialogue {
+  color: var(--text-primary);
+  padding-top: 1em;
+}
+.auto-preview-v-page-start {
+  margin-right: 14px;
 }

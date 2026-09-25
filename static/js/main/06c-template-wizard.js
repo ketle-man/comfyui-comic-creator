@@ -14,7 +14,7 @@ import { t } from '../i18n.js';
 import { dbGet, dbPut, dbDelete, svgTextToDataUrl } from './00-db.js';
 import { _pointsToStr } from './05-groups-move.js';
 import { _polygonCentroid, _pointInPolygon, _splitPolygonByLine } from './06a-polygon-geometry.js';
-import { saveTemplate, loadTemplates, _tmplGroups } from './06b-template-manager.js';
+import { saveTemplate, loadTemplates, _tmplGroups, _tmplAutoStage } from './06b-template-manager.js';
 import { state } from './01-state.js';
 import { buildMergedSvg } from './07-pages.js';
 
@@ -503,6 +503,9 @@ async function deleteTemplate(templateName) {
     try {
         await dbDelete('templates', templateName);
         _tmplGroups.remove(templateName);
+        // 送信済み（オートレイアウトへ送信）のテンプレートが削除された場合、送信状態を残すと
+        // 存在しないテンプレート名を指したままになるため、あわせて解除する
+        if (_tmplAutoStage.get() === templateName) _tmplAutoStage.clear();
         if (state.selectedTemplateName === templateName) {
             state.selectedTemplateName = null;
             _tmplSidePanelUpdate(null);
@@ -513,6 +516,8 @@ async function deleteTemplate(templateName) {
         if (renameBtn) renameBtn.disabled = true;
         const insertPageBtn = document.getElementById('template-insert-page-btn');
         if (insertPageBtn) insertPageBtn.disabled = true;
+        const sendAutoBtn = document.getElementById('template-send-auto-btn');
+        if (sendAutoBtn) sendAutoBtn.disabled = true;
         await loadTemplates();
         renderTemplateList();
     } catch (e) {
@@ -655,6 +660,8 @@ function selectTemplate(name) {
     if (renameBtn) renameBtn.disabled = !name;
     const insertPageBtn = document.getElementById('template-insert-page-btn');
     if (insertPageBtn) insertPageBtn.disabled = !name;
+    const sendAutoBtn = document.getElementById('template-send-auto-btn');
+    if (sendAutoBtn) sendAutoBtn.disabled = !name;
     _tmplSidePanelUpdate(name);
 }
 
@@ -699,6 +706,8 @@ async function renameTemplate(oldName) {
             await dbPut('templates', { ...record, name: newName });
             await dbDelete('templates', oldName);
             _tmplGroups.renameTemplate(oldName, newName);
+            // 送信済みテンプレートの名前が変わった場合、送信状態がリネーム後も追従するようにする
+            if (_tmplAutoStage.get() === oldName) _tmplAutoStage.set(newName);
             state.selectedTemplateName = newName;
             await loadTemplates();
             renderTemplateList();
@@ -709,6 +718,8 @@ async function renameTemplate(oldName) {
             if (renameBtn) renameBtn.disabled = false;
             const insertPageBtn = document.getElementById('template-insert-page-btn');
             if (insertPageBtn) insertPageBtn.disabled = false;
+            const sendAutoBtn = document.getElementById('template-send-auto-btn');
+            if (sendAutoBtn) sendAutoBtn.disabled = false;
             close();
         } catch (e) {
             alert(t('tmpl.renameFailed', e.message));

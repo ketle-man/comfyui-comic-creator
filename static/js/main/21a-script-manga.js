@@ -178,6 +178,7 @@ function _scriptMangaRenderPage() {
                         <option value="">${t('script.balloonShapeDefault')}</option>
                         <option value="normal">${t('layout.balloonNormal')}</option>
                         <option value="rect">${t('layout.balloonRect')}</option>
+                        <option value="caption">${t('layout.balloonCaption')}</option>
                         <option value="thought">${t('layout.balloonThought')}</option>
                         <option value="bomb">${t('layout.balloonBomb')}</option>
                         <option value="cloudpuffy">${t('layout.balloonCloudPuffy')}</option>

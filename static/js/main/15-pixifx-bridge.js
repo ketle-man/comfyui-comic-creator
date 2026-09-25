@@ -23,6 +23,7 @@ import {
     getI2ISettingsState, saveI2ISettingsState, sendI2IRunToWorkflowStudio,
     getT2ISettingsState, saveT2ISettingsState, requestPanelImageFromWorkflowStudio,
 } from './14-integrations.js';
+import { getAutoWork } from './28-auto-tab.js';
 import { pickSdxlResolution } from '../auto-comic-core.js';
 import { pixiFxOpen } from '../pixifx.js';
 import { state, switchTab } from './01-state.js';
@@ -271,6 +272,28 @@ function _li2iPromptSlot(tabKey) {
     return _layoutI2IPrompts.byPanel[tabKey];
 }
 
+// 「Autoから取得」: 現在Autoタブで作業中の作品（getAutoWork()）のストーリー・脚本を、
+// このモーダルの「全体」タブと各コマタブのPositiveプロンプトへ流し込む（既存入力は上書き）。
+// レイアウトタブへの転送（詳細編集）とは無関係の独立機能で、あくまで画像生成のプロンプトとして
+// Autoの内容を再利用したいだけのため、転送済みページとの対応関係（page.id等）は一切参照しない。
+// コマの対応付けは「配列の順序（読み順）」のみで行う。
+function _layoutI2IAutoFetch(pageIdx) {
+    const work = getAutoWork();
+    const pages = work?.script?.pages || [];
+    if (!pages.length) { alert(t('layout.i2iAutoNoScript')); return null; }
+    const idx = Math.max(0, Math.min(pageIdx, pages.length - 1));
+    const page = pages[idx];
+
+    _layoutI2IPrompts.overall.positive = work.story || '';
+
+    const panels = state.activePage?.panels || [];
+    const count = Math.min(panels.length, page.panels.length);
+    for (let i = 0; i < count; i++) {
+        _li2iPromptSlot(panels[i].id).positive = page.panels[i].action || '';
+    }
+    return { scriptPanelCount: page.panels.length, pagePanelCount: panels.length };
+}
+
 // 生成結果URLを、コマのbboxへストレッチする明示的なplacementで、そのコマの画像として挿入する
 // （26-auto-comic-bridge.jsのバッチ生成と同じ方式。preserveAspectRatio:'none'でコマ全面へ伸縮するため、
 // extraAttrsを渡せないinsertImageFromUrl()ではなくinsertImage()を直接使う）
@@ -456,6 +479,12 @@ function openLayoutI2IModal() {
                 </label>
                 <button type="button" id="li2i-run-btn" class="btn primary">${t('layout.i2iRunBtn')}</button>
             </div>
+            <div class="fontmgr-style-group" id="li2i-auto-fetch-row">
+                <label class="fontmgr-style-group-label">${t('layout.i2iAutoFetchLabel')}</label>
+                <select id="li2i-auto-page-select" style="max-width:120px;"></select>
+                <button type="button" id="li2i-auto-fetch-btn" class="btn small secondary" title="${t('layout.i2iAutoFetchTitle')}">${t('layout.i2iAutoFetchBtn')}</button>
+                <span id="li2i-auto-fetch-status" style="font-size:11px; color:var(--text-secondary);"></span>
+            </div>
             <div class="li2i-tabs" id="li2i-tabs"></div>
             <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
                 <label class="fontmgr-style-group-label">${t('layout.i2iPositiveLabel')}</label>
@@ -550,6 +579,32 @@ function openLayoutI2IModal() {
         _layoutI2IActiveTab = btn.dataset.tabKey;
         syncTabButtons();
         syncPromptFields();
+    });
+
+    // 「Autoから取得」: Auto作品の脚本ページ一覧をセレクトへ用意する（脚本が無ければボタンを無効化）
+    const autoPages = getAutoWork()?.script?.pages || [];
+    const autoSelectEl = $('li2i-auto-page-select');
+    const autoFetchBtn = $('li2i-auto-fetch-btn');
+    autoSelectEl.innerHTML = '';
+    autoPages.forEach((_, i) => {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = t('auto.pageTitle', i + 1);
+        autoSelectEl.appendChild(opt);
+    });
+    if (!autoPages.length) {
+        autoSelectEl.disabled = true;
+        autoFetchBtn.disabled = true;
+    }
+    autoFetchBtn.addEventListener('click', () => {
+        const idx = parseInt(autoSelectEl.value, 10) || 0;
+        const result = _layoutI2IAutoFetch(idx);
+        if (!result) return;
+        syncPromptFields();
+        const statusEl = $('li2i-auto-fetch-status');
+        statusEl.textContent = result.scriptPanelCount === result.pagePanelCount
+            ? t('layout.i2iAutoFetchDone')
+            : t('layout.i2iAutoFetchMismatch', result.scriptPanelCount, result.pagePanelCount);
     });
 
     $('li2i-positive').addEventListener('input', e => { _li2iPromptSlot(_layoutI2IActiveTab).positive = e.target.value; });

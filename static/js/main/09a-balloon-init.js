@@ -539,7 +539,7 @@ function initBalloonManager() {
         const el = state.selectedShapeId ? document.getElementById(state.selectedShapeId) : null;
         if (!el) return;
         const type = el.dataset.shapeType;
-        if (type !== 'bomb' && type !== 'thought' && type !== 'normal' && type !== 'rect' && type !== 'cloudpuffy' && type !== 'cloudwavy') return;
+        if (type !== 'bomb' && type !== 'thought' && type !== 'normal' && type !== 'rect' && type !== 'caption' && type !== 'cloudpuffy' && type !== 'cloudwavy') return;
         el.dataset[dataKey] = value;
         const textEl = document.getElementById(textId);
         if (textEl) textEl.textContent = Math.round(value) + (suffix || '');
@@ -633,7 +633,7 @@ function initBalloonManager() {
             const el = state.selectedShapeId ? document.getElementById(state.selectedShapeId) : null;
             if (!el) return;
             const cur = el.dataset.shapeType;
-            if (cur !== 'bomb' && cur !== 'thought' && cur !== 'normal' && cur !== 'rect' && cur !== 'cloudpuffy' && cur !== 'cloudwavy') return;
+            if (cur !== 'bomb' && cur !== 'thought' && cur !== 'normal' && cur !== 'rect' && cur !== 'caption' && cur !== 'cloudpuffy' && cur !== 'cloudwavy') return;
             const newType = e.target.value;
             if (newType === 'oval' || newType === 'bubble' || newType === 'spiky') return; // 旧来タイプへの変換は不可
             el.dataset.shapeType = newType;
@@ -669,7 +669,7 @@ function initBalloonManager() {
     const borderWidthEl = document.getElementById('border-width');
     // 既存のhandlerでは el.setAttribute('fill',...) するが h2はg要素なので上書き
     // renderHandlesで色同期済み。ここでは h2 データ属性への反映を追加
-    const _isH2Type = (t) => t === 'bomb' || t === 'thought' || t === 'normal' || t === 'rect' || t === 'cloudpuffy' || t === 'cloudwavy';
+    const _isH2Type = (t) => t === 'bomb' || t === 'thought' || t === 'normal' || t === 'rect' || t === 'caption' || t === 'cloudpuffy' || t === 'cloudwavy';
     if (boxColorEl) {
         boxColorEl.addEventListener('input', (e) => {
             const el = state.selectedShapeId ? document.getElementById(state.selectedShapeId) : null;

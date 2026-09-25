@@ -9,17 +9,19 @@
 // LLM呼び出しは ../auto-ai-client.js、プロンプト/パースは ../auto-story-core.js（どちらもDOM非依存）。
 // ============================================================
 
-import { t } from '../i18n.js';
+import { t, getLang } from '../i18n.js';
 import {
     getBackendDefaultUrl, isValidBackendUrl, loadAiSettings, saveAiSettings, validateAiSettings, aiChat,
     fetchModels, testConnection, unloadModel, getGeminiKeyStatus, fetchGeminiTextModels, suggestHostMatchedUrl,
 } from '../auto-ai-client.js';
 import {
     IMPORTANCE_LEVELS, BUBBLE_TYPES, blankScript, blankPanel, blankDialogue, normalizeScript, parseScriptResponse,
-    buildStoryMessages, buildScriptMessages, cloneSampleScript, SAMPLE_THEME, SAMPLE_STORY,
+    buildStoryMessages, buildScriptMessages, cloneSampleScript, getSampleTheme, getSampleStory,
     AUTO_TOOLS, buildChatSystemMessage, buildImagePromptMessages,
 } from '../auto-story-core.js';
 import { generateAutoImage, listWorkflowFilenames } from './28a-auto-image.js';
+import { LAYOUT_STYLES, READING_ORDERS } from '../auto-layout-core.js';
+import { initAutoLayoutSubtab } from './28b-auto-layout-tab.js';
 
 const CURRENT_KEY = 'ccc_auto_current';   // 作業中の作品（オートセーブ）
 const WORKS_KEY = 'ccc_auto_works';       // 保存済みの作品一覧（スクリプトタブの作品とは別キー）
@@ -43,13 +45,48 @@ function newId() {
     return 'auto-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
+// pageWidth/pageHeight/margin*/gapPx/strokeWidthは、このアプリの「作品」（11a-work-manager.js）
+// と同じ単位系（1ユーザー単位=0.01mm。テンプレートウィザードと同じ規約）。既定値はB5縦（18200×25700）。
+function blankLayoutSettings() {
+    return {
+        style: 'balanced', readingOrder: 'rtl', pageWidth: 18200, pageHeight: 25700, gapPx: 200,
+        marginTop: 0, marginBottom: 0, marginLeft: 0, marginRight: 0,
+        strokeWidth: 60, fontFamily: '', fontSizePt: 80,
+    };
+}
+
 function blankWork() {
-    return { id: newId(), name: '', theme: '', pageCount: 2, story: '', script: blankScript(), memo: '', chat: [], images: [], updatedAt: Date.now() };
+    return { id: newId(), name: '', theme: '', pageCount: 2, story: '', script: blankScript(), memo: '', chat: [], images: [], layout: blankLayoutSettings(), updatedAt: Date.now() };
 }
 
 function clampPageCount(v) {
     const n = parseInt(v, 10);
     return Number.isFinite(n) ? Math.min(50, Math.max(1, n)) : 2;
+}
+
+function normalizeLayoutSettings(data) {
+    const base = blankLayoutSettings();
+    if (!data || typeof data !== 'object') return base;
+    const pageWidth = Math.max(200, parseInt(data.pageWidth, 10) || base.pageWidth);
+    const pageHeight = Math.max(200, parseInt(data.pageHeight, 10) || base.pageHeight);
+    // 余白の入力ミス（桁が飛んだ大きすぎる値等）でコマ配置領域がページ外に出ないよう、
+    // ページ幅・高さ自体を上限としてクランプする（実際の下限クランプはauto-layout-core.js
+    // のcontentAreaFromMargins()がさらに厳密に行うが、保存データ自体も常識的な値に保つ）
+    const clampMargin = (v, max) => Math.max(0, Math.min(parseInt(v, 10) || 0, max));
+    return {
+        style: LAYOUT_STYLES.includes(data.style) ? data.style : base.style,
+        readingOrder: READING_ORDERS.includes(data.readingOrder) ? data.readingOrder : base.readingOrder,
+        pageWidth,
+        pageHeight,
+        gapPx: Math.max(0, parseInt(data.gapPx, 10) || 0),
+        marginTop: clampMargin(data.marginTop, pageHeight),
+        marginBottom: clampMargin(data.marginBottom, pageHeight),
+        marginLeft: clampMargin(data.marginLeft, pageWidth),
+        marginRight: clampMargin(data.marginRight, pageWidth),
+        strokeWidth: Math.max(0, parseInt(data.strokeWidth, 10) || base.strokeWidth),
+        fontFamily: typeof data.fontFamily === 'string' ? data.fontFamily : base.fontFamily,
+        fontSizePt: Math.max(6, parseInt(data.fontSizePt, 10) || base.fontSizePt),
+    };
 }
 
 function normalizeWork(data) {
@@ -69,6 +106,7 @@ function normalizeWork(data) {
         images: Array.isArray(data.images)
             ? data.images.filter((im) => im && typeof im.url === 'string' && im.url.startsWith('/ccc_auto_output/')).slice(-IMAGES_MAX)
             : [],
+        layout: normalizeLayoutSettings(data.layout),
         updatedAt: Number(data.updatedAt) || Date.now(),
     };
 }
@@ -225,7 +263,62 @@ function renderLeftAndStory() {
 
 function switchCenterTab(name) {
     document.querySelectorAll('[data-auto-center]').forEach((btn) => btn.classList.toggle('active', btn.dataset.autoCenter === name));
-    ['story', 'script', 'memo'].forEach((key) => { $('auto-center-' + key).style.display = key === name ? '' : 'none'; });
+    ['story', 'script', 'preview-h', 'preview-v', 'memo'].forEach((key) => { $('auto-center-' + key).style.display = key === name ? '' : 'none'; });
+    // プレビューは常に最新の脚本内容で再生成する読み取り専用表示（開くたびに作り直す）
+    if (name === 'preview-h') renderAutoPreview('h');
+    else if (name === 'preview-v') renderAutoPreview('v');
+}
+
+// ============================================================
+// 脚本プレビュー（横・縦）: 全ページの脚本を「背景描写・演技指示（任意でON/OFF）」＋
+// 「話者：セリフ」の形式でページ横断のテキストとして表示する読み取り専用タブ。
+// スクリプトタブのプレビュー横／縦（21a-script-manga.js）と同じ考え方だが、あちらの
+// page.sceneに相当するもの（ページ単位の見出し）はAutoの脚本データに無く、代わりに
+// panel.action（背景描写・演技指示）を持つため、その表示要否をチェックボックスで切り替える。
+// ============================================================
+
+const AUTO_PREVIEW_SHOW_ACTION_KEY = 'ccc_auto_preview_show_action';
+
+function getPreviewShowAction() {
+    try { return localStorage.getItem(AUTO_PREVIEW_SHOW_ACTION_KEY) !== '0'; } catch { return true; }
+}
+function setPreviewShowAction(v) {
+    try { localStorage.setItem(AUTO_PREVIEW_SHOW_ACTION_KEY, v ? '1' : '0'); } catch { /* ignore */ }
+}
+
+function renderAutoPreview(axis) {
+    const showAction = getPreviewShowAction();
+    const cbH = $('auto-preview-show-action-h');
+    const cbV = $('auto-preview-show-action-v');
+    if (cbH) cbH.checked = showAction;
+    if (cbV) cbV.checked = showAction;
+
+    const container = $(axis === 'h' ? 'auto-preview-h-container' : 'auto-preview-v-container');
+    if (!container) return;
+    const lineClass = axis === 'h' ? 'auto-preview-h-line' : 'auto-preview-v-line';
+    const pageStartClass = axis === 'h' ? 'auto-preview-h-page-start' : 'auto-preview-v-page-start';
+    const actionClass = axis === 'h' ? 'auto-preview-h-action' : 'auto-preview-v-action';
+    const dialogueClass = axis === 'h' ? 'auto-preview-h-dialogue' : 'auto-preview-v-dialogue';
+
+    const parts = [];
+    auto.work.script.pages.forEach((page, pageIdx) => {
+        let isFirstLineOfPage = true;
+        const lineClasses = (cls) => {
+            const withStart = (isFirstLineOfPage && pageIdx > 0) ? `${lineClass} ${cls} ${pageStartClass}` : `${lineClass} ${cls}`;
+            isFirstLineOfPage = false;
+            return withStart;
+        };
+        page.panels.forEach((panel) => {
+            if (showAction && panel.action && panel.action.trim()) {
+                parts.push(`<div class="${lineClasses(actionClass)}">${esc(panel.action.trim())}</div>`);
+            }
+            panel.dialogues.filter((d) => d.text && d.text.trim()).forEach((d) => {
+                const prefix = d.character ? `${d.character}：` : '';
+                parts.push(`<div class="${lineClasses(dialogueClass)}">${esc(prefix + d.text)}</div>`);
+            });
+        });
+    });
+    container.innerHTML = parts.length ? parts.join('') : `<div class="auto-empty">${esc(t('auto.scriptEmpty'))}</div>`;
 }
 
 // ストーリー生成（1段階目）
@@ -239,7 +332,7 @@ async function onCreateStory() {
 
     const pageCount = clampPageCount($('auto-page-count').value);
     await runBusy('auto-status', t('auto.statusGeneratingStory'), async () => {
-        const { content } = await aiChat(settings, buildStoryMessages({ theme, pageCount }));
+        const { content } = await aiChat(settings, buildStoryMessages({ theme, pageCount, lang: getLang() }));
         const story = (content || '').trim();
         if (!story) throw new Error(t('auto.errEmptyResponse'));
         auto.work.theme = theme;
@@ -255,10 +348,11 @@ async function onCreateStory() {
 function onSample() {
     const w = auto.work;
     if ((w.story.trim() || w.script.pages.length) && !confirm(t('auto.confirmOverwriteSample'))) return;
-    w.theme = SAMPLE_THEME;
+    const lang = getLang();
+    w.theme = getSampleTheme(lang);
     w.pageCount = 2;
-    w.story = SAMPLE_STORY;
-    w.script = cloneSampleScript();
+    w.story = getSampleStory(lang);
+    w.script = cloneSampleScript(lang);
     saveCurrent();
     renderAll();
     setStatus('auto-status', 'ok', t('auto.statusSampleLoaded'));
@@ -285,7 +379,7 @@ async function onCreateScript() {
 
     showRawOutput('');
     await runBusy('auto-script-status', t('auto.statusGeneratingScript'), async () => {
-        const { content } = await aiChat(settings, buildScriptMessages({ story, theme: auto.work.theme, pageCount: auto.work.pageCount }), { json: true });
+        const { content } = await aiChat(settings, buildScriptMessages({ story, theme: auto.work.theme, pageCount: auto.work.pageCount, lang: getLang() }), { json: true });
         const raw = (content || '').trim();
         if (!raw) throw new Error(t('auto.errEmptyResponse'));
         const parsed = parseScriptResponse(raw);
@@ -297,7 +391,9 @@ async function onCreateScript() {
         auto.work.script = parsed.script;
         saveCurrent();
         renderScript();
-        if (parsed.method === 'lines') {
+        if (parsed.method !== 'json') {
+            // 'json-repaired'（末尾の閉じ括弧を補って復元）・'lines'（行ベース復元）は
+            // どちらもLLM出力が崩れていた復元経路なので、内容確認を促し生出力も表示する
             showRawOutput(raw);
             setStatus('auto-script-status', 'ok', t('auto.statusScriptRecovered', parsed.script.pages.length));
         } else {
@@ -769,10 +865,11 @@ function renderAll() {
 }
 
 function bindEvents() {
-    // サブタブ（ストーリー・脚本 / レイアウト）
+    // サブタブ（ストーリー・脚本 / オートレイアウト）
     document.querySelectorAll('[data-auto-subtab]').forEach((btn) => btn.addEventListener('click', () => {
         document.querySelectorAll('[data-auto-subtab]').forEach((b) => b.classList.toggle('active', b === btn));
         ['story', 'layout'].forEach((key) => { $('auto-subtab-' + key).style.display = key === btn.dataset.autoSubtab ? '' : 'none'; });
+        if (btn.dataset.autoSubtab === 'layout') initAutoLayoutSubtab();
     }));
     document.querySelectorAll('[data-auto-center]').forEach((btn) => btn.addEventListener('click', () => switchCenterTab(btn.dataset.autoCenter)));
     document.querySelectorAll('[data-auto-right]').forEach((btn) => btn.addEventListener('click', () => switchRightTab(btn.dataset.autoRight)));
@@ -797,6 +894,13 @@ function bindEvents() {
     // 中央ペイン
     $('auto-story').addEventListener('input', (e) => { auto.work.story = e.target.value; saveCurrent(); updateButtons(); });
     $('auto-memo').addEventListener('input', (e) => { auto.work.memo = e.target.value; saveCurrent(); });
+    const onPreviewShowActionChange = (e) => {
+        setPreviewShowAction(e.target.checked);
+        renderAutoPreview('h');
+        renderAutoPreview('v');
+    };
+    $('auto-preview-show-action-h').addEventListener('change', onPreviewShowActionChange);
+    $('auto-preview-show-action-v').addEventListener('change', onPreviewShowActionChange);
     $('auto-script-create-btn').addEventListener('click', onCreateScript);
     $('auto-script-add-page-btn').addEventListener('click', onAddPage);
     const list = $('auto-script-list');
@@ -847,6 +951,23 @@ function bindEvents() {
     $('auto-model-refresh-btn').addEventListener('click', () => refreshLocalModels(false));
     $('auto-gemini-refresh-btn').addEventListener('click', () => refreshGeminiModels(false));
     $('auto-settings-save-btn').addEventListener('click', onSaveSettings);
+}
+
+// ============================================================
+// 28b-auto-layout-tab.js（オートレイアウトサブタブ）向けアクセサ
+// 作品データ（auto.work）はこのファイル内のプライベート状態のため、循環import
+// （28b-auto-layout-tab.js → 本ファイル）で必要最小限の読み書きだけを公開する。
+// ============================================================
+
+export function getAutoWork() {
+    // Autoタブが一度も開かれていない（auto.workが未初期化の）状態でも、
+    // フォントタブ等から既定フォント設定を保存できるよう、必要ならここで読み込む
+    if (!auto.work) auto.work = normalizeWork(readJson(CURRENT_KEY, null));
+    return auto.work;
+}
+
+export function saveAutoWork() {
+    saveCurrent();
 }
 
 export function initAutoTab() {

@@ -365,6 +365,7 @@ function _fontMgrRenderFavList() {
 // 右パネル描画
 function _fontMgrRenderRightPanel() {
     const family = _fontMgr.selectedFamily;
+
     document.getElementById('fontmgr-family-name').textContent = family || t('font.noFontSelected');
 
     // ファイルパス（システムフォントの場合）
@@ -374,6 +375,9 @@ function _fontMgrRenderRightPanel() {
     // 適用ボタンのenable/disable
     const applyBtn = document.getElementById('fontmgr-apply-btn');
     if (applyBtn) applyBtn.disabled = !family;
+    // オートレイアウト「既定フォントに設定」ボタンのenable/disable
+    const aloDefaultFontBtn = document.getElementById('fontmgr-alo-default-font-btn');
+    if (aloDefaultFontBtn) aloDefaultFontBtn.disabled = !family;
 
     // タグチップ描画
     _fontMgrRenderTagChips();

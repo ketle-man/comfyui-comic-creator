@@ -1085,6 +1085,13 @@ function _updateH2ShapePath(el) {
             const cx1 = bMidX + curveOX, cy1 = bMidY + curveOY;
             tailPath = `M ${b1.x},${b1.y} Q ${cx1},${cy1} ${tipX},${tipY} Q ${cx1},${cy1} ${b2.x},${b2.y} Z`;
         }
+    } else if (type === 'caption') {
+        // キャプション: 常に直角の矩形＋尻尾なし。角丸矩形(rect)は角丸半径0＋尻尾長さ0でも
+        // 代用できるが、毎回その2箇所を設定する手間を避けるための専用タイプ（尻尾関連の
+        // 計算は一切行わないため、rect分岐と違い_h2TailBoundaryPoint等を呼ばない）。
+        const x0 = cx - rx, y0 = cy - ry, w = rx * 2, h = ry * 2;
+        bodyPath = `M ${x0},${y0} L ${x0 + w},${y0} L ${x0 + w},${y0 + h} L ${x0},${y0 + h} Z`;
+        tailPath = '';
     } else if (type === 'cloudpuffy' || type === 'cloudwavy') {
         // 雲フキダシ: 本体は専用の輪郭生成関数、尻尾はnormalタイプと同じ滑らかな三角形。
         // 尻尾の付け根は本体パス生成と同じ関数(_cloudWavyPointAt/_cloudPuffyPointAt)で

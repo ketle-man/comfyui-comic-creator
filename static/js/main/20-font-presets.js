@@ -19,6 +19,7 @@ import {
     _fontMgrLoadStyles, _fontMgrRenderStylePreviewSvg, _fontMgrUpdateStylePreview, _fontMgrInitStyleTab,
 } from './19-font-manager.js';
 import { state } from './01-state.js';
+import { getAutoWork, saveAutoWork } from './28-auto-tab.js';
 
 // ==============================
 // プリセット（フォント＋サイズ＋スタイル参照）
@@ -497,6 +498,20 @@ async function initFontMgrTab() {
         }
         // Google Fontsなら動的ロード
         _fontMgrEnsureFontLoaded(family);
+    });
+
+    // --- オートレイアウト「既定フォントに設定」ボタン（詳細設定タブと同じ値、自動保存） ---
+    document.getElementById('fontmgr-alo-default-font-btn')?.addEventListener('click', () => {
+        const family = _fontMgr.selectedFamily;
+        if (!family) return;
+        const w = getAutoWork();
+        w.layout.fontFamily = family;
+        saveAutoWork();
+        const statusEl = document.getElementById('fontmgr-alo-default-font-status');
+        if (statusEl) {
+            statusEl.className = 'auto-status ok';
+            statusEl.textContent = t('font.autoLayoutFontSaved', family);
+        }
     });
 
     // 初期状態でソースを適用

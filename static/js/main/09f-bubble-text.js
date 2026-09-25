@@ -43,7 +43,7 @@ function _isBubbleTextType(shapeType) {
 // 09b-balloon-shapes.js の h2 タイプ判定と同じ集合（尻尾付き・雲を含む既存フキダシ全形状）
 function _isH2BalloonType(shapeType) {
     return shapeType === 'bomb' || shapeType === 'thought' || shapeType === 'normal'
-        || shapeType === 'rect' || shapeType === 'cloudpuffy' || shapeType === 'cloudwavy';
+        || shapeType === 'rect' || shapeType === 'caption' || shapeType === 'cloudpuffy' || shapeType === 'cloudwavy';
 }
 
 // テキストを内包できる対象（textbox-* または h2タイプ）かどうか

@@ -89,6 +89,27 @@ const _tmplGroups = {
 };
 
 // ==============================
+// オートレイアウトへの「送信」テンプレート（1件のみ）
+// ==============================
+// テンプレート数が増えるとオートレイアウト側の左ペイン（幅が狭い）に一覧を表示しきれず
+// 表示が崩れるため、ページタブ側のテンプレート一覧から「送信」した1件のみを
+// オートレイアウト側で参照する方式にする（一覧はページタブ側にのみ存在する）。
+
+const _TMPL_AUTO_STAGE_LS = 'auto_layout_staged_template';
+
+const _tmplAutoStage = {
+    get() { return localStorage.getItem(_TMPL_AUTO_STAGE_LS) || null; },
+    set(name) { localStorage.setItem(_TMPL_AUTO_STAGE_LS, name); },
+    clear() { localStorage.removeItem(_TMPL_AUTO_STAGE_LS); },
+    // 既に送信済みの同じテンプレートなら解除、それ以外なら送信（既存の送信先を置き換える）
+    toggle(name) {
+        if (this.get() === name) { this.clear(); return false; }
+        this.set(name);
+        return true;
+    },
+};
+
+// ==============================
 // テンプレート管理
 // ==============================
 
@@ -210,6 +231,16 @@ async function initTemplateManager() {
         insertPageBtn.addEventListener('click', () => insertTemplatePageToWork(state.selectedTemplateName));
     }
 
+    // 選択中のテンプレートをオートレイアウトへ送信（常に1件のみ、送信し直すと置き換わる）
+    const sendAutoBtn = document.getElementById('template-send-auto-btn');
+    if (sendAutoBtn) {
+        sendAutoBtn.addEventListener('click', () => {
+            if (!state.selectedTemplateName) { alert(t('tmpl.selectTemplate')); return; }
+            _tmplAutoStage.set(state.selectedTemplateName);
+            alert(t('page.tmplSendAutoAlert', state.selectedTemplateName));
+        });
+    }
+
     // サイドパネル: グループ追加
     document.getElementById('tmpl-group-add-btn')?.addEventListener('click', () => {
         const input = document.getElementById('tmpl-group-name-input');
@@ -274,7 +305,26 @@ async function saveTemplate(template, svgContent) {
     await dbPut('templates', record);
 }
 
-export { _tmplGroups, initTemplateManager, loadTemplates, saveTemplate };
+// 既存ページ（state.activePage互換の構造: panels[].panelSvgContent/overlaySvgContent等を
+// 実際に持つ）を、そのままテンプレートとして保存する。テンプレートウィザード/SVG取込作成の
+// テンプレートは通常panelSvgContentを持たない（枠のみ）が、renderTemplateList等の
+// プレビュー処理・オートレイアウトへの流し込みはどちらの形も既に想定済みのため、
+// レコード形状（id/name/width/height/panels/basePanelPoints/overlaySvgContent/svgContent）を
+// 揃えるだけでよい（draftSvgContentは下書きレイヤーのためテンプレートには含めない）。
+async function savePageAsTemplate(pageRecord, templateName) {
+    const template = {
+        id: templateName,
+        name: templateName,
+        width: pageRecord.width,
+        height: pageRecord.height,
+        panels: JSON.parse(JSON.stringify(pageRecord.panels || [])),
+        basePanelPoints: pageRecord.basePanelPoints || '',
+        overlaySvgContent: pageRecord.overlaySvgContent || '',
+    };
+    await saveTemplate(template, pageRecord.svgContent || '');
+}
+
+export { _tmplAutoStage, _tmplGroups, initTemplateManager, loadTemplates, savePageAsTemplate, saveTemplate };
 
 // まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
 // （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
