@@ -428,12 +428,15 @@ const SCRIPT_JSON_SCHEMA = '{"pages":[{"page":1,"panels":[{"importance":"High","
 
 // includeContext が true のとき、現在のお題・ストーリー・脚本をシステムプロンプトへ含める。
 // 脚本はJSONで渡す（Chatが返した修正版をそのまま「脚本に反映」できるよう、往復で同じ形式を保つため）。
-export function buildChatSystemMessage({ theme, pageCount, story, script, includeContext }) {
+// lang（'ja'|'en'|'zh'）はUI設定言語。相談・質問への回答言語を指示するのに使う
+// （storySystemPrompt/scriptSystemPromptと同様、指示文自体は日本語のままでも、
+// 応答言語だけはUI設定に合わせる）。
+export function buildChatSystemMessage({ theme, pageCount, story, script, includeContext, lang }) {
     const lines = [
         'あなたはマンガ制作を手伝うアシスタントです。ユーザーと相談しながら、ストーリーや脚本（ネーム）を作り、直します。',
         '- ストーリーを直すときは、修正後のストーリー【全文】だけを返してください（【タイトル】【登場人物】【あらすじ】【ページ配分】の形式）。',
         `- 脚本を直すときは、修正後の脚本【全体】を次のJSON形式のコードブロック（\`\`\`json）で返してください。${SCRIPT_JSON_SCHEMA}`,
-        '- 相談や質問には、簡潔な日本語で答えてください。',
+        `- 相談や質問には、簡潔な${langLabel(lang)}で答えてください。`,
     ];
     if (includeContext) {
         lines.push('', '【現在の内容】');
@@ -445,30 +448,45 @@ export function buildChatSystemMessage({ theme, pageCount, story, script, includ
     return { role: 'system', content: lines.join('\n') };
 }
 
-// Auto向けツール（登録式）。id・ラベル用の言語キー・チャットへ送る依頼文。
+// Auto向けツール（登録式）。id・ラベル用の言語キー。
 // 新しいツールはここへ追加するだけでよい（UIは AUTO_TOOLS を並べる）。
 export const AUTO_TOOLS = [
-    {
-        id: 'story-to-script',
-        labelKey: 'auto.tool.storyToScript',
-        prompt: '現在のストーリーを、ページとコマに分けた脚本にしてください。脚本全体をJSONのコードブロックで返してください。',
-    },
-    {
-        id: 'dialogue-polish',
-        labelKey: 'auto.tool.dialoguePolish',
-        prompt: '現在の脚本のセリフを、キャラクターの口調を保ちつつ、自然で簡潔に推敲してください。セリフ以外は変えず、脚本全体をJSONのコードブロックで返してください。',
-    },
-    {
-        id: 'story-refine',
-        labelKey: 'auto.tool.storyRefine',
-        prompt: '現在のストーリーを、起承転結が分かりやすくなるように整えてください。修正後のストーリー全文を返してください。',
-    },
-    {
-        id: 'character-sheet',
-        labelKey: 'auto.tool.characterSheet',
-        prompt: '現在のストーリーの登場人物について、性格・口調・見た目の特徴（髪型・服装・体型・色など、作画の指示に使える具体的な内容）を、人物ごとに箇条書きでまとめてください。',
-    },
+    { id: 'story-to-script', labelKey: 'auto.tool.storyToScript' },
+    { id: 'dialogue-polish', labelKey: 'auto.tool.dialoguePolish' },
+    { id: 'story-refine', labelKey: 'auto.tool.storyRefine' },
+    { id: 'character-sheet', labelKey: 'auto.tool.characterSheet' },
 ];
+
+// ツールがチャットへ送る依頼文。ユーザーのチャット欄にそのまま表示されるため、
+// UI設定言語（ja/en/zh）に合わせて切り替える。
+const TOOL_PROMPT_BY_LANG = {
+    'story-to-script': {
+        ja: '現在のストーリーを、ページとコマに分けた脚本にしてください。脚本全体をJSONのコードブロックで返してください。',
+        en: 'Please turn the current story into a script broken down into pages and panels. Return the entire script as a JSON code block.',
+        zh: '请将当前的故事改编为按页面和分镜划分的脚本。请以JSON代码块的形式返回整个脚本。',
+    },
+    'dialogue-polish': {
+        ja: '現在の脚本のセリフを、キャラクターの口調を保ちつつ、自然で簡潔に推敲してください。セリフ以外は変えず、脚本全体をJSONのコードブロックで返してください。',
+        en: "Please polish the dialogue in the current script so it sounds natural and concise, while keeping each character's tone of voice. Don't change anything besides the dialogue, and return the entire script as a JSON code block.",
+        zh: '请在保持角色语气的同时，将当前脚本中的台词打磨得更自然、更简洁。除台词外不要更改其他内容，并以JSON代码块的形式返回整个脚本。',
+    },
+    'story-refine': {
+        ja: '現在のストーリーを、起承転結が分かりやすくなるように整えてください。修正後のストーリー全文を返してください。',
+        en: 'Please refine the current story so its narrative structure (setup, development, twist, conclusion) reads more clearly. Return the full revised story.',
+        zh: '请调整当前的故事，使其起承转合更加清晰易懂。请返回修改后的完整故事。',
+    },
+    'character-sheet': {
+        ja: '現在のストーリーの登場人物について、性格・口調・見た目の特徴（髪型・服装・体型・色など、作画の指示に使える具体的な内容）を、人物ごとに箇条書きでまとめてください。',
+        en: "For each character in the current story, summarize their personality, tone of voice, and visual traits (hairstyle, clothing, build, color, etc. — concrete details usable as drawing instructions), one character at a time as bullet points.",
+        zh: '请针对当前故事中的每个角色，以要点形式分别总结其性格、语气和外貌特征（发型、服装、体型、颜色等可用于作画指示的具体内容）。',
+    },
+};
+
+export function getToolPrompt(toolId, lang) {
+    const entry = TOOL_PROMPT_BY_LANG[toolId];
+    if (!entry) return '';
+    return entry[lang] || entry.ja;
+}
 
 // ============================================
 // 画像プロンプトの作成（Chatの画像生成用）

@@ -456,14 +456,15 @@ async def handle_save_nanobanana_image(request):
 
 async def handle_save_group_asset(request):
     try:
-        data = await request.json()
+        data = await _read_json_limited(request, MAX_JSON_IMAGE_UPLOAD_BYTES)
         group_name = (data.get('group') or '').strip()
         svg_content = data.get('svg', '')
+        image_data_url = data.get('image', '')
         filename = (data.get('filename') or '').strip()
         if not group_name:
             return web.json_response({'status': 'error', 'message': 'group field required'}, status=400)
-        if not svg_content:
-            return web.json_response({'status': 'error', 'message': 'svg field required'}, status=400)
+        if not svg_content and not image_data_url:
+            return web.json_response({'status': 'error', 'message': 'svg or image field required'}, status=400)
         safe_group = re.sub(r'[\\/:*?"<>|]', '_', group_name)
         if safe_group in ('', '.', '..'):
             return web.json_response({'status': 'error', 'message': 'invalid group name'}, status=400)
@@ -472,16 +473,48 @@ async def handle_save_group_asset(request):
         if out_dir != base and not str(out_dir).startswith(str(base) + os.sep):
             return web.json_response({'status': 'error', 'message': 'invalid group name'}, status=400)
         out_dir.mkdir(parents=True, exist_ok=True)
-        if not filename:
-            filename = datetime.now().strftime('group_%Y%m%d_%H%M%S') + '.svg'
+
+        if image_data_url:
+            # レイヤーパネルで画像1件だけをチェックして登録した場合、SVGグループでラップせず
+            # 画像そのものをラスター/SVGファイルとして直接保存する（コマへの挿入時、画像1枚だけ
+            # なのに <g data-group-id> が余分に作られてしまうのを避けるため）
+            mime = 'image/png'
+            b64_part = image_data_url
+            if image_data_url.startswith('data:'):
+                header, _, b64_part = image_data_url.partition(',')
+                m = re.match(r'data:([^;]+);base64', header)
+                if m:
+                    mime = m.group(1)
+            ext = {
+                'image/png': '.png', 'image/jpeg': '.jpg', 'image/jpg': '.jpg',
+                'image/webp': '.webp', 'image/svg+xml': '.svg',
+            }.get(mime, '.png')
+            try:
+                img_bytes = base64.b64decode(b64_part)
+            except Exception:
+                return web.json_response({'status': 'error', 'message': 'invalid image data'}, status=400)
+            if not filename:
+                filename = datetime.now().strftime('image_%Y%m%d_%H%M%S') + ext
+            else:
+                filename = re.sub(r'[\\/:*?"<>|]', '_', filename)
+                if not filename.lower().endswith(ext):
+                    filename += ext
+            dest = _safe_path(out_dir, filename)
+            dest.write_bytes(img_bytes)
         else:
-            filename = re.sub(r'[\\/:*?"<>|]', '_', filename)
-            if not filename.lower().endswith('.svg'):
-                filename += '.svg'
-        dest = _safe_path(out_dir, filename)
-        dest.write_text(svg_content, encoding='utf-8')
+            if not filename:
+                filename = datetime.now().strftime('group_%Y%m%d_%H%M%S') + '.svg'
+            else:
+                filename = re.sub(r'[\\/:*?"<>|]', '_', filename)
+                if not filename.lower().endswith('.svg'):
+                    filename += '.svg'
+            dest = _safe_path(out_dir, filename)
+            dest.write_text(svg_content, encoding='utf-8')
+
         _generate_assets_json()
-        return web.json_response({'status': 'ok', 'path': f'ccc_assets/{safe_group}/{filename}'})
+        return web.json_response({'status': 'ok', 'path': f'ccc_assets/{safe_group}/{dest.name}'})
+    except CCCError as e:
+        return _error_response(e, status=413)
     except Exception as e:
         return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 

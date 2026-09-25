@@ -376,10 +376,13 @@ async function switchTab(tabId) {
             document.querySelector('.asset-panel-tab-btn[data-panel-tab="assets"]')?.click();
         }
     }
-    // 「I（画像プロジェクト）」タブはImageタブでのみ使用（他タブでは非表示、アクティブなら強制的にAタブへ戻す）
+    // 「I（画像プロジェクト）」タブはImage/レイアウトタブで使用（それ以外では非表示、アクティブなら強制的にAタブへ戻す）。
+    // レイアウトタブでの挿入は handleInsertAsset が「アクティブなメインタブがimageか否か」で
+    // 分岐済みのため、ボタンの表示可否をここで揃えるだけでImageタブと同じ一覧・同じ選択の仕組みを流用できる
+    const _imagesTabVisibleFor = tabId === 'image' || tabId === 'layout';
     const imagesTabBtn = document.getElementById('asset-panel-tab-images');
-    if (imagesTabBtn) imagesTabBtn.style.display = tabId === 'image' ? '' : 'none';
-    if (tabId !== 'image') {
+    if (imagesTabBtn) imagesTabBtn.style.display = _imagesTabVisibleFor ? '' : 'none';
+    if (!_imagesTabVisibleFor) {
         const activeBtn = document.querySelector('.asset-panel-tab-btn.active');
         if (activeBtn && activeBtn.dataset.panelTab === 'images') {
             document.querySelector('.asset-panel-tab-btn[data-panel-tab="assets"]')?.click();

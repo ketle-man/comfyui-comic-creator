@@ -2,9 +2,10 @@
 // main.js 分割ファイル (6/24): グループ機能+移動
 // 元 main.js の行 2625-3347 に相当
 // type="module" として読み込まれる（ESモジュール化 G2）。
-// 主なトップレベル定義: _insetPolygonPoints,_parsePointsStr,_pointsToStr,_polygonCenter,_round2,deleteSelectedObject,duplicateSelectedObject,groupSelectedLayers,initLayoutDeleteShortcut,moveSelectedObject,saveGroupAsAsset,ungroupLayer
+// 主なトップレベル定義: _insetPolygonPoints,_parsePointsStr,_pointsToStr,_polygonCenter,_round2,deleteSelectedObject,duplicateSelectedObject,groupSelectedLayers,initLayoutDeleteShortcut,moveSelectedObject,saveGroupAsAsset,saveSelectedLayersAsAsset,ungroupLayer
 // （ヘッダコメントは元main.js分割時のもので非網羅。deleteSelectedObject/initLayoutDeleteShortcutは
-//  機械抽出で追加確認したシンボルで、01-state.js/07-pages.jsから外部参照される）
+//  機械抽出で追加確認したシンボルで、01-state.js/07-pages.jsから外部参照される。
+//  saveSelectedLayersAsAssetは後日追加、03-layers-panel.jsから参照される）
 // 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
 // 呼び出し箇所は書き換えていない）:
 //   state（01-state.js）, getPanelLayerSvg/renderLayerPanel（04b-layer-panel-render.js）,
@@ -89,8 +90,13 @@ async function groupSelectedLayers() {
     renderLayerPanel();
 }
 
-async function saveGroupAsAsset(groupEl, groupName) {
-    // ─ グループ名・登録先の入力 ─
+// アセット登録ダイアログ（登録先グループ選択・ファイル名入力・保存）の共通処理。
+// buildPayload は OKボタン押下時に呼ばれ、保存内容を { svg: '<svg data-group-asset="true">...' }
+// または { image: 'data:image/png;base64,...' }（画像1件を直接保存したい場合）のどちらかの
+// 形で返す関数。onSaved は保存成功後（アセットパネル再取得の直後）に呼ばれる任意のコールバック。
+// グループ登録(saveGroupAsAsset)・チェック選択レイヤー登録(saveSelectedLayersAsAsset)の両方で共有する。
+async function _openSaveAssetDialog(defaultName, buildPayload, onSaved) {
+    // ─ 登録先・ファイル名の入力 ─
     // 既存アセットフォルダ一覧を取得してドロップダウンに使う
     let existingGroups = [];
     try {
@@ -127,7 +133,7 @@ async function saveGroupAsAsset(groupEl, groupName) {
             </div>
             <div style="display:flex;flex-direction:column;gap:6px;">
                 <label style="font-size:12px;">${t('layer.saveAssetFilenameLabel')}</label>
-                <input id="sga-filename" placeholder="${groupName || 'group'}" style="padding:4px;font-size:13px;" />
+                <input id="sga-filename" placeholder="${defaultName || 'asset'}" style="padding:4px;font-size:13px;" />
             </div>
             <div style="display:flex;gap:8px;justify-content:flex-end;">
                 <button id="sga-cancel" class="btn small">${t('common.cancel')}</button>
@@ -151,8 +157,31 @@ async function saveGroupAsAsset(groupEl, groupName) {
         let targetGroup = sel.value === '__new__' ? newInput.value.trim() : sel.value;
         if (!targetGroup) { statusEl.textContent = t('layer.saveAssetGroupNameRequired'); return; }
 
-        const rawFilename = dlg.querySelector('#sga-filename').value.trim() || (groupName || 'group');
+        const rawFilename = dlg.querySelector('#sga-filename').value.trim() || (defaultName || 'asset');
+        const payload = buildPayload();
 
+        statusEl.textContent = t('nb.saving');
+        try {
+            const res = await fetch('/api/ccc/save-group-asset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ group: targetGroup, filename: rawFilename, ...payload }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+            statusEl.textContent = t('layer.saveAssetDone', data.path);
+            // アセットパネルを更新（サーバー側で再生成済みのassets.jsonを確実に反映するためtrueで再取得）
+            await loadAssets(true);
+            if (onSaved) onSaved();
+            setTimeout(() => dlg.remove(), 1200);
+        } catch (err) {
+            statusEl.textContent = t('common.errorPrefix', err.message);
+        }
+    });
+}
+
+async function saveGroupAsAsset(groupEl, groupName) {
+    await _openSaveAssetDialog(groupName, () => {
         // グループ要素のSVGを取り出す（ハンドル等UI要素を除外してクローン）
         const clone = groupEl.cloneNode(true);
         clone.querySelectorAll('.group-handle, .group-bbox, .group-rotate-line, .resize-handle, .rotate-handle').forEach(el => el.remove());
@@ -171,24 +200,85 @@ async function saveGroupAsAsset(groupEl, groupName) {
         } catch (_) {}
 
         // data-group-asset="true" でグループアセットとして識別
-        const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" data-group-asset="true" ${bboxAttr}>${clone.outerHTML}</svg>`;
+        return { svg: `<svg xmlns="http://www.w3.org/2000/svg" data-group-asset="true" ${bboxAttr}>${clone.outerHTML}</svg>` };
+    });
+}
 
-        statusEl.textContent = t('nb.saving');
-        try {
-            const res = await fetch('/api/ccc/save-group-asset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ group: targetGroup, svg: svgContent, filename: rawFilename }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-            statusEl.textContent = t('layer.saveAssetDone', data.path);
-            // アセットパネルを更新（サーバー側で再生成済みのassets.jsonを確実に反映するためtrueで再取得）
-            await loadAssets(true);
-            setTimeout(() => dlg.remove(), 1200);
-        } catch (err) {
-            statusEl.textContent = t('common.errorPrefix', err.message);
+// レイヤーパネルでチェックボックス選択した個別アイテム（グループ化されていない
+// 画像・フキダシ・テキスト・描画レイヤー）を、1件だけアセットとして登録する。
+// グループ化(groupSelectedLayers)はDOM構造を恒久的に変更するのに対し、こちらは選択中の
+// 要素をその場ではクローンして保存するだけで、レイヤーパネル上の元の要素はそのまま残す。
+async function saveSelectedLayersAsAsset() {
+    const checked = Array.from(state.checkedLayerEls);
+    if (checked.length < 1) {
+        alert(t('layer.confirmSelectAssetItems'));
+        return;
+    }
+    // 複数アイテムを1つのアセットにまとめる操作ではないため、2件以上のチェックは受け付けない
+    if (checked.length > 1) {
+        alert(t('layer.saveAssetOnlyOneItem'));
+        return;
+    }
+    // 全要素が同一の直接親かチェック（グループ化と同じ制約。座標系が異なる要素は束ねられない）
+    const parentEl = checked[0].parentNode;
+    if (!parentEl || !checked.every(el => el.parentNode === parentEl)) {
+        alert(t('layer.groupSamePanelOnly'));
+        return;
+    }
+    if (checked.some(el => _isObjectLocked(el))) {
+        alert(t('layer.saveAssetLockedItems'));
+        return;
+    }
+
+    const panelSvg = getPanelLayerSvg();
+    if (!panelSvg) return;
+
+    // DOM順（＝現在の重ね順）で並べ替え
+    const sorted = Array.from(parentEl.children).filter(c => checked.includes(c));
+
+    await _openSaveAssetDialog('asset', () => {
+        // 選択が画像1件のみの場合は、SVGグループでラップせず画像そのものを直接保存する。
+        // グループ経由だと、コマへ挿入する際に画像1枚だけなのに insertGroupAsset が
+        // 余分な <g data-group-id> を作ってしまうため（フキダシ・テキスト・描画レイヤーは
+        // ネイティブな編集可能要素として復元する必要があるため、従来通りグループ化する）。
+        const only = sorted[0];
+        if (sorted.length === 1 && only.tagName?.toLowerCase() === 'image' && only.classList.contains('inserted-image')) {
+            const href = only.getAttribute('href') || only.getAttribute('xlink:href') || '';
+            if (href) return { image: href };
         }
+
+        // 選択要素を、位置(transform/x/y等)はそのまま保った状態で g[data-group-id] にまとめてクローンする。
+        // グループ自身には座標を持たせない（子要素はパネル内の元の絶対座標のまま、viewBoxで
+        // その範囲だけを切り出す）ことで、グループ化して登録した場合(saveGroupAsAsset)と
+        // 同じ座標系のアセット（挿入時は insertGroupAsset が g[data-group-id] を前提に読む）として保存できる。
+        const ns = 'http://www.w3.org/2000/svg';
+        const tempG = document.createElementNS(ns, 'g');
+        tempG.setAttribute('data-group-id', 'group-' + Date.now());
+        sorted.forEach(el => {
+            const clone = el.cloneNode(true);
+            clone.classList.remove('selected');
+            clone.querySelectorAll(
+                '.image-handle, .image-bbox, .image-rotate-line, .group-handle, .group-bbox, .group-rotate-line, .resize-handle, .rotate-handle'
+            ).forEach(h => h.remove());
+            tempG.appendChild(clone);
+        });
+
+        // getBBox はライブDOMに属していないと正しく計算できないため、計測後は同期的に
+        // （間に await を挟まず）取り外す。挟むと、他の保存処理と競合した際にこの一時グループが
+        // 実パネルの panelSvgContent へ紛れ込んでしまう可能性がある
+        panelSvg.appendChild(tempG);
+        let bboxAttr = '';
+        try {
+            const bb = tempG.getBBox();
+            bboxAttr = `viewBox="${bb.x} ${bb.y} ${bb.width} ${bb.height}" width="${bb.width}" height="${bb.height}"`;
+        } catch (_) {}
+        tempG.remove();
+
+        return { svg: `<svg xmlns="${ns}" data-group-asset="true" ${bboxAttr}>${tempG.outerHTML}</svg>` };
+    }, () => {
+        // 登録完了後、チェック状態を解除してレイヤーパネルの表示にも反映する
+        checked.forEach(el => state.checkedLayerEls.delete(el));
+        renderLayerPanel();
     });
 }
 
@@ -1052,7 +1142,8 @@ function _insetPolygonPoints(pointsStr, d) {
 export {
     _insetPolygonPoints, _parsePointsStr, _pointsToStr, _polygonCenter, _round2,
     deleteSelectedObject, duplicateSelectedObject, groupSelectedLayers,
-    initLayoutDeleteShortcut, moveSelectedObject, saveGroupAsAsset, ungroupLayer,
+    initLayoutDeleteShortcut, moveSelectedObject, saveGroupAsAsset,
+    saveSelectedLayersAsAsset, ungroupLayer,
 };
 
 // まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ

@@ -20,7 +20,7 @@ import { getPanelLayerSvg, renderLayerPanel, _layerOpacityGetSelected } from './
 import { initLayoutPreviewSizeSlider } from './02-assets.js';
 import { state } from './01-state.js';
 import { clearGroupHandles, layerMove } from './06a-polygon-geometry.js';
-import { duplicateSelectedObject, groupSelectedLayers, moveSelectedObject, ungroupLayer } from './05-groups-move.js';
+import { duplicateSelectedObject, groupSelectedLayers, moveSelectedObject, saveSelectedLayersAsAsset, ungroupLayer } from './05-groups-move.js';
 import { saveOverlaySvg } from './09b-balloon-shapes.js';
 import { _syncDraftInteractivity, clearImageHandles, highlightOverlay, saveDraftSvg, updatePanelSelectDropdown } from './08-panels-images.js';
 import { savePanelSvg } from './07-pages.js';
@@ -35,6 +35,9 @@ import { clearDrawShapeHandles } from './17c-layer-draw-handles.js';
 
 function initLayerPanel() {
     initLayoutPreviewSizeSlider();
+
+    const saveCheckedAssetBtn = document.getElementById('layer-save-checked-asset-btn');
+    if (saveCheckedAssetBtn) saveCheckedAssetBtn.addEventListener('click', () => saveSelectedLayersAsAsset());
 
     const upBtn = document.getElementById('layer-up-btn');
     const downBtn = document.getElementById('layer-down-btn');

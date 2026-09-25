@@ -17,7 +17,7 @@ import {
 import {
     IMPORTANCE_LEVELS, BUBBLE_TYPES, blankScript, blankPanel, blankDialogue, normalizeScript, parseScriptResponse,
     buildStoryMessages, buildScriptMessages, cloneSampleScript, getSampleTheme, getSampleStory,
-    AUTO_TOOLS, buildChatSystemMessage, buildImagePromptMessages,
+    AUTO_TOOLS, getToolPrompt, buildChatSystemMessage, buildImagePromptMessages,
 } from '../auto-story-core.js';
 import { generateAutoImage, listWorkflowFilenames } from './28a-auto-image.js';
 import { LAYOUT_STYLES, READING_ORDERS } from '../auto-layout-core.js';
@@ -729,7 +729,7 @@ async function sendChat(text, { forceContext = false } = {}) {
 
     const includeContext = forceContext || $('auto-chat-context').checked;
     const messages = [
-        buildChatSystemMessage({ theme: work.theme, pageCount: work.pageCount, story: work.story, script: work.script, includeContext }),
+        buildChatSystemMessage({ theme: work.theme, pageCount: work.pageCount, story: work.story, script: work.script, includeContext, lang: getLang() }),
         ...work.chat.map((m) => ({ role: m.role, content: m.content })),
     ];
     await runBusy('auto-chat-status', t('auto.chatThinking'), async () => {
@@ -753,7 +753,7 @@ function onChatToolRun() {
         setStatus('auto-chat-status', 'error', t('auto.errStoryEmpty'));
         return;
     }
-    sendChat(tool.prompt, { forceContext: true });   // ツールは現在のストーリー・脚本が前提のため、文脈は常に含める
+    sendChat(getToolPrompt(tool.id, getLang()), { forceContext: true });   // ツールは現在のストーリー・脚本が前提のため、文脈は常に含める
 }
 
 function onChatClick(e) {
