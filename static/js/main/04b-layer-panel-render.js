@@ -40,6 +40,42 @@ import { pushHistory, savePanelSvg } from './07-pages.js';
 import { saveGroupAsAsset, ungroupLayer } from './05-groups-move.js';
 import { _isSubPanelFrameMode, deleteSubPanel, renderSubPanelHandles, toggleSubPanelFrameMode } from './24-sub-panels.js';
 
+// ── Alt+クリックで「同じ種類のオブジェクトをページ全体で一括表示/非表示切替」 ──
+// ページ（=getPanelLayerSvg()が返す統合SVG。全コマ+オーバーレイ+下書きを含む）内から、
+// kindに応じた対象要素を集める。textは、フキダシ内蔵のセリフ用<text>（balloon-shape配下）を
+// 誤って含めないよう、.balloon-shapeの子孫であるものを除外する（レイヤーパネル本体の描画ループ
+// でもテキストツールの<text>はg.data-clip-panel等の直接の子だけを対象にしており、
+// フキダシ内蔵の<text>はそもそも別行として表示されない＝同じ判定基準に揃える）。
+function _rlpCollectSameTypeElements(kind, panelSvg) {
+    if (!panelSvg) return [];
+    switch (kind) {
+        case 'shape': return Array.from(panelSvg.querySelectorAll('.balloon-shape'));
+        case 'image': return Array.from(panelSvg.querySelectorAll('.inserted-image'));
+        case 'draw':  return Array.from(panelSvg.querySelectorAll('.draw-shape'));
+        case 'text':  return Array.from(panelSvg.querySelectorAll('text')).filter(el => !el.closest('.balloon-shape'));
+        default: return [];
+    }
+}
+
+// 対象要素は複数のコマ/オーバーレイ/下書きレイヤーにまたがることがあるため、実際に変更が
+// 生じた範囲（panelId）だけを重複なく集め、それぞれ個別に保存する。savePanelSvgは
+// 'panel-0'/'__overlay__'→オーバーレイ、'__draft__'→下書きへの振り分けを内部で行う。
+async function _rlpBulkToggleSameType(kind, newHidden) {
+    const panelSvg = getPanelLayerSvg();
+    const elements = _rlpCollectSameTypeElements(kind, panelSvg);
+    if (!elements.length) return;
+    elements.forEach(el => { el.style.display = newHidden ? 'none' : ''; });
+
+    const panelIds = new Set();
+    elements.forEach(el => {
+        if (el.closest('g[data-draft-layer]')) { panelIds.add('__draft__'); return; }
+        panelIds.add(el.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || 'panel-0');
+    });
+    for (const panelId of panelIds) {
+        await savePanelSvg(panelId, panelSvg);
+    }
+}
+
 function renderLayerPanel() {
     const listEl = document.getElementById('layer-list');
     if (!listEl) return;
@@ -83,7 +119,7 @@ function renderLayerPanel() {
         const individualLocked = shape.dataset.locked === 'true';
         const isLocked = individualLocked || panelLocked;
         const isActive = shape.id === state.selectedShapeId;
-        const shapeTypeIcons = { rect: '▭', 'textbox-rect': '▭', 'textbox-rounded': '▢', 'textbox-oval': '○', cloudpuffy: '☁', cloudwavy: '☁' };
+        const shapeTypeIcons = { rect: '▭', caption: '▬', 'textbox-rect': '▭', 'textbox-rounded': '▢', 'textbox-oval': '○', cloudpuffy: '☁', cloudwavy: '☁' };
         const typeLabel = shapeTypeIcons[shape.dataset.shapeType] || '○';
         if (!shape.dataset.name) {
             shape.dataset.name = t('layer.balloonName', objIdx + 1);
@@ -98,7 +134,7 @@ function renderLayerPanel() {
             <span class="layer-item-name">${_escHtml(name)}</span>
             <div class="layer-item-btns">
                 <button class="layer-item-btn lock-btn" ${panelLocked ? 'disabled' : ''} title="${panelLocked ? t('layer.panelLockedTitle') : (individualLocked ? t('layer.unlockTitle') : t('layer.lockTitle'))}">${isLocked ? '🔒' : '🔓'}</button>
-                <button class="layer-item-btn vis-btn" title="${isHidden ? t('layer.showTitle') : t('layer.hideTitle')}">${isHidden ? '🚫' : '👁'}</button>
+                <button class="layer-item-btn vis-btn" title="${(isHidden ? t('layer.showTitle') : t('layer.hideTitle'))}${t('layer.visAltHint')}">${isHidden ? '🚫' : '👁'}</button>
                 <button class="layer-item-btn delete-btn" title="${t('common.delete')}">✕</button>
             </div>
         `;
@@ -133,15 +169,25 @@ function renderLayerPanel() {
                 // ロック時は選択解除
                 if (state.selectedShapeId === shape.id) { state.selectedShapeId = null; clearHandles(); }
             }
+            // 実際のDOM上の親コマを最優先で使う（レイヤーパネルは全コマのオブジェクトを一覧表示するため、
+            // state.selectedPanelId（キャンバス上で最後に選択したコマ）と対象shapeの所属コマが
+            // 一致しないケースがあり、それに頼ると無関係なコマへ誤保存されてしまう）
+            const panelId = shape.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || 'panel-0';
             const curSvg = getPanelLayerSvg();
-            if (curSvg) await savePanelSvg(state.selectedPanelId || 'panel-0', curSvg);
+            if (curSvg) await savePanelSvg(panelId, curSvg);
             renderLayerPanel();
         });
         item.querySelector('.vis-btn').addEventListener('click', async (e) => {
             e.stopPropagation();
-            shape.style.display = isHidden ? '' : 'none';
-            const curSvg = getPanelLayerSvg();
-            if (curSvg) await savePanelSvg(state.selectedPanelId || 'panel-0', curSvg);
+            const newHidden = !isHidden;
+            if (e.altKey) {
+                await _rlpBulkToggleSameType('shape', newHidden);
+            } else {
+                shape.style.display = newHidden ? 'none' : '';
+                const panelId = shape.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || 'panel-0';
+                const curSvg = getPanelLayerSvg();
+                if (curSvg) await savePanelSvg(panelId, curSvg);
+            }
             renderLayerPanel();
         });
         item.querySelector('.delete-btn').addEventListener('click', async (e) => {
@@ -150,6 +196,7 @@ function renderLayerPanel() {
             pushHistory();
             if (state.selectedShapeId === shape.id) { state.selectedShapeId = null; clearHandles(); }
             state.checkedLayerEls.delete(shape);
+            const panelId = shape.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || 'panel-0';
             // 延長フキダシの道連れ削除・ネック/共有リングの後始末は09b-balloon-shapes.jsの
             // 共通ヘルパーに集約（Delete/Backspaceキー経由の05-groups-move.jsと共有）。
             // これを経由しないと、延長・ネック・共有リングが消し忘れられて保存後もゴミが残る
@@ -157,7 +204,7 @@ function renderLayerPanel() {
             shape.remove();
             _h2RefreshChainAfterDelete(linkedToId);
             const curSvg = getPanelLayerSvg();
-            if (curSvg) await savePanelSvg(state.selectedPanelId || 'panel-0', curSvg);
+            if (curSvg) await savePanelSvg(panelId, curSvg);
             renderLayerPanel();
         });
         return item;
@@ -195,7 +242,7 @@ function renderLayerPanel() {
             <div class="layer-item-btns">
                 ${isDraftImg ? '' : `<button class="layer-item-btn addmask-btn" title="${t('layer.addMaskTitle')}">🎭</button>`}
                 <button class="layer-item-btn lock-btn" ${panelLocked ? 'disabled' : ''} title="${panelLocked ? t('layer.panelLockedTitle') : (individualLocked ? t('layer.unlockTitle') : t('layer.lockTitle'))}">${isLocked ? '🔒' : '🔓'}</button>
-                <button class="layer-item-btn vis-btn" title="${isHidden ? t('layer.showTitle') : t('layer.hideTitle')}">${isHidden ? '🚫' : '👁'}</button>
+                <button class="layer-item-btn vis-btn" title="${(isHidden ? t('layer.showTitle') : t('layer.hideTitle'))}${t('layer.visAltHint')}">${isHidden ? '🚫' : '👁'}</button>
                 <button class="layer-item-btn delete-btn" title="${t('common.delete')}">✕</button>
             </div>
         `;
@@ -257,11 +304,16 @@ function renderLayerPanel() {
         });
         item.querySelector('.vis-btn').addEventListener('click', async (e) => {
             e.stopPropagation();
-            img.style.display = isHidden ? '' : 'none';
-            const curSvg = getPanelLayerSvg();
-            const visPanelId = img.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
-                                img.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0';
-            if (curSvg) await savePanelSvg(visPanelId, curSvg);
+            const newHidden = !isHidden;
+            if (e.altKey) {
+                await _rlpBulkToggleSameType('image', newHidden);
+            } else {
+                img.style.display = newHidden ? 'none' : '';
+                const curSvg = getPanelLayerSvg();
+                const visPanelId = img.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
+                                    img.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0';
+                if (curSvg) await savePanelSvg(visPanelId, curSvg);
+            }
             renderLayerPanel();
         });
         item.querySelector('.delete-btn').addEventListener('click', async (e) => {
@@ -303,7 +355,7 @@ function renderLayerPanel() {
             <span class="layer-item-name">${_escHtml(label)}</span>
             <div class="layer-item-btns">
                 <button class="layer-item-btn lock-btn" ${panelLocked ? 'disabled' : ''} title="${panelLocked ? t('layer.panelLockedTitle') : (individualLocked ? t('layer.unlockTitle') : t('layer.lockTitle'))}">${isLocked ? '🔒' : '🔓'}</button>
-                <button class="layer-item-btn vis-btn" title="${isHidden ? t('layer.showTitle') : t('layer.hideTitle')}">${isHidden ? '🚫' : '👁'}</button>
+                <button class="layer-item-btn vis-btn" title="${(isHidden ? t('layer.showTitle') : t('layer.hideTitle'))}${t('layer.visAltHint')}">${isHidden ? '🚫' : '👁'}</button>
                 <button class="layer-item-btn delete-btn" title="${t('common.delete')}">✕</button>
             </div>
         `;
@@ -342,15 +394,23 @@ function renderLayerPanel() {
                     if (panelSvg) clearTextHandles(panelSvg);
                 }
             }
+            // 実際のDOM上の親コマを最優先で使う（理由はmakeShapeItemのコメント参照）
+            const panelId = textEl.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || 'panel-0';
             const curSvg = getPanelLayerSvg();
-            if (curSvg) await savePanelSvg(state.selectedPanelId || 'panel-0', curSvg);
+            if (curSvg) await savePanelSvg(panelId, curSvg);
             renderLayerPanel();
         });
         item.querySelector('.vis-btn').addEventListener('click', async (e) => {
             e.stopPropagation();
-            textEl.style.display = isHidden ? '' : 'none';
-            const curSvg = getPanelLayerSvg();
-            if (curSvg) await savePanelSvg(state.selectedPanelId || 'panel-0', curSvg);
+            const newHidden = !isHidden;
+            if (e.altKey) {
+                await _rlpBulkToggleSameType('text', newHidden);
+            } else {
+                textEl.style.display = newHidden ? 'none' : '';
+                const panelId = textEl.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || 'panel-0';
+                const curSvg = getPanelLayerSvg();
+                if (curSvg) await savePanelSvg(panelId, curSvg);
+            }
             renderLayerPanel();
         });
         item.querySelector('.delete-btn').addEventListener('click', async (e) => {
@@ -362,9 +422,10 @@ function renderLayerPanel() {
                 if (panelSvg) clearTextHandles(panelSvg);
             }
             state.checkedLayerEls.delete(textEl);
+            const panelId = textEl.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || 'panel-0';
             textEl.remove();
             const curSvg = getPanelLayerSvg();
-            if (curSvg) await savePanelSvg(state.selectedPanelId || 'panel-0', curSvg);
+            if (curSvg) await savePanelSvg(panelId, curSvg);
             renderLayerPanel();
         });
         return item;
@@ -394,7 +455,7 @@ function renderLayerPanel() {
             <div class="layer-item-btns">
                 <button class="layer-item-btn addmask-btn" title="${t('layer.addMaskTitle')}">🎭</button>
                 <button class="layer-item-btn lock-btn" ${panelLocked ? 'disabled' : ''} title="${panelLocked ? t('layer.panelLockedTitle') : (individualLocked ? t('layer.unlockTitle') : t('layer.lockTitle'))}">${isLocked ? '🔒' : '🔓'}</button>
-                <button class="layer-item-btn vis-btn" title="${isHidden ? t('layer.showTitle') : t('layer.hideTitle')}">${isHidden ? '🚫' : '👁'}</button>
+                <button class="layer-item-btn vis-btn" title="${(isHidden ? t('layer.showTitle') : t('layer.hideTitle'))}${t('layer.visAltHint')}">${isHidden ? '🚫' : '👁'}</button>
                 <button class="layer-item-btn delete-btn" title="${t('common.delete')}">✕</button>
             </div>
         `;
@@ -422,20 +483,28 @@ function renderLayerPanel() {
                 el.dataset.locked = 'true';
                 if (state.selectedDrawId === el.id) { state.selectedDrawId = null; state.selectedDrawEl = null; clearDrawShapeHandles(); _drawShapeSyncProps(null); }
             }
+            // 実際のDOM上の親コマを最優先で使う（理由はmakeShapeItemのコメント参照）
+            const clipPanelId = el.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel');
             const curSvg = getPanelLayerSvg();
             if (curSvg) {
-                if (state.selectedOverlay) await saveOverlaySvg(curSvg);
-                else await savePanelSvg(state.selectedPanelId || 'panel-0', curSvg);
+                if (!clipPanelId) await saveOverlaySvg(curSvg);
+                else await savePanelSvg(clipPanelId, curSvg);
             }
             renderLayerPanel();
         });
         item.querySelector('.vis-btn').addEventListener('click', async (e) => {
             e.stopPropagation();
-            el.style.display = isHidden ? '' : 'none';
-            const curSvg = getPanelLayerSvg();
-            if (curSvg) {
-                if (state.selectedOverlay) await saveOverlaySvg(curSvg);
-                else await savePanelSvg(state.selectedPanelId || 'panel-0', curSvg);
+            const newHidden = !isHidden;
+            if (e.altKey) {
+                await _rlpBulkToggleSameType('draw', newHidden);
+            } else {
+                el.style.display = newHidden ? 'none' : '';
+                const clipPanelId = el.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel');
+                const curSvg = getPanelLayerSvg();
+                if (curSvg) {
+                    if (!clipPanelId) await saveOverlaySvg(curSvg);
+                    else await savePanelSvg(clipPanelId, curSvg);
+                }
             }
             renderLayerPanel();
         });
@@ -444,11 +513,12 @@ function renderLayerPanel() {
             if (isLocked) return;
             if (state.selectedDrawId === el.id) { state.selectedDrawId = null; state.selectedDrawEl = null; clearDrawShapeHandles(); _drawShapeSyncProps(null); }
             state.checkedLayerEls.delete(el);
+            const clipPanelId = el.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel');
             el.remove();
             const curSvg = getPanelLayerSvg();
             if (curSvg) {
-                if (state.selectedOverlay) await saveOverlaySvg(curSvg);
-                else await savePanelSvg(state.selectedPanelId || 'panel-0', curSvg);
+                if (!clipPanelId) await saveOverlaySvg(curSvg);
+                else await savePanelSvg(clipPanelId, curSvg);
             }
             renderLayerPanel();
         });
