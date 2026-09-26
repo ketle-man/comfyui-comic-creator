@@ -1,6 +1,6 @@
 # 作業計画バックログ
 
-更新日: 2026-09-26（v1.46.0: Autoタブ Chat Toolの多言語対応・レイヤーパネルへの個別アイテムのアセット登録機能・アセットパネル「I」タブのレイアウトタブ対応。詳細はDEVLOG参照）
+更新日: 2026-09-26（未リリース: Autoタブお題入力のモーダル化・画像生成タブ分離・レイアウトタブへのコマ分割ツール追加。詳細はDEVLOG参照）
 
 過去の計画書・調査・コード内 TODO を棚卸しし、未着手の作業を一元管理するためのファイル。
 着手時は該当項目の「実装メモ」を出発点にし、完了したら「完了済み」へ移動して DEVLOG.md に詳細を記録する。
@@ -16,6 +16,7 @@
 ## 未着手
 
 - **テンプレートSVG互換性拡張のヘルプ英語・中国語訳の追従**（2026-08-12発生）: v1.33.0で日本語ヘルプ（`22-help-tab.js`の`_HELP_DATA`、「付録: テンプレートSVG仕様」「付録: Inkscapeでテンプレート作成」）を実態（rect/path/polygon/circle/ellipse対応、path→polygon手動変換が不要になった等）に合わせて更新したが、`_HELP_I18N.en`/`.zh`側は未追従（従来のpolygon限定・変換必須の説明のまま）。次回ヘルプ関連の作業時にあわせて翻訳・更新すること。
+- **Autoタブ「オートレイアウト」サブタブのヘルプ英語・中国語訳の追従**（2026-09-26発生）: 日本語ヘルプ（`_HELP_DATA`のid `auto`）には「オートレイアウトサブタブ — 概要」「ページ設定（左ペイン）」「テンプレート（左ペイン）」「詳細設定（左ペイン）」「中央ペイン: プレビューとツール」「右ペイン: プロパティ（フキダシ・画像）」「レイアウトタブへの転送」「レイアウトタブのGenerateモーダルとの連携」の8見出しがあるが、`_HELP_I18N.en`/`.zh`側にはこれらが1つも存在せず、Overview相当の説明も「"Layout" will be added later」という古い記述のまま残っている（オートレイアウト自体はv1.45.0で実装済み）。次回Autoタブのヘルプ関連の作業時にあわせて翻訳・追加すること。
 - **ライブペイント／Blender連携の実現可能性調査**（2026-07-29 調査のみ実施・未着手）: ユーザー依頼「krita-ai-diffusionのライブペイント」「krita_blender_workflow_bridge（Krita-Blender連携）」をこのプロジェクトで実現可能か調査。
   - **ライブペイント（krita-ai-diffusion）**: ソース（`ai_diffusion/model/model.py` の `LiveScheduler`/`LiveWorkspace`）を確認。100ms間隔ポーリング＋デバウンス（直近変更から grace_period秒 or 最初の変更からmax_wait_time=3秒）でComfyUIへWebSocket経由ジョブ投入、完了シグナルで自動反映という仕組み。Comic Creatorでは既存のI2I連携（PI2I: ページPNG化→Workflow Studio送信→呼び戻し）をJS側debounce＋ComfyUI標準WebSocket API購読で拡張すれば実現可能と判断（技術的に可能、Workflow Studio側にもプレビュー購読口の追加が必要）。ブラウザCanvas2DのPNGエンコード＋アップロード往復はKritaのネイティブpixel bufferより重いため、軽量モデル（LCM/Turbo系）＋低解像度プレビュー前提でないと「ライブ」感は出ない。
   - **Blender連携（krita_blender_workflow_bridge）**: GitLab READMEを確認。Krita・Blenderは別プロセスで、ファイルシステム経由（スケッチ画像・`.blend`・レンダリング結果PNG）でデータ交換し、Krita側からBlender実行ファイルをsubprocessとして呼び出す方式。Comic Creatorでは既存のG'MIC連携パターン（`py/ccc.py`の`_gmic_run_gui`/`handle_local_gmic_status`: subprocess起動→job_idポーリング→結果ファイルbase64回収、`_validate_local_exe_path`によるexeパス検証）をそのまま横展開すれば実現可能と判断。3Dポーズ機能（Three.js内製、[[vrm-pose-editor-architecture]]参照）とは競合せず、複雑な3Dシーン制作が必要な場合の別機能という位置づけになる。Blenderは`--background --python`実行のためG'MICよりレイテンシが大きく、非同期ジョブ＋進捗UIは必須。
