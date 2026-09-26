@@ -376,6 +376,14 @@ const LANGUAGES = {
         'layout.toolPose3d': '3Dポーズ',
         'layout.toolManga': 'マンガ',
         'layout.toolSubpanel': 'サブコマ',
+        'layout.toolSplit': '分割',
+
+        // -- コマ分割（選択中のコマをドラッグした直線で2つに分割） --
+        'split.label': 'コマ分割:',
+        'split.hint': '※ ONにしてプレビュー上のコマ内をドラッグすると、線を引いた方向でそのコマだけを2つに分割します',
+        'split.creating': 'ドラッグして分割線を指定してください',
+        'split.done': '分割しました',
+        'split.errLocked': 'ロック中のコマは分割できません',
 
         // -- サブコマ（コマの中に矩形/丸のコマをオブジェクトとして配置） --
         'subpanel.addLabel': 'サブコマ追加:',
@@ -2006,6 +2014,14 @@ const LANGUAGES = {
         'layout.toolPose3d': '3D Pose',
         'layout.toolManga': 'Manga',
         'layout.toolSubpanel': 'Sub-panel',
+        'layout.toolSplit': 'Split',
+
+        // -- Split panel (split the selected panel in two along a dragged line) --
+        'split.label': 'Split panel:',
+        'split.hint': '※ Turn ON, then drag inside a panel on the preview: it splits just that panel in two along the drag direction.',
+        'split.creating': 'Drag to define the split line',
+        'split.done': 'Split',
+        'split.errLocked': 'Locked panels cannot be split',
 
         // -- Sub-panel (place a rectangular/circular panel inside a panel as an object) --
         'subpanel.addLabel': 'Add sub-panel:',
@@ -3610,6 +3626,14 @@ const LANGUAGES = {
         'layout.toolPose3d': '3D姿势',
         'layout.toolManga': '漫画',
         'layout.toolSubpanel': '子画格',
+        'layout.toolSplit': '分割',
+
+        // -- 画格分割（沿拖动的直线将选中的画格一分为二） --
+        'split.label': '画格分割：',
+        'split.hint': '※ 打开ON后，在预览上的画格内拖动，即可沿拖动方向将该画格一分为二',
+        'split.creating': '请拖动指定分割线',
+        'split.done': '已分割',
+        'split.errLocked': '已锁定的画格无法分割',
 
         // -- 子画格（在画格内放置矩形/圆形的子画格作为对象） --
         'subpanel.addLabel': '添加子画格：',

@@ -39,6 +39,7 @@ import { initText3DTab, hideText3DCanvas } from './25-text3d-bridge.js';
 import { initVideoTab, hideVideoOverlay } from './27-video-bridge.js';
 import { initAutoTab } from './28-auto-tab.js';
 import { initSubPanelTool } from './24-sub-panels.js';
+import { initSplitPanelTool } from './24a-panel-split.js';
 import { initNanobananaTab } from '../nanobanana.js';
 import { initImageTab } from '../image-tab.js';
 
@@ -167,6 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initProcessingTab();
         initEditTab();
         initSubPanelTool();
+        initSplitPanelTool();
         initNanobananaTab();
         _initEditTabTrigger();
         console.log('Plugin Initialized');

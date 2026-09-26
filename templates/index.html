@@ -137,6 +137,7 @@
             <button class="subtab-btn tool-panel-btn" data-subtab="text3d" data-i18n="layout.toolText3d">3Dテキスト</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="manga" data-i18n="layout.toolManga">マンガ</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="subpanel" data-i18n="layout.toolSubpanel">サブコマ</button>
+            <button class="subtab-btn tool-panel-btn" data-subtab="split" data-i18n="layout.toolSplit">分割</button>
           </div>
         </aside>
 
@@ -806,6 +807,19 @@
                   <input type="number" id="subpanel-border-width" min="0" max="5000" step="0.01" style="width:70px" disabled data-i18n-title="subpanel.borderWidthTitle" title="選択中のサブコマの枠線太さ（SVG座標系単位、他のサブコマ・コマとは独立）" />
                 </div>
                 <div style="margin-top:4px; font-size:11px; color:var(--text-secondary);" data-i18n="subpanel.frameModeLayerHint">※ 作成後の「サブコマ自体を操作」の切り替えは、右のレイヤーパネルのサブコマ行にあるチェックボックスで行います</div>
+              </div>
+
+              <!-- コマ分割サブタブ: 選択中のコマを、プレビュー上でドラッグした直線で2つに分割する -->
+              <div id="subtab-split" class="subtab-content" style="display:none; flex:1; padding:0; margin:0;">
+                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                  <span style="font-size:12px; white-space:nowrap;" data-i18n="split.label">コマ分割:</span>
+                  <div id="split-mode-group" class="seg-group">
+                    <button type="button" class="seg-btn" data-split-mode="on">ON</button>
+                    <button type="button" class="seg-btn active" data-split-mode="off">OFF</button>
+                  </div>
+                  <span style="font-size:11px; color:var(--text-secondary);" data-i18n="split.hint">※ ONにしてプレビュー上のコマ内をドラッグすると、線を引いた方向でそのコマだけを2つに分割します</span>
+                  <span id="split-status" style="font-size:11px; color:var(--text-secondary);"></span>
+                </div>
               </div>
 
             </div>
@@ -2456,6 +2470,7 @@
     <script type="module" src="/ccc_static/js/main/22-help-tab.js"></script>
     <script type="module" src="/ccc_static/js/main/23-pose3d-bridge.js"></script>
     <script type="module" src="/ccc_static/js/main/24-sub-panels.js"></script>
+    <script type="module" src="/ccc_static/js/main/24a-panel-split.js"></script>
     <script type="module" src="/ccc_static/js/main/25-text3d-bridge.js"></script>
     <script type="module" src="/ccc_static/js/main/26-auto-comic-bridge.js"></script>
     <script type="module" src="/ccc_static/js/main/27-video-bridge.js"></script>

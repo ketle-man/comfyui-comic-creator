@@ -39,6 +39,7 @@ import { initBubbleTextTools } from './09f-bubble-text.js';
 import { initGroupManipulation } from './06a-polygon-geometry.js';
 import { initDrawShapeManipulation } from './17c-layer-draw-handles.js';
 import { initSubPanelManipulation } from './24-sub-panels.js';
+import { initSplitPanelManipulation } from './24a-panel-split.js';
 import { renderLayerPanel } from './04b-layer-panel-render.js';
 import { _maskAttachOverlay, _maskSetEditing, _maskState, _maskUpdateUI } from './04a-mask-core.js';
 import { _pose3dSyncPosition } from './23-pose3d-bridge.js';
@@ -585,6 +586,7 @@ async function renderLayoutTab() {
             initGroupManipulation(svgEl);
             initDrawShapeManipulation(svgEl);
             initSubPanelManipulation(svgEl);
+            initSplitPanelManipulation(svgEl);
         }
     } catch (e) {
         console.error('Preview load error:', e);
