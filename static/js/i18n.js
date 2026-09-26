@@ -380,6 +380,8 @@ const LANGUAGES = {
 
         // -- コマ分割（選択中のコマをドラッグした直線で2つに分割） --
         'split.label': 'コマ分割:',
+        'split.gapLabel': 'コマ間の幅:',
+        'split.gapTitle': '分割後の2つのコマの間に見える幅（SVG座標系単位、他のコマ間の隙間と同じ見た目になる値）。0で隙間なく分割します',
         'split.hint': '※ ONにしてプレビュー上のコマ内をドラッグすると、線を引いた方向でそのコマだけを2つに分割します',
         'split.creating': 'ドラッグして分割線を指定してください',
         'split.done': '分割しました',
@@ -2018,6 +2020,8 @@ const LANGUAGES = {
 
         // -- Split panel (split the selected panel in two along a dragged line) --
         'split.label': 'Split panel:',
+        'split.gapLabel': 'Gap between panels:',
+        'split.gapTitle': 'Visible gap between the two panels after splitting (SVG coordinate units; matches the look of the gap between other panels). 0 splits with no gap.',
         'split.hint': '※ Turn ON, then drag inside a panel on the preview: it splits just that panel in two along the drag direction.',
         'split.creating': 'Drag to define the split line',
         'split.done': 'Split',
@@ -3630,6 +3634,8 @@ const LANGUAGES = {
 
         // -- 画格分割（沿拖动的直线将选中的画格一分为二） --
         'split.label': '画格分割：',
+        'split.gapLabel': '画格间距：',
+        'split.gapTitle': '分割后两个画格之间可见的间距（SVG坐标系单位，与其他画格之间的间距外观一致）。0表示无间距分割',
         'split.hint': '※ 打开ON后，在预览上的画格内拖动，即可沿拖动方向将该画格一分为二',
         'split.creating': '请拖动指定分割线',
         'split.done': '已分割',

@@ -817,6 +817,8 @@
                     <button type="button" class="seg-btn" data-split-mode="on">ON</button>
                     <button type="button" class="seg-btn active" data-split-mode="off">OFF</button>
                   </div>
+                  <label for="split-gap-width" style="font-size:12px; white-space:nowrap;" data-i18n="split.gapLabel">コマ間の幅:</label>
+                  <input type="number" id="split-gap-width" min="0" step="1" value="0" style="width:70px" data-i18n-title="split.gapTitle" title="分割後の2つのコマの間に見える幅（SVG座標系単位、他のコマ間の隙間と同じ見た目になる値）。0で隙間なく分割します" />
                   <span style="font-size:11px; color:var(--text-secondary);" data-i18n="split.hint">※ ONにしてプレビュー上のコマ内をドラッグすると、線を引いた方向でそのコマだけを2つに分割します</span>
                   <span id="split-status" style="font-size:11px; color:var(--text-secondary);"></span>
                 </div>

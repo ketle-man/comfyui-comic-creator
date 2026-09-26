@@ -16,6 +16,10 @@
 // 挿入する（＝新コマの番号は常に「旧コマ番号+1」になり、以降の番号が1つずつ
 // 繰り下がる）。
 //
+// 「コマ間の幅」入力（#split-gap-width）で指定した幅だけ分割線の両側を空けて
+// 分割できる（_splitPolygonByLineのgap引数、テンプレート作成ウィザードのフレーム幅と
+// 同じ仕組み）。0を指定すれば隙間なく分割する。最後に使った値はlocalStorageに保存する。
+//
 // type="module" として読み込まれる。
 // ============================================================
 
@@ -34,6 +38,16 @@ const _splitToolState = { armed: false };
 // window.mouseupリスナーはrenderLayoutTabのたびにinitSplitPanelManipulationが
 // 再呼び出しされるため、前回分を確実に外してから登録し直す（多重登録防止）
 let _splitManipWinMouseUp = null;
+
+// コマ間の幅（分割後の2コマの間に空ける幅）は、ページ・作品を跨いで最後に使った値を
+// 覚えておくと毎回入力し直さずに済むため、localStorageに保存する
+const SPLIT_GAP_WIDTH_KEY = 'ccc_split_gap_width';
+
+function _splitGetGapWidth() {
+    const input = document.getElementById('split-gap-width');
+    const w = input ? parseFloat(input.value) : 0;
+    return Number.isFinite(w) && w >= 0 ? w : 0;
+}
 
 function _splitSetStatus(text) {
     const el = document.getElementById('split-status');
@@ -57,6 +71,19 @@ function initSplitPanelTool() {
             _splitSetStatus(armed ? t('split.creating') : '');
         });
     });
+
+    const gapInput = document.getElementById('split-gap-width');
+    if (gapInput) {
+        try {
+            const saved = parseFloat(localStorage.getItem(SPLIT_GAP_WIDTH_KEY));
+            if (Number.isFinite(saved) && saved >= 0) gapInput.value = saved;
+        } catch { /* ignore */ }
+        gapInput.addEventListener('change', () => {
+            const w = _splitGetGapWidth();
+            gapInput.value = w;
+            try { localStorage.setItem(SPLIT_GAP_WIDTH_KEY, String(w)); } catch { /* ignore */ }
+        });
+    }
 }
 
 // ドラッグ線a-bの中点→開始点→終了点の順で内包判定し、その線を引いたコマ1つだけを特定する
@@ -112,7 +139,14 @@ async function _splitCommitCut(a, b) {
     const pageW = vb[2] || 21000, pageH = vb[3] || 29700;
     const minArea = Math.max(1, pageW * pageH * 0.0002);
 
-    const result = _splitPolygonByLine(oldPts, a, b, 0, minArea);
+    // 「コマ間の幅」入力は、見た目の隙間（他のコマ同士の間隔と同じもの）として扱う。
+    // レイアウトタブは常にコマ枠線幅の半分ずつを内側へ自動で食い込ませて表示するため
+    // （renderLayoutTabのクリップ縮小）、_splitPolygonByLineへ渡す実際のポリゴン間隔は
+    // 「見た目の幅 − 現在のコマ枠線幅」にしないと、その分だけ余計に広く見えてしまう
+    const borderWidth = state.panelBorder?.width || 0;
+    const pointsGap = Math.max(0, _splitGetGapWidth() - borderWidth);
+
+    const result = _splitPolygonByLine(oldPts, a, b, pointsGap, minArea);
     if (!result) return; // 分割線がコマを横切っていない、または分割後の面積が小さすぎる
     const [polyA, polyB] = result;
 
