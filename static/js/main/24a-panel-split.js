@@ -18,7 +18,13 @@
 //
 // 「コマ間の幅」入力（#split-gap-width）で指定した幅だけ分割線の両側を空けて
 // 分割できる（_splitPolygonByLineのgap引数、テンプレート作成ウィザードのフレーム幅と
-// 同じ仕組み）。0を指定すれば隙間なく分割する。最後に使った値はlocalStorageに保存する。
+// 同じ仕組み）。0を指定すれば隙間なく分割する。分割ツールをONにした時点／「分割」
+// サブタブを開いた時点で、既存コマ同士の隙間から自動検出した値を初期値として補完する
+// （検出できない場合は最後に使った値をlocalStorageから引き継ぐ）。
+//
+// コマの見た目の枠線は、コンテンツ層ではなく背景SVG（svgContent）に静的に描かれた
+// polygon（id=コマID）が担っているため、分割時にこのpolygonも同じ形へ複製・分割する
+// （これをしないと分割した2コマの間に枠線が引かれないまま残る）。
 //
 // type="module" として読み込まれる。
 // ============================================================
@@ -49,6 +55,55 @@ function _splitGetGapWidth() {
     return Number.isFinite(w) && w >= 0 ? w : 0;
 }
 
+// 現在のページの既存コマ同士から「コマ間の幅」を自動検出する。
+// 矩形コマ（多くのテンプレート・分割で作られるコマはすべて矩形）を対象に、
+// 上下または左右に隣接する2コマの軸方向の隙間を集め、その中央値を返す
+// （外れ値になりやすい単発のはみ出しコマ等の影響を受けにくくするため）。
+// 隣接ペアが見つからない場合（コマが1つしかない等）はnullを返す
+function _splitAutoDetectGap() {
+    const panels = (state.activePage?.panels || []).filter(p => !p.parentPanelId && p.points);
+    const rects = panels.map((p) => {
+        const pts = _parsePointsStr(p.points);
+        if (pts.length < 3) return null;
+        const xs = pts.map((pt) => pt.x), ys = pts.map((pt) => pt.y);
+        return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+    }).filter(Boolean);
+
+    const gaps = [];
+    for (let i = 0; i < rects.length; i++) {
+        for (let j = i + 1; j < rects.length; j++) {
+            const r1 = rects[i], r2 = rects[j];
+            // 左右に隣接（y範囲が重なり、x方向に隙間がある）
+            const yOverlap = Math.min(r1.maxY, r2.maxY) - Math.max(r1.minY, r2.minY);
+            if (yOverlap > 0) {
+                if (r2.minX >= r1.maxX) gaps.push(r2.minX - r1.maxX);
+                else if (r1.minX >= r2.maxX) gaps.push(r1.minX - r2.maxX);
+            }
+            // 上下に隣接（x範囲が重なり、y方向に隙間がある）
+            const xOverlap = Math.min(r1.maxX, r2.maxX) - Math.max(r1.minX, r2.minX);
+            if (xOverlap > 0) {
+                if (r2.minY >= r1.maxY) gaps.push(r2.minY - r1.maxY);
+                else if (r1.minY >= r2.maxY) gaps.push(r1.minY - r2.maxY);
+            }
+        }
+    }
+    const positive = gaps.filter((g) => g > 0.5).sort((x, y) => x - y); // ほぼ0（誤差程度）は隙間なしとして除外
+    if (!positive.length) return null;
+    const mid = Math.floor(positive.length / 2);
+    return positive.length % 2 ? positive[mid] : (positive[mid - 1] + positive[mid]) / 2;
+}
+
+// 「コマ間の幅」欄へ自動検出した値を反映する（見つからない場合は現在の値のまま据え置く）。
+// 入力欄は見た目の幅を表すため、検出した実座標上の隙間にコマ枠線幅を足して表示値に変換する
+function _splitRefreshGapDefault() {
+    const input = document.getElementById('split-gap-width');
+    if (!input || !state.activePage) return;
+    const detected = _splitAutoDetectGap();
+    if (detected === null) return;
+    const borderWidth = state.panelBorder?.width || 0;
+    input.value = Math.round((detected + borderWidth) * 100) / 100;
+}
+
 function _splitSetStatus(text) {
     const el = document.getElementById('split-status');
     if (el) el.textContent = text || '';
@@ -69,6 +124,8 @@ function initSplitPanelTool() {
             _splitToolState.armed = armed;
             _splitUpdateToggleUI();
             _splitSetStatus(armed ? t('split.creating') : '');
+            // ONにした時点の既存コマ間隔を自動検出し、コマ間の幅欄へ反映する
+            if (armed) _splitRefreshGapDefault();
         });
     });
 
@@ -84,6 +141,11 @@ function initSplitPanelTool() {
             try { localStorage.setItem(SPLIT_GAP_WIDTH_KEY, String(w)); } catch { /* ignore */ }
         });
     }
+
+    // 「分割」サブタブを開いた時点でも自動検出し直す（別ページ・別作品に切り替えていた場合に追従させる）
+    document.querySelector('button[data-subtab="split"]')?.addEventListener('click', () => {
+        _splitRefreshGapDefault();
+    });
 }
 
 // ドラッグ線a-bの中点→開始点→終了点の順で内包判定し、その線を引いたコマ1つだけを特定する
@@ -183,12 +245,27 @@ async function _splitCommitCut(a, b) {
         }
     });
 
+    // 背景SVG（svgContent）側のコマ枠線ポリゴン（id=旧コマID）も同じ形に分割する。
+    // 枠線はコンテンツ層ではなく背景SVGに静的に描かれたpolygonのため、これをしないと
+    // 分割した2コマの間（新しくできた境界）に見た目の枠線が引かれないまま残る
+    let updatedSvgContent = state.activePage.svgContent;
+    const bgDoc = new DOMParser().parseFromString(updatedSvgContent, 'image/svg+xml');
+    const bgPoly = bgDoc.querySelector(`polygon[id="${target.id}"]`);
+    if (bgPoly) {
+        const newBgPoly = bgPoly.cloneNode(true);
+        bgPoly.setAttribute('points', _pointsToStr(polyA));
+        newBgPoly.setAttribute('id', newId);
+        newBgPoly.setAttribute('points', _pointsToStr(polyB));
+        bgPoly.parentNode.insertBefore(newBgPoly, bgPoly.nextSibling);
+        updatedSvgContent = new XMLSerializer().serializeToString(bgDoc.querySelector('svg'));
+    }
+
     // panels配列を更新: 旧コマはpointsだけ縮小（id・配列位置は不変）、新コマは旧コマの直後に挿入
     const updatedPanels = state.activePage.panels.map(p =>
         p.id === target.id ? { ...p, points: _pointsToStr(polyA) } : p);
     const oldIdx = updatedPanels.findIndex(p => p.id === target.id);
     updatedPanels.splice(oldIdx + 1, 0, { id: newId, points: _pointsToStr(polyB), panelSvgContent: '' });
-    state.activePage = { ...state.activePage, panels: updatedPanels };
+    state.activePage = { ...state.activePage, panels: updatedPanels, svgContent: updatedSvgContent };
     await dbPut('pages', state.activePage, { deferThumb: true });
 
     await savePanelSvg(target.id, svgEl);
