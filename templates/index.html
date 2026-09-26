@@ -1530,25 +1530,12 @@
                   <button id="auto-work-new-btn" class="btn small secondary" data-i18n="auto.workNew">新規</button>
                   <button id="auto-work-save-btn" class="btn small primary" data-i18n="auto.workSave">保存</button>
                   <button id="auto-work-delete-btn" class="btn small danger" data-i18n="auto.workDelete">削除</button>
+                  <span class="auto-grow"></span>
+                  <button id="auto-theme-open-btn" class="btn small secondary" data-i18n="auto.themeLabel">お題・プロンプトを入力</button>
+                  <div id="auto-status" class="auto-status" role="status"></div>
                 </div>
 
-                <div class="auto-3pane">
-                  <!-- 左ペイン: お題・ページ数・作成 -->
-                  <div class="auto-pane auto-pane-left">
-                    <label class="auto-label" for="auto-theme" data-i18n="auto.themeLabel">お題・プロンプトを入力</label>
-                    <textarea id="auto-theme" class="comfyui-textarea auto-theme" data-i18n-placeholder="auto.themePlaceholder"></textarea>
-                    <div class="auto-row">
-                      <label class="auto-label" for="auto-page-count" data-i18n="auto.pageCountLabel">ページ数</label>
-                      <input id="auto-page-count" type="number" min="1" max="50" value="2" class="comfyui-input auto-page-count" />
-                    </div>
-                    <div class="auto-row auto-row-buttons">
-                      <button id="auto-create-btn" class="btn primary auto-grow" data-i18n="auto.createBtn">作成</button>
-                      <button id="auto-sample-btn" class="btn secondary" data-i18n="auto.sampleBtn">サンプル</button>
-                    </div>
-                    <p class="auto-hint" data-i18n="auto.createHint">「作成」でストーリーを生成します。</p>
-                    <div id="auto-status" class="auto-status" role="status"></div>
-                  </div>
-
+                <div class="auto-2pane">
                   <!-- 中央ペイン: ストーリー / 脚本 / メモ -->
                   <div class="auto-pane auto-pane-center">
                     <div class="comfyui-subtab-nav">
@@ -1594,6 +1581,7 @@
                   <div class="auto-pane auto-pane-right">
                     <div class="comfyui-subtab-nav">
                       <button class="comfyui-subtab-btn active" data-auto-right="chat" data-i18n="auto.tabChat">Chat</button>
+                      <button class="comfyui-subtab-btn" data-auto-right="image" data-i18n="auto.imgTitle">画像生成</button>
                       <button class="comfyui-subtab-btn" data-auto-right="settings" data-i18n="auto.tabSettings">設定</button>
                     </div>
                     <div id="auto-right-chat" class="auto-right-content">
@@ -1603,20 +1591,6 @@
                         <button id="auto-chat-tool-run-btn" class="btn small secondary" data-i18n="auto.chatToolRun">実行</button>
                       </div>
                       <div id="auto-chat-messages" class="auto-chat-messages"></div>
-                      <details id="auto-img-panel" class="auto-img-panel">
-                        <summary data-i18n="auto.imgTitle">画像生成</summary>
-                        <div class="auto-radio-row auto-radio-wrap">
-                          <label><input type="radio" name="auto-imggen-engine" value="local" /> <span data-i18n="auto.imgEngineLocal">ローカル（Workflow Studio）</span></label>
-                          <label><input type="radio" name="auto-imggen-engine" value="gemini" /> <span data-i18n="auto.imgEngineGemini">Gemini（Nanobanana）</span></label>
-                        </div>
-                        <textarea id="auto-img-prompt" class="comfyui-textarea auto-chat-input" rows="3" data-i18n-placeholder="auto.imgPromptPlaceholder"></textarea>
-                        <div class="auto-row auto-row-buttons">
-                          <button id="auto-img-make-prompt-btn" class="btn small secondary" data-i18n="auto.imgMakePrompt">プロンプトを作成</button>
-                          <button id="auto-img-generate-btn" class="btn small primary auto-grow" data-i18n="auto.imgGenerate">画像を生成</button>
-                        </div>
-                        <div id="auto-img-status" class="auto-status" role="status"></div>
-                        <div id="auto-img-gallery" class="auto-img-gallery"></div>
-                      </details>
                       <label class="auto-check"><input id="auto-chat-context" type="checkbox" checked /> <span data-i18n="auto.chatContext">現在のストーリー・脚本を文脈に含める</span></label>
                       <textarea id="auto-chat-input" class="comfyui-textarea auto-chat-input" rows="3" data-i18n-placeholder="auto.chatInputPlaceholder"></textarea>
                       <div class="auto-row auto-row-buttons">
@@ -1625,6 +1599,19 @@
                         <button id="auto-chat-clear-btn" class="btn small secondary" data-i18n="auto.chatClear">履歴を消去</button>
                       </div>
                       <div id="auto-chat-status" class="auto-status" role="status"></div>
+                    </div>
+                    <div id="auto-right-image" class="auto-right-content auto-settings" style="display:none">
+                      <div class="auto-radio-row auto-radio-wrap">
+                        <label><input type="radio" name="auto-imggen-engine" value="local" /> <span data-i18n="auto.imgEngineLocal">ローカル（Workflow Studio）</span></label>
+                        <label><input type="radio" name="auto-imggen-engine" value="gemini" /> <span data-i18n="auto.imgEngineGemini">Gemini（Nanobanana）</span></label>
+                      </div>
+                      <textarea id="auto-img-prompt" class="comfyui-textarea auto-chat-input" rows="3" data-i18n-placeholder="auto.imgPromptPlaceholder"></textarea>
+                      <div class="auto-row auto-row-buttons">
+                        <button id="auto-img-make-prompt-btn" class="btn small secondary" data-i18n="auto.imgMakePrompt">プロンプトを作成</button>
+                        <button id="auto-img-generate-btn" class="btn small primary auto-grow" data-i18n="auto.imgGenerate">画像を生成</button>
+                      </div>
+                      <div id="auto-img-status" class="auto-status" role="status"></div>
+                      <div id="auto-img-gallery" class="auto-img-gallery"></div>
                     </div>
                     <div id="auto-right-settings" class="auto-right-content auto-settings" style="display:none">
                       <div class="auto-set-section">
@@ -2296,6 +2283,25 @@
         <div class="text-dialog-buttons">
           <button id="work-dlg-cancel" class="btn secondary" data-i18n="common.cancel">キャンセル</button>
           <button id="work-dlg-create" class="btn" data-i18n="dialog.createBtn">作成</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Auto Tab: お題・プロンプト入力ダイアログ -->
+    <div id="auto-theme-dialog" class="text-dialog-overlay" style="display:none;">
+      <div class="text-dialog auto-theme-dialog">
+        <div class="text-dialog-header" data-i18n="auto.themeLabel">お題・プロンプトを入力</div>
+        <textarea id="auto-theme" class="comfyui-textarea auto-theme" data-i18n-placeholder="auto.themePlaceholder"></textarea>
+        <div class="auto-row" style="margin-top:10px;">
+          <label class="auto-label" for="auto-page-count" data-i18n="auto.pageCountLabel">ページ数</label>
+          <input id="auto-page-count" type="number" min="1" max="50" value="2" class="comfyui-input auto-page-count" />
+        </div>
+        <p class="auto-hint" data-i18n="auto.createHint">「作成」でストーリーを生成します。確認・編集してから、「脚本」タブで脚本を作成します。</p>
+        <div id="auto-theme-status" class="auto-status" role="status"></div>
+        <div class="text-dialog-buttons">
+          <button id="auto-theme-close-btn" class="btn secondary" data-i18n="common.close">閉じる</button>
+          <button id="auto-sample-btn" class="btn secondary" data-i18n="auto.sampleBtn">サンプル</button>
+          <button id="auto-create-btn" class="btn primary" data-i18n="auto.createBtn">作成</button>
         </div>
       </div>
     </div>

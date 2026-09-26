@@ -321,17 +321,30 @@ function renderAutoPreview(axis) {
     container.innerHTML = parts.length ? parts.join('') : `<div class="auto-empty">${esc(t('auto.scriptEmpty'))}</div>`;
 }
 
+// お題・プロンプト入力ダイアログ（左ペインをモーダル化したもの）
+function openThemeDialog() {
+    const dlg = $('auto-theme-dialog');
+    if (!dlg) return;
+    dlg.style.display = 'flex';
+    $('auto-theme').focus();
+}
+
+function closeThemeDialog() {
+    const dlg = $('auto-theme-dialog');
+    if (dlg) dlg.style.display = 'none';
+}
+
 // ストーリー生成（1段階目）
 async function onCreateStory() {
     const theme = $('auto-theme').value.trim();
-    if (!theme) { setStatus('auto-status', 'error', t('auto.errThemeEmpty')); return; }
+    if (!theme) { setStatus('auto-theme-status', 'error', t('auto.errThemeEmpty')); return; }
     const settings = loadAiSettings();
     const problem = validateAiSettings(settings);
-    if (problem) { setStatus('auto-status', 'error', settingsProblemMessage(problem)); return; }
+    if (problem) { setStatus('auto-theme-status', 'error', settingsProblemMessage(problem)); return; }
     if (auto.work.story.trim() && !confirm(t('auto.confirmOverwriteStory'))) return;
 
     const pageCount = clampPageCount($('auto-page-count').value);
-    await runBusy('auto-status', t('auto.statusGeneratingStory'), async () => {
+    await runBusy('auto-theme-status', t('auto.statusGeneratingStory'), async () => {
         const { content } = await aiChat(settings, buildStoryMessages({ theme, pageCount, lang: getLang() }));
         const story = (content || '').trim();
         if (!story) throw new Error(t('auto.errEmptyResponse'));
@@ -341,7 +354,8 @@ async function onCreateStory() {
         saveCurrent();
         renderLeftAndStory();
         switchCenterTab('story');
-        setStatus('auto-status', 'ok', t('auto.statusStoryDone'));
+        setStatus('auto-theme-status', 'ok', t('auto.statusStoryDone'));
+        closeThemeDialog();
     });
 }
 
@@ -355,7 +369,9 @@ function onSample() {
     w.script = cloneSampleScript(lang);
     saveCurrent();
     renderAll();
-    setStatus('auto-status', 'ok', t('auto.statusSampleLoaded'));
+    switchCenterTab('story');
+    setStatus('auto-theme-status', 'ok', t('auto.statusSampleLoaded'));
+    closeThemeDialog();
 }
 
 // ============================================================
@@ -433,7 +449,10 @@ function renderScript() {
                     <div class="auto-field-label">${esc(t('auto.actionLabel'))}</div>
                     <textarea data-field="action" rows="2">${esc(panel.action)}</textarea>
                     ${dialoguesHtml}
-                    <div><button class="auto-mini-btn" data-act="add-dialogue">${esc(t('auto.addDialogue'))}</button></div>
+                    <div>
+                        <button class="auto-mini-btn" data-act="add-dialogue">${esc(t('auto.addDialogue'))}</button>
+                        <button class="auto-mini-btn" data-act="send-chat-image" title="${esc(t('auto.sendChatImageTitle'))}">${esc(t('auto.sendChatImage'))}</button>
+                    </div>
                 </div>`;
         }).join('');
         return `
@@ -476,6 +495,15 @@ function onScriptClick(e) {
     const ci = Number(btn.closest('.auto-panel')?.dataset.c);
     const di = Number(btn.closest('.auto-dialogue-row')?.dataset.d);
     const act = btn.dataset.act;
+    if (act === 'send-chat-image') {
+        // このコマの背景描写・演技指示を、Chatの画像生成プロンプトへ送る（既存入力は上書き）
+        const panel = pages[pi]?.panels[ci];
+        if (!panel) return;
+        switchRightTab('image');
+        $('auto-img-prompt').value = (panel.action || '').trim();
+        $('auto-img-prompt').focus();
+        return;
+    }
     if (act === 'del-page') pages.splice(pi, 1);
     else if (act === 'add-panel') pages[pi]?.panels.push(blankPanel());
     else if (act === 'del-panel') pages[pi]?.panels.splice(ci, 1);
@@ -636,7 +664,7 @@ function onSaveSettings() {
 
 function switchRightTab(name) {
     document.querySelectorAll('[data-auto-right]').forEach((btn) => btn.classList.toggle('active', btn.dataset.autoRight === name));
-    ['chat', 'settings'].forEach((key) => { $('auto-right-' + key).style.display = key === name ? '' : 'none'; });
+    ['chat', 'image', 'settings'].forEach((key) => { $('auto-right-' + key).style.display = key === name ? '' : 'none'; });
     if (name === 'settings' && !auto.settingsOpened) {
         auto.settingsOpened = true;
         // 初回に開いたとき、保存済みの接続先からモデル一覧を静かに更新する
@@ -767,7 +795,7 @@ function onChatClick(e) {
     } else if (act === 'to-image') {
         // 返答（場面の説明など）を画像プロンプト欄へ移す。「プロンプトを作成」で画像向けに書き直せる
         $('auto-img-prompt').value = msg.content.replace(/```[A-Za-z]*\s*[\s\S]*?```/g, '').trim();
-        $('auto-img-panel').open = true;
+        switchRightTab('image');
         $('auto-img-prompt').focus();
     } else if (act === 'apply-story') {
         if (auto.work.story.trim() && !confirm(t('auto.confirmOverwriteStory'))) return;
@@ -858,6 +886,7 @@ function renderAll() {
     updateUndoButton();
     showRawOutput('');
     setStatus('auto-status', '', '');
+    setStatus('auto-theme-status', '', '');
     setStatus('auto-script-status', '', '');
     setStatus('auto-chat-status', '', '');
     setStatus('auto-img-status', '', '');
@@ -881,7 +910,10 @@ function bindEvents() {
     $('auto-work-delete-btn').addEventListener('click', onWorkDelete);
     $('auto-work-select').addEventListener('change', onWorkSelect);
 
-    // 左ペイン
+    // お題・プロンプト入力ダイアログ
+    $('auto-theme-open-btn').addEventListener('click', openThemeDialog);
+    $('auto-theme-close-btn').addEventListener('click', closeThemeDialog);
+    $('auto-theme-dialog').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeThemeDialog(); });
     $('auto-theme').addEventListener('input', (e) => { auto.work.theme = e.target.value; saveCurrent(); });
     $('auto-page-count').addEventListener('change', (e) => {
         auto.work.pageCount = clampPageCount(e.target.value);

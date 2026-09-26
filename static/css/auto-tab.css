@@ -38,10 +38,38 @@
   width: 220px !important;
 }
 
-/* 3ペイン */
+.auto-work-bar .auto-status {
+  min-width: 0;
+}
+
+/* お題・プロンプト入力ダイアログ（.text-dialog-overlay/.text-dialog を流用） */
+.auto-theme-dialog {
+  width: 640px;
+  max-width: 92vw;
+}
+
+.auto-theme-dialog .auto-theme {
+  min-height: 200px;
+}
+
+.auto-theme-dialog .auto-hint,
+.auto-theme-dialog .auto-status {
+  margin: 8px 0;
+}
+
+/* 3ペイン（オートレイアウトサブタブで使用） */
 .auto-3pane {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr) 380px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 2ペイン（ストーリー・脚本サブタブ: お題・プロンプト入力はモーダル化したため中央+Chatの2ペイン） */
+.auto-2pane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 480px;
   gap: 12px;
   flex: 1;
   min-height: 0;
@@ -336,6 +364,9 @@
   .auto-3pane {
     grid-template-columns: 240px minmax(0, 1fr) 320px;
   }
+  .auto-2pane {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
 }
 
 /* Chat */
@@ -415,28 +446,7 @@
   margin: 4px 0;
 }
 
-/* 画像生成（Chat内） */
-.auto-img-panel {
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 13px;
-}
-
-.auto-img-panel[open] {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 55%;
-  overflow-y: auto;
-}
-
-.auto-img-panel summary {
-  cursor: pointer;
-  font-weight: bold;
-  font-size: 12px;
-}
-
+/* 画像生成（Chat右隣の独立タブ） */
 .auto-img-gallery {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
