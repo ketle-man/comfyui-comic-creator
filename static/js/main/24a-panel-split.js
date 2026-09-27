@@ -94,14 +94,16 @@ function _splitAutoDetectGap() {
 }
 
 // 「コマ間の幅」欄へ自動検出した値を反映する（見つからない場合は現在の値のまま据え置く）。
-// 入力欄は見た目の幅を表すため、検出した実座標上の隙間にコマ枠線幅を足して表示値に変換する
+// 入力欄は見た目の幅（枠線同士の間に実際に見える白い隙間）を表す。枠線はpoints境界を
+// 中心に太さ半分ずつ内外にはみ出て描かれるため、見た目の幅 = 実座標上の隙間 − コマ枠線幅。
+// よって検出した実座標上の隙間からコマ枠線幅を引いて表示値に変換する
 function _splitRefreshGapDefault() {
     const input = document.getElementById('split-gap-width');
     if (!input || !state.activePage) return;
     const detected = _splitAutoDetectGap();
     if (detected === null) return;
     const borderWidth = state.panelBorder?.width || 0;
-    input.value = Math.round((detected + borderWidth) * 100) / 100;
+    input.value = Math.max(0, Math.round((detected - borderWidth) * 100) / 100);
 }
 
 function _splitSetStatus(text) {
@@ -192,21 +194,48 @@ async function _splitCommitCut(a, b) {
     const oldPts = _parsePointsStr(target.points);
     if (oldPts.length < 3) return;
 
-    const oldContentG = svgEl.querySelector(`g[data-clip-panel="${CSS.escape(target.id)}"]`);
-    const clipPoly = svgEl.querySelector(`#panel-clip-${CSS.escape(target.id)} polygon`);
     const defs = svgEl.querySelector('defs');
-    if (!oldContentG || !clipPoly || !defs) return;
+    if (!defs) return;
+
+    // まだ画像・フキダシ等のコンテンツを一度も追加していないコマ（panelSvgContentが空のまま）は、
+    // buildMergedSvg側でg[data-clip-panel]・そのclipPathを一切生成しないためDOM上に存在しない。
+    // その場合は空の状態でここに新規生成してから分割処理を続行する（コマが1つのみのテンプレートを
+    // 挿入した直後、中身が空のままそのコマを分割しようとすると何も起きなかった不具合の対応）
+    const ns = 'http://www.w3.org/2000/svg';
+    const clipId = `panel-clip-${target.id}`;
+    let clipPathEl = svgEl.querySelector(`#${CSS.escape(clipId)}`);
+    if (!clipPathEl) {
+        clipPathEl = document.createElementNS(ns, 'clipPath');
+        clipPathEl.setAttribute('id', clipId);
+        clipPathEl.setAttribute('clipPathUnits', 'userSpaceOnUse');
+        defs.appendChild(clipPathEl);
+    }
+    let clipPoly = clipPathEl.querySelector('polygon');
+    if (!clipPoly) {
+        clipPoly = document.createElementNS(ns, 'polygon');
+        clipPoly.setAttribute('points', target.points);
+        clipPathEl.appendChild(clipPoly);
+    }
+    let oldContentG = svgEl.querySelector(`g[data-clip-panel="${CSS.escape(target.id)}"]`);
+    if (!oldContentG) {
+        oldContentG = document.createElementNS(ns, 'g');
+        oldContentG.setAttribute('data-clip-panel', target.id);
+        oldContentG.setAttribute('clip-path', `url(#${clipId})`);
+        // 挿入位置はこの後すぐ呼ばれるrenderLayoutTabで正しい重なり順に再構築されるため、
+        // ここでは defs の直後という暫定位置で構わない
+        defs.parentNode.insertBefore(oldContentG, defs.nextSibling);
+    }
 
     const vb = (svgEl.getAttribute('viewBox') || '0 0 21000 29700').trim().split(/\s+/).map(Number);
     const pageW = vb[2] || 21000, pageH = vb[3] || 29700;
     const minArea = Math.max(1, pageW * pageH * 0.0002);
 
-    // 「コマ間の幅」入力は、見た目の隙間（他のコマ同士の間隔と同じもの）として扱う。
-    // レイアウトタブは常にコマ枠線幅の半分ずつを内側へ自動で食い込ませて表示するため
-    // （renderLayoutTabのクリップ縮小）、_splitPolygonByLineへ渡す実際のポリゴン間隔は
-    // 「見た目の幅 − 現在のコマ枠線幅」にしないと、その分だけ余計に広く見えてしまう
+    // 「コマ間の幅」入力は、見た目の隙間（枠線同士の間に実際に見える白い部分の幅）として扱う。
+    // 枠線はpoints境界を中心に太さ半分ずつ内外にはみ出て描かれるため、両側の枠線が隙間側に
+    // 食い込む分（コマ枠線幅ぶん）を実座標上の間隔に上乗せしないと、枠線同士が重なって
+    // 隙間が指定どおりに見えなくなる（幅を大きくしても分割線が1本にしか見えなかった不具合の対応）
     const borderWidth = state.panelBorder?.width || 0;
-    const pointsGap = Math.max(0, _splitGetGapWidth() - borderWidth);
+    const pointsGap = Math.max(0, _splitGetGapWidth() + borderWidth);
 
     const result = _splitPolygonByLine(oldPts, a, b, pointsGap, minArea);
     if (!result) return; // 分割線がコマを横切っていない、または分割後の面積が小さすぎる
@@ -215,7 +244,6 @@ async function _splitCommitCut(a, b) {
     pushHistory();
 
     const newId = 'panel-split-' + Date.now();
-    const ns = 'http://www.w3.org/2000/svg';
 
     // 旧コマのクリップ形状を分割後の形（polyA）に更新
     clipPoly.setAttribute('points', _pointsToStr(polyA));

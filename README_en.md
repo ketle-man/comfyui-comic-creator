@@ -8,7 +8,9 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 
 ## Features
 
-### Page / Work management
+<details>
+<summary><strong>Page / Work management</strong></summary>
+
 - **Work (page group) management** — Pages are grouped into "works" that carry a width/height. Templates are automatically resized to the work's size when inserted
 - **Templates** — Create panel-layout templates either by importing an SVG or with the wizard (draw lines to split the page into panels). SVG import works regardless of which drawing tool produced the file — Inkscape, Illustrator, Affinity Designer, CorelDraw, and others are all supported (`rect`/`path`/`polygon`/`polyline`/`circle`/`ellipse`, including nested groups and transforms), so you can just draw the panel borders visually and save. The SVG's `width` attribute (a real-world size with a unit) is used to automatically detect whether a scale correction is needed to match panel border widths with other templates, showing a confirmation dialog where you can review and adjust the multiplier if so (normalizes to the internal coordinate scale of "1 user unit = 0.01mm"). Templates assigned to a template group are shown under a collapsible group header in the Layout tab's "Templates" asset panel, making it easier to find the one you want as your template count grows. Turning on the wizard's "Design" checkbox lets you create a **design template** with no margin around the page and no gap between panels at all (for uses like flyer creation) — the frame width is forced to 0, and the panel border thickness can still be adjusted independently after placing the template on a page, via the Layout tab's "Panel Border Width". The **"Insert as Page"** button next to the group-filter dropdown at the top of the Page tab's "Templates" sub-tab also lets you insert the selected template as a new page into the work you currently have open (same operation as inserting from the Layout tab's "Template" asset panel)
 - **Export** — Export as JPEG/PNG/WebP/SVG/PDF/EPUB, including bulk export of multiple pages with sequential filenames. The libraries (jsPDF/JSZip) are bundled, so every format also works offline
@@ -17,10 +19,13 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Export metadata** — Embed title, author, subject, and keywords into every format (PDF = document properties / EPUB = Dublin Core / PNG = iTXt / JPEG & WebP = XMP). Resolution (dpi) is also always embedded (PNG = pHYs / JPEG = JFIF density / WebP = EXIF), so all three formats report the same dpi
 - **Bulk backup / restore** — Save all works, pages, templates, and settings into a single zip and restore anytime (merge mode: same names are overwritten)
 
-### Layout tab
+</details>
+
+<details>
+<summary><strong>Layout tab</strong></summary>
+
 - **Image placement** — Drag and drop images into a panel or the overlay (to target the overlay, either select "Overlay" in the layer panel first, or drop directly onto existing overlay content). Resize (aspect ratio locked by default, hold Alt to resize freely) and rotate with handles. The toolbar's **Delete** button isn't limited to images — it deletes whichever object is currently selected (balloon, text, shape, or group too), same as the Delete/Backspace key
 - **Sub-panels** — Drag to add a rectangular or circular sub-panel inside a panel as a nested image target (e.g. an inset cut). Move, resize, and rotate with handles; parts that extend outside the parent panel are automatically cropped, just like any other object. Border thickness can be set per sub-panel. A "Move sub-panel" checkbox in the layer panel toggles whether clicking inside selects the sub-panel itself instead of the objects inside it. The layer panel's duplicate/move buttons also work on the sub-panel itself, including moving/duplicating it to another panel or to the overlay (re-parenting)
-- **Panel splitting** — Turn on panel splitting in the "Split" sub-tab, then drag inside a panel on the preview to split just that one panel in two along a line at any angle (not just horizontal/vertical — reuses the same algorithm as the template wizard's single-panel split). The **gap between panels** is auto-detected from the existing gaps between panels on that page as soon as splitting is turned on (enter 0 for no gap). Existing objects (images, balloons, text, etc.) move to the new panel only if they fit entirely within its new area; anything straddling the split line, or fitting within the original panel, stays put. The new panel is inserted right after the original one (original number + 1), and subsequent panel numbers shift down. Locked panels and sub-panels cannot be split
 - **Speech balloons** — Place oval, rounded-rectangle, thought, burst, and cloud (puffy/wavy) shaped balloons inside panels, with 8-point resize handles. The **No tail** checkbox sets the tail length to 0 to hide it (unchecking restores the previous length). The burst shape has an **inner curve** slider that rounds the notch and flank between spikes while keeping the tips sharp. The **Embed Text** button lets you auto-wrap and embed text into any of these shapes (vertical writing, a line-height slider, text color, bold, a cross-axis position adjustment independent of the main alignment, Google/System/Category font selection, and double-click to re-edit an already-embedded text). Custom SVG balloons from assets can also have their fill/border colors changed after placement
 - **Extension balloons** — Inspired by Comic Life's "extension balloon" feature. The **Add Extension** button adds a balloon of the same shape and color as the selected one, connected by a neck, so a long line of dialogue can be split across multiple balloons. Extensions can be individually repositioned, resized, rotated, and given their own embedded text. Moving the base also moves any extensions with it (resizing/rotating the base does not affect their position), while moving an extension only stretches the neck. Dragging the tail from the base toward an extension lets it reach the outer edge of the combined shape. Even where balloons overlap, no interior lines appear — only the outer outline of the whole connected group is shown
 - **Text** — Vertical/horizontal writing, Google Fonts / system fonts, a style modal for fill, stroke, outline, shadow, line height, vertical alignment, and text alignment. The preview supports multiple lines; below Size, a line-height slider plus button-style vertical alignment (top/center/bottom) and text alignment (left/center/right) — the same controls as the balloon's embedded text — let you adjust and check multi-line text (in vertical writing, vertical alignment controls the position within each column, text alignment the left-right spread of the columns). Line height, vertical alignment, and text alignment are applied to the real text on both the Layout and Image tabs. Fills support gradients, textures (with adjustable X/Y position), and no-fill in addition to solid colors (shared between the Layout and Image tabs)
@@ -37,7 +42,11 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Video tool** (experimental) — The "Video" sub-tab lets you place an MP4 video in a panel and play/pause it, adjust volume/mute, and capture a still image from any frame. Place a video by dragging and dropping an MP4 file onto a panel, or by sending it from Workflow Studio's Gallery tab via "Send CC" (via [ComfyUI-Workflow-Studio](#optional-dependencies)). The video file itself is stored on the ComfyUI server (not duplicated into the browser database), and the original video object is left unchanged after capturing a still image, so it can be reused in other panels
 - **Manga tool** — "Halftone" (an "Convert image" mode that halftones the selected image, plus a "Create pattern" mode that generates a halftone dot pattern sized to the panel/overlay), "Manga effects" (generate and insert vignette, screentone noise, and speed lines — radial / uni flash / uni ring / linear — as transparent objects sized to the panel), and "Background Pattern" (generate stripes, dots, checks, Japanese traditional motifs — asanoha/ichimatsu/shippou/uroko — or a custom SVG as a transparent object sized to the panel; adjustable color, opacity, size, and rotation angle, with independent width/height for custom SVGs). All three modals let you switch the preview background between the selected image, a checkerboard, and white while adjusting
 
-### Image tab (layer-based Canvas 2D editor)
+</details>
+
+<details>
+<summary><strong>Image tab (layer-based Canvas 2D editor)</strong></summary>
+
 - **Select / Text / 3D Text / Draw / Shape / Fill / Mask / Blur / Filter / BG Remove / Upscale** tools (the Select tool now displays selection bounds and transform handles for objects outside the canvas via an extended control overlay, and draws a real checkerboard pattern on transparent areas to clearly indicate canvas boundaries; 3D Text shares the same engine and settings modal as the Layout tab, via [comfyui-vrm-pose-editor](#optional-dependencies))
 - **Crop / Extend Canvas (in the Select tool)** — <b>Crop</b> lets you set the crop area by dragging a resizable overlay (8 handles) or entering X/Y/width/height numerically in the property panel, then apply; resizes the whole canvas and shifts each layer's content to match (undoable). The <b>Extend Canvas</b> button next to it adds pixel-precise padding on each of the four sides independently (or check "link all sides" to apply one value to all four at once), with a margin color of transparent, white, or black (white/black automatically add a fill layer at the very back so the color appears in exported output). Both features now show their inputs and Apply/Cancel controls in the property panel
 - **Select I2I** — While the Select tool is active, an always-visible I2I panel lets you set Positive/Negative prompts and Denoise and click Run to execute a Workflow Studio I2I generation on the spot. Switch the target between "All" (all layers composited) and "Layer" (only the selected layer); the result is added as a new layer that inherits the original layer's position, size, and rotation (via [ComfyUI-Workflow-Studio](#optional-dependencies))
@@ -53,39 +62,64 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Layer panel** — Add, duplicate, delete, reorder, adjust opacity, and 12 kinds of adjustment layers (brightness, contrast, saturation, etc.). Multi-select layers and click **Merge** to combine only the selected ones (merging mask layers together keeps the result as a mask layer). The **📁 Group** button on the toolbar's second row folds multi-selected layers into a collapsible group folder (with bulk show/hide and ungroup, undoable)
 - **Project saving** — Save the entire layer composition and resume editing at any time. Saved projects live in the asset panel's "I" tab, browsable from **both the Layout tab and the Image tab**. In the Image tab, selecting a project and clicking "Open" resumes editing; in the Layout tab, the same "Open" instead inserts the saved thumbnail as a regular image into the currently selected panel
 
-### Font manager
+</details>
+
+<details>
+<summary><strong>Font manager</strong></summary>
+
 - Preview Google Fonts and system fonts, with category management
 - Create and save "Styles" (fill, stroke, outline, shadow, line height, vertical alignment, text alignment — the same button-style controls as the balloon's embedded text, applied to the real text on both the Layout and Image tabs) and "Presets" (font + size + style), and apply them instantly from the Layout / Image tabs
 - A "Set as default font" button that sets the selected font directly as the Auto tab's "Auto Layout" sub-tab default font (auto-saved)
 
-### Nanobanana (AI image generation)
+</details>
+
+<details>
+<summary><strong>Nanobanana (AI image generation)</strong></summary>
+
 - Generate images via the Gemini API (Positive/Negative prompts, model, and resolution)
 - Generated images are automatically saved to ComfyUI's own `output/cc_nanobanana` folder
 
-### Auto (AI manga auto-creation)
+</details>
+
+<details>
+<summary><strong>Auto (AI manga auto-creation)</strong></summary>
 
 - Creates a **story and then a script** with AI from a theme and page count (assumes a person edits and finishes the result; independent of the Script tab as a new work)
 - The script is edited as a page → panel → dialogue table (importance, background / acting direction, speaker, balloon type). Malformed AI output is recovered as far as possible (first by repairing incomplete JSON by adding missing closing brackets, then by line-based recovery if that still fails)
 - AI engine: local LLM (Ollama / LM Studio / Lemonade / Unsloth) or Gemini (API key shared with Nanobanana). Settings are stored in this app (Unsloth uses `UNSLOTH_API_KEY` in `.env`). When creating the story/script, the AI is instructed to write in the current UI display language (Japanese/English/Chinese); whether it actually does depends on the model. The theme/story/script loaded by the "Sample" button is also in the current UI display language (pre-translated into all three languages)
-- The right pane has three tabs: **Chat, Image Generation, and Settings**. Talk about and edit the story and script in Chat (apply replies with "Apply to story" / "Apply to script" / "To image prompt", undoable), plus Auto tools (story to script, dialogue polish, story refinement, character sheets) — both the request text a tool sends and Chat's reply language follow the UI language setting (Japanese/English/Chinese)
-- The Image Generation tab lets you choose Local (Workflow Studio) or Gemini with radio buttons and generate from an AI-written image prompt. Each panel in the Script tab has a **"Send Chat Image"** button that sends that panel's background/acting direction straight to the Image Generation tab's prompt field with one click (the right pane switches to that tab automatically, overwriting the current input). Generated images are saved to `output/cc_auto`
+- Talk about and edit the story and script in Chat (apply replies with "Apply to story" / "Apply to script", undoable), plus Auto tools (story to script, dialogue polish, story refinement, character sheets) — both the request text a tool sends and Chat's reply language follow the UI language setting (Japanese/English/Chinese)
+- Image generation from Chat (choose Local (Workflow Studio) or Gemini with radio buttons, with AI-written image prompts). Generated images are saved to `output/cc_auto`
 - **Auto Layout sub-tab** — Automatically generates a panel layout from the script via importance-weighted recursive subdivision (Balanced / Asymmetric / Diagonal seams / Vertical strip / Horizontal strip styles, right-to-left or left-to-right reading order, a panel gap independent of the outer margin). The "Generate" button produces a different random layout each time it's pressed (Asymmetric/Diagonal styles). Select a panel to assign balloons and images (images can be AI-prompted and generated, or picked from previously generated images). "Detail Edit" transfers the pages to the Layout tab (balloons are always drawn above images where they overlap)
 - **Auto Layout ↔ Page-tab template integration** — Each template in the Page tab's "Templates" list can be sent to Auto Layout with the **"Send to Auto Layout"** button at the top (next to "Insert as Page") — only one template can be sent at a time; sending another replaces it. The sent template appears in Auto Layout's "Template" tab, from which it can be assigned to the currently displayed page. Conversely, Auto Layout's **"Save as template"** button saves the panel layout of the page currently shown there as a new template in the Page tab (browsing/managing the template list stays consolidated in the Page tab)
 
-### Script tab
+</details>
+
+<details>
+<summary><strong>Script tab</strong></summary>
+
 - Manage the screenplay in a hierarchy of Title → Synopsis → Plot [Pages → Panel breakdown (scene, image prompt, elements, dialogue/description, etc.)]
 - Insert any plot cell's content into the Layout tab as text with one click
 - **Media type (Manga / Semi-Auto Manga / Novel / Screenplay)** — a sub-tab foundation for switching the editing screen per work (fixed per work). "Manga" and "Semi-Auto Manga" share the same panel-breakdown editing screen while keeping each work's data separate (Novel and Screenplay are planned)
 - **Semi-automatic manga creation** — the "Map this page to the layout" button maps each panel of a template-applied Layout-tab page to the script's panels in panel-number order. The "Get from Layout" button matches this page's panel count to the actual panel count of the currently selected Layout-tab page (shows a confirmation dialog if panels with entered data would be removed). The plot table has a per-line "Balloon Shape" dropdown (Default / Normal / Rounded rectangle / Thought / Bomb / Cloud (puffy) / Cloud (wavy)); the "Auto-generate balloons" button then automatically creates dialogue-filled balloons in the shape specified per line (rounded rectangle by default) in each mapped panel (adjustable afterward with the existing manual editing tools). The "L" button adds Workflow Studio-based prompt drafting (Ollama/LM Studio). The "Batch-generate images (T2I)" button opens a dedicated modal with the same layout as "Batch-generate images (I2I)" (overall Positive/Negative combined with each panel's prompt, an option to skip panels with an empty prompt, and a T2I default-workflow setting) to run batch T2I image generation sized to each panel's aspect ratio. The "Batch-generate images (I2I)" button opens a dedicated modal equivalent to the Layout tab's I2I modal (overall Positive/Negative combined with each panel's prompt, with an option to skip panels that have an empty prompt) and runs batch I2I generation using each panel's current image as input. The "Batch-generate images (Nanobanana)" button uses Nanobanana (the Gemini image generation API) instead of Workflow Studio, automatically picking the closest Nanobanana resolution preset to each panel bounding box aspect ratio and scaling the result on insert (with model selection and a "2K" toggle; generated images follow the Eagle auto-save setting). The same "2K" toggle was added to the Nanobanana tab (sets the Gemini API's ImageConfig.imageSize, supported models only). Since the Gemini image generation API has no numeric parameter for controlling I2I edit intensity, the previous I2I strength slider was removed from both the Nanobanana tab and the semi-automatic manga modal
 
-### External integrations
+</details>
+
+<details>
+<summary><strong>External integrations</strong></summary>
+
 - **Workflow Studio** — Embedded gallery view, bidirectional I2I (image ↔ workflow) transfer
 - **Eagle** — Save generated/edited images to Eagle automatically or manually
 - **G'MIC** — Filter editing integrated with the G'MIC Qt GUI
 
-### Other
+</details>
+
+<details>
+<summary><strong>Other</strong></summary>
+
 - **Multilingual UI (i18n)** — Switch between Japanese, English, and Chinese in the Settings tab (the entire Help tab is also available in all three languages)
 - **Help tab** — A searchable, comprehensive in-app reference covering every feature
+
+</details>
 
 ## Installation
 

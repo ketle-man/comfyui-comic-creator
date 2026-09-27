@@ -815,7 +815,11 @@ async function insertTemplatePageToWork(templateName) {
         };
 
         await dbPut('pages', pageRecord);
-        if (work) _pageMgrGroups.assign(pageName, work.name);
+        // ページは必ず作品・stock・任意グループのいずれかに属する運用（_adoptOrphanPagesToStock参照）。
+        // 作品を開いていない状態でここを通ると work が null のままグループ未割り当てになり、
+        // 次回起動時のマイグレーションが走るまで作品一覧にもstockにも表示されない「幽霊ページ」に
+        // なってしまうため、その場でstockへ収容する
+        _pageMgrGroups.assign(pageName, work ? work.name : STOCK_GROUP);
         await loadPages();
 
         state.activePage = pageRecord;

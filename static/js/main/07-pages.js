@@ -28,7 +28,7 @@ import { state, switchTab } from './01-state.js';
 import { _movePageToTrashSilent, _pageMgrGroups } from './11b-page-manager-tab.js';
 import { _insetPolygonPoints, _round2, deleteSelectedObject } from './05-groups-move.js';
 import { flipSelected } from './09c-balloon-handles.js';
-import { _getOrBuildPageThumb } from './11a-work-manager.js';
+import { _getOrBuildPageThumb, STOCK_GROUP } from './11a-work-manager.js';
 import { _applyLayoutPreviewSize, _layoutPreviewSizePct, sanitizeSvgTree, updateTemplateSidePanel } from './02-assets.js';
 import { _prepareTemplateSvgDocForPage, _tmplResolveTemplateSvgForPage, _tmplForceInlineStyle } from './06c-template-wizard.js';
 import { _layerDrawAttachOverlay, _layerDrawDetachOverlay, _layerDrawFlushPendingSave, _layerDrawState } from './17a-layer-draw-input.js';
@@ -62,8 +62,13 @@ async function initPageManager() {
             if (!state.activePage) { alert(t('page.msgNoPageToSave')); return; }
             try {
                 await dbPut('pages', state.activePage);
-                if (state.activeWork && _pageMgrGroups.groupOf(state.activePage.name) !== state.activeWork.name) {
-                    _pageMgrGroups.assign(state.activePage.name, state.activeWork.name);
+                // ページは必ず作品・stock・任意グループのいずれかに属する運用。作品を開いていない
+                // 状態で保存すると従来はグループ未割り当てのままになり、次回起動時のマイグレーション
+                // が走るまで作品一覧にもstockにも表示されない「幽霊ページ」になっていたため、
+                // 所属先が無い場合はその場でstockへ収容する
+                const targetGroup = state.activeWork ? state.activeWork.name : STOCK_GROUP;
+                if (_pageMgrGroups.groupOf(state.activePage.name) !== targetGroup) {
+                    _pageMgrGroups.assign(state.activePage.name, targetGroup);
                 }
                 await loadPages();
                 renderPageSelector();

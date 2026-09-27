@@ -23,3 +23,6 @@ assets/*.rar
 
 # 調査メモ（正式なドキュメントではなく、暫定的な検討記録。PLAN_*.md/README/DEVLOGには昇格させたもののみ反映）
 NOTES_*.md
+
+# 計画メモ（作業用の下書き。正式な記録はDEVLOG/READMEへ昇格させたもののみ反映）
+PLAN_*.md
