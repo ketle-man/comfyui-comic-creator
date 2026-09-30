@@ -1568,6 +1568,7 @@
                       <div class="auto-script-toolbar">
                         <button id="auto-script-create-btn" class="btn primary" data-i18n="auto.scriptCreateBtn">ストーリーから脚本を作成</button>
                         <button id="auto-script-add-page-btn" class="btn secondary" data-i18n="auto.scriptAddPage">＋ ページを追加</button>
+                        <button id="auto-script-decide-btn" class="btn secondary" data-i18n="auto.scriptDecideBtn" data-i18n-title="auto.scriptDecideTitle" style="display:none">意思決定モデルで推定</button>
                       </div>
                       <div id="auto-script-status" class="auto-status" role="status"></div>
                       <details id="auto-raw-output" class="auto-raw-output" style="display:none">
@@ -1730,6 +1731,20 @@
                           </select>
                           <label class="auto-check"><input id="auto-img-gemini-2k" type="checkbox" /> 2K</label>
                         </div>
+                      </div>
+
+                      <div class="auto-set-section">
+                        <div class="auto-set-title" data-i18n="auto.setBalloonDecision">フキダシ・意思決定モデル</div>
+                        <label class="auto-check"><input id="auto-balloon-autofit" type="checkbox" /> <span data-i18n="auto.setBalloonAutoFit">フキダシと文字の大きさをセリフの量に合わせる</span></label>
+                        <p class="auto-hint" data-i18n="auto.setBalloonAutoFitHint">オートレイアウトの転送と、スクリプトタブの「フキダシを自動生成」に適用します。OFFにすると従来どおりコマを上から均等に分けて配置します。</p>
+                        <div class="auto-set-sub" data-i18n="auto.setDecisionSub">意思決定モデル（Workflow Studioの設定を使用）</div>
+                        <div id="auto-decision-info" class="auto-hint"></div>
+                        <label class="auto-check"><input id="auto-decision-bubble" type="checkbox" /> <span data-i18n="auto.setDecisionBubble">セリフからフキダシの形を推定する</span></label>
+                        <label class="auto-check"><input id="auto-decision-importance" type="checkbox" /> <span data-i18n="auto.setDecisionImportance">コマの重要度を推定する（オートレイアウトのコマの大きさに反映）</span></label>
+                        <div class="auto-row auto-row-buttons">
+                          <button id="auto-decision-test-btn" class="btn small secondary" data-i18n="auto.testConnection">接続テスト</button>
+                        </div>
+                        <p class="auto-hint" data-i18n="auto.setDecisionHint">ONにすると、脚本の作成・Chatからの反映の直後に推定し、確率がしきい値以上のものだけ書き換えます。脚本タブの「意思決定モデルで推定」ボタンでいつでも実行できます。接続先・モデル・しきい値はWorkflow StudioのSettingsタブ「意思決定モデル」で変更します。</p>
                       </div>
 
                       <div class="auto-set-section">

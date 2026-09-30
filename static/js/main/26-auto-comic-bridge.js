@@ -7,7 +7,7 @@
 // 対応付ける。
 // - 「このページをレイアウトに流し込む」(Phase 1): 対応付け結果を一覧表示するのみ。
 // - 「フキダシを自動生成」(Phase 2): 対応付け結果をもとに、各コマへセリフ件数分の
-//   フキダシ（コマ内で上から均等配置）を自動生成しテキストを流し込む。形状はセリフごとの
+//   フキダシ（配置・大きさは09g-balloon-autofit.js）を自動生成しテキストを流し込む。形状はセリフごとの
 //   「フキダシ形状」列指定を優先し、未指定（空）の場合は角丸矩形にフォールバックする。
 // - 「画像を一括生成」(Phase 3, T2I): I2Iモーダルと同じ構成の専用モーダルを開く。モーダルの
 //   全体Positive/NegativeとコマごとのT2Iプロンプトを結合し、コマのbboxアスペクト比に応じた
@@ -35,8 +35,8 @@ import { mapScriptPageToPanels, pickSdxlResolution, pickNanobananaResolution } f
 import { getBoundingBoxFromPoints, insertImage } from './08-panels-images.js';
 import { getPanelLayerSvg } from './04b-layer-panel-render.js';
 import { pushHistory } from './07-pages.js';
-import { createBalloonAtPosition } from './09c-balloon-handles.js';
-import { applyBubbleTextToShape, BUBBLE_TEXT_PT_TO_SVG } from './09f-bubble-text.js';
+import { placePanelBalloons } from './09g-balloon-autofit.js';
+import { loadAiSettings } from '../auto-ai-client.js';
 import { requestPanelImageFromWorkflowStudio, sendI2IRunToWorkflowStudio, getI2ISettingsState, saveI2ISettingsState, getT2ISettingsState, saveT2ISettingsState } from './14-integrations.js';
 import { requestNanobananaGenerate, saveNanobananaImageAndMaybeEagle, checkNanobananaKeyStatus } from '../nanobanana.js';
 import { _getPanelImageBlob, _composeOverallPrompt } from './15-pixifx-bridge.js';
@@ -118,8 +118,8 @@ function _handleAutoComicMapClick() {
 }
 
 // 対応付け済みの各コマについて、セリフ（空文字は除く）の件数分フキダシを生成する。
-// 配置はコマのbbox内で上から均等配置する単純な方式（v1）。フォントサイズはコマの
-// 分割サイズに収まる範囲で、レイアウトタブの現在のフキダシ既定値を上限に自動調整する。
+// 配置・大きさは09g-balloon-autofit.js（Autoタブ設定の自動調整ON=セリフの量に合わせる、
+// OFF=コマを上から均等分割）。文字サイズはレイアウトタブの現在のフキダシ既定値を上限とする。
 async function _handleAutoBalloonGenerateClick() {
     const result = _computeMapping();
     if (!result) return;
@@ -135,6 +135,7 @@ async function _handleAutoBalloonGenerateClick() {
     pushHistory();
 
     let createdCount = 0;
+    let overflowCount = 0;
     for (const item of mapped) {
         const dialogues = (item.dialogues || []).filter(d => d.text && d.text.trim());
         if (dialogues.length === 0) continue;
@@ -147,36 +148,26 @@ async function _handleAutoBalloonGenerateClick() {
         state.selectedPanelId = item.panelId;
         state.selectedOverlay = false;
 
-        const slotHeight = bbox.height / dialogues.length;
-        const rx = bbox.width * 0.35;
-        const ry = Math.min(slotHeight * 0.35, bbox.height * 0.2);
-        // フキダシに収まる範囲でフォントサイズを決める（レイアウトタブの現在のフキダシ既定値を上限とする）
-        const fontSizePt = Math.max(20, Math.min(state.balloon.fontSize, Math.round((ry * 0.55) / BUBBLE_TEXT_PT_TO_SVG)));
-
-        for (let i = 0; i < dialogues.length; i++) {
-            const cx = bbox.x + bbox.width / 2;
-            const cy = bbox.y + slotHeight * (i + 0.5);
-            // セリフごとのフキダシ形状指定（プロットの「フキダシ形状」列）を優先し、
-            // 未指定（空文字）の場合は既定の角丸矩形にフォールバックする
-            const balloonType = dialogues[i].shape || AUTO_BALLOON_TYPE;
-            const shape = createBalloonAtPosition(overlaySvgEl, balloonType, cx, cy, rx, ry);
-            await applyBubbleTextToShape(shape, {
-                text: dialogues[i].text,
-                fontSizePt,
-                textAlign: 'center',
-                textValign: 'center',
+        // セリフごとのフキダシ形状指定（プロットの「フキダシ形状」列）を優先し、
+        // 未指定（空文字）の場合は既定の角丸矩形にフォールバックする。
+        // 文字サイズはレイアウトタブの現在のフキダシ既定値を上限とする
+        const res = await placePanelBalloons(overlaySvgEl, bbox,
+            dialogues.map(d => ({ text: d.text, shapeType: d.shape || AUTO_BALLOON_TYPE })), {
+                autoFit: loadAiSettings().balloonAutoFit,
+                maxFontPt: state.balloon.fontSize,
                 fontFamily: state.balloon.fontFamily,
                 vertical: state.balloon.isVertical,
                 textColor: state.balloon.textColor,
+                readingOrder: state.balloon.isVertical ? 'rtl' : 'ltr',
             });
-            createdCount++;
-        }
+        createdCount += res.created;
+        overflowCount += res.overflow;
     }
 
     if (createdCount === 0) { alert(t('script.autoComicBalloonNoDialogue')); return; }
 
     await switchTab('layout');
-    alert(t('script.autoComicBalloonSuccess', createdCount));
+    alert(t('script.autoComicBalloonSuccess', createdCount) + (overflowCount ? '\n' + t('balloonFit.overflowWarn', overflowCount) : ''));
 }
 
 // ============================================================

@@ -870,14 +870,22 @@ async def handle_auto_gemini_text(request):
     except Exception as e:
         return _error_response(e, status=500)
 
-# Unslothはローカルでも常にAPIキー(UNSLOTH_API_KEY、.envから読込)が必要なため、ブラウザから直接叩かず
+# Unslothはローカルでも原則APIキー(UNSLOTH_API_KEY、.envから読込)が必要なため、ブラウザから直接叩かず
 # サーバーが中継してAuthorizationヘッダーを付与する（キーをフロントへ渡さない）。
+# キーが未設定ならヘッダー無しで中継する（Unsloth側の Keyless API access →「Chat and inference」が
+# オンなら動く。Workflow Studio の unsloth_routes.py と同じ挙動）。
+# /v1/systemone は意思決定モデル（Decision API、static/js/decision-client.js）。
 # キーを含むリクエストを任意ホストへ送らせないため、宛先はループバックに限定する（SSRF対策）。
-_AUTO_UNSLOTH_ALLOWED_PATHS = {'/v1/models', '/v1/chat/completions'}
+_AUTO_UNSLOTH_ALLOWED_PATHS = {'/v1/models', '/v1/chat/completions', '/v1/systemone'}
 _AUTO_UNSLOTH_ALLOWED_HOSTS = {'localhost', '127.0.0.1', '::1'}
+_AUTO_UNSLOTH_KEYLESS_REJECTED = (
+    'Unsloth rejected the request without an API key (HTTP 401). Either add UNSLOTH_API_KEY=... to the .env '
+    'file in the plugin folder and restart ComfyUI, or turn on Keyless API access -> "Chat and inference" '
+    "in Unsloth Desktop's Settings -> API."
+)
 
 async def handle_auto_unsloth_proxy(request):
-    """body: { baseUrl, path: '/v1/models'|'/v1/chat/completions', method: 'GET'|'POST', payload }"""
+    """body: { baseUrl, path: '/v1/models'|'/v1/chat/completions'|'/v1/systemone', method: 'GET'|'POST', payload }"""
     try:
         body = await request.json()
         base_url = (body.get('baseUrl') or 'http://localhost:8888').rstrip('/')
@@ -890,12 +898,10 @@ async def handle_auto_unsloth_proxy(request):
         if parsed.scheme not in ('http', 'https') or parsed.hostname not in _AUTO_UNSLOTH_ALLOWED_HOSTS:
             return web.json_response({'message': 'Unsloth backend URL must point to localhost/127.0.0.1/::1'}, status=400)
         api_key = os.environ.get('UNSLOTH_API_KEY', '').strip()
-        if not api_key:
-            return web.json_response({'message': 'UNSLOTH_API_KEY is not set. Add UNSLOTH_API_KEY=... to the .env file in the plugin folder and restart ComfyUI.'}, status=401)
 
         def _fetch():
             data = json.dumps(payload).encode('utf-8') if payload is not None else None
-            headers = {'Authorization': f'Bearer {api_key}'}
+            headers = {'Authorization': f'Bearer {api_key}'} if api_key else {}
             if data is not None:
                 headers['Content-Type'] = 'application/json'
             req = urllib.request.Request(f'{base_url}{path}', data=data, headers=headers, method=method)
@@ -905,7 +911,12 @@ async def handle_auto_unsloth_proxy(request):
         result = await loop.run_in_executor(None, _fetch)
         return web.json_response(result)
     except urllib.error.HTTPError as e:
-        return web.json_response({'message': f'Unsloth API error: HTTP {e.code}'}, status=e.code)
+        if e.code == 401 and not os.environ.get('UNSLOTH_API_KEY', '').strip():
+            return web.json_response({'message': _AUTO_UNSLOTH_KEYLESS_REJECTED}, status=401)
+        # Unsloth自身のエラー本文の先頭も返す（Decision APIの質問形式エラーや
+        # 「The Decision API is off」(404) はこれが無いとフロントから原因が分からない）
+        detail = e.read().decode('utf-8', errors='replace') if e.fp else ''
+        return web.json_response({'message': f'Unsloth API error: HTTP {e.code} {detail[:300]}'.strip()}, status=e.code)
     except urllib.error.URLError as e:
         return web.json_response({'message': f'Could not reach Unsloth: {e.reason}'}, status=502)
     except Exception as e:

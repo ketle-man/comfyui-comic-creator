@@ -6,7 +6,7 @@
 // （../auto-layout-core.js、DOM非依存）でコマ割りを自動生成してプレビュー表示し、
 // フキダシ・画像コマ単位で割り当ててから「詳細編集」で既存のレイアウトタブへ転送する。
 // 転送先のページ生成・フキダシ流し込みは、半自動マンガ作成（26-auto-comic-bridge.js）と
-// 同じ既存関数（createBalloonAtPosition/applyBubbleTextToShape/insertImage等）を再利用する。
+// 同じ既存関数（09g-balloon-autofit.jsのplacePanelBalloons/insertImage等）を再利用する。
 // 作品データ（auto.work）自体は28-auto-tab.jsが所有し、このファイルは
 // getAutoWork/saveAutoWork 経由で読み書きする（循環import、PLAN_auto_tab.md参照）。
 // ============================================================
@@ -21,8 +21,7 @@ import { state, switchTab } from './01-state.js';
 import { dbGet, dbPut } from './00-db.js';
 import { loadPages, renderLayoutTab, renderPageSelector, updateLayoutPageNav, pushHistory } from './07-pages.js';
 import { getPanelLayerSvg } from './04b-layer-panel-render.js';
-import { createBalloonAtPosition } from './09c-balloon-handles.js';
-import { applyBubbleTextToShape, BUBBLE_TEXT_PT_TO_SVG } from './09f-bubble-text.js';
+import { placePanelBalloons } from './09g-balloon-autofit.js';
 import { getBoundingBoxFromPoints, insertImage } from './08-panels-images.js';
 import { mapScriptPageToPanels } from '../auto-comic-core.js';
 import { _tmplAutoStage, loadTemplates, savePageAsTemplate } from './06b-template-manager.js';
@@ -658,6 +657,8 @@ async function insertBalloonsAndImages(scriptPage) {
     // insertImage()内のrenderLayoutTab()でDOMが再構築されているため、
     // フキダシ追加の直前に最新のパネルレイヤーSVGを取得する
     const overlaySvgEl = getPanelLayerSvg();
+    const autoFit = loadAiSettings().balloonAutoFit;
+    let overflow = 0;
     if (overlaySvgEl) {
         for (const item of mapped) {
             const dialogues = (item.dialogues || []).filter((d) => d.text && d.text.trim());
@@ -668,27 +669,19 @@ async function insertBalloonsAndImages(scriptPage) {
             if (!bbox) continue;
             state.selectedPanelId = item.panelId;
             state.selectedOverlay = false;
-            const slotHeight = bbox.height / dialogues.length;
-            const rx = bbox.width * 0.35;
-            const ry = Math.min(slotHeight * 0.35, bbox.height * 0.2);
-            const fontSizePt = Math.max(20, Math.min(L.fontSizePt || state.balloon.fontSize, Math.round((ry * 0.55) / BUBBLE_TEXT_PT_TO_SVG)));
-            for (let i = 0; i < dialogues.length; i++) {
-                const cx = bbox.x + bbox.width / 2;
-                const cy = bbox.y + slotHeight * (i + 0.5);
-                const shapeType = bubbleTypeToBalloonShape(dialogues[i].bubbleType);
-                const shape = createBalloonAtPosition(overlaySvgEl, shapeType, cx, cy, rx, ry);
-                await applyBubbleTextToShape(shape, {
-                    text: dialogues[i].text,
-                    fontSizePt,
-                    textAlign: 'center',
-                    textValign: 'center',
+            const res = await placePanelBalloons(overlaySvgEl, bbox,
+                dialogues.map((d) => ({ text: d.text, shapeType: bubbleTypeToBalloonShape(d.bubbleType) })), {
+                    autoFit,
+                    maxFontPt: L.fontSizePt || state.balloon.fontSize,
                     fontFamily: L.fontFamily || state.balloon.fontFamily,
                     vertical: state.balloon.isVertical,
                     textColor: state.balloon.textColor,
+                    readingOrder: L.readingOrder,
                 });
-            }
+            overflow += res.overflow;
         }
     }
+    return { overflow };
 }
 
 async function transferAllPages() {
@@ -709,6 +702,7 @@ async function transferAllPages() {
         if (!groupCreated) console.warn('[AutoLayout] page group already exists, pages will not be listed as a work:', workGroupName);
 
         let firstPageRecord = null;
+        let overflowTotal = 0;
         for (let i = 0; i < pages.length; i++) {
             const scriptPage = pages[i];
             const st = alo.pages[i] && alo.pages[i].quads?.length === scriptPage.panels.length ? alo.pages[i]
@@ -751,7 +745,7 @@ async function transferAllPages() {
             await renderLayoutTab();
             pushHistory();
 
-            await insertBalloonsAndImages(scriptPage);
+            overflowTotal += (await insertBalloonsAndImages(scriptPage)).overflow;
 
             if (!firstPageRecord) firstPageRecord = state.activePage;
         }
@@ -767,7 +761,7 @@ async function transferAllPages() {
         renderPageSelector();
         updateLayoutPageNav();
         await switchTab('layout');
-        setStatus('alo-transfer-status', 'ok', t('alo.msgTransferDone', pages.length));
+        setStatus('alo-transfer-status', 'ok', t('alo.msgTransferDone', pages.length) + (overflowTotal ? ' ' + t('balloonFit.overflowWarn', overflowTotal) : ''));
     } catch (e) {
         console.error('[AutoLayout] transfer error:', e);
         setStatus('alo-transfer-status', 'error', t('alo.msgTransferFailed', e.message || String(e)));

@@ -22,6 +22,8 @@ import {
 import { generateAutoImage, listWorkflowFilenames } from './28a-auto-image.js';
 import { LAYOUT_STYLES, READING_ORDERS } from '../auto-layout-core.js';
 import { initAutoLayoutSubtab } from './28b-auto-layout-tab.js';
+import { estimateScript } from '../auto-decision.js';
+import { getDecisionSettings, testDecisionConnection } from '../decision-client.js';
 
 const CURRENT_KEY = 'ccc_auto_current';   // 作業中の作品（オートセーブ）
 const WORKS_KEY = 'ccc_auto_works';       // 保存済みの作品一覧（スクリプトタブの作品とは別キー）
@@ -175,7 +177,7 @@ function updateButtons() {
     if (create) create.disabled = auto.busy;
     if (sample) sample.disabled = auto.busy;
     if (script) script.disabled = auto.busy || !hasStory;   // ストーリーが空の間は脚本を作成できない（2段階の徹底）
-    ['auto-chat-send-btn', 'auto-chat-tool-run-btn', 'auto-img-make-prompt-btn', 'auto-img-generate-btn'].forEach((id) => { const b = $(id); if (b) b.disabled = auto.busy; });
+    ['auto-chat-send-btn', 'auto-chat-tool-run-btn', 'auto-img-make-prompt-btn', 'auto-img-generate-btn', 'auto-script-decide-btn'].forEach((id) => { const b = $(id); if (b) b.disabled = auto.busy; });
 }
 
 async function runBusy(statusId, busyText, fn) {
@@ -407,14 +409,16 @@ async function onCreateScript() {
         auto.work.script = parsed.script;
         saveCurrent();
         renderScript();
-        if (parsed.method !== 'json') {
-            // 'json-repaired'（末尾の閉じ括弧を補って復元）・'lines'（行ベース復元）は
-            // どちらもLLM出力が崩れていた復元経路なので、内容確認を促し生出力も表示する
-            showRawOutput(raw);
-            setStatus('auto-script-status', 'ok', t('auto.statusScriptRecovered', parsed.script.pages.length));
-        } else {
-            setStatus('auto-script-status', 'ok', t('auto.statusScriptDone', parsed.script.pages.length));
-        }
+        // 'json-repaired'（末尾の閉じ括弧を補って復元）・'lines'（行ベース復元）は
+        // どちらもLLM出力が崩れていた復元経路なので、内容確認を促し生出力も表示する
+        if (parsed.method !== 'json') showRawOutput(raw);
+        const doneMsg = parsed.method !== 'json'
+            ? t('auto.statusScriptRecovered', parsed.script.pages.length)
+            : t('auto.statusScriptDone', parsed.script.pages.length);
+        setStatus('auto-script-status', 'ok', doneMsg);
+        // 設定で意思決定モデルの推定がONなら、続けてフキダシの形・重要度を推定する
+        const decision = await estimateWithDecisionModel('auto-script-status');
+        if (decision) setStatus('auto-script-status', decision.kind, `${doneMsg}\n${decision.text}`);
     });
 }
 
@@ -567,6 +571,12 @@ function renderSettings() {
     $('auto-img-gemini-model').value = s.imgGeminiModel;
     $('auto-img-gemini-res').value = s.imgGeminiResolution;
     $('auto-img-gemini-2k').checked = !!s.imgGemini2k;
+    // フキダシ・意思決定モデル
+    $('auto-balloon-autofit').checked = !!s.balloonAutoFit;
+    $('auto-decision-bubble').checked = !!s.decisionBubbleType;
+    $('auto-decision-importance').checked = !!s.decisionImportance;
+    renderDecisionInfo();
+    updateDecideButton();
 }
 
 async function refreshWorkflowList(silent) {
@@ -658,13 +668,81 @@ function onSaveSettings() {
         imgGeminiModel: $('auto-img-gemini-model').value,
         imgGeminiResolution: $('auto-img-gemini-res').value,
         imgGemini2k: $('auto-img-gemini-2k').checked,
+        balloonAutoFit: $('auto-balloon-autofit').checked,
+        decisionBubbleType: $('auto-decision-bubble').checked,
+        decisionImportance: $('auto-decision-importance').checked,
     });
+    updateDecideButton();
     setStatus('auto-settings-status', 'ok', t('auto.msgSettingsSaved'));
+}
+
+// ------------------------------------------------------------
+// 意思決定モデル（接続先・モデル・しきい値はWorkflow Studioの設定を読むだけ、decision-client.js）
+// フキダシの形・コマの重要度を推定し、確率がしきい値以上のものだけ脚本へ書き込む（auto-decision.js）。
+// ------------------------------------------------------------
+
+function decisionEnabled() {
+    const s = loadAiSettings();
+    return !!(s.decisionBubbleType || s.decisionImportance);
+}
+
+// WFS側で設定が変わっている可能性があるため、設定タブを開くたび・テスト時に読み直して表示する
+function renderDecisionInfo() {
+    const d = getDecisionSettings();
+    const el = $('auto-decision-info');
+    el.textContent = d.configured ? t('auto.decisionInfo', d.backendLabel, d.model, d.threshold) : t('auto.decisionNotConfigured');
+    el.style.color = d.configured ? '' : '#e57373';
+}
+
+function updateDecideButton() {
+    const btn = $('auto-script-decide-btn');
+    if (btn) btn.style.display = decisionEnabled() ? '' : 'none';
+}
+
+async function onDecisionTest() {
+    renderDecisionInfo();
+    setStatus('auto-settings-status', 'busy', '…');
+    try {
+        const { ms, yes } = await testDecisionConnection();
+        setStatus('auto-settings-status', 'ok', t('auto.decisionTestOk', ms, typeof yes === 'number' ? yes.toFixed(3) : '?'));
+    } catch (e) {
+        setStatus('auto-settings-status', 'error', t('auto.decisionTestFailed', e?.message || String(e)));
+    }
+}
+
+// 設定でONの項目を推定して脚本へ書き込み、結果の文言を返す（無効なら null）。busy管理は呼び出し側
+async function estimateWithDecisionModel(statusId) {
+    const s = loadAiSettings();
+    const opts = { bubble: !!s.decisionBubbleType, importance: !!s.decisionImportance };
+    if (!opts.bubble && !opts.importance) return null;
+    const work = auto.work;
+    const stats = await estimateScript(work.script, {
+        ...opts,
+        onProgress: (done, total) => setStatus(statusId, 'busy', t('auto.decisionRunning', done, total)),
+    });
+    if (auto.work !== work) return null;   // 推定中に別の作品へ切り替えた場合は書き込まない
+    saveCurrent();
+    renderScript();
+    const parts = [];
+    if (opts.bubble) parts.push(t('auto.decisionResultBubble', stats.bubble));
+    if (opts.importance) parts.push(t('auto.decisionResultImportance', stats.importance));
+    if (stats.failed) parts.push(t('auto.decisionResultFailed', stats.failed, stats.error));
+    return { kind: stats.total && stats.failed === stats.total ? 'error' : 'ok', text: parts.join('\n') };
+}
+
+function onScriptDecide() {
+    if (!auto.work.script.pages.length) { setStatus('auto-script-status', 'error', t('auto.scriptEmpty')); return; }
+    runBusy('auto-script-status', t('auto.decisionRunning', 0, '…'), async () => {
+        pushUndo();   // Chatの「反映を元に戻す」で推定前へ戻せるようにする
+        const decision = await estimateWithDecisionModel('auto-script-status');
+        if (decision) setStatus('auto-script-status', decision.kind, decision.text);
+    });
 }
 
 function switchRightTab(name) {
     document.querySelectorAll('[data-auto-right]').forEach((btn) => btn.classList.toggle('active', btn.dataset.autoRight === name));
     ['chat', 'image', 'settings'].forEach((key) => { $('auto-right-' + key).style.display = key === name ? '' : 'none'; });
+    if (name === 'settings') renderDecisionInfo();
     if (name === 'settings' && !auto.settingsOpened) {
         auto.settingsOpened = true;
         // 初回に開いたとき、保存済みの接続先からモデル一覧を静かに更新する
@@ -815,7 +893,14 @@ function onChatClick(e) {
         saveCurrent();
         renderScript();
         switchCenterTab('script');
-        setStatus('auto-chat-status', 'ok', t('auto.chatAppliedScript', parsed.script.pages.length));
+        const doneMsg = t('auto.chatAppliedScript', parsed.script.pages.length);
+        setStatus('auto-chat-status', 'ok', doneMsg);
+        if (!decisionEnabled()) return;
+        // 反映前の状態はpushUndo済みなので、「反映を元に戻す」で推定結果ごと戻せる
+        runBusy('auto-chat-status', t('auto.decisionRunning', 0, '…'), async () => {
+            const decision = await estimateWithDecisionModel('auto-chat-status');
+            if (decision) setStatus('auto-chat-status', decision.kind, `${doneMsg}\n${decision.text}`);
+        });
     }
 }
 
@@ -935,6 +1020,7 @@ function bindEvents() {
     $('auto-preview-show-action-v').addEventListener('change', onPreviewShowActionChange);
     $('auto-script-create-btn').addEventListener('click', onCreateScript);
     $('auto-script-add-page-btn').addEventListener('click', onAddPage);
+    $('auto-script-decide-btn').addEventListener('click', onScriptDecide);
     const list = $('auto-script-list');
     list.addEventListener('input', onScriptFieldChange);
     list.addEventListener('change', onScriptFieldChange);
@@ -983,6 +1069,7 @@ function bindEvents() {
     $('auto-model-refresh-btn').addEventListener('click', () => refreshLocalModels(false));
     $('auto-gemini-refresh-btn').addEventListener('click', () => refreshGeminiModels(false));
     $('auto-settings-save-btn').addEventListener('click', onSaveSettings);
+    $('auto-decision-test-btn').addEventListener('click', onDecisionTest);
 }
 
 // ============================================================
