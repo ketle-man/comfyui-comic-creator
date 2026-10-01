@@ -268,6 +268,43 @@ function clearTextHandles(svgEl) {
     root.querySelectorAll('.text-handle, .text-bbox, .text-rotate-line').forEach(h => h.remove());
 }
 
+// ── テキストの変形（縦長/横長の拡縮 + 辺のせん断による平行四辺形） ──
+// 状態は dataset.scaleX/scaleY（既定1）と dataset.shearX/shearY（tan値、既定0）に持つ。
+// 変形は「BBox中心を原点に、回転(angle) → 変形行列M」の順で合成する:
+//   M = [[sx, shearX*sy], [shearY*sx, sy]]   （x' = sx*x + shearX*sy*y,  y' = shearY*sx*x + sy*y）
+// 中心は変形しても動かない。無変形（既定）のときは従来どおり rotate(angle,cx,cy) だけを出力する
+function _textGetDeform(el) {
+    const n = (v, d) => { const f = parseFloat(v); return Number.isFinite(f) ? f : d; };
+    return {
+        sx: n(el.dataset.scaleX, 1), sy: n(el.dataset.scaleY, 1),
+        shx: n(el.dataset.shearX, 0), shy: n(el.dataset.shearY, 0),
+    };
+}
+
+function _textHasDeform(el) {
+    const d = _textGetDeform(el);
+    return d.sx !== 1 || d.sy !== 1 || d.shx !== 0 || d.shy !== 0;
+}
+
+function _textBuildTransform(el, cx, cy, angle = parseFloat(el.dataset.angle || 0)) {
+    if (!_textHasDeform(el)) return `rotate(${angle},${cx},${cy})`;
+    const { sx, sy, shx, shy } = _textGetDeform(el);
+    return `translate(${cx},${cy}) rotate(${angle}) matrix(${sx} ${shy * sx} ${shx * sy} ${sy} 0 0) translate(${-cx},${-cy})`;
+}
+
+// テキストのローカル座標(lx,ly)を、現在の回転・変形を適用したSVG座標へ変換する（中心 cx,cy）
+function _textLocalToSvg(el, lx, ly, cx, cy) {
+    const { sx, sy, shx, shy } = _textGetDeform(el);
+    const rad = (parseFloat(el.dataset.angle || 0)) * Math.PI / 180;
+    const dx = lx - cx, dy = ly - cy;
+    const mx = sx * dx + shx * sy * dy;
+    const my = shy * sx * dx + sy * dy;
+    return {
+        x: cx + mx * Math.cos(rad) - my * Math.sin(rad),
+        y: cy + mx * Math.sin(rad) + my * Math.cos(rad),
+    };
+}
+
 function renderTextHandles(el, svgEl) {
     clearTextHandles(svgEl);
     el.classList.add('selected');
@@ -277,7 +314,7 @@ function renderTextHandles(el, svgEl) {
     const cx = bb.x + bb.width / 2;
     const cy = bb.y + bb.height / 2;
     // transform から cx/cy を実際の中心にするため、回転中心も getBBox 中心を使う
-    el.setAttribute('transform', `rotate(${angle},${cx},${cy})`);
+    el.setAttribute('transform', _textBuildTransform(el, cx, cy, angle));
     el.dataset.bboxCx = cx;
     el.dataset.bboxCy = cy;
 
@@ -287,25 +324,18 @@ function renderTextHandles(el, svgEl) {
     const r = Math.round(scale * 8);
     const strokeW = Math.round(scale * 1.5);
 
-    // バウンディングボックス（回転を考慮して transform グループに入れる）
-    const bboxEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    bboxEl.setAttribute('x', bb.x);
-    bboxEl.setAttribute('y', bb.y);
-    bboxEl.setAttribute('width', bb.width);
-    bboxEl.setAttribute('height', bb.height);
+    // 8点リサイズハンドル・BBox枠の回転/変形前座標
+    const x1 = bb.x, y1 = bb.y, x2 = bb.x + bb.width, y2 = bb.y + bb.height;
+    const rotPt = (px, py) => _textLocalToSvg(el, px, py, cx, cy);
+
+    // バウンディングボックス（回転・拡縮・せん断を適用した四辺形で描く）
+    const bboxEl = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    bboxEl.setAttribute('points', [rotPt(x1, y1), rotPt(x2, y1), rotPt(x2, y2), rotPt(x1, y2)]
+        .map(p => `${p.x},${p.y}`).join(' '));
     bboxEl.setAttribute('class', 'text-bbox');
     bboxEl.setAttribute('stroke-width', strokeW);
-    bboxEl.setAttribute('transform', `rotate(${angle},${cx},${cy})`);
     bboxEl.style.pointerEvents = 'none';
     svgEl.appendChild(bboxEl);
-
-    // 8点リサイズハンドルの回転前座標
-    const x1 = bb.x, y1 = bb.y, x2 = bb.x + bb.width, y2 = bb.y + bb.height;
-    const rad = angle * Math.PI / 180;
-    const rotPt = (px, py) => ({
-        x: cx + (px - cx) * Math.cos(rad) - (py - cy) * Math.sin(rad),
-        y: cy + (px - cx) * Math.sin(rad) + (py - cy) * Math.cos(rad)
-    });
 
     const pts = [
         ['nw', x1, y1], ['n', cx, y1], ['ne', x2, y1],
@@ -328,8 +358,11 @@ function renderTextHandles(el, svgEl) {
     // 回転ハンドル（上辺中央から offset 上）
     const offset = scale * 24;
     const topMid = rotPt(cx, y1);
-    const rotHx = topMid.x + Math.sin(rad) * offset;
-    const rotHy = topMid.y - Math.cos(rad) * offset;
+    // 回転ハンドルは「中心→上辺中点」方向の延長上に置く（拡縮・せん断後も上辺の外側を向く）
+    const center = rotPt(cx, cy);
+    const dirLen = Math.hypot(topMid.x - center.x, topMid.y - center.y) || 1;
+    const rotHx = topMid.x + (topMid.x - center.x) / dirLen * offset;
+    const rotHy = topMid.y + (topMid.y - center.y) / dirLen * offset;
 
     const rotateLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     rotateLine.setAttribute('x1', topMid.x); rotateLine.setAttribute('y1', topMid.y);
@@ -483,6 +516,7 @@ function syncFontFamilyUI(textEl) {
 
 export {
     _loadFavoriteFontsToSelect, _loadGoogleFontsToSelect, _syncFontFavCatSelect,
+    _textBuildTransform, _textGetDeform, _textHasDeform,
     clearTextHandles, initBalloonTools, loadSystemFontsToSelect, renderTextHandles, syncFontFamilyUI,
 };
 

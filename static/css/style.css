@@ -1273,6 +1273,9 @@ input[type="number"] {
   opacity: 1;
 }
 
+/* 辺ハンドル（縦長/横長の伸縮、Shift+ドラッグでせん断）は角ハンドルと色を変えて区別する */
+.text-handle.resize-n, .text-handle.resize-s,
+.text-handle.resize-e, .text-handle.resize-w { fill: #33a0ff; stroke: #0b5fa8; }
 .text-handle.resize-nw, .text-handle.resize-se { cursor: nwse-resize; }
 .text-handle.resize-ne, .text-handle.resize-sw { cursor: nesw-resize; }
 .text-handle.resize-n,  .text-handle.resize-s  { cursor: ns-resize; }

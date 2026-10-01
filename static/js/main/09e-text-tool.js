@@ -15,7 +15,7 @@ import { _isObjectLocked, syncPanelSelectionToObject } from './03-layers-panel.j
 import { getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
 import { pushHistory, savePanelSvg, saveTextSvg } from './07-pages.js';
 import { saveOverlaySvg, getOrCreateOverlayGroup } from './09b-balloon-shapes.js';
-import { syncFontFamilyUI, renderTextHandles, clearTextHandles } from './09d-balloon-tools.js';
+import { syncFontFamilyUI, renderTextHandles, clearTextHandles, _textBuildTransform, _textGetDeform, _textHasDeform } from './09d-balloon-tools.js';
 import { state } from './01-state.js';
 import { _clearObjectSelection } from './08-panels-images.js';
 import { _scriptMangaGetSelectedDialogue } from './21a-script-manga.js';
@@ -26,8 +26,26 @@ import { _fontMgrLoadPresets } from './20-font-presets.js';
 let _textToolsDocMouseMove = null;
 let _textToolsDocMouseUp = null;
 
+// 選択中テキストの縦長/横長/せん断の変形を解除する（「変形リセット」ボタン）
+async function _textResetDeform() {
+    const el = state.selectedTextEl;
+    const svgEl = getPanelLayerSvg();
+    if (!el || !svgEl || !_textHasDeform(el) || _isObjectLocked(el)) return;
+    pushHistory();
+    delete el.dataset.scaleX; delete el.dataset.scaleY;
+    delete el.dataset.shearX; delete el.dataset.shearY;
+    renderTextHandles(el, svgEl);
+    const panelId = el.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
+    await savePanelSvg(panelId, svgEl);
+}
+
 function initTextTools(textSvgEl, _imageSvgEl) {
     if (!textSvgEl) return;
+    const resetBtn = document.getElementById('text-deform-reset-btn');
+    if (resetBtn && !resetBtn.dataset.bound) { // renderLayoutTabのたびに呼ばれるため1回だけ登録する
+        resetBtn.dataset.bound = '1';
+        resetBtn.addEventListener('click', _textResetDeform);
+    }
     if (_textToolsDocMouseMove) { document.removeEventListener('mousemove', _textToolsDocMouseMove); _textToolsDocMouseMove = null; }
     if (_textToolsDocMouseUp)   { document.removeEventListener('mouseup', _textToolsDocMouseUp); _textToolsDocMouseUp = null; }
 
@@ -35,6 +53,8 @@ function initTextTools(textSvgEl, _imageSvgEl) {
     let textRotating = false;
     let textDragging = false;
     let textResizing = false;
+    let textStretching = false;
+    let stretchType = null, stretchHW = 1, stretchHH = 1;
     let startAngle = 0, startAngleRad = 0;
     let startX = 0, startY = 0, initTx = 0, initTy = 0;
     let resizeInitFontSize = 0, resizeInitBboxDiag = 0, resizeCx = 0, resizeCy = 0;
@@ -59,14 +79,28 @@ function initTextTools(textSvgEl, _imageSvgEl) {
                 textRotating = true;
                 startAngle = parseFloat(selectedText.dataset.angle || 0);
                 startAngleRad = Math.atan2(pt.y - cy, pt.x - cx);
+            } else if (['n', 's', 'e', 'w'].includes(handle.dataset.handleType)) {
+                // 辺ハンドル: ドラッグで縦長/横長に伸縮、Shiftを押しながらで辺に沿ってせん断（平行四辺形）。
+                // 中心は固定で、カーソル位置から絶対値で倍率/せん断量を求める
+                if (_isObjectLocked(selectedText)) return;
+                textStretching = true;
+                stretchType = handle.dataset.handleType;
+                resizeCx = cx;
+                resizeCy = cy;
+                const bb = selectedText.getBBox();
+                stretchHW = bb.width / 2 || 1;
+                stretchHH = bb.height / 2 || 1;
+                pushHistory();
             } else {
-                // リサイズハンドル: 現在のBBox対角線長とフォントサイズを記録
+                // 角ハンドル: ハンドル位置の中心からの距離（=BBox対角線の半分）とフォントサイズを記録
+                // （拡縮・せん断後でも正しい距離になるよう、BBox寸法ではなくハンドル座標から求める）
                 textResizing = true;
                 resizeCx = cx;
                 resizeCy = cy;
                 resizeInitFontSize = parseFloat(selectedText.getAttribute('font-size')) || 10;
-                const bb = selectedText.getBBox();
-                resizeInitBboxDiag = Math.sqrt(bb.width * bb.width + bb.height * bb.height) || 1;
+                resizeInitBboxDiag = 2 * (Math.hypot(
+                    parseFloat(handle.getAttribute('cx')) - cx,
+                    parseFloat(handle.getAttribute('cy')) - cy) || 1);
                 startX = pt.x;
                 startY = pt.y;
             }
@@ -139,6 +173,37 @@ function initTextTools(textSvgEl, _imageSvgEl) {
     _textToolsDocMouseMove = (e) => {
         if (!selectedText) return;
 
+        if (textStretching) {
+            e.preventDefault();
+            const pt = getSvgPt(e.clientX, e.clientY);
+            // カーソルを、テキストの回転に合わせたローカル軸(ex=横, ey=縦)へ射影する
+            const rad = parseFloat(selectedText.dataset.angle || 0) * Math.PI / 180;
+            const vx = pt.x - resizeCx, vy = pt.y - resizeCy;
+            const u = vx * Math.cos(rad) + vy * Math.sin(rad);   // 横軸方向の成分
+            const w = -vx * Math.sin(rad) + vy * Math.cos(rad);  // 縦軸方向の成分
+            const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+            const d = _textGetDeform(selectedText);
+            if (e.shiftKey) {
+                // せん断: 上下の辺は横方向へ、左右の辺は縦方向へずらす（反対側の辺は逆向きに動く）
+                if (stretchType === 'n') d.shx = -u / (d.sy * stretchHH);
+                else if (stretchType === 's') d.shx = u / (d.sy * stretchHH);
+                else if (stretchType === 'e') d.shy = w / (d.sx * stretchHW);
+                else d.shy = -w / (d.sx * stretchHW);
+                d.shx = clamp(d.shx, -3, 3);
+                d.shy = clamp(d.shy, -3, 3);
+            } else if (stretchType === 'e' || stretchType === 'w') {
+                d.sx = clamp(Math.abs(u) / stretchHW, 0.05, 20);
+            } else {
+                d.sy = clamp(Math.abs(w) / stretchHH, 0.05, 20);
+            }
+            selectedText.dataset.scaleX = d.sx;
+            selectedText.dataset.scaleY = d.sy;
+            selectedText.dataset.shearX = d.shx;
+            selectedText.dataset.shearY = d.shy;
+            renderTextHandles(selectedText, textSvgEl);
+            return;
+        }
+
         if (textResizing) {
             e.preventDefault();
             const pt = getSvgPt(e.clientX, e.clientY);
@@ -169,7 +234,7 @@ function initTextTools(textSvgEl, _imageSvgEl) {
             const deltaDeg = (currentRad - startAngleRad) * 180 / Math.PI;
             const newAngle = startAngle + deltaDeg;
             selectedText.dataset.angle = newAngle;
-            selectedText.setAttribute('transform', `rotate(${newAngle},${cx},${cy})`);
+            selectedText.setAttribute('transform', _textBuildTransform(selectedText, cx, cy, newAngle));
             renderTextHandles(selectedText, textSvgEl);
         }
 
@@ -203,7 +268,7 @@ function initTextTools(textSvgEl, _imageSvgEl) {
                 const bcy = bb.y + bb.height / 2;
                 selectedText.dataset.bboxCx = bcx;
                 selectedText.dataset.bboxCy = bcy;
-                selectedText.setAttribute('transform', `rotate(${angle},${bcx},${bcy})`);
+                selectedText.setAttribute('transform', _textBuildTransform(selectedText, bcx, bcy, angle));
             }
             renderTextHandles(selectedText, textSvgEl);
         }
@@ -211,6 +276,14 @@ function initTextTools(textSvgEl, _imageSvgEl) {
     document.addEventListener('mousemove', _textToolsDocMouseMove);
 
     const onTextMouseUp = async () => {
+        if (textStretching) {
+            textStretching = false;
+            if (selectedText) {
+                const panelId = selectedText.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
+                await savePanelSvg(panelId, textSvgEl);
+            }
+            return;
+        }
         if (textResizing) {
             textResizing = false;
             if (selectedText) {
@@ -355,10 +428,10 @@ function _setTextElVertical(textEl, isVertical, keepCenter = false) {
             }
             // 回転がある場合は回転中心もBBox中心に合わせ直す
             const angle = parseFloat(textEl.dataset.angle || 0);
-            if (angle !== 0) {
+            if (angle !== 0 || _textHasDeform(textEl)) {
                 textEl.dataset.bboxCx = beforeCx;
                 textEl.dataset.bboxCy = beforeCy;
-                textEl.setAttribute('transform', `rotate(${angle},${beforeCx},${beforeCy})`);
+                textEl.setAttribute('transform', _textBuildTransform(textEl, beforeCx, beforeCy, angle));
             }
         } catch { /* 念のため */ }
     }

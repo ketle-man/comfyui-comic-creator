@@ -562,8 +562,13 @@ const _BACKUP_LS_KEYS = [
     'work_meta', 'work_size_presets', 'active_work', 'page_groups', 'template_groups',
     // 表示・出力設定
     'layout_preview_size', 'output_sort_criterion', 'ccc_ui_lang', 'ccc_export_meta', 'ccc_export_dpi',
-    // 連携設定
-    'eagle_settings', 'ccc_i2i_settings', 'cccPixiFxSettings',
+    // 連携設定（Eagle / I2I・T2I・Inpaint・Outpaintのデフォルトワークフロー / PixiJS FX）
+    'eagle_settings', 'ccc_i2i_settings', 'ccc_t2i_settings', 'ccc_inpaint_settings', 'ccc_outpaint_settings',
+    'cccPixiFxSettings', 'cccPixiFxMultiPresets',
+    // Autoタブ（AI設定・作品・作業中データ・プレビュー表示設定）
+    'ccc_auto_ai_settings', 'ccc_auto_works', 'ccc_auto_current', 'ccc_auto_preview_show_action',
+    // レイアウトタブの操作設定（コマ分割のコマ間幅・コマ変形の外周ロック）・動画の音量
+    'ccc_split_gap_width', 'ccc_deform_outer_lock', 'cccVideoMuted', 'cccVideoVolume',
     // 脚本タブ
     'cccScriptCurrent', 'cccScriptWorks',
     // フォント管理

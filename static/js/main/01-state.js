@@ -40,6 +40,7 @@ import { initVideoTab, hideVideoOverlay } from './27-video-bridge.js';
 import { initAutoTab } from './28-auto-tab.js';
 import { initSubPanelTool } from './24-sub-panels.js';
 import { initSplitPanelTool } from './24a-panel-split.js';
+import { initDeformPanelTool } from './24b-panel-deform.js';
 import { initNanobananaTab } from '../nanobanana.js';
 import { initImageTab } from '../image-tab.js';
 
@@ -169,6 +170,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initEditTab();
         initSubPanelTool();
         initSplitPanelTool();
+        initDeformPanelTool();
         initNanobananaTab();
         _initEditTabTrigger();
         console.log('Plugin Initialized');

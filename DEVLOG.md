@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-10-01（コマの変形・削除、テキストの縦長/横長/平行四辺形変形、バックアップの設定タブ移動、v1.50.0）
+
+レイアウトタブにコマの変形・削除とテキストの変形を追加し、ページタブにあった一括バックアップ／復元を設定タブへ移した。ユーザーが実機（Kapture経由の確認を含む）で変形サブタブとテキスト変形の動作を確認済み。
+
+**コマの変形・削除（`main/24b-panel-deform.js`、新規）**: 「変形」サブタブでONにし、コマを選択すると輪郭・頂点・辺のハンドルをプレビューSVG上に重ねる。頂点ドラッグは自由移動、辺ドラッグは辺の向きを保った法線方向の平行移動（前後の辺の延長線との交点を新しい両端にする。平行で交点がなければ法線方向へ平行移動）。頂点削除は4頂点以上のコマだけ（三角形は不可）。コマ間の幅・外側の幅は見ず、選択コマのポリゴンだけを更新する（隣のコマと重なってもよい）。ただし自己交差する形、面積がページの0.02%未満になる形は赤表示にして確定しない。確定時は`panels[].points`・背景SVG（`svgContent`）の枠線polygon（id=コマID）・コマ個別SVG内の`clipPath`のpolygonの3か所を更新する（コマ分割`24a-panel-split.js`と同じ保存先）。保存は`_enqueueActivePageSave`の直列化キューを通し、直前に`pushHistory()`するのでUndoで戻る。**外周ロック**（既定ON、localStorage`ccc_deform_outer_lock`）は、サブコマを除く全コマの外接矩形をレイアウトの外周とみなし、その上にある頂点（許容差は幅の0.2%）を外周ラインから動かさない（左右の外周上はX固定・上下の外周上はY固定・角はXY固定。削除も不可）。コマ一括ロック（`_isPanelLocked`）中のコマも変形・削除できない。コマ削除はレイヤーパネルのコマ行の✕ボタン（`04b-layer-panel-render.js`）と変形サブタブのボタンから`deletePanel()`を呼ぶ。サブコマ（親子を辿った子孫すべて）と背景SVGの枠線polygonも一緒に消す。`selectPanel`の末尾で`refreshDeformOverlay()`を呼び、コマ選択が変わると変形UIを描き直す。他のサブタブへ切り替えるとモードはOFFに戻る。
+
+**テキストの変形（`09d-balloon-tools.js`/`09e-text-tool.js`）**: 従来は8つのハンドルすべてがフォントサイズの均等拡縮だった。角のハンドルは従来どおりにし、辺の中央のハンドル（青）を縦長/横長の伸縮に変え、Shift+ドラッグで辺に沿ったせん断（平行四辺形）にした。状態は`dataset.scaleX/scaleY/shearX/shearY`（せん断はtan値）に持ち、`transform`は`translate(中心) rotate(角度) matrix(...) translate(-中心)`で組む（無変形のときは従来どおり`rotate(angle,cx,cy)`だけを出力するので既存データは変わらない）。変形してもBBox中心は動かない。ハンドル・選択枠・回転ハンドルは変形後の四辺形に追従して描く（選択枠は`rect`から`polygon`に変更）。`transform`を組み立てる箇所（ハンドル再描画・回転・移動・縦横書き切替）は`_textBuildTransform`に集約した。角ハンドルのリサイズは、BBoxの対角線ではなくハンドル座標から中心までの距離を基準にして、変形後でも飛ばないようにした。テキストサブタブに「変形リセット」ボタンを追加。
+
+**バックアップの移動と対象の追加**: ページタブ「作品管理」のツールバーにあった「バックアップ」「復元」を、設定タブの「バックアップ・復元」カードへ移した（ボタンのIDは同じなので`11a-work-manager.js`の処理は変更なし）。あわせて`_BACKUP_LS_KEYS`を見直し、これまで抜けていた`ccc_t2i_settings`・`ccc_inpaint_settings`・`ccc_outpaint_settings`・`cccPixiFxMultiPresets`・Autoの`ccc_auto_ai_settings`/`ccc_auto_works`/`ccc_auto_current`/`ccc_auto_preview_show_action`・`ccc_split_gap_width`・`ccc_deform_outer_lock`・`cccVideoMuted`/`cccVideoVolume`を追加した。IndexedDBのストア（pages/templates/trash/settings）は変わっていない。WFSが書く`wfm_decision_settings`はCC側では読むだけなので対象外のまま。
+
+**ヘルプ・README**: ヘルプタブ（`22-help-tab.js`、ja/en/zh）に「コマ変形・コマ削除」を追加し、テキストのハンドル説明・ツールペイン・レイヤーパネルのコマ行の✕を更新、「バックアップと復元」をページ—作品管理から設定へ移した。README（ja/en/zh）はバックアップの場所と対象、コマ変形・削除、テキスト変形を追記し、英語・中国語版にはなかったコマ分割の項目も追加した。
+
+**実機確認（Kapture、ComfyUI_5）**: 配信元はStability Matrix配下のComfyUI_5のカスタムノードコピーで、リポジトリとは別物のため、変更ファイルをコピーして確認した（コピー前に`diff --strip-trailing-cr`で今回の変更以外の差分がないことを確認）。辺の平行移動（外周ロックONで左右の頂点がX固定のままY方向に滑る）、外周ロック中の頂点削除の拒否、ロックOFFでの頂点削除（四角形→三角形）、三角形の頂点削除の拒否、Undoでの復元を確認した。テキストは東辺・南辺の伸縮とShift+北辺のせん断で平行四辺形になること、変形後の選択枠が四辺形になることを確認した。
+
+**How to apply**:
+- ComfyUI_6のコピーにはまだ同期していない。使う前に同期すること。
+- テキストの`transform`を別の箇所で直接書き換えると、伸縮・せん断が消える。新たに書くときは`_textBuildTransform`を使う。
+- バックアップ対象のlocalStorageキーを増やしたときは、`_BACKUP_LS_KEYS`にも足す（ComfyUIとオリジンを共有しているため、全キーのダンプはしない方針）。
+- 変形ツールのUIを描くSVG要素（`.deform-ui`）は`panel-layer`のSVG直下に追加している。コマ保存（`savePanelSvg`）は`g[data-clip-panel]`だけを抜き出すため混入しないが、SVG全体を保存する処理を足すときは除去対象に加えること。
+
+---
+
 ## 2026-09-30（フキダシの自動サイズ調整、意思決定モデルによるフキダシの形・コマの重要度の推定（Workflow Studioの設定を共有）、v1.49.0）
 
 Workflow Studio（v0.7.6〜v0.7.7）に意思決定モデル（文章を生成せず、型付きの質問に確率つきで答えるモデル。Unsloth Decision APIのLaya、Ollama 0.35+のtev1/nimble）の設定が入ったのを受け、CCでの活用として3機能を追加した。いずれもAutoタブの設定タブ「フキダシ・意思決定モデル」でON/OFFできる。ユーザーが実機で動作を確認済み（「これまで大きいフキダシで作成されていたため、サイズ調整の手間が減らせる」）。

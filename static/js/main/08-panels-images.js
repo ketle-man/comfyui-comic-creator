@@ -28,6 +28,7 @@ import { clearTextHandles } from './09d-balloon-tools.js';
 import { clearDrawShapeHandles } from './17c-layer-draw-handles.js';
 import { clearGroupHandles } from './06a-polygon-geometry.js';
 import { _subPanelSyncBorderWidthUI } from './24-sub-panels.js';
+import { refreshDeformOverlay } from './24b-panel-deform.js';
 import { updateBalloonPanelSelect } from './09e-text-tool.js';
 import { _isObjectLocked, syncPanelSelectionToObject } from './03-layers-panel.js';
 
@@ -207,6 +208,7 @@ function selectPanel(panelId) {
         renderLayoutTab();
     }
     _subPanelSyncBorderWidthUI();
+    refreshDeformOverlay();
 }
 
 // 下書きレイヤーを選択（編集モードON）。編集モード中のみ下書き内の画像をクリック・操作できる

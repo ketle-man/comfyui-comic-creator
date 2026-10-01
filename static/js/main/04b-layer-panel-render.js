@@ -39,6 +39,7 @@ import { clearHandles, renderHandles } from './09c-balloon-handles.js';
 import { pushHistory, savePanelSvg } from './07-pages.js';
 import { saveGroupAsAsset, ungroupLayer } from './05-groups-move.js';
 import { _isSubPanelFrameMode, deleteSubPanel, renderSubPanelHandles, toggleSubPanelFrameMode } from './24-sub-panels.js';
+import { deletePanel } from './24b-panel-deform.js';
 
 // ── Alt+クリックで「同じ種類のオブジェクトをページ全体で一括表示/非表示切替」 ──
 // ページ（=getPanelLayerSvg()が返す統合SVG。全コマ+オーバーレイ+下書きを含む）内から、
@@ -710,7 +711,8 @@ function renderLayerPanel() {
                         style="${panelMaskLayers.length ? (panelMaskOff ? 'opacity:0.45;' : 'color:#7ab8ff;') : 'opacity:0.6;'}">🎭</button>
                 ${isSubPanel
                     ? `<button class="layer-item-btn subpanel-delete-btn" title="${t('subpanel.deleteTitle')}">✕</button>`
-                    : `<button class="layer-item-btn border-toggle-btn" title="${isBorderHidden ? t('layer.borderShowTitle') : t('layer.borderHideTitle')}">${isBorderHidden ? '−' : '□'}</button>`}
+                    : `<button class="layer-item-btn border-toggle-btn" title="${isBorderHidden ? t('layer.borderShowTitle') : t('layer.borderHideTitle')}">${isBorderHidden ? '−' : '□'}</button>
+                       <button class="layer-item-btn panel-delete-btn" title="${t('deform.layerDeleteTitle')}">✕</button>`}
             </div>
         `;
         if (isSubPanel) {
@@ -740,6 +742,10 @@ function renderLayerPanel() {
             panelItem.querySelector('.border-toggle-btn').addEventListener('click', async (e) => {
                 e.stopPropagation();
                 await togglePanelBorderVisibility(panel.id);
+            });
+            panelItem.querySelector('.panel-delete-btn').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await deletePanel(panel.id);
             });
         }
         panelItem.querySelector('.mask-btn').addEventListener('click', async (e) => {

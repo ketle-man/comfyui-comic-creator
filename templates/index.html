@@ -138,6 +138,7 @@
             <button class="subtab-btn tool-panel-btn" data-subtab="manga" data-i18n="layout.toolManga">マンガ</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="subpanel" data-i18n="layout.toolSubpanel">サブコマ</button>
             <button class="subtab-btn tool-panel-btn" data-subtab="split" data-i18n="layout.toolSplit">分割</button>
+            <button class="subtab-btn tool-panel-btn" data-subtab="deform" data-i18n="layout.toolDeform">変形</button>
           </div>
         </aside>
 
@@ -553,6 +554,7 @@
                     </div>
 
                     <button type="button" id="text-style-modal-btn" class="btn small" style="margin-left:8px;" data-i18n="layout.styleBtn" data-i18n-title="layout.styleBtnTitle" title="線・袋文字・影などのスタイルを設定します（選択中テキストがあれば適用、なければコマに新規挿入）">スタイル</button>
+                    <button type="button" id="text-deform-reset-btn" class="btn small" style="margin-left:8px;" data-i18n="text.deformReset" data-i18n-title="text.deformResetTitle" title="選択中のテキストの縦長・横長・平行四辺形の変形を元に戻します（辺の青いハンドルをドラッグで縦長/横長、Shift+ドラッグで平行四辺形）">変形リセット</button>
                     <button type="button" id="text-undo-btn" class="btn small" style="margin-left:8px;" data-i18n="common.undo">取消</button>
                     <button type="button" id="text-save-btn" class="btn secondary small" data-i18n="common.save">保存</button>
                     <button type="button" id="text-to-png-btn" class="btn small" style="margin-left:8px;" data-i18n="layout.textToPng" data-i18n-title="layout.textToPngTitle" title="選択中のテキストを透過PNGに変換してコマに挿入します">テキスト→PNG</button>
@@ -822,6 +824,25 @@
                   <span style="font-size:11px; color:var(--text-secondary);" data-i18n="split.hint">※ ONにしてプレビュー上のコマ内をドラッグすると、線を引いた方向でそのコマだけを2つに分割します</span>
                   <span id="split-status" style="font-size:11px; color:var(--text-secondary);"></span>
                 </div>
+              </div>
+
+              <!-- コマ変形サブタブ: 選択中のコマの頂点移動・頂点削除・辺の平行移動、コマ削除（コマ間幅/外側幅は無視する破壊的操作） -->
+              <div id="subtab-deform" class="subtab-content" style="display:none; flex:1; padding:0; margin:0;">
+                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                  <span style="font-size:12px; white-space:nowrap;" data-i18n="deform.label">コマ変形:</span>
+                  <div id="deform-mode-group" class="seg-group">
+                    <button type="button" class="seg-btn" data-deform-mode="on">ON</button>
+                    <button type="button" class="seg-btn active" data-deform-mode="off">OFF</button>
+                  </div>
+                  <label style="font-size:12px; white-space:nowrap; display:inline-flex; align-items:center; gap:4px;" data-i18n-title="deform.outerLockTitle" title="ONの間、レイアウト全体の外周ライン上にある頂点を外周から動かせなくします（内側の辺・頂点だけを変形できます）">
+                    <input type="checkbox" id="deform-outer-lock" checked />
+                    <span data-i18n="deform.outerLock">外周ロック</span>
+                  </label>
+                  <button id="deform-delete-vertex" type="button" class="btn small secondary" data-i18n="deform.deleteVertex" data-i18n-title="deform.deleteVertexTitle" title="選択中の頂点を削除します（四角形→三角形。三角形は不可。Deleteキーでも可）">選択頂点を削除</button>
+                  <button id="deform-delete-panel" type="button" class="btn small danger" data-i18n="deform.deletePanel" data-i18n-title="deform.deletePanelTitle" title="選択中のコマを削除します（コマ内の画像・フキダシ・サブコマも削除されます）">選択コマを削除</button>
+                  <span id="deform-status" style="font-size:11px; color:var(--text-secondary);"></span>
+                </div>
+                <div style="margin-top:4px; font-size:11px; color:var(--text-secondary);" data-i18n="deform.hint">※ ONにしてコマを選択すると、頂点（●）のドラッグで移動、辺のドラッグで辺の平行移動ができます。コマ間の幅・外側の幅は無視して変形します（元に戻すは Undo）</div>
               </div>
 
             </div>
@@ -1274,11 +1295,6 @@
                 <button id="work-create-btn" class="btn" data-i18n="page.workCreate" data-i18n-title="page.workCreateTitle" title="作品名とサイズを設定して新規作品を作成します">新規作成</button>
                 <button id="work-open-btn" class="btn secondary" disabled data-i18n="page.workOpen" data-i18n-title="page.workOpenTitle" title="一覧で選択した作品をレイアウトに展開します">開く</button>
                 <button id="work-export-btn" class="btn secondary" disabled data-i18n="page.subtabExport" data-i18n-title="page.workExportTitle" title="選択した作品/グループのページを出力サブタブで表示します">出力</button>
-                <button id="work-backup-btn" class="btn secondary" data-i18n="page.backupBtn" data-i18n-title="page.backupBtnTitle" title="全作品・ページ・テンプレート・設定を1つのzipファイルへ一括保存します">バックアップ</button>
-                <label class="btn secondary" data-i18n-title="page.restoreBtnTitle" title="バックアップzipからデータを復元します（同名のデータは上書き、それ以外は保持）">
-                  <span data-i18n="page.restoreBtn">復元</span>
-                  <input type="file" id="work-restore-file" accept=".zip,application/zip" class="hidden" />
-                </label>
                 <span id="work-active-label" style="margin-left:auto; font-size:12px; color:var(--text-secondary);"></span>
               </div>
               <div style="display:flex; gap:0; flex:1; overflow:hidden; min-height:0;">
@@ -2156,6 +2172,18 @@
             </div>
 
             <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
+              <h3 data-i18n="settings.backupTitle">バックアップ・復元</h3>
+              <p data-i18n="settings.backupDesc" style="margin: 0 0 8px; font-size:12px; color:#888;">全作品・ページ・テンプレート・ゴミ箱・各種設定を1つのzipファイルへ一括保存／復元します（ブラウザのデータ消去や別PCへの移行に備えて）</p>
+              <div class="control-row" style="align-items: center; gap: 8px;">
+                <button id="work-backup-btn" class="btn small primary" data-i18n="page.backupBtn" data-i18n-title="page.backupBtnTitle" title="全作品・ページ・テンプレート・設定を1つのzipファイルへ一括保存します">バックアップ</button>
+                <label class="btn small secondary" data-i18n-title="page.restoreBtnTitle" title="バックアップzipからデータを復元します（同名のデータは上書き、それ以外は保持）">
+                  <span data-i18n="page.restoreBtn">復元</span>
+                  <input type="file" id="work-restore-file" accept=".zip,application/zip" class="hidden" />
+                </label>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
               <h3 data-i18n="settings.eagleTitle">Eagle 設定</h3>
               <div class="control-row" style="margin-bottom: 10px; align-items: center; gap: 8px;">
                 <label for="settings-eagle-url" data-i18n="settings.eagleUrlLabel" style="white-space:nowrap; min-width:160px;">Eagle API URL</label>
@@ -2488,6 +2516,7 @@
     <script type="module" src="/ccc_static/js/main/23-pose3d-bridge.js"></script>
     <script type="module" src="/ccc_static/js/main/24-sub-panels.js"></script>
     <script type="module" src="/ccc_static/js/main/24a-panel-split.js"></script>
+    <script type="module" src="/ccc_static/js/main/24b-panel-deform.js"></script>
     <script type="module" src="/ccc_static/js/main/25-text3d-bridge.js"></script>
     <script type="module" src="/ccc_static/js/main/26-auto-comic-bridge.js"></script>
     <script type="module" src="/ccc_static/js/main/27-video-bridge.js"></script>
