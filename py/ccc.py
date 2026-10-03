@@ -49,6 +49,8 @@ def _validate_local_url(url: str, param_name: str = 'url') -> str:
         p = _urlparse(url)
         if p.scheme not in ('http', 'https'):
             raise CCCError('url_invalid_scheme', f"{param_name}: スキームは http/https のみ許可", param=param_name)
+        if p.username or p.password:
+            raise CCCError('url_has_credentials', f"{param_name}: 認証情報つきURLは禁止", param=param_name)
         host = (p.hostname or '').lower()
         if host not in _ALLOWED_LOCALHOST:
             raise CCCError('url_not_localhost', f"{param_name}: ローカルホスト以外への接続は禁止", param=param_name)
@@ -57,6 +59,17 @@ def _validate_local_url(url: str, param_name: str = 'url') -> str:
     except Exception:
         raise CCCError('url_invalid', f"{param_name}: 無効なURL", param=param_name)
     return url
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+_local_opener = urllib.request.build_opener(_NoRedirect)
+
+def _local_urlopen(req, timeout):
+    """ローカルサービス(Unsloth/Eagle/G'MIC)宛て用のurlopen。リダイレクトは追従しない（3xxはHTTPErrorになる）。
+    ローカルサービスが返したLocationで外部ホストへ接続させない（SSRF対策。Workflow Studioのurl_guardと同じ方針）。"""
+    return _local_opener.open(req, timeout=timeout)
 
 def _validate_local_exe_path(path: str, param_name: str = 'gmicQtPath') -> str:
     """ローカル実行ファイルパスを検証する（UNC/ネットワークパスを拒否し、実在するファイルであることを要求）。
@@ -895,8 +908,9 @@ async def handle_auto_unsloth_proxy(request):
         if path not in _AUTO_UNSLOTH_ALLOWED_PATHS or method not in ('GET', 'POST'):
             return web.json_response({'message': 'Unsupported proxy target'}, status=400)
         parsed = _urlparse(base_url)
-        if parsed.scheme not in ('http', 'https') or parsed.hostname not in _AUTO_UNSLOTH_ALLOWED_HOSTS:
-            return web.json_response({'message': 'Unsloth backend URL must point to localhost/127.0.0.1/::1'}, status=400)
+        if (parsed.scheme not in ('http', 'https') or parsed.hostname not in _AUTO_UNSLOTH_ALLOWED_HOSTS
+                or parsed.username or parsed.password):
+            return web.json_response({'message': 'Unsloth backend URL must be http(s)://localhost|127.0.0.1|::1[:port] (no credentials)'}, status=400)
         api_key = os.environ.get('UNSLOTH_API_KEY', '').strip()
 
         def _fetch():
@@ -905,7 +919,7 @@ async def handle_auto_unsloth_proxy(request):
             if data is not None:
                 headers['Content-Type'] = 'application/json'
             req = urllib.request.Request(f'{base_url}{path}', data=data, headers=headers, method=method)
-            with urllib.request.urlopen(req, timeout=180) as resp:
+            with _local_urlopen(req, timeout=180) as resp:
                 return json.loads(resp.read().decode('utf-8'))
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, _fetch)
@@ -992,7 +1006,7 @@ async def handle_eagle_add(request):
                 payload = json.dumps({'url': image_url, 'name': name, 'tags': tags}).encode('utf-8')
                 endpoint = f'{eagle_url}/api/item/addFromURL'
             req = urllib.request.Request(endpoint, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with _local_urlopen(req, timeout=10) as resp:
                 return json.loads(resp.read().decode('utf-8'))
         result = await loop.run_in_executor(None, _post)
         return web.json_response(result)
@@ -1153,7 +1167,7 @@ async def handle_proxy_gmic(request):
         loop = asyncio.get_event_loop()
         def _do():
             req = urllib.request.Request(target_url, data=body, headers={'Content-Type': 'application/json'}, method=request.method)
-            with urllib.request.urlopen(req, timeout=310) as resp:
+            with _local_urlopen(req, timeout=310) as resp:
                 return resp.read(), resp.status
         raw, status = await loop.run_in_executor(None, _do)
         return web.Response(body=raw, status=status, content_type='application/json')

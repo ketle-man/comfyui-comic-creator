@@ -2,6 +2,23 @@
 
 ---
 
+## 2026-10-04（ローカル中継のSSRF対策、意思決定モデルの画像入力の下地、v1.50.1）
+
+ComfyUI-Manager へのLiveChatStream登録PR（#3340）で指摘された「リクエストで指定した接続先へサーバーが接続できてしまう」問題が、CCのローカル中継にも当てはまるため対処した（Workflow Studio側は対応済み）。あわせて、vision対応の意思決定モデル（Ollama 0.35+ のclef）に画像を渡すクライアント側の口を用意した（画像判定を使う機能は見送り）。
+
+**SSRF対策（`py/ccc.py`）**: Unsloth中継（`/api/ccc/auto/unsloth-proxy`）・Eagle（`/api/ccc/eagle/add`）・G'MIC中継は元々localhost/127.0.0.1/::1に限定していたが、(1) 3xxリダイレクトを追従していた、(2) `user:pass@localhost`形式の認証情報つきURLを拒否していなかった。リダイレクトを追わない`_local_urlopen`に3経路を統一し、認証情報つきURLは`_validate_local_url`とUnsloth中継で拒否するようにした。Workflow Studioの`url_guard`と同じ方針（ただしCCは元々loopbackのみで、許可リスト環境変数は設けていない）。Ollamaはブラウザから直接呼ぶためサーバー側ルートが無く、この指摘の対象外。
+
+**意思決定モデルの画像入力（`decision-client.js`）**: `decide(state, questions, settings, images)`に画像（base64、dataプレフィックス無し）を渡せるようにし、`imageToBase64`と`supportsDecisionVision`を追加した。Ollama 0.35.1のclef/clef-flashは`/api/show`のcapabilitiesが`['decision']`のみで`vision`が付かないため、`projector_info`（画像エンコーダ）の有無でも判定する。LiveChatStreamの`judgeImage`と同じ形式。
+
+**実機確認**: 再起動後のComfyUI_5(8189)で、認証情報つきURL・外部IP・`file://`・Eagleの外部宛てが拒否され、302を返すlocalhostサーバーへは追従せず`HTTP 302`で止まること、localhost/[::1]宛ては通常どおり中継されることを確認。clefに赤い円の画像を渡し「赤い円があるか」0.99・「青い四角があるか」0.01。
+
+**How to apply**:
+- clef-flash(9b)はOllama 0.35.1で`/v1/systemone`が常に失敗する（CUDAは`Clef: non-finite logit`、CPUは`cannot open model`）。ollama/ollama Issue #18769、open。画像あり・なしの両方で再現し、CC側の問題ではない。Ollamaの修正を待つ。当面はclef(27b)を使う。
+- 非visionモデルに`images`を渡すと接続が切れる。画像を渡す前に`supportsDecisionVision`で確認する。
+- ローカルサービスへの新しい中継を足すときは、`_validate_local_url`で検証し`_local_urlopen`で接続する（`urllib.request.urlopen`直呼びはリダイレクトを追従する）。
+
+---
+
 ## 2026-10-01（コマの変形・削除、テキストの縦長/横長/平行四辺形変形、バックアップの設定タブ移動、v1.50.0）
 
 レイアウトタブにコマの変形・削除とテキストの変形を追加し、ページタブにあった一括バックアップ／復元を設定タブへ移した。ユーザーが実機（Kapture経由の確認を含む）で変形サブタブとテキスト変形の動作を確認済み。

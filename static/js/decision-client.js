@@ -4,10 +4,12 @@
 // ComfyUI-Workflow-Studio の static/js/decision-client.js から、必要部分を 2026-09-30 時点で
 // 移植したもの。WFS側の仕様変更を取り込みたいときは、あちらの getDecisionSettings / decide /
 // pickChoice / pickScore / testDecisionConnection を見比べて同期すること。
+// （画像入力 images / supportsDecisionVision / imageToBase64 はCC独自の追加。LiveChatStream の judgeImage 相当）
 //
 // 意思決定モデルは文章を生成せず、状態（テキストやJSON）と型付きの質問（yes/no・選択・段階評価）に
 // 確率つきで答える。Unsloth Decision API（Laya）と Ollama 0.35+（tev1 / nimble）が同じ
-// POST /v1/systemone を話す。画像は扱えない。
+// POST /v1/systemone を話す。画像はvision対応の意思決定モデルのみ扱える（decide の images 引数。
+// 非対応モデルに渡すとエラーになるため、事前に supportsDecisionVision で確認する）。
 //
 // 設定（backend / baseUrl / model / threshold）は Workflow Studio の Settings タブ「意思決定モデル」の
 // localStorage 'wfm_decision_settings' を読むだけで、CC側では書き換えない（CCとWFSは同じComfyUIの
@@ -91,8 +93,10 @@ async function unslothProxy(baseUrl, payload) {
  * 1つの状態に型付きの質問をまとめて聞く。戻り値は questions と同じキーの answers。
  * Unsloth は起動後の初回にモデル読み込みで10〜20秒かかる。
  */
-export async function decide(state, questions, settings = getDecisionSettings()) {
+export async function decide(state, questions, settings = getDecisionSettings(), images = []) {
     const payload = { model: settings.model, state, questions };
+    // images は base64文字列（data: プレフィックス無し）の配列。vision対応モデルのみ
+    if (images?.length) payload.images = images;
     let data;
     if (settings.backend === 'ollama') {
         const res = await fetch(`${hostMatched(settings.baseUrl)}/v1/systemone`, {
@@ -108,6 +112,40 @@ export async function decide(state, questions, settings = getDecisionSettings())
     }
     if (!data || typeof data.answers !== 'object') throw new Error(data?.error || 'Decision API returned no answers');
     return data.answers;
+}
+
+/** Blob / data URL / 画像URL を base64（data:プレフィックス無し）にする。decide の images 用。 */
+export async function imageToBase64(src) {
+    const blob = src instanceof Blob ? src : await (await fetch(src)).blob();
+    return await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(',')[1] || '');
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(blob);
+    });
+}
+
+/**
+ * 設定中の意思決定モデルが画像入力に対応しているか。
+ * Ollama は /api/show で判定する。decisionモデルは capabilities が ['decision'] のみで 'vision' が付かない
+ * （Ollama 0.35.1 + clef で確認）ため、capabilities の 'vision' か、画像エンコーダ(projector_info)の有無を見る。Unsloth は一覧APIで判別できないため
+ * null（不明）を返す（呼び出し側は試して失敗したらテキストのみへ戻す）。
+ */
+export async function supportsDecisionVision(settings = getDecisionSettings()) {
+    if (settings.backend !== 'ollama') return null;
+    try {
+        const res = await fetch(`${hostMatched(settings.baseUrl)}/api/show`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: settings.model }),
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        return (Array.isArray(data.capabilities) && data.capabilities.includes('vision'))
+            || !!(data.projector_info && Object.keys(data.projector_info).length);
+    } catch {
+        return false;
+    }
 }
 
 /** 設定タブの接続テスト: yes/no 1問の所要時間と「はい」の確率 */
