@@ -23,6 +23,13 @@ let currentMorphKeys = [];
 // Light & Pose Editorを閉じた際、モーダル内でWind/LookAt/カメラ/Point Size等の状態が変更された
 // 可能性があるため、レイアウトタブ側のツールバー表示を再同期する
 // （node側pose_editor_3d.jsのonLightPoseEditorClosedと同じパターン）。
+// Light & Pose Editor / Pose Library を開いている間、3Dビューのラッパーはモーダル内のプレビュー枠へ
+// 一時的に貸し出されている(DOM移動 + transform: scale)。その間にコマ用の位置・サイズを書き込んだり
+// #layout-preview へ戻したりすると、モーダルのプレビューが枠外へずれる・消えるため、貸し出し中かを判定する
+function _pose3dIsBorrowed() {
+    return !!state.pose3d.wrapper?.closest?.('#light-pose-editor-modal, #pose-library-modal');
+}
+
 function _pose3dOnLightPoseEditorClosed({ windBtn, windSourceBtn, ptSlider, ptVal, camModeBtn, lookAtBtn, fovSlider, fovVal, nearSlider, nearVal }) {
     const editor = state.pose3d.editor;
     if (!editor) return;
@@ -66,6 +73,15 @@ function _pose3dOnLightPoseEditorClosed({ windBtn, windSourceBtn, ptSlider, ptVa
         nearSlider.value = String(v);
         if (nearVal) nearVal.textContent = v.toFixed(2);
     }
+
+    // モーダルを開いている間はコマへの位置合わせを止めていた(_pose3dIsBorrowed)ため、
+    // その間にウィンドウやプレビューのサイズが変わっていても追従するよう、戻ってきた時点で合わせ直す
+    requestAnimationFrame(() => {
+        const pid = state.pose3d.activePanelId;
+        const p   = pid && state.activePage?.panels.find(pp => pp.id === pid);
+        const sv  = document.querySelector('#layout-preview #image-layer svg');
+        if (p && sv) _pose3dSyncPosition(p, sv);
+    });
 }
 
 function initPose3DTab() {
@@ -118,7 +134,7 @@ function initPose3DTab() {
     // 再描画（DOMから切り離された場合の再追加 + レイアウト再同期）
     if (refreshBtn) refreshBtn.addEventListener('click', () => {
         const pid = state.pose3d.activePanelId;
-        if (!pid || !state.pose3d.editor) return;
+        if (!pid || !state.pose3d.editor || _pose3dIsBorrowed()) return;
         const previewContainer = document.getElementById('layout-preview');
         if (!previewContainer) return;
         if (!previewContainer.contains(state.pose3d.wrapper)) {
@@ -495,6 +511,7 @@ function showPose3DCanvas(panelId) {
 
 // コマbboxに合わせてラッパー位置・canvasサイズを更新
 function _pose3dSyncPosition(panel, svgEl) {
+    if (_pose3dIsBorrowed()) return;
     const bbox = getBoundingBoxFromPoints(panel.points);
     if (!bbox) return;
 
@@ -706,7 +723,7 @@ function _base64ToArrayBuffer(b64) {
     return bytes.buffer;
 }
 
-export { initPose3DTab, hidePose3DCanvas, _pose3dSyncPosition };
+export { initPose3DTab, hidePose3DCanvas, _pose3dSyncPosition, _pose3dIsBorrowed };
 
 // まだESM化されていない main/以下の classic <script> や、既存ESMファイルの一部が
 // window経由で呼んでいるためのブリッジ（ESモジュール化移行中の一時措置。

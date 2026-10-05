@@ -43,7 +43,7 @@ import { initSplitPanelManipulation } from './24a-panel-split.js';
 import { initDeformPanelManipulation } from './24b-panel-deform.js';
 import { renderLayerPanel } from './04b-layer-panel-render.js';
 import { _maskAttachOverlay, _maskSetEditing, _maskState, _maskUpdateUI } from './04a-mask-core.js';
-import { _pose3dSyncPosition } from './23-pose3d-bridge.js';
+import { _pose3dSyncPosition, _pose3dIsBorrowed } from './23-pose3d-bridge.js';
 import { saveOverlaySvg } from './09b-balloon-shapes.js';
 
 // ==============================
@@ -622,7 +622,7 @@ async function renderLayoutTab() {
     }
 
     // 3Dポーズビュー表示中なら wrapper を layout-preview に再アタッチしてサイズ同期
-    if (state.pose3d.activePanelId && state.pose3d.wrapper) {
+    if (state.pose3d.activePanelId && state.pose3d.wrapper && !_pose3dIsBorrowed()) {
         const svgEl = document.querySelector('#layout-preview #image-layer svg');
         if (previewContainer && svgEl) {
             previewContainer.style.position = 'relative';
