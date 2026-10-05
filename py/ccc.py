@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import math
 import os
 import re
 import subprocess
@@ -1023,6 +1024,8 @@ async def handle_eagle_add(request):
 
 _MB = 1024 * 1024
 _OLLAMA_DEFAULT_URL = 'http://127.0.0.1:11434'
+_VRAM_MAX_URLS = 4                      # 既定URLを含む。1件ごとに接続待ちが発生するため上限を設ける
+_vram_lock = asyncio.Lock()             # 同時に走らせない（アンロードと空きの計測が干渉するため）
 
 def _smi_free_mb(ident):
     flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
@@ -1102,8 +1105,12 @@ def _ollama_unload(base, name):
 
 def _ollama_bases(urls):
     """検証済み・重複なしのOllama URL一覧。localhost / 127.0.0.1 / ::1 は同じサーバーとみなす。"""
+    if urls is None:
+        urls = []
+    if not isinstance(urls, list):
+        raise CCCError('vram_invalid_urls', 'urls は配列で指定')
     bases, seen = [], set()
-    for raw in [_OLLAMA_DEFAULT_URL, *(urls or [])]:
+    for raw in [_OLLAMA_DEFAULT_URL, *urls]:
         if not isinstance(raw, str) or not raw.strip():
             continue
         base = _validate_local_url(raw.strip().rstrip('/'), 'urls')
@@ -1113,6 +1120,8 @@ def _ollama_bases(urls):
             continue
         seen.add(key)
         bases.append(base)
+        if len(bases) > _VRAM_MAX_URLS:
+            raise CCCError('vram_too_many_urls', f'接続先は{_VRAM_MAX_URLS}件まで')
     return bases
 
 def _vram_prepare(mode, target_mb, bases):
@@ -1126,8 +1135,9 @@ def _vram_prepare(mode, target_mb, bases):
                     cands.append({'base': base, 'name': m['name'], 'vram_mb': int(m.get('size_vram', 0) / _MB)})
         except Exception as e:
             # Ollamaが起動していない等。既定URLが無いのは普通なので失敗扱いにはしないが、原因はログに残す
+            # 応答には理由を含めない（呼び出し側が指定したローカルホストのポートの状態を知らせないため）
             print(f"[ccc] vram: {base}/api/ps failed: {e!r}")
-            unreachable.append({'url': base, 'error': repr(e)})
+            unreachable.append({'url': base})
     unloaded, failed = [], []
     free_after = free_before
     if mode == 'auto':
@@ -1161,18 +1171,29 @@ async def handle_vram_prepare(request):
     auto: 空きVRAMが target_gb 未満のときだけ、VRAM使用量の大きいモデルから必要な分だけアンロード。
     all: ロード中のモデルをすべてアンロード（「モデルをアンロード」ボタンもこれを使う）。
     接続先はローカルホストに限る（既定の127.0.0.1:11434も常に対象）。"""
+    # 他サイトからの単純リクエスト（text/plain等、CORSのプリフライト無し）でモデルを外されないよう、JSONのみ受け付ける
+    if request.content_type != 'application/json':
+        return _error_response(CCCError('vram_bad_content_type', 'Content-Type は application/json のみ'), status=415)
     try:
         data = await request.json()
+        if not isinstance(data, dict):
+            raise CCCError('vram_invalid_body', '本文はJSONオブジェクトで指定')
         mode = data.get('mode')
         if mode not in ('auto', 'all'):
             raise CCCError('vram_invalid_mode', 'mode は auto / all のみ')
-        target_mb = min(max(float(data.get('target_gb', 8) or 0), 0.0), 64.0) * 1024
+        target_gb = float(data.get('target_gb', 8) or 0)
+        if not math.isfinite(target_gb):
+            raise CCCError('vram_invalid_target', 'target_gb は有限の数値で指定')
+        target_mb = min(max(target_gb, 0.0), 64.0) * 1024
         bases = _ollama_bases(data.get('urls'))
     except Exception as e:
         return _error_response(e, status=400)
+    if _vram_lock.locked():
+        return _error_response(CCCError('vram_busy', 'VRAM調整は実行中'), status=409)
     try:
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, _vram_prepare, mode, target_mb, bases)
+        async with _vram_lock:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, _vram_prepare, mode, target_mb, bases)
         return web.json_response(result)
     except Exception as e:
         print(f"[ccc] vram prepare error: {e}")
