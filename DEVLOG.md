@@ -2,7 +2,7 @@
 
 ---
 
-## 2026-10-05（VRAM調整: 画像生成の前にOllamaのモデルをアンロード、未リリース）
+## 2026-10-05（VRAM調整: 画像生成の前にOllamaのモデルをアンロード、v1.51.0）
 
 ComfyUI-LiveChatStream（LCS）のVRAM調整（`/live_chat_stream/vram_prepare`）が有効かを確かめ、CCへ移植した。CCはこれまでAutoタブの「モデルをアンロード」で選択中の1モデルを手動で外すだけだった。
 
@@ -25,7 +25,7 @@ ComfyUI-LiveChatStream（LCS）のVRAM調整（`/live_chat_stream/vram_prepare`�
 
 ---
 
-## 2026-10-05（3Dポーズ: vrm-pose-editorの既定モデルをCCでも自動で読み込む、ヘルプをv0.21.0に追従、未リリース）
+## 2026-10-05（3Dポーズ: vrm-pose-editorの既定モデルをCCでも自動で読み込む、ヘルプをv0.21.0に追従、v1.51.0）
 
 v1.50.2リリース後にヘルプを確認したところ、3Dポーズの説明が2点ずれていた。(1)「🎛 Editor」にImageタブ・自動瞬き・Blinkトラックが無い。(2)「モデル読込」の「`model.glb`をプロジェクト直下に置くと起動時に自動ロード」が実際には動いていなかった。CCは`initPoseEditor3D`の`baseUrl`に`'./'`を渡しており、自動読み込みは`/model.glb`等を探すがComfyUIでは404になる（ページが`/ccc`のため）。v0.21.0のvrm-pose-editorは`model/`フォルダ＋Default Model設定から既定モデルを選ぶ仕組み（`default_model.js`）になったが、ノードの`pose_editor_3d.js`だけが`defaultModelProvider`を渡しており、CCからは使われていなかった。ユーザー判断で、記述を消すのではなくCC側でも既定モデルを読み込むようにした。
 
