@@ -1015,6 +1015,169 @@ async def handle_eagle_add(request):
     except Exception as e:
         return _error_response(e, status=500)
 
+# ─── VRAM調整（Ollamaのモデルをアンロードして画像生成用の空きVRAMを作る） ───────────────
+# ComfyUI-LiveChatStream の vram_prepare と同じ方式。ComfyUIの空きVRAM（get_free_memory / system_stats の
+# vram_free）は、環境によってOllamaのロード/アンロードに反応しない（ComfyUI_5でも9Bモデルのロード前後で
+# 8462MBのまま、nvidia-smiは6530→469MBと実測）。そのためドライバの実測（nvidia-smi）に
+# ComfyUI自身のtorch未使用キャッシュ分を足して空きとし、取れなければ get_free_memory に戻す。
+
+_MB = 1024 * 1024
+_OLLAMA_DEFAULT_URL = 'http://127.0.0.1:11434'
+
+def _smi_free_mb(ident):
+    flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+    out = subprocess.run(
+        ['nvidia-smi', '-i', str(ident), '--query-gpu=memory.free', '--format=csv,noheader,nounits'],
+        capture_output=True, text=True, timeout=5, creationflags=flags,
+    )
+    if out.returncode != 0:
+        raise RuntimeError(out.stderr.strip() or 'nvidia-smi failed')
+    return float(out.stdout.strip().splitlines()[0])
+
+def _free_vram_mb():
+    """画像生成で使える空きVRAM(MB)と取得元（'nvidia-smi' / 'comfy'）を返す。"""
+    import torch
+    import comfy.model_management as mm
+    dev = mm.get_torch_device()
+    if getattr(dev, 'type', 'cpu') == 'cuda':
+        try:
+            st = torch.cuda.memory_stats(dev)
+            cached = max(0, st['reserved_bytes.all.current'] - st['active_bytes.all.current'])
+            try:
+                free = _smi_free_mb(f"GPU-{torch.cuda.get_device_properties(dev).uuid}")
+            except Exception:
+                free = _smi_free_mb(dev.index or 0)
+            return free + cached / _MB, 'nvidia-smi'
+        except Exception as e:
+            print(f"[ccc] nvidia-smi free VRAM unavailable, falling back to ComfyUI: {e}")
+    return mm.get_free_memory(dev) / _MB, 'comfy'
+
+def _wait_vram_settled(prev_mb, timeout_s=6.0):
+    """アンロード後、Ollamaのランナー終了で空きが増えて頭打ちになるまで待ち、実測の空き(MB)を返す。"""
+    now = prev_mb
+    last = None
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        time.sleep(0.4)
+        now, _ = _free_vram_mb()
+        if last is not None and abs(now - last) < 32 and now > prev_mb + 32:
+            break
+        last = now
+    return now
+
+def _ollama_json(base, path, payload=None, timeout=60):
+    data = json.dumps(payload).encode('utf-8') if payload is not None else None
+    req = urllib.request.Request(base + path, data=data, headers={'Content-Type': 'application/json'},
+                                 method='POST' if data is not None else 'GET')
+    with _local_urlopen(req, timeout=timeout) as resp:
+        return resp.status, resp.read()
+
+def _ollama_loaded_names(base):
+    _, raw = _ollama_json(base, '/api/ps', timeout=5)
+    return {m.get('name') for m in json.loads(raw.decode('utf-8')).get('models', [])}
+
+def _ollama_unload(base, name):
+    """keep_alive=0 でアンロード。意思決定モデルなど /api/generate を受け付けないモデルは /api/chat で再試行。
+    応答がエラーでも、Ollamaは少し遅れてアンロードしていることがある（実機で1回発生）ため、
+    最後に /api/ps でまだロードされているかを確かめて判定する。"""
+    errors = []
+    for path, payload in (('/api/generate', {'model': name, 'keep_alive': 0}),
+                          ('/api/chat', {'model': name, 'messages': [], 'keep_alive': 0})):
+        try:
+            status, _ = _ollama_json(base, path, payload)
+            if status == 200:
+                return True
+            errors.append(f"{path}: HTTP {status}")
+        except Exception as e:
+            errors.append(f"{path}: {e}")
+    for _ in range(5):
+        time.sleep(0.5)
+        try:
+            if name not in _ollama_loaded_names(base):
+                return True
+        except Exception:
+            pass
+    print(f"[ccc] vram: unload failed for {name}: {'; '.join(errors)}")
+    return False
+
+def _ollama_bases(urls):
+    """検証済み・重複なしのOllama URL一覧。localhost / 127.0.0.1 / ::1 は同じサーバーとみなす。"""
+    bases, seen = [], set()
+    for raw in [_OLLAMA_DEFAULT_URL, *(urls or [])]:
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        base = _validate_local_url(raw.strip().rstrip('/'), 'urls')
+        p = _urlparse(base)
+        key = (p.scheme, p.port or (443 if p.scheme == 'https' else 80))
+        if key in seen:
+            continue
+        seen.add(key)
+        bases.append(base)
+    return bases
+
+def _vram_prepare(mode, target_mb, bases):
+    free_before, free_src = _free_vram_mb()
+    cands, unreachable = [], []
+    for base in bases:
+        try:
+            _, raw = _ollama_json(base, '/api/ps', timeout=5)
+            for m in json.loads(raw.decode('utf-8')).get('models', []):
+                if m.get('name'):
+                    cands.append({'base': base, 'name': m['name'], 'vram_mb': int(m.get('size_vram', 0) / _MB)})
+        except Exception as e:
+            # Ollamaが起動していない等。既定URLが無いのは普通なので失敗扱いにはしないが、原因はログに残す
+            print(f"[ccc] vram: {base}/api/ps failed: {e!r}")
+            unreachable.append({'url': base, 'error': repr(e)})
+    unloaded, failed = [], []
+    free_after = free_before
+    if mode == 'auto':
+        # Ollamaの size_vram はKVキャッシュ等を含まず実際に増える空きより小さい。見込みで選ぶと余分に
+        # 解放しかねないので、大きいモデルから1台ずつアンロードし、そのつど実測の空きで止める
+        cands.sort(key=lambda c: c['vram_mb'], reverse=True)
+        for c in cands:
+            if free_after >= target_mb:
+                break
+            if _ollama_unload(c['base'], c['name']):
+                unloaded.append(c)
+                free_after = _wait_vram_settled(free_after)
+            else:
+                failed.append(c)
+    else:
+        for c in cands:
+            (unloaded if _ollama_unload(c['base'], c['name']) else failed).append(c)
+        if unloaded:
+            free_after = _wait_vram_settled(free_after)
+    strip = lambda cs: [{'name': c['name'], 'vram_mb': c['vram_mb']} for c in cs]
+    return {
+        'status': 'ok', 'mode': mode, 'target_gb': target_mb / 1024, 'free_source': free_src,
+        'free_before_mb': round(free_before), 'free_after_mb': round(free_after),
+        'unloaded': strip(unloaded), 'failed': [c['name'] for c in failed],
+        'unreachable': unreachable,
+        'reached': free_after >= target_mb,
+    }
+
+async def handle_vram_prepare(request):
+    """POST {mode:'auto'|'all', target_gb, urls:[OllamaのURL]}。
+    auto: 空きVRAMが target_gb 未満のときだけ、VRAM使用量の大きいモデルから必要な分だけアンロード。
+    all: ロード中のモデルをすべてアンロード（「モデルをアンロード」ボタンもこれを使う）。
+    接続先はローカルホストに限る（既定の127.0.0.1:11434も常に対象）。"""
+    try:
+        data = await request.json()
+        mode = data.get('mode')
+        if mode not in ('auto', 'all'):
+            raise CCCError('vram_invalid_mode', 'mode は auto / all のみ')
+        target_mb = min(max(float(data.get('target_gb', 8) or 0), 0.0), 64.0) * 1024
+        bases = _ollama_bases(data.get('urls'))
+    except Exception as e:
+        return _error_response(e, status=400)
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _vram_prepare, mode, target_mb, bases)
+        return web.json_response(result)
+    except Exception as e:
+        print(f"[ccc] vram prepare error: {e}")
+        return _error_response(e, status=500)
+
 async def handle_get_app_server_settings(request):
     return web.json_response({'status': 'ok', 'autoStart': _app_settings.get('appServerAutoStart', False)})
 
@@ -1203,6 +1366,7 @@ def _build_dispatch_tables():
         "psd/export-layers":           handle_psd_export_layers,
         "nanobanana/generate":         handle_nanobanana_generate,
         "eagle/add":                   handle_eagle_add,
+        "vram/prepare":                handle_vram_prepare,
         "app-server/settings":         handle_post_app_server_settings,
         "local-gmic/settings":         handle_post_local_gmic_settings,
         "local-gmic/open_in_gui_b64":  handle_local_gmic_open_b64,
@@ -1268,6 +1432,7 @@ class ComicCreator:
         app.router.add_post("/api/ccc/psd/export-layers",        handle_psd_export_layers)
         app.router.add_post("/api/ccc/nanobanana/generate",      handle_nanobanana_generate)
         app.router.add_post("/api/ccc/eagle/add",                handle_eagle_add)
+        app.router.add_post("/api/ccc/vram/prepare",             handle_vram_prepare)
         app.router.add_post("/api/ccc/app-server/settings",      handle_post_app_server_settings)
         app.router.add_post("/api/ccc/local-gmic/settings",      handle_post_local_gmic_settings)
         app.router.add_post("/api/ccc/local-gmic/open_in_gui_b64", handle_local_gmic_open_b64)

@@ -177,6 +177,10 @@ NANOBANANA_API_KEY=あなたのAPIキー
 
 設定タブの「Eagle設定」で Eagle の API URL（デフォルト: `http://localhost:41595`）を確認・変更できます。Eagle アプリが起動している必要があります。
 
+### Ollama と画像生成で VRAM を取り合う場合
+
+設定タブの「VRAM調整（Ollama）」で、Workflow Studio 経由の画像生成（T2I・I2I・Inpaint・Outpaint）の直前に Ollama のモデルをアンロードできます。「空きが目標未満のときだけ必要な分をアンロード」（VRAM 使用量の大きいモデルから1台ずつ、目標の空き GB に届くまで）と「毎回すべてアンロード」を選べます。空き VRAM は `nvidia-smi` の実測で判定します（ComfyUI が表示する空きは Ollama の使用分を反映しないことがあるため）。対象はローカルホストの Ollama（既定の `127.0.0.1:11434`、Auto タブのローカル LLM、意思決定モデル）です。Auto タブの「モデルをアンロード」も、Ollama のときはロード中の全モデルをアンロードします。
+
 ### 依存関係（任意）
 
 以下のカスタムノードがインストールされていると、対応する機能が有効になります。未インストールでも他の機能には影響しません。
@@ -275,6 +279,7 @@ comfyui-comic-creator/
 | POST     | `/api/ccc/save-image-project`         | Image タブのプロジェクト保存 |
 | POST     | `/api/ccc/video/upload`               | 動画（MP4）のアップロード    |
 | POST     | `/api/ccc/eagle/add`                  | Eagle への画像保存           |
+| POST     | `/api/ccc/vram/prepare`               | 画像生成前の VRAM 調整（Ollama のモデルのアンロード） |
 | POST     | `/api/ccc/local-gmic/open_in_gui_b64` | G'MIC Qt GUI 起動            |
 | GET      | `/api/ccc/local-gmic/status/{job_id}` | G'MIC ジョブ状態取得         |
 

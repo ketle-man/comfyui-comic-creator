@@ -2,6 +2,27 @@
 
 ---
 
+## 2026-10-05（VRAM調整: 画像生成の前にOllamaのモデルをアンロード、未リリース）
+
+ComfyUI-LiveChatStream（LCS）のVRAM調整（`/live_chat_stream/vram_prepare`）が有効かを確かめ、CCへ移植した。CCはこれまでAutoタブの「モデルをアンロード」で選択中の1モデルを手動で外すだけだった。
+
+**LCSの確認（ComfyUI_5、Ollama 0.35.1）**: `qwen3.5:9b`をロードした状態でauto（目標6GB）→1台アンロードし空き470→7869MB。空きが足りていればアンロードしない。allで意思決定モデル`tev1:0.8b`も外れる（`/api/generate`が拒否されたときの`/api/chat`での再試行が効く）。**ComfyUIの空きVRAMはOllamaに反応しない**: 9Bのロードでnvidia-smiは6530→469MBに減ったが、`/system_stats`の`vram_free`は8462MBのままだった（LCSのv0.5.3で見つかった現象がComfyUI_5でも起きる）。そのため空きの判定はLCSと同じくnvidia-smiの実測が必要。
+
+**サーバー（`py/ccc.py`）**: `POST /api/ccc/vram/prepare`（`mode`: auto/all、`target_gb`: 0〜64、`urls`: OllamaのURL）。空きはnvidia-smi（torchのGPU UUIDで特定）＋ComfyUI自身のtorch未使用キャッシュ（reserved−active）。取れなければ`get_free_memory`。autoはOllama`/api/ps`の`size_vram`の大きい順に1台ずつアンロードし、そのつど空きが頭打ちになるまで待って（最大6秒）実測で止める（`size_vram`はKVキャッシュ等を含まず実消費より小さいため、見込みでは選ばない）。URLは`_validate_local_url`でローカルホストに限り、既定の`127.0.0.1:11434`を常に加え、ポートで重複を除く（localhost/127.0.0.1/::1は同じサーバー）。通信は`_local_urlopen`（リダイレクトを追わない）。アンロードは`keep_alive:0`で`/api/generate`→`/api/chat`の順に試し、どちらもエラーなら最大2.5秒`/api/ps`を見て、消えていれば成功とみなす（Playwright経由の検証で、応答はエラーなのに少し遅れてアンロードされていたことが1回あった）。`/api/ps`の失敗は`[ccc] vram:`でログに出し、応答の`unreachable`に理由を返す。
+
+**フロント**: `static/js/vram-prepare.js`（新規）。設定は`ccc_vram_settings`（`mode`: off/auto/all、`targetGb`、既定off・8GB、バックアップ対象に追加）。対象URLはAutoタブのローカルLLM（Ollamaのとき）と意思決定モデル（WFSと共有の設定がOllamaのとき）。ループバック以外（LAN上のOllama等）はサーバーが拒否するので送らない。`14-integrations.js`のWorkflow Studioへの実行4関数（`requestPanelImageFromWorkflowStudio`・`sendI2IRunToWorkflowStudio`・`sendInpaintToWorkflowStudio`・`sendOutpaintToWorkflowStudio`）の先頭で`prepareVramForGeneration()`を呼ぶので、Autoタブ・オートレイアウト・スクリプトの自動作画・PixiJS FX・Imageタブのどこから生成しても効く。失敗しても生成は止めない。アンロードしたとき・目標に届かないとき・失敗したときは画面右下に通知する（目標未達の同じ警告は連続生成で繰り返さない）。設定タブに「VRAM調整（Ollama）」カード（生成前の動作・目標GB・今すぐすべてアンロード）。Autoタブの「モデルをアンロード」は、Ollamaかつローカルホストのときは同じAPIでロード中の全モデル（意思決定モデルを含む）を外す。LM Studio等とLAN上のOllamaは従来どおり選択中の1モデル。
+
+**ヘルプ・README（ja/en/zh）**: ヘルプの設定にVRAM調整の節を追加し、Autoタブのアンロードの説明を更新。READMEの任意設定に「Ollamaと画像生成でVRAMを取り合う場合」、APIの表に`/api/ccc/vram/prepare`を追加。
+
+**実機確認（ComfyUI_5）**: curlでルートを直接呼び、不正なmode・外部IP・認証情報つきURLの拒否、auto（空き2.6→10.1GB）、空きが足りるときのno-op、allで意思決定モデルのアンロードを確認。ブラウザはKapture（ユーザーの通常のChrome）で、ブラウザからOllamaへ`qwen3.5:9b`と`tev1:0.8b`をロード→`requestVramPrepare`を3回（all/auto/all）繰り返し、毎回2台とも外れて空き約1.3→9.9GB（1.3〜2.1秒、失敗・接続不可0件）。`prepareVramForGeneration`（auto・目標6GB）でqwenが外れ「🧹 qwen3.5:9b をアンロード — 空き 2.3 → 9.6 GB」が出ること、2回目はアンロードしないことを確認（設定は確認後に元へ戻した）。設定タブのカードの表示と保存はPlaywrightで確認。Playwright経由では2回失敗があった（上記のアンロード判定と、`/api/ps`の取得失敗で「ロード中のモデルなし」と表示）。curlとKaptureでは再現せず、検証用ブラウザ側の制約の可能性があるため、ユーザー判断でKaptureで動けば問題なしとした。Workflow Studioで実際に画像を生成しての通し確認はしていない。
+
+**How to apply**:
+- ComfyUIの`get_free_memory`や`/system_stats`の`vram_free`は、Ollama等の他プロセスのVRAM使用を反映しないことがある。空きVRAMを判断材料にするときは`_free_vram_mb()`を使う。
+- Workflow Studio経由の生成関数を新しく足すときは、先頭で`prepareVramForGeneration()`を呼ぶ。
+- 意思決定モデルは`/api/generate`の`keep_alive:0`を受け付けないことがある。Ollamaのアンロードは`_ollama_unload`（`/api/chat`で再試行し、最後に`/api/ps`で確認）を使う。
+
+---
+
 ## 2026-10-05（3Dポーズ: vrm-pose-editorの既定モデルをCCでも自動で読み込む、ヘルプをv0.21.0に追従、未リリース）
 
 v1.50.2リリース後にヘルプを確認したところ、3Dポーズの説明が2点ずれていた。(1)「🎛 Editor」にImageタブ・自動瞬き・Blinkトラックが無い。(2)「モデル読込」の「`model.glb`をプロジェクト直下に置くと起動時に自動ロード」が実際には動いていなかった。CCは`initPoseEditor3D`の`baseUrl`に`'./'`を渡しており、自動読み込みは`/model.glb`等を探すがComfyUIでは404になる（ページが`/ccc`のため）。v0.21.0のvrm-pose-editorは`model/`フォルダ＋Default Model設定から既定モデルを選ぶ仕組み（`default_model.js`）になったが、ノードの`pose_editor_3d.js`だけが`defaultModelProvider`を渡しており、CCからは使われていなかった。ユーザー判断で、記述を消すのではなくCC側でも既定モデルを読み込むようにした。

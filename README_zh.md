@@ -177,6 +177,10 @@ NANOBANANA_API_KEY=你的API密钥
 
 在设置标签的"Eagle设置"中确认/修改 Eagle 的 API URL（默认：`http://localhost:41595`）。需要保持 Eagle 应用处于运行状态。
 
+### Ollama 与图像生成争用显存时
+
+在设置标签的"显存调整（Ollama）"中，可以在通过 Workflow Studio 生成图像（T2I・I2I・Inpaint・Outpaint）之前卸载 Ollama 的模型。可选择"仅在空闲显存低于目标时卸载所需的部分"（从显存占用大的模型开始逐个卸载，直到达到目标空闲 GB）或"每次全部卸载"。空闲显存以 `nvidia-smi` 的实测值判断（ComfyUI 显示的空闲显存可能不反映 Ollama 的占用）。对象为本机的 Ollama（默认的 `127.0.0.1:11434`、Auto 标签的本地 LLM、决策模型）。使用 Ollama 时，Auto 标签的"卸载模型"也会卸载所有已加载的模型。
+
 ### 可选依赖
 
 安装以下自定义节点后可启用对应功能。未安装时不影响其他功能的使用。
@@ -275,6 +279,7 @@ comfyui-comic-creator/
 | POST | `/api/ccc/save-image-project` | 保存 Image 标签项目 |
 | POST | `/api/ccc/video/upload` | 上传视频（MP4） |
 | POST | `/api/ccc/eagle/add` | 保存图像到 Eagle |
+| POST | `/api/ccc/vram/prepare` | 图像生成前的显存调整（卸载 Ollama 模型） |
 | POST | `/api/ccc/local-gmic/open_in_gui_b64` | 启动 G'MIC Qt GUI |
 | GET | `/api/ccc/local-gmic/status/{job_id}` | 获取 G'MIC 任务状态 |
 

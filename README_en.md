@@ -177,6 +177,10 @@ In the Settings tab's "G'MIC Settings", specify the full path to the G'MIC Qt ex
 
 In the Settings tab's "Eagle Settings", check/change the Eagle API URL (default: `http://localhost:41595`). The Eagle app must be running.
 
+### When Ollama and image generation compete for VRAM
+
+"VRAM Management (Ollama)" in the Settings tab can unload Ollama models right before image generation through Workflow Studio (T2I, I2I, Inpaint, Outpaint). Choose "Unload only as much as needed when free VRAM is below the target" (one model at a time, largest VRAM first, until the target free GB is reached) or "Unload everything every time". Free VRAM is measured with `nvidia-smi` (the free VRAM ComfyUI reports may not reflect what Ollama uses). It targets Ollama on localhost (the default `127.0.0.1:11434`, the local LLM in the Auto tab, and the decision model). The Auto tab's "Unload Model" also unloads every loaded model when the backend is Ollama.
+
 ### Optional dependencies
 
 Installing the following custom nodes enables the corresponding features. Nothing else is affected if they are not installed.
@@ -275,6 +279,7 @@ comfyui-comic-creator/
 | POST | `/api/ccc/save-image-project` | Save an Image tab project |
 | POST | `/api/ccc/video/upload` | Upload a video (MP4) |
 | POST | `/api/ccc/eagle/add` | Save an image to Eagle |
+| POST | `/api/ccc/vram/prepare` | VRAM management before image generation (unload Ollama models) |
 | POST | `/api/ccc/local-gmic/open_in_gui_b64` | Launch the G'MIC Qt GUI |
 | GET | `/api/ccc/local-gmic/status/{job_id}` | Get a G'MIC job's status |
 

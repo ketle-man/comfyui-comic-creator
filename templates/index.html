@@ -2184,6 +2184,27 @@
             </div>
 
             <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
+              <h3 data-i18n="vram.title">VRAM調整（Ollama）</h3>
+              <p data-i18n="vram.desc" style="margin: 0 0 8px; font-size:12px; color:#888;">Workflow Studio経由の画像生成（T2I・I2I・Inpaint・Outpaint）の直前に、Ollamaでロード中のモデルをアンロードして空きVRAMを作ります。空きはnvidia-smiの実測で判定します。対象はローカルホストのOllama（既定の127.0.0.1:11434、Autoタブのローカル LLM、意思決定モデル）です。</p>
+              <div class="control-row" style="margin-bottom: 10px; align-items: center; gap: 8px;">
+                <label for="settings-vram-mode" data-i18n="vram.modeLabel" style="white-space:nowrap; min-width:160px;">生成前の動作</label>
+                <select id="settings-vram-mode" style="flex:1; min-width:120px;">
+                  <option value="off" data-i18n="vram.modeOff">何もしない</option>
+                  <option value="auto" data-i18n="vram.modeAuto">空きが目標未満のときだけ必要な分をアンロード</option>
+                  <option value="all" data-i18n="vram.modeAll">毎回すべてアンロード</option>
+                </select>
+              </div>
+              <div class="control-row" style="margin-bottom: 10px; align-items: center; gap: 8px;">
+                <label for="settings-vram-target" data-i18n="vram.targetLabel" style="white-space:nowrap; min-width:160px;">目標の空き（GB）</label>
+                <input type="number" id="settings-vram-target" min="0" max="64" step="0.5" value="8" style="width:80px;" />
+              </div>
+              <div class="control-row" style="align-items: center; gap: 8px;">
+                <button id="settings-vram-unload-btn" class="btn small secondary" data-i18n="vram.unloadNow">今すぐすべてアンロード</button>
+                <span id="settings-vram-status" style="font-size:12px; color:#888;"></span>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
               <h3 data-i18n="settings.eagleTitle">Eagle 設定</h3>
               <div class="control-row" style="margin-bottom: 10px; align-items: center; gap: 8px;">
                 <label for="settings-eagle-url" data-i18n="settings.eagleUrlLabel" style="white-space:nowrap; min-width:160px;">Eagle API URL</label>

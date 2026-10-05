@@ -14,6 +14,7 @@ import {
     getBackendDefaultUrl, isValidBackendUrl, loadAiSettings, saveAiSettings, validateAiSettings, aiChat,
     fetchModels, testConnection, unloadModel, getGeminiKeyStatus, fetchGeminiTextModels, suggestHostMatchedUrl,
 } from '../auto-ai-client.js';
+import { requestVramPrepare, describeVramResult, isLoopbackUrl } from '../vram-prepare.js';
 import {
     IMPORTANCE_LEVELS, BUBBLE_TYPES, blankScript, blankPanel, blankDialogue, normalizeScript, parseScriptResponse,
     buildStoryMessages, buildScriptMessages, cloneSampleScript, getSampleTheme, getSampleStory,
@@ -640,6 +641,12 @@ async function onTestConnection() {
 async function onUnloadModel() {
     const { backend, url } = currentUrlAndBackend();
     try {
+        if (backend === 'ollama' && isLoopbackUrl(url)) {
+            // Ollamaはロード中の全モデル（意思決定モデルを含む）をアンロード（設定タブ「VRAM調整」と同じサーバー処理）
+            const d = await requestVramPrepare('all', undefined, [url]);
+            setStatus('auto-settings-status', d.failed.length ? 'error' : 'ok', describeVramResult(d));
+            return;
+        }
         await unloadModel(url, backend, $('auto-model-select').value);
         setStatus('auto-settings-status', 'ok', t('auto.msgUnloaded'));
     } catch (e) {

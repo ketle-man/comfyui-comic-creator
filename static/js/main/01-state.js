@@ -38,6 +38,7 @@ import { initPose3DTab, hidePose3DCanvas } from './23-pose3d-bridge.js';
 import { initText3DTab, hideText3DCanvas } from './25-text3d-bridge.js';
 import { initVideoTab, hideVideoOverlay } from './27-video-bridge.js';
 import { initAutoTab } from './28-auto-tab.js';
+import { initVramSettings } from '../vram-prepare.js';
 import { initSubPanelTool } from './24-sub-panels.js';
 import { initSplitPanelTool } from './24a-panel-split.js';
 import { initDeformPanelTool } from './24b-panel-deform.js';
@@ -438,6 +439,7 @@ async function switchTab(tabId) {
         initGmicSettings();
         initInpaintSettings();
         initOutpaintSettings();
+        initVramSettings();
     } else if (tabId === 'fontmgr') {
         await initFontMgrTab();
     } else if (tabId === 'project') {

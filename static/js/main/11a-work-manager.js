@@ -567,8 +567,8 @@ const _BACKUP_LS_KEYS = [
     'cccPixiFxSettings', 'cccPixiFxMultiPresets',
     // Autoタブ（AI設定・作品・作業中データ・プレビュー表示設定）
     'ccc_auto_ai_settings', 'ccc_auto_works', 'ccc_auto_current', 'ccc_auto_preview_show_action',
-    // レイアウトタブの操作設定（コマ分割のコマ間幅・コマ変形の外周ロック）・動画の音量
-    'ccc_split_gap_width', 'ccc_deform_outer_lock', 'cccVideoMuted', 'cccVideoVolume',
+    // レイアウトタブの操作設定（コマ分割のコマ間幅・コマ変形の外周ロック）・動画の音量・VRAM調整
+    'ccc_split_gap_width', 'ccc_deform_outer_lock', 'cccVideoMuted', 'cccVideoVolume', 'ccc_vram_settings',
     // 脚本タブ
     'cccScriptCurrent', 'cccScriptWorks',
     // フォント管理

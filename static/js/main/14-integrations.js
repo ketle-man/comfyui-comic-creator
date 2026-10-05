@@ -10,6 +10,7 @@
 import { t, resolveBackendError } from '../i18n.js';
 import { insertImage } from './08-panels-images.js';
 import { state, switchTab } from './01-state.js';
+import { prepareVramForGeneration } from '../vram-prepare.js';
 
 // ==============================
 // Eagle 連携
@@ -420,6 +421,7 @@ async function sendInpaintToWorkflowStudio(imageBlob, maskBlob, params) {
     if (typeof fn !== 'function') {
         return { ok: false, message: 'Workflow Studio inpaint bridge is not ready' };
     }
+    await prepareVramForGeneration();   // 設定タブ「VRAM調整」: Ollamaのモデルをアンロードして空きを作る（off なら何もしない）
 
     let workflowData = null;
     let workflowFilename = null;
@@ -470,6 +472,7 @@ async function sendOutpaintToWorkflowStudio(imageBlob, maskBlob, params) {
     if (typeof fn !== 'function') {
         return { ok: false, message: 'Workflow Studio inpaint bridge is not ready' };
     }
+    await prepareVramForGeneration();   // 設定タブ「VRAM調整」: Ollamaのモデルをアンロードして空きを作る（off なら何もしない）
 
     let workflowData = null;
     let workflowFilename = null;
@@ -521,6 +524,7 @@ async function sendI2IRunToWorkflowStudio(imageBlob, params, wfOverride) {
     if (typeof fn !== 'function') {
         return { ok: false, message: 'Workflow Studio I2I run bridge is not ready' };
     }
+    await prepareVramForGeneration();   // 設定タブ「VRAM調整」: Ollamaのモデルをアンロードして空きを作る（off なら何もしない）
 
     const wf = wfOverride || getI2ISettingsState();
 
@@ -606,6 +610,7 @@ async function requestPanelImageFromWorkflowStudio(prompt, width, height, negati
     if (typeof fn !== 'function') {
         return { ok: false, message: 'Workflow Studio generate bridge is not ready' };
     }
+    await prepareVramForGeneration();   // 設定タブ「VRAM調整」: Ollamaのモデルをアンロードして空きを作る（off なら何もしない）
 
     const wf = wfOverride || getT2ISettingsState();
 
