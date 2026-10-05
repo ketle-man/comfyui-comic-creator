@@ -29,6 +29,8 @@ v1.50.2リリース後にヘルプを確認したところ、3Dポーズの説�
 
 **実装（`static/js/pose3d.js`・`main/23-pose3d-bridge.js`）**: `pose3d.js`で`default_model.js`を他のモジュールと一緒に動的importし（失敗してもcatchしてnull＝v0.21.0未満のvrm-pose-editorでも3Dポーズ自体は動く）、`window.pose3dResolveDefaultModel`として公開する。`window.initPoseEditor3D`は6番目の引数`defaultModelProvider`をそのままコアへ渡す。ブリッジ側の`_pose3dDefaultModelProvider()`はノードの`pose_editor_3d.js`と同じ処理: `.gltf`はサーバーのURLのまま（外部.bin/テクスチャを相対パスで読むため）、`.vrm`/`.glb`は1回だけfetchしてBlob URLにする。VRMならバッファを`state.pose3d.modelBuffer`に入れてLight & Pose Editor（Pose Libraryのサムネイル生成）へ渡す。`modelIsDefault`はtrueのままなので、コマ確定時にモデルは埋め込まれない（従来の既定モデルと同じ扱い）。取得中にユーザーが「モデル読込」していたら上書きしない。モデル名はツールバーのラベル（`pose3d-vrm-label`）に出す。Default Modelの選択UIは、Light & Pose Editorを`nodeActions.loadVrmFile`付きで開いたとき（ノードから開いたとき）だけ表示されるため、CCでは選べない。ノード側で選んだ設定（ComfyUIユーザーデータの`vrm_pose_editor_settings.json`）を共有する。
 
+**Editorボタンの目印**: ツールバーの「🎛 Editor」ボタンの下辺だけを水色（`#4fc3f7`、2px）にした（`templates/index.html`のボタンのstyle）。ユーザーの要望。
+
 **ヘルプ・README（ja/en/zh）**: ヘルプの「🎛 Editor」にImageタブ（SAM 3D Body、ComfyUI 0.38以降、`models/detection/`）・自動瞬き・😑 Blinkトラックを追記し、「モデル読込」の自動ロードの説明を`model/`フォルダの既定モデルに書き換えた。READMEの3Dポーズの項にも既定モデルの説明を追記。
 
 **実機確認（Playwright、ComfyUI_5、回避策なし）**: `model/`に`AvatarSample_F.vrm`を一時的に置いた状態で、`pose3dResolveDefaultModel()`が`/api/pose_editor/models/AvatarSample_F.vrm`を返し、「コマに配置」で自動読み込みされた（ラベルが`AvatarSample_F.vrm`、シェイプキー15個、`modelBuffer` 10,712,884バイト・`modelIsDefault: true`）。Editorを開くとImageタブ・Blinkが表示され、Pose Libraryの「VRM 未読込のためサムネイルを生成できません」は非表示（VRMが渡っている）。`model/`を空に戻すと、モデル無しで3Dビューが開き、エラーは出なかった（`/api/userdata/vrm_pose_editor_settings.json`の404は設定未保存時の正常動作で、ノード側でも同じ）。確認はキャンセルで終え、ページは保存していない。
