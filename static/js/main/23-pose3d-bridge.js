@@ -2,7 +2,7 @@
 // main.js 分割ファイル (24/24): 3Dポーズエディタ
 // 元 main.js の行 17767-18313 に相当
 // type="module" として読み込まれる（ESモジュール化 G9）。
-// 主なトップレベル定義: _arrayBufferToBase64,_base64ToArrayBuffer,_pose3dCaptureFrameToPanel,_pose3dInsertCaptureIntoPanel,_pose3dOnLightPoseEditorClosed,_pose3dRebuildMorphSliders,_pose3dSyncPosition,commitPose3D,hidePose3DCanvas,initPose3DTab,showPose3DCanvas
+// 主なトップレベル定義: _arrayBufferToBase64,_base64ToArrayBuffer,_pose3dCaptureFrameToPanel,_pose3dDefaultModelProvider,_pose3dInsertCaptureIntoPanel,_pose3dOnLightPoseEditorClosed,_pose3dRebuildMorphSliders,_pose3dSyncPosition,commitPose3D,hidePose3DCanvas,initPose3DTab,showPose3DCanvas
 // 未ESM化の外部依存（非moduleのグローバル関数はwindowプロパティとして自動的に見えるため、
 // 呼び出し箇所は書き換えていない）: state（01-state.js）
 // ============================================================
@@ -362,6 +362,36 @@ function initPose3DTab() {
     }
 }
 
+// 既定モデル: vrm-pose-editor の model/ フォルダ＋Default Model 設定（ノードと共有）から読み込む。
+// vrm-pose-editor が v0.21.0 未満で default_model.js が無ければ undefined を返し、従来の動作のままにする。
+// ユーザーが読み込んだモデルではないので modelIsDefault は true のまま（コマ確定時にモデルを埋め込まない）。
+// VRM のバッファは Pose Library のサムネイル生成用に Light & Pose Editor へ渡すため保持する
+function _pose3dDefaultModelProvider() {
+    const resolve = window.pose3dResolveDefaultModel;
+    if (typeof resolve !== 'function') return undefined;
+    return async () => {
+        const pick = await resolve();
+        if (!pick) return null;
+        const label = document.getElementById('pose3d-vrm-label');
+        const showName = () => {
+            if (label && state.pose3d.modelIsDefault) {
+                label.textContent = pick.name.slice(0, 20) + (pick.name.length > 20 ? '…' : '');
+            }
+        };
+        // .gltf は外部の .bin / テクスチャを相対パスで読むため、サーバーの URL のまま渡す
+        if (/\.gltf$/i.test(pick.name)) { showName(); return pick.url; }
+        const res = await fetch(pick.url);
+        if (!res.ok) throw new Error(`default model: HTTP ${res.status}`);
+        const buf = await res.arrayBuffer();
+        // 取得中にユーザーがモデルを読み込んでいたら上書きしない
+        if (!state.pose3d.modelIsDefault) return null;
+        if (/\.vrm$/i.test(pick.name)) state.pose3d.modelBuffer = buf;
+        showName();
+        // WebGL コンテキスト復帰時の再読み込みでも使うため revoke しない
+        return URL.createObjectURL(new Blob([buf]));
+    };
+}
+
 // コマ上に Three.js canvas をオーバーレイ表示する
 function showPose3DCanvas(panelId) {
     if (!panelId || !state.activePage) return;
@@ -458,7 +488,8 @@ function showPose3DCanvas(panelId) {
                 if (state.pose3d.editor && cvs.width > 0 && cvs.height > 0) {
                     state.pose3d.editor.resizeRenderer(cvs.width, cvs.height);
                 }
-            }
+            },
+            _pose3dDefaultModelProvider()
         );
         // 初期化直後にカメラアスペクト比をcanvasサイズに合わせる（条件なしで強制適用）
         const cvs = state.pose3d.canvas;
