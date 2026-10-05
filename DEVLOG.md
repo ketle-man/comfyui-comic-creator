@@ -2,9 +2,9 @@
 
 ---
 
-## 2026-10-05（3Dポーズ: Light & Pose Editor表示中にプレビューが枠外へずれる不具合を修正、配信元をリポジトリへのリンクに変更）
+## 2026-10-05（3Dポーズ: Light & Pose Editor表示中にプレビューが枠外へずれる不具合を修正、配信元をリポジトリへのリンクに変更、v1.50.2）
 
-comfyui-vrm-pose-editor側の機能追加（Imageタブ＝画像からSAM 3D Bodyでポーズ推定、自動瞬き等）に合わせてレイアウトタブ「3Dポーズ」との連携を確認したところ、CC側の不具合が見つかったため修正した。版数は上げていない（次のリリースにまとめる）。
+comfyui-vrm-pose-editor側の機能追加（Imageタブ＝画像からSAM 3D Bodyでポーズ推定、自動瞬き等）に合わせてレイアウトタブ「3Dポーズ」との連携を確認したところ、CC側の不具合が見つかったため修正した。
 
 **不具合**: 「Editor」でLight & Pose Editorを開くと、3Dビューのラッパー（`state.pose3d.wrapper`）はvrm-pose-editor側（`light_editor.js`）によってモーダル内のプレビュー枠へDOM移動され、`left/top`を0にリセットして`transform: scale()`で表示される（Pose Libraryも同じ方式で借りる）。ところがCC側の`_pose3dSyncPosition`は貸し出し中かどうかを見ずに、コマ用の`left/top/width/height`を書き込んでいた。`ResizeObserver`（`#layout-preview`とSVGを監視）がウィンドウサイズや表示倍率の変化で発火すると、モーダル内のキャンバスがコマの位置（例: `left: 399px`）へ飛び、プレビュー枠の外（右のプロパティ欄の下）に隠れて見えなくなった。さらに`07-pages.js`のページ再描画と「再描画」ボタンは、ラッパーが`#layout-preview`に無ければ無条件で`appendChild`して戻すため、モーダルでCapture（コマに確定）→コマへの画像挿入→ページ再描画の流れで、モーダルからキャンバスを奪い返すおそれがあった。
 
@@ -13,6 +13,8 @@ comfyui-vrm-pose-editor側の機能追加（Imageタブ＝画像からSAM 3D Bod
 **配信元の変更**: これまでComfyUI_5の`custom_nodes/comfyui-comic-creator`はリポジトリとは別のgitクローン（v1.49.0）で、変更を確認するたびにファイルをコピーしていた。今回、リポジトリ（`eagle_comic_creator_spa/comfyui-comic-creator`）への相対パスのシンボリックリンクに置き換えた（ユーザーが実施）。vrm-pose-editorも、CCの`pose3d.js`が`/extensions/comfyui-vrm-pose-editor/`固定でimportするため、ComfyUI_5では`custom_nodes/comfyui-vrm-pose-editor`という名前のリンクにした（それまでの`3dpose_light_editor`という名前では404になり、3Dポーズ機能が使えなかった）。
 
 **実機確認（Kapture、ComfyUI_5、回避策なし）**: モデル読込→コマに配置→Editor→Imageタブで画像からSAM3D推定・適用（7.1秒）→CaptureでコマにCapture画像を確定、まで通ることを確認した。Editorを開いたまま`#layout-preview`の幅を変えてResizeObserverを発火させても、ラッパーはモーダル内で`left: 0`のままプレビュー枠に収まる。Capture（コマに確定）後もラッパーはモーダル内に残る。閉じると`#layout-preview`へ戻り、途中で変わった表示倍率（80%→70%）に合わせた位置（`left` 482.8px→493.7px）に合わせ直された。
+
+**README（ja/en/zh）**: vrm-pose-editor v0.21.0のリリースに合わせ、3Dポーズの項にImageタブ（SAM 3D Bodyでのポーズ推定。ComfyUI 0.38以降、モデルは`models/detection/`に各自導入）・自動瞬き（Auto Blink）・😑 Blinkトラックを追記し、Image タブと自動瞬きにはv0.21.0以降が必要と明記した。依存関係の表に、手動インストール時はフォルダ名を`comfyui-vrm-pose-editor`にする旨を追加。スクリーンショット`docs/17_3DPose_2.png`をvrm-pose-editor側の`docs/2_screenshot_pose_editor_c.png`（Light/pose/Imageタブ）に差し替えた。
 
 **How to apply**:
 - 3Dビューのラッパーの位置・サイズや親要素を変える処理を足すときは、先に`_pose3dIsBorrowed()`を確認する（モーダルに貸し出し中に触ると、vrm-pose-editor側のプレビューを壊す）。
