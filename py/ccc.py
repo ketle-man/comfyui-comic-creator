@@ -801,6 +801,71 @@ async def handle_nanobanana_list_models(request):
     except Exception as e:
         return _error_response(e, status=500)
 
+_NANOBANANA_HISTORY_FILENAME = 'history.txt'
+_MAX_HISTORY_FIELD_CHARS = 4000
+_MAX_HISTORY_FILENAMES = 50
+
+def _nanobanana_history_path():
+    return OUTPUT_NANOBANANA_DIR / _NANOBANANA_HISTORY_FILENAME
+
+def _clip_history_field(value, max_chars: int) -> str:
+    s = str(value or '').strip()
+    return s if len(s) <= max_chars else s[:max_chars] + '…'
+
+async def handle_nanobanana_history_get(request):
+    """生成履歴テキストファイルの内容をそのまま返す（無ければ空文字）。"""
+    try:
+        path = _nanobanana_history_path()
+        text = path.read_text(encoding='utf-8') if path.is_file() else ''
+        return web.json_response({'status': 'ok', 'text': text, 'path': str(path).replace('\\', '/')})
+    except Exception as e:
+        return _error_response(e, status=500)
+
+async def handle_nanobanana_history_append(request):
+    """生成1回分の記録を history.txt へ追記する（編集・削除はユーザーがファイルを直接操作する前提）。"""
+    try:
+        data = await request.json()
+        filenames = data.get('filenames')
+        if not filenames and data.get('filename'):
+            filenames = [data['filename']]
+        if not filenames:
+            return _error_response(CCCError('nanobanana_history_no_filename', 'ファイル名が指定されていません。'), status=400)
+
+        model = _clip_history_field(data.get('model', ''), 100)
+        width, height = data.get('width'), data.get('height')
+        image_size = _clip_history_field(data.get('image_size', ''), 20)
+        seed = data.get('seed')
+        prompt = _clip_history_field(data.get('prompt', ''), _MAX_HISTORY_FIELD_CHARS)
+        negative = _clip_history_field(data.get('negative_prompt', ''), _MAX_HISTORY_FIELD_CHARS)
+
+        lines = [f"==== {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===="]
+        if model:
+            lines.append(f"モデル: {model}")
+        res = f"{width}x{height}" if width and height else ''
+        if image_size:
+            res = f"{res} / 出力解像度: {image_size}" if res else f"出力解像度: {image_size}"
+        if res:
+            lines.append(f"解像度: {res}")
+        if seed is not None and seed != '':
+            lines.append(f"シード: {seed}")
+        lines.append("ファイル:")
+        for fn in filenames[:_MAX_HISTORY_FILENAMES]:
+            lines.append(f"  {_clip_history_field(fn, 300)}")
+        lines.append(f"Positive: {prompt}")
+        if negative:
+            lines.append(f"Negative: {negative}")
+        lines.append("")
+        block = "\n".join(lines) + "\n"
+
+        OUTPUT_NANOBANANA_DIR.mkdir(parents=True, exist_ok=True)
+        with open(_nanobanana_history_path(), 'a', encoding='utf-8') as f:
+            f.write(block)
+        return web.json_response({'status': 'ok'})
+    except CCCError as e:
+        return _error_response(e, status=400)
+    except Exception as e:
+        return _error_response(e, status=500)
+
 # ─── Autoタブ（AIマンガ自動作成） ──────────────────────────────────────────────
 
 async def handle_save_auto_image(request):
@@ -1372,6 +1437,7 @@ def _build_dispatch_tables():
         "refresh-assets":         handle_refresh_assets,
         "nanobanana/key":         handle_nanobanana_key,
         "nanobanana/models":      handle_nanobanana_list_models,
+        "nanobanana/history":     handle_nanobanana_history_get,
         "app-server/settings":    handle_get_app_server_settings,
         "local-gmic/settings":    handle_get_local_gmic_settings,
     }
@@ -1386,6 +1452,7 @@ def _build_dispatch_tables():
         "psd/import-layers":           handle_psd_import_layers,
         "psd/export-layers":           handle_psd_export_layers,
         "nanobanana/generate":         handle_nanobanana_generate,
+        "nanobanana/history/append":   handle_nanobanana_history_append,
         "eagle/add":                   handle_eagle_add,
         "vram/prepare":                handle_vram_prepare,
         "app-server/settings":         handle_post_app_server_settings,
@@ -1435,6 +1502,7 @@ class ComicCreator:
         app.router.add_get("/api/ccc/refresh-assets",         handle_refresh_assets)
         app.router.add_get("/api/ccc/nanobanana/key",         handle_nanobanana_key)
         app.router.add_get("/api/ccc/nanobanana/models",      handle_nanobanana_list_models)
+        app.router.add_get("/api/ccc/nanobanana/history",     handle_nanobanana_history_get)
         app.router.add_get("/api/ccc/google-font-ttf",        handle_google_font_ttf)
         app.router.add_get("/api/ccc/app-server/settings",    handle_get_app_server_settings)
         app.router.add_get("/api/ccc/local-gmic/settings",    handle_get_local_gmic_settings)
@@ -1452,6 +1520,7 @@ class ComicCreator:
         app.router.add_post("/api/ccc/psd/import-layers",        handle_psd_import_layers)
         app.router.add_post("/api/ccc/psd/export-layers",        handle_psd_export_layers)
         app.router.add_post("/api/ccc/nanobanana/generate",      handle_nanobanana_generate)
+        app.router.add_post("/api/ccc/nanobanana/history/append", handle_nanobanana_history_append)
         app.router.add_post("/api/ccc/eagle/add",                handle_eagle_add)
         app.router.add_post("/api/ccc/vram/prepare",             handle_vram_prepare)
         app.router.add_post("/api/ccc/app-server/settings",      handle_post_app_server_settings)

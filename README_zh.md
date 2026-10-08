@@ -81,6 +81,7 @@
 - 使用 Gemini API 生成图像（正向/负向提示词、模型、分辨率）。可选模型：`gemini-3.1-flash-lite-image` / `gemini-3.1-flash-image` / `gemini-3-pro-image` / `gemini-nano-banana-2.1`
 - 输出分辨率可指定为 1K（默认）/2K/4K（仅部分模型支持），I2I 最多可添加 14 张参考图像
 - 生成的图像会自动保存到 ComfyUI 本体的 `output/cc_nanobanana` 文件夹
+- 生成历史会记录到文本文件（`output/cc_nanobanana/history.txt`：日期时间・模型・分辨率・提示词等），可通过自动记录复选框或针对单次结果的手动按钮记录（编辑・删除请直接打开该文件）
 
 </details>
 

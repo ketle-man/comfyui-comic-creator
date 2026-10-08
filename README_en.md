@@ -81,6 +81,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - Generate images via the Gemini API (Positive/Negative prompts, model, and resolution). Model choices: `gemini-3.1-flash-lite-image` / `gemini-3.1-flash-image` / `gemini-3-pro-image` / `gemini-nano-banana-2.1`
 - Output size can be set to 1K (default)/2K/4K (supported models only); I2I accepts up to 14 reference images
 - Generated images are automatically saved to ComfyUI's own `output/cc_nanobanana` folder
+- Generation history is logged to a text file (`output/cc_nanobanana/history.txt`: date/time, model, resolution, prompt, etc.), via an auto-record checkbox or a per-result manual button (edit/delete by opening the file directly)
 
 </details>
 

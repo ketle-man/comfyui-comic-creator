@@ -2,6 +2,43 @@
 
 ---
 
+## 2026-10-09（Nanobananaタブに生成履歴（テキストファイル）機能を追加、v1.53.0）
+
+ユーザーから「Nanobananaで生成した画像にプロンプトを埋め込み、Workflow StudioのGalleryのプロンプト/Metadataタブで見たい」という依頼を受け、まずWFS側（`ComfyUI-Workflow-Studio`リポジトリ）のGallery実装を調査した。
+
+**調査結果（コード変更前の事前調査）**: WFSの「プロンプト」「Metadata」タブ（`static/js/gallery-tab.js`の`renderPromptTab`・`static/js/metadata-tab.js`）は、PNGの`tEXt`チャンク（キー`prompt`、ComfyUI API形式のワークフローJSON）からノードを解析する仕組みで、**PNG専用**（`py/services/gallery_service.py`の`_read_png_metadata`/`_read_jpeg_metadata`を確認。JPEGは単純なCOMコメントマーカーしか読まず、構造化されたワークフロー解析には対応していない）。Nanobanana（Gemini API）の生成結果は多くの場合JPEGで返るため、この仕組みに正攻法で乗せるには常時PNG保存への変更か、WFS側コードの拡張が必要と判明。この調査結果と、PNG保存+ダミーワークフローノード（`WFS_PromptText`）埋め込み案を含む3案をAskUserQuestionで提示しようとしたところ、ユーザーからツール自体を却下され、「WFSのGalleryへの埋め込みではなく、Nanobananaタブ自身の機能として生成履歴をテキストファイルで残したい」という明確な代替要望が示された。
+
+**実装（ユーザー指定仕様）**: 画像ファイルへの埋め込みではなく、1つのテキストファイルに「ファイル名・日時・プロンプト・設定」をまとめて記録する方式にした。編集・削除はアプリ側にUIを設けず、ユーザーがテキストファイルを直接編集する前提（この方がWFS側の実装に依存せず、PNG/JPEGどちらでも同じように使える）。
+
+- **保存先**: `output/cc_nanobanana/history.txt`（画像の保存先と同じフォルダ）に、生成1回＝1ブロックで追記（`py/ccc.py`の`handle_nanobanana_history_append`）。モデル・解像度・出力解像度・シード・ファイル名（バッチ全体をまとめて1ブロック）・Positive/Negativeプロンプトを記録。`GET /api/ccc/nanobanana/history`で全文取得、`POST /api/ccc/nanobanana/history/append`で追記（ルートはdispatchテーブル`_DISPATCH_GET`/`_DISPATCH_POST`と明示`add_get`/`add_post`の両方に登録。既存エンドポイントが両方に重複登録されている既存パターンに合わせた）。各フィールドは`_clip_history_field()`で長さ上限（prompt/negativeは4000文字、ファイル名は300文字×最大50件）を設け、異常に大きいリクエストでファイルが際限なく肥大化しないようにした。
+- **UI（`templates/index.html`・`static/js/nanobanana.js`）**: Nanobananaタブの基本設定に「生成時に自動で履歴に記録」チェックボックス（`#nanobanana-history-auto`、`localStorage`の`ccc_nanobanana_history_auto`に保存、ブラウザ間では共有されない）を追加。サブタブに「履歴」を新設し、`history.txt`の全文を読み取り専用の`<textarea>`に表示＋「更新」ボタン（切替時に自動読み込みも行う）。結果プレビュー欄に「履歴に記録」ボタン（直近の生成後に有効化）を追加し、自動記録チェックがOFFでも任意の生成結果だけを選んで記録できるようにした（チェックON時も含め、押せば常に新しいブロックが追記される。二重記録の防止や上書きは行わない簡素な設計）。
+- 半自動マンガの「画像を一括生成（Nanobanana）」モーダルやAutoタブのGemini設定には**今回は手を入れていない**（ユーザー依頼がNanobananaタブ自身の機能に限定されていたため）。
+
+**検証**: `python -m py_compile py/ccc.py`・`node --check`・`vm.SourceTextModule`で3ファイルの構文を確認。Pythonの変更はComfyUI再起動が必要なため、まず再起動前にKaptureでUI（チェックボックス・履歴サブタブ・記録ボタンの表示、バックエンド未反映時に404を握りつぶしてエラーメッセージ表示に倒れること）を確認。ユーザー再起動後、`curl`で`GET/POST /api/ccc/nanobanana/history`の読み書きをダミーデータで確認（確認後`history.txt`を空に戻した）。続けて実機（Kapture、実際にGemini APIで1枚課金生成）で、(1)自動記録チェックON→生成→履歴タブに新しいブロックが自動追加される、(2)生成設定タブへ戻って「履歴に記録」ボタンを手動クリック→履歴タブに同じ生成のブロックがもう1件追加される、の両方を確認。コンソールエラーなし。
+
+**How to apply**: 画像生成系の新しい外部API（Nanobanana以外も含む）にメタデータ記録機能を足す依頼が来たら、まず対象ツール（WFSのGallery等）側の既存仕組みがPNG専用か等の制約を確認してから実装方針をユーザーに確認する。今回のように「画像への埋め込み」から「独立したログファイル」へ要望が変わるケースがあるため、調査結果は先に共有し、複数案がある場合はAskUserQuestionで確認してから実装に入ること。
+
+---
+
+## 2026-10-09（v1.52.0のNanobanana実機課金テスト、Auto意思決定モデルclef-flashの動作確認）
+
+ユーザー依頼で2件確認した。コード変更は無し（検証のみ）。
+
+**Nanobanana実課金テスト（gemini-nano-banana-2.1）**: 実機（Kapture、ComfyUI_5 8189）のNanobananaタブで、モデルを`gemini-nano-banana-2.1`にしてT2I生成（1K既定、プロンプト「宇宙飛行士の猫」）→成功、`生成結果プレビュー`に意図通りの画像が表示された。I2I＋出力解像度4Kの組み合わせは、ファイル選択ダイアログをKaptureが操作できない（[[comic-creator-workflow]]既知の制約）ため、`/api/ccc/nanobanana/generate`へ直接curlでPOST（`images`配列1枚＋`image_size:"4K"`）して検証し、返却画像をPillowで実寸確認した結果`4096x4096`（4K、指定どおり1:1）のJPEGが得られ、入力画像（赤い円）の指示（「バナナのキャラクターに変換」）が反映された画像が生成された。I2I配列・`image_size`パラメータが新モデルで問題なく機能することを確認。テスト用の一時ファイルは検証後に削除済み。
+
+**Auto意思決定モデル clef-flash の動作確認（Ollamaアップデートによる改善）**: [[comic-creator-workflow]]に記録済みの既知バグ（2026-10-04時点、clef-flash(9b)はOllama 0.35.1で`/v1/systemone`が常に失敗、CUDAで`non-finite logit`・CPUで`cannot open model`、ollama/ollama Issue #18769）について、ローカルのOllamaが0.40.1に更新されたとの申告を受け再検証した。
+
+- `/api/version`で0.40.1を確認（0.35.1から更新済み）。`/api/tags`で`clef-flash:latest`のcapabilitiesが`["decision","vision"]`になっている（旧バージョン時は`vision`が付かずprojector_infoでの判定が必要だったが、現在は素直に`vision`が立つ）。
+- curlで`/v1/systemone`に`noul`（赤い丸が写った自作テスト画像での画像判定含む）・`choice`（フキダシ種別）・`score`（コマ重要度）の3種類の質問形式を個別に投げ、いずれも200・妥当な確率値で応答することを確認（以前のような100%失敗は再現せず）。
+- 実機（Workflow StudioのSettingsタブ「Decision Model」でBackend=Ollama・Model=clef-flashに変更、ユーザー自身が設定）でAutoタブの「接続テスト」ボタンを実行し成功（1005ms, yes=0.972）。続けて既存のサンプル作品「これはTEST」の脚本に対し「意思決定モデルで推定」を2回実行し、フキダシの形・コマの重要度ともに意味のある推定結果（確率に基づく変更/一致/据え置きの内訳）を得られることを確認。
+- **副次的に判明**: 1回目は6コマ中2コマ、2回目は6コマ中4コマが`wsarecv: An existing connection was forcibly closed by the remote host`（Ollamaの内部ランナーへの`health`/`embedding`エンドポイント疎通の瞬断）で失敗した。curlで`clef-flash`に同一の`noul`質問を6回連続送信したところ6回中1回失敗、同条件で`nimble:9b`に対しても同様に6回中1回失敗し、**この断続的な接続エラーはclef-flash固有ではなくOllama 0.40.1側の一般的な不安定挙動**（モデルを問わず発生）と判明した。`auto-decision.js`は元々コマ単位で失敗を分離して処理を続行する設計（[[comic-creator-workflow]]に既知の挙動として記載済み）のため、失敗したコマ以外は正常に反映される。
+
+**結論**: clef-flashを実際に使った推定（テキスト・画像とも）自体は、Ollama 0.35.1→0.40.1の更新で解消したと判断してよい（Issue #18769の症状は再現せず、確率値も実用的な精度で返っている）。ただし断続的な`wsarecv`系の接続エラーはOllama側の別の既知事象として残っており、clef-flash固有でも今回のアップデートで新たに生じたものでもない。CC側での対応（リトライ等）は現状の設計のままで妥当と判断し、コード変更はしていない。
+
+**How to apply**: 意思決定モデル関連で「失敗した」と報告を受けたら、まず`wsarecv`/`health`/`embedding`等のOllama内部ランナー通信エラーかどうかをメッセージで切り分ける（モデル名に関わらず起き得るOllama側の問題で、CC側のバグではない可能性が高い）。clef-flash自体が動くかどうかを疑うときは、まず`curl .../v1/systemone`を直接複数回叩いて成功率を見るのが早い。
+
+---
+
 ## 2026-10-07（Nanobananaタブ等: gemini-nano-banana-2.1 対応、I2I上限14枚・4K出力に拡張、v1.52.0）
 
 ユーザー依頼で、Google公式ドキュメント（`ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1`）を確認した上でNanobanana（Gemini画像生成API連携）に新モデル`gemini-nano-banana-2.1`を追加した。同ドキュメントによれば、本モデルは最大14枚の参照画像による多画像融合（従来のNano Banana 2の後継）と1K/2K/4K出力解像度に対応する。`py/ccc.py`の`handle_nanobanana_generate`はモデル名を正規表現検証（`_GEMINI_MODEL_RE`）するだけで、`gemini-`始まりのモデルは汎用的に`generateContent`エンドポイント＋`generationConfig.imageConfig`（`aspectRatio`・任意の`imageSize`）へ渡す実装だったため、**バックエンド改修は不要**だった。

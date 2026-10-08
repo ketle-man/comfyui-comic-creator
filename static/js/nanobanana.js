@@ -8,6 +8,8 @@ import { insertImage } from './main/08-panels-images.js';
 import { saveToEagle, _eagleSettings } from './main/14-integrations.js';
 import { state } from './main/01-state.js';
 
+const HISTORY_AUTO_KEY = 'ccc_nanobanana_history_auto';
+
 class NanobananaManager {
     constructor() {
         this.status = 'disconnected';
@@ -15,6 +17,7 @@ class NanobananaManager {
         this.MAX_I2I = 14;
         this.generatedImages = [];
         this.apiUrl = '/api/ccc/nanobanana/generate';
+        this.lastGenerationMeta = null;   // 直近の生成パラメータ（履歴の手動記録用）
 
         this.init();
     }
@@ -24,6 +27,16 @@ class NanobananaManager {
         await this.refreshApiKey();
         this.bindEvents();
         this.renderI2IGrid();
+        this.restoreHistoryAutoSetting();
+    }
+
+    restoreHistoryAutoSetting() {
+        const checkbox = document.getElementById('nanobanana-history-auto');
+        if (!checkbox) return;
+        try { checkbox.checked = localStorage.getItem(HISTORY_AUTO_KEY) === '1'; } catch { /* 無視 */ }
+        checkbox.addEventListener('change', () => {
+            try { localStorage.setItem(HISTORY_AUTO_KEY, checkbox.checked ? '1' : '0'); } catch { /* 無視 */ }
+        });
     }
 
     async refreshApiKey() {
@@ -49,8 +62,13 @@ class NanobananaManager {
                 btn.classList.add('active');
                 document.querySelectorAll('#nanobanana-tab .comfyui-subtab-content').forEach(c => c.style.display = 'none');
                 document.getElementById(`nanobanana-subtab-${subtab}`).style.display = 'block';
+                if (subtab === 'history') this.loadHistory();
             });
         });
+
+        // 履歴
+        document.getElementById('nanobanana-history-refresh-btn')?.addEventListener('click', () => this.loadHistory());
+        document.getElementById('nanobanana-history-record-btn')?.addEventListener('click', () => this.recordHistory());
 
         // APIキー再読込
         document.getElementById('nanobanana-refresh-key-btn')?.addEventListener('click', () => this.refreshApiKey());
@@ -241,6 +259,17 @@ class NanobananaManager {
                 this.generatedImages.push({ url, b64: dataUrl });
             }
 
+            this.lastGenerationMeta = {
+                model, width, height, image_size: imageSize || '', seed: payload.seed,
+                prompt, negative_prompt: negative,
+                filenames: this.generatedImages.map(img => img.url.split('/').pop()),
+            };
+            const recordBtn = document.getElementById('nanobanana-history-record-btn');
+            if (recordBtn) recordBtn.disabled = false;
+            if (document.getElementById('nanobanana-history-auto')?.checked) {
+                this.recordHistory({ silent: true });
+            }
+
             this.showResult(this.generatedImages[0].url);
             progress.textContent = t('common.done');
 
@@ -253,6 +282,38 @@ class NanobananaManager {
             progress.textContent = t('nb.generationErrorStatus');
         } finally {
             btn.disabled = false;
+        }
+    }
+
+    // 直近の生成パラメータを履歴ファイルへ記録する（基本設定の自動記録チェック・手動「履歴に記録」ボタン共通）
+    async recordHistory({ silent = false } = {}) {
+        if (!this.lastGenerationMeta) return;
+        try {
+            await appendNanobananaHistoryEntry(this.lastGenerationMeta);
+            if (!silent) {
+                const progress = document.getElementById('nanobanana-progress-text');
+                if (progress) progress.textContent = t('nb.historyRecorded');
+            }
+        } catch (e) {
+            console.error('History record error:', e);
+            if (!silent) alert(t('nb.historyRecordFailed', e.message));
+        }
+    }
+
+    // 履歴サブタブを開いた・更新ボタンを押したときに history.txt の内容を読み込んで表示する
+    async loadHistory() {
+        const content = document.getElementById('nanobanana-history-content');
+        const pathEl = document.getElementById('nanobanana-history-path');
+        if (!content) return;
+        try {
+            const { text, path } = await fetchNanobananaHistory();
+            content.value = text;
+            content.scrollTop = content.scrollHeight;
+            if (pathEl) pathEl.textContent = path;
+        } catch (e) {
+            console.error('History load error:', e);
+            content.value = '';
+            if (pathEl) pathEl.textContent = t('nb.historyLoadFailed', e.message);
         }
     }
 
@@ -328,6 +389,27 @@ async function requestNanobananaGenerate(payload) {
         throw new Error(t('nb.noImagesGenerated'));
     }
     return images;
+}
+
+// 生成履歴テキストファイル（history.txt）の内容を取得する（Nanobananaタブの履歴サブタブ用）
+async function fetchNanobananaHistory() {
+    const response = await fetch('/api/ccc/nanobanana/history');
+    const data = await response.json();
+    if (data.status !== 'ok') throw new Error(data.message || 'failed');
+    return { text: data.text || '', path: data.path || '' };
+}
+
+// 生成1回分の記録をhistory.txtへ追記する
+async function appendNanobananaHistoryEntry(entry) {
+    const response = await fetch('/api/ccc/nanobanana/history/append', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+    });
+    const data = await response.json();
+    if (data.status !== 'ok') {
+        throw new Error(resolveBackendError(data.error_code, data.error_params) || data.message || 'failed');
+    }
 }
 
 // base64/data-URI文字列をdata URLへ正規化し、ファイル拡張子を判定する

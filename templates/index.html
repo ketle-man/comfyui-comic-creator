@@ -1947,6 +1947,7 @@
                 <div class="comfyui-subtab-nav">
                   <button class="comfyui-subtab-btn active" data-nanobanana-subtab="prompt" data-i18n="nb.subtabPrompt">生成設定</button>
                   <button class="comfyui-subtab-btn" data-nanobanana-subtab="i2i" data-i18n="nb.subtabI2i">I2I 入力</button>
+                  <button class="comfyui-subtab-btn" data-nanobanana-subtab="history" data-i18n="nb.subtabHistory">履歴</button>
                 </div>
 
                 <div id="nanobanana-subtab-prompt" class="comfyui-subtab-content">
@@ -1992,6 +1993,11 @@
                       <label class="comfyui-label" data-i18n="nb.batchLabel">生成枚数:</label>
                       <input type="number" id="nanobanana-batch-size" value="1" min="1" max="4" class="comfyui-input" />
                     </div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-checkbox-label" style="cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+                        <input type="checkbox" id="nanobanana-history-auto"> <span data-i18n="nb.historyAutoLabel">生成時に自動で履歴に記録</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
 
@@ -2010,6 +2016,18 @@
                     <!-- 4列×3行 12スロットグリッド -->
                     <div id="nanobanana-i2i-grid" style="display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(3,1fr); gap:4px; height:590px; overflow:hidden;">
                     </div>
+                  </div>
+                </div>
+
+                <div id="nanobanana-subtab-history" class="comfyui-subtab-content" style="display:none">
+                  <div class="comfyui-field-group">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                      <div class="comfyui-group-title" style="margin-bottom:0;" data-i18n="nb.historyTitle">生成履歴</div>
+                      <button id="nanobanana-history-refresh-btn" class="btn small secondary" data-i18n="nb.historyRefresh">更新</button>
+                    </div>
+                    <div style="font-size:11px; color:#888; margin-bottom:6px;" data-i18n="nb.historyHint">テキストファイルに記録されます。編集・削除はファイルを直接開いて行ってください。</div>
+                    <div id="nanobanana-history-path" style="font-size:11px; color:#666; margin-bottom:6px; word-break:break-all;"></div>
+                    <textarea id="nanobanana-history-content" readonly rows="20" class="comfyui-textarea" style="width:100%; background:#111; color:#ddd; box-sizing:border-box; font-family:monospace; font-size:12px;"></textarea>
                   </div>
                 </div>
               </div>
@@ -2033,6 +2051,9 @@
                 <div id="nanobanana-result-thumbs" class="comfyui-result-thumbs" style="display:none; margin-top:8px;"></div>
                 <div class="control-row" style="margin-top:10px">
                   <button id="nanobanana-insert-btn" class="btn secondary" style="width:100%" disabled data-i18n="asset.insertToPanel">コマに挿入</button>
+                </div>
+                <div class="control-row" style="margin-top:6px">
+                  <button id="nanobanana-history-record-btn" class="btn secondary" style="width:100%" disabled data-i18n="nb.historyRecordBtn">履歴に記録</button>
                 </div>
               </div>
             </div>
