@@ -1734,6 +1734,7 @@
                             <option value="gemini-3.1-flash-lite-image">gemini-3.1-flash-lite-image</option>
                             <option value="gemini-3.1-flash-image">gemini-3.1-flash-image</option>
                             <option value="gemini-3-pro-image">gemini-3-pro-image</option>
+                            <option value="gemini-nano-banana-2.1">gemini-nano-banana-2.1</option>
                           </select>
                         </div>
                         <div class="auto-row">
@@ -1745,7 +1746,12 @@
                             <option value="768x1344">768 x 1344 (9:16)</option>
                             <option value="1344x768">1344 x 768 (16:9)</option>
                           </select>
-                          <label class="auto-check"><input id="auto-img-gemini-2k" type="checkbox" /> 2K</label>
+                          <label class="auto-label" style="margin-left:8px;" data-i18n="nb.imageSizeLabel">出力解像度:</label>
+                          <select id="auto-img-gemini-image-size" class="comfyui-select" title="" data-i18n-title="nb.imageSizeHint">
+                            <option value="" data-i18n="nb.imageSize1k">1K（既定）</option>
+                            <option value="2K">2K</option>
+                            <option value="4K">4K</option>
+                          </select>
                         </div>
                       </div>
 
@@ -1963,6 +1969,7 @@
                         <option value="gemini-3.1-flash-lite-image">gemini-3.1-flash-lite-image</option>
                         <option value="gemini-3.1-flash-image">gemini-3.1-flash-image</option>
                         <option value="gemini-3-pro-image">gemini-3-pro-image</option>
+                        <option value="gemini-nano-banana-2.1">gemini-nano-banana-2.1</option>
                       </select>
                     </div>
                     <div class="comfyui-field">
@@ -1974,9 +1981,12 @@
                         <option value="768x1344">768 x 1344 (9:16)</option>
                         <option value="1344x768">1344 x 768 (16:9)</option>
                       </select>
-                      <label class="comfyui-checkbox-label" style="margin-left:8px; cursor:pointer; display:inline-flex; align-items:center; gap:4px;" title="" data-i18n-title="nb.2kHint">
-                        <input type="checkbox" id="nanobanana-2k"> <span data-i18n="nb.2kLabel">2K</span>
-                      </label>
+                      <label class="comfyui-label" style="margin-left:8px;" data-i18n="nb.imageSizeLabel">出力解像度:</label>
+                      <select id="nanobanana-image-size" class="comfyui-select" title="" data-i18n-title="nb.imageSizeHint">
+                        <option value="" data-i18n="nb.imageSize1k">1K（既定）</option>
+                        <option value="2K">2K</option>
+                        <option value="4K">4K</option>
+                      </select>
                     </div>
                     <div class="comfyui-field">
                       <label class="comfyui-label" data-i18n="nb.batchLabel">生成枚数:</label>
@@ -1988,7 +1998,7 @@
                 <div id="nanobanana-subtab-i2i" class="comfyui-subtab-content" style="display:none">
                   <div class="comfyui-field-group">
                     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-                      <div class="comfyui-group-title" style="margin-bottom:0;">Image-to-Image <span id="nb-i2i-count" style="font-size:11px; color:#888; font-weight:normal;">(0/12)</span></div>
+                      <div class="comfyui-group-title" style="margin-bottom:0;">Image-to-Image <span id="nb-i2i-count" style="font-size:11px; color:#888; font-weight:normal;">(0/14)</span></div>
                       <div style="display:flex; gap:4px;">
                         <label class="btn small secondary" style="cursor:pointer; margin:0;">
                           <span data-i18n="nb.addImage">画像追加</span>

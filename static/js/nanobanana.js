@@ -11,8 +11,8 @@ import { state } from './main/01-state.js';
 class NanobananaManager {
     constructor() {
         this.status = 'disconnected';
-        this.i2iImages = [];   // { b64: 'data:...', mime: 'image/png' }[]  最大12枚
-        this.MAX_I2I = 12;
+        this.i2iImages = [];   // { b64: 'data:...', mime: 'image/png' }[]  最大14枚
+        this.MAX_I2I = 14;
         this.generatedImages = [];
         this.apiUrl = '/api/ccc/nanobanana/generate';
 
@@ -148,7 +148,7 @@ class NanobananaManager {
 
         grid.innerHTML = '';
         const count = this.i2iImages.length;
-        if (countEl) countEl.textContent = `(${count}/12)`;
+        if (countEl) countEl.textContent = `(${count}/${this.MAX_I2I})`;
 
         this.i2iImages.forEach((img, idx) => {
             const cell = document.createElement('div');
@@ -201,7 +201,7 @@ class NanobananaManager {
         const negative = document.getElementById('nanobanana-negative').value;
         const resolution = document.getElementById('nanobanana-resolution').value;
         const [width, height] = resolution.split('x').map(Number);
-        const is2k = document.getElementById('nanobanana-2k')?.checked;
+        const imageSize = document.getElementById('nanobanana-image-size')?.value;
         const batchSize = parseInt(document.getElementById('nanobanana-batch-size').value) || 1;
         const seed = parseInt(document.getElementById('nanobanana-seed').value);
 
@@ -221,7 +221,7 @@ class NanobananaManager {
                 num_images: batchSize,
                 seed: seed === -1 ? Math.floor(Math.random() * 1000000) : seed
             };
-            if (is2k) payload.image_size = '2K';
+            if (imageSize) payload.image_size = imageSize;
 
             // I2I: 複数画像を配列で送る
             if (this.i2iImages.length > 0) {

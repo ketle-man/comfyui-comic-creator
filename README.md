@@ -78,7 +78,8 @@ ComfyUI 上で動作するマンガページ作成 SPA（シングルページ�
 <details>
 <summary><strong>Nanobanana（AI 画像生成）</strong></summary>
 
-- Gemini API を使った画像生成（Positive/Negative プロンプト・モデル・解像度指定）
+- Gemini API を使った画像生成（Positive/Negative プロンプト・モデル・解像度指定）。モデルは `gemini-3.1-flash-lite-image` / `gemini-3.1-flash-image` / `gemini-3-pro-image` / `gemini-nano-banana-2.1` から選択
+- 出力解像度は 1K（既定）/2K/4K を指定可能（対応モデルのみ）、I2I は参照画像を最大 14 枚まで追加可能
 - 生成画像は ComfyUI 本体の `output/cc_nanobanana` フォルダへ自動保存
 
 </details>

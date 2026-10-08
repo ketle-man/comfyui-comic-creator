@@ -72,7 +72,7 @@ export const DEFAULT_AI_SETTINGS = Object.freeze({
     imgLocalNegative: '',
     imgGeminiModel: 'gemini-3.1-flash-image',
     imgGeminiResolution: '1024x1024',
-    imgGemini2k: false,
+    imgGeminiImageSize: '',
     // フキダシ・意思決定モデル（接続先・モデル・しきい値はWorkflow Studioの設定を共有、decision-client.js）
     balloonAutoFit: true,            // フキダシと文字の大きさをセリフの量に合わせる（OFF=従来の均等配置）
     decisionBubbleType: false,       // セリフからフキダシの形を推定する

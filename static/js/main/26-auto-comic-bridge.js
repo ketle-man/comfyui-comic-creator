@@ -589,12 +589,12 @@ function _openAutoComicI2IModal() {
 let _autoNbModel = 'gemini-3.1-flash-lite-image';
 let _autoNbPositive = '';
 let _autoNbNegative = '';
-let _autoNb2k = false;
+let _autoNbImageSize = '';
 let _autoNbSkipEmptyPrompt = false;
 
 // 対応付け済みの各コマについて、コマの現在の画像を入力にNanobanana I2I生成を順次リクエストし、
 // 結果を該当コマへ挿入する。skipEmptyPromptの絞り込みは_runAutoImageGenerateI2Iと同じ。
-async function _runAutoImageGenerateNanobanana({ model, positive, negative, is2k, skipEmptyPrompt }, statusEl) {
+async function _runAutoImageGenerateNanobanana({ model, positive, negative, imageSize, skipEmptyPrompt }, statusEl) {
     const mapping = _computeMapping();
     if (!mapping) return { ok: false };
     if (mapping.error === 'noActivePage') { alert(t('script.autoComicMapNoActivePage')); return { ok: false }; }
@@ -634,7 +634,7 @@ async function _runAutoImageGenerateNanobanana({ model, positive, negative, is2k
                 seed: Math.floor(Math.random() * 1000000),
                 images: [{ data: inputDataUrl, mime: 'image/png' }],
             };
-            if (is2k) genPayload.image_size = '2K';
+            if (imageSize) genPayload.image_size = imageSize;
             const images = await requestNanobananaGenerate(genPayload);
 
             const { dataUrl } = await saveNanobananaImageAndMaybeEagle(images[0], 'nanobanana_autocomic');
@@ -686,10 +686,14 @@ function _openAutoComicNanobananaModal() {
                     <option value="gemini-3.1-flash-lite-image">gemini-3.1-flash-lite-image</option>
                     <option value="gemini-3.1-flash-image">gemini-3.1-flash-image</option>
                     <option value="gemini-3-pro-image">gemini-3-pro-image</option>
+                    <option value="gemini-nano-banana-2.1">gemini-nano-banana-2.1</option>
                 </select>
-                <label style="cursor:pointer; margin-left:8px; display:inline-flex; align-items:center; gap:4px;">
-                    <input type="checkbox" id="anb-2k"> <span>${t('nb.2kLabel')}</span>
-                </label>
+                <label style="margin-left:8px;">${t('nb.imageSizeLabel')}</label>
+                <select id="anb-image-size" class="comfyui-select" title="${t('nb.imageSizeHint')}">
+                    <option value="">${t('nb.imageSize1k')}</option>
+                    <option value="2K">2K</option>
+                    <option value="4K">4K</option>
+                </select>
             </div>
             <div class="fontmgr-style-group" style="flex-direction:column; align-items:stretch;">
                 <label class="fontmgr-style-group-label">${t('script.autoI2IPositiveLabel')}</label>
@@ -718,13 +722,13 @@ function _openAutoComicNanobananaModal() {
     const $ = id => dialog.querySelector('#' + id);
 
     $('anb-model').value = _autoNbModel;
-    $('anb-2k').checked = _autoNb2k;
+    $('anb-image-size').value = _autoNbImageSize;
     $('anb-positive').value = _autoNbPositive;
     $('anb-negative').value = _autoNbNegative;
     $('anb-skip-empty-prompt').checked = _autoNbSkipEmptyPrompt;
 
     $('anb-model').addEventListener('change', e => { _autoNbModel = e.target.value; });
-    $('anb-2k').addEventListener('change', e => { _autoNb2k = e.target.checked; });
+    $('anb-image-size').addEventListener('change', e => { _autoNbImageSize = e.target.value; });
     $('anb-positive').addEventListener('input', e => { _autoNbPositive = e.target.value; });
     $('anb-negative').addEventListener('input', e => { _autoNbNegative = e.target.value; });
     $('anb-skip-empty-prompt').addEventListener('change', e => { _autoNbSkipEmptyPrompt = e.target.checked; });
@@ -761,7 +765,7 @@ function _openAutoComicNanobananaModal() {
             model: _autoNbModel,
             positive: _autoNbPositive,
             negative: _autoNbNegative,
-            is2k: _autoNb2k,
+            imageSize: _autoNbImageSize,
             skipEmptyPrompt: _autoNbSkipEmptyPrompt,
         }, statusEl);
 

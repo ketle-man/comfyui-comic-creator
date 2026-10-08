@@ -2,6 +2,26 @@
 
 ---
 
+## 2026-10-07（Nanobananaタブ等: gemini-nano-banana-2.1 対応、I2I上限14枚・4K出力に拡張、v1.52.0）
+
+ユーザー依頼で、Google公式ドキュメント（`ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1`）を確認した上でNanobanana（Gemini画像生成API連携）に新モデル`gemini-nano-banana-2.1`を追加した。同ドキュメントによれば、本モデルは最大14枚の参照画像による多画像融合（従来のNano Banana 2の後継）と1K/2K/4K出力解像度に対応する。`py/ccc.py`の`handle_nanobanana_generate`はモデル名を正規表現検証（`_GEMINI_MODEL_RE`）するだけで、`gemini-`始まりのモデルは汎用的に`generateContent`エンドポイント＋`generationConfig.imageConfig`（`aspectRatio`・任意の`imageSize`）へ渡す実装だったため、**バックエンド改修は不要**だった。
+
+**モデル追加（3箇所、`<option value="gemini-nano-banana-2.1">`を追記）**: Nanobananaタブ本体の`#nanobanana-model`（`templates/index.html`）、半自動マンガ「画像を一括生成（Nanobanana）」モーダルの`#anb-model`（`static/js/main/26-auto-comic-bridge.js`）、Autoタブ設定「画像生成」欄の`#auto-img-gemini-model`（`templates/index.html`）の3セレクト。いずれも既定選択は変更していない。
+
+**I2I参照画像の上限を12枚→14枚に拡張**: `nanobanana.js`の`NanobananaManager.MAX_I2I`を14に変更（`nb-i2i-count`の初期表示・`renderI2IGrid()`の空スロット描画は元々`MAX_I2I`を参照する実装だったため追従）。アラート文言（`nb.maxImagesReached`/`nb.maxImagesTruncated`）も引数化済みで無改修。
+
+**出力解像度: 2Kチェックボックス→1K/2K/4Kセレクトに変更**: 旧実装は`is2k`チェックボックス1個で`image_size: '2K'`固定だったが、4K対応のため3箇所とも`<select>`（値: `''`=1K既定/`2K`/`4K`）に置き換えた。対象は上記3箇所と同じ（Nanobananaタブ`#nanobanana-image-size`、半自動マンガモーダル`#anb-image-size`、Autoタブ設定`#auto-img-gemini-image-size`）。Autoタブの永続設定（`static/js/auto-ai-client.js`の`DEFAULT_SETTINGS`、`localStorage`）は`imgGemini2k: false` → `imgGeminiImageSize: ''`にキー名ごと変更（旧キーの値は単に無視される）。半自動マンガモーダルのモジュール変数も`_autoNb2k` → `_autoNbImageSize`、ランナー関数の引数も`is2k` → `imageSize`にリネームした。バックエンドは元々`image_size`を検証なしでそのまま`imageConfig.imageSize`に渡す実装だったため、`'1K'`/`'2K'`/`'4K'`以外の値やモデルが対応しない解像度を選んだ場合の挙動はGoogle API側のエラー応答に委ねる（サーバー側での事前バリデーションは追加していない）。
+
+**i18n（ja/en/zh）**: `nb.2kLabel`/`nb.2kHint`を廃止し、`nb.imageSizeLabel`（出力解像度:/Output Size:/输出分辨率：）・`nb.imageSize1k`（1K（既定）/1K (default)/1K（默认））・`nb.imageSizeHint`を3言語で追加。
+
+**検証**: `node --check`に加え、[[comic-creator-workflow]]の教訓（`node --check`は長い文字列リテラル中のクォート崩れを見逃すことがある）に従い`node --experimental-vm-modules`での`vm.SourceTextModule`構文チェックも実施、変更対象6ファイルすべてOK。Kapture（ポート8189、ユーザーの通常のChromeとは別の新規タブ）で実機確認し、コンソールエラー無しで次を確認: (1) Nanobananaタブのモデルセレクトに新モデルが追加され、I2Iサブタブのグリッドが実際に14枚分描画され見出しが「(0/14)」になっている、(2) 半自動マンガの「画像を一括生成（Nanobanana）」モーダルの`#anb-model`/`#anb-image-size`、(3) Autoタブ設定「画像生成」欄の`#auto-img-gemini-model`/`#auto-img-gemini-image-size`。検証用タブは確認後に閉じた。**Gemini APIへの実リクエスト（課金あり）による生成テストは未実施**（[[comic-creator-workflow]]の方針どおり、実行前にユーザー確認が必要なため）。
+
+**判明した事実（副次的）**: 開発ディレクトリ`eagle_comic_creator_spa\comfyui-comic-creator`と`ComfyUI_5\custom_nodes\comfyui-comic-creator`は、今回触った7ファイル（`templates/index.html`・`static/js/nanobanana.js`・`static/js/i18n.js`・`static/js/auto-ai-client.js`・`static/js/main/26-auto-comic-bridge.js`・`static/js/main/28-auto-tab.js`・`static/js/main/28a-auto-image.js`）について`ls -li`でinode一致を確認し、**現在はハードリンクで繋がっており手動コピー不要**だった（過去の記録「普通のコピーで自動同期されない」と矛盾するため、[[comic-creator-workflow]]に状態確認要の注記が必要）。
+
+**残タスク**: ヘルプ（`22-help-tab.js`、ja/en/zh）・README（3言語）への反映、実際のAPIキーでの生成テスト、リリース（バージョン上げ）は未着手。ユーザーから別途依頼があり次第対応する。
+
+---
+
 ## 2026-10-05（VRAM調整: 画像生成の前にOllamaのモデルをアンロード、v1.51.0）
 
 ComfyUI-LiveChatStream（LCS）のVRAM調整（`/live_chat_stream/vram_prepare`）が有効かを確かめ、CCへ移植した。CCはこれまでAutoタブの「モデルをアンロード」で選択中の1モデルを手動で外すだけだった。

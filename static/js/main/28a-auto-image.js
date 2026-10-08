@@ -85,7 +85,7 @@ async function generateGemini(settings, prompt) {
         height: height || 1024,
         num_images: 1,
     };
-    if (settings.imgGemini2k) payload.image_size = '2K';
+    if (settings.imgGeminiImageSize) payload.image_size = settings.imgGeminiImageSize;
     const images = await requestNanobananaGenerate(payload);
     return normalizeImage(images[0]);
 }

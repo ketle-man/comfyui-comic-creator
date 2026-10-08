@@ -571,7 +571,7 @@ function renderSettings() {
     $('auto-img-negative').value = s.imgLocalNegative;
     $('auto-img-gemini-model').value = s.imgGeminiModel;
     $('auto-img-gemini-res').value = s.imgGeminiResolution;
-    $('auto-img-gemini-2k').checked = !!s.imgGemini2k;
+    $('auto-img-gemini-image-size').value = s.imgGeminiImageSize || '';
     // フキダシ・意思決定モデル
     $('auto-balloon-autofit').checked = !!s.balloonAutoFit;
     $('auto-decision-bubble').checked = !!s.decisionBubbleType;
@@ -674,7 +674,7 @@ function onSaveSettings() {
         imgLocalNegative: $('auto-img-negative').value,
         imgGeminiModel: $('auto-img-gemini-model').value,
         imgGeminiResolution: $('auto-img-gemini-res').value,
-        imgGemini2k: $('auto-img-gemini-2k').checked,
+        imgGeminiImageSize: $('auto-img-gemini-image-size').value,
         balloonAutoFit: $('auto-balloon-autofit').checked,
         decisionBubbleType: $('auto-decision-bubble').checked,
         decisionImportance: $('auto-decision-importance').checked,
