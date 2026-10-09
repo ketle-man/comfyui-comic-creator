@@ -260,7 +260,7 @@ class NanobananaManager {
             }
 
             this.lastGenerationMeta = {
-                model, width, height, image_size: imageSize || '', seed: payload.seed,
+                engine: 'gemini', model, width, height, image_size: imageSize || '', seed: payload.seed,
                 prompt, negative_prompt: negative,
                 filenames: this.generatedImages.map(img => img.url.split('/').pop()),
             };
@@ -300,14 +300,15 @@ class NanobananaManager {
         }
     }
 
-    // 履歴サブタブを開いた・更新ボタンを押したときに history.txt の内容を読み込んで表示する
+    // 履歴サブタブを開いた・更新ボタンを押したときに history.jsonl を読み込み、見やすいブロック形式に整形して表示する
+    // （保存形式は1行1件のJSONだが、表示は従来どおり日時・設定・プロンプトをまとめたテキストにする）
     async loadHistory() {
         const content = document.getElementById('nanobanana-history-content');
         const pathEl = document.getElementById('nanobanana-history-path');
         if (!content) return;
         try {
-            const { text, path } = await fetchNanobananaHistory();
-            content.value = text;
+            const { entries, path } = await fetchNanobananaHistory();
+            content.value = entries.map(formatHistoryEntry).join('\n');
             content.scrollTop = content.scrollHeight;
             if (pathEl) pathEl.textContent = path;
         } catch (e) {
@@ -391,15 +392,34 @@ async function requestNanobananaGenerate(payload) {
     return images;
 }
 
-// 生成履歴テキストファイル（history.txt）の内容を取得する（Nanobananaタブの履歴サブタブ用）
+// 生成履歴（history.jsonl、1行1件のJSON）をパース済みentriesとして取得する（Nanobananaタブの履歴サブタブ用）
 async function fetchNanobananaHistory() {
     const response = await fetch('/api/ccc/nanobanana/history');
     const data = await response.json();
     if (data.status !== 'ok') throw new Error(data.message || 'failed');
-    return { text: data.text || '', path: data.path || '' };
+    return { entries: data.entries || [], text: data.text || '', path: data.path || '' };
 }
 
-// 生成1回分の記録をhistory.txtへ追記する
+// 履歴1件を表示用のブロックテキストに整形する（手編集等で壊れた行はparse_error付きでそのまま表示）
+function formatHistoryEntry(e) {
+    if (e.parse_error) {
+        return `==== (${e.line}行目: 解析エラー) ====\n${e.raw}\n`;
+    }
+    const lines = [`==== ${e.timestamp || ''} ====`];
+    if (e.engine && e.engine !== 'gemini') lines.push(`エンジン: ${e.engine}`);
+    if (e.model) lines.push(`モデル: ${e.model}`);
+    let res = (e.width && e.height) ? `${e.width}x${e.height}` : '';
+    if (e.image_size) res = res ? `${res} / 出力解像度: ${e.image_size}` : `出力解像度: ${e.image_size}`;
+    if (res) lines.push(`解像度: ${res}`);
+    if (e.seed !== undefined && e.seed !== null && e.seed !== '') lines.push(`シード: ${e.seed}`);
+    lines.push('ファイル:');
+    (e.filenames || []).forEach(fn => lines.push(`  ${fn}`));
+    lines.push(`Positive: ${e.prompt || ''}`);
+    if (e.negative_prompt) lines.push(`Negative: ${e.negative_prompt}`);
+    return lines.join('\n') + '\n';
+}
+
+// 生成1回分の記録をhistory.jsonlへ1行追記する
 async function appendNanobananaHistoryEntry(entry) {
     const response = await fetch('/api/ccc/nanobanana/history/append', {
         method: 'POST',

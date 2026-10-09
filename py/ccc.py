@@ -801,7 +801,7 @@ async def handle_nanobanana_list_models(request):
     except Exception as e:
         return _error_response(e, status=500)
 
-_NANOBANANA_HISTORY_FILENAME = 'history.txt'
+_NANOBANANA_HISTORY_FILENAME = 'history.jsonl'
 _MAX_HISTORY_FIELD_CHARS = 4000
 _MAX_HISTORY_FILENAMES = 50
 
@@ -813,16 +813,27 @@ def _clip_history_field(value, max_chars: int) -> str:
     return s if len(s) <= max_chars else s[:max_chars] + '…'
 
 async def handle_nanobanana_history_get(request):
-    """生成履歴テキストファイルの内容をそのまま返す（無ければ空文字）。"""
+    """生成履歴（JSON Lines、1行1件）を読み、行ごとにパースしたentriesと生のテキストの両方を返す。
+    手編集等で壊れた行は無視せず、parse_error付きでそのままentriesに含める（Workflow Studio等の
+    外部連携で読み取りやすいよう、1行1エントリのJSONL形式を採用）。"""
     try:
         path = _nanobanana_history_path()
         text = path.read_text(encoding='utf-8') if path.is_file() else ''
-        return web.json_response({'status': 'ok', 'text': text, 'path': str(path).replace('\\', '/')})
+        entries = []
+        for i, line in enumerate(text.splitlines()):
+            if not line.strip():
+                continue
+            try:
+                entries.append(json.loads(line))
+            except Exception as e:
+                entries.append({'line': i + 1, 'raw': line, 'parse_error': str(e)})
+        return web.json_response({'status': 'ok', 'text': text, 'entries': entries, 'path': str(path).replace('\\', '/')})
     except Exception as e:
         return _error_response(e, status=500)
 
 async def handle_nanobanana_history_append(request):
-    """生成1回分の記録を history.txt へ追記する（編集・削除はユーザーがファイルを直接操作する前提）。"""
+    """生成1回分の記録をJSON Lines（history.jsonl）へ1行追記する
+    （編集・削除はユーザーがファイルを直接操作する前提。1行=1件のJSONのため、該当行を削除するだけで良い）。"""
     try:
         data = await request.json()
         filenames = data.get('filenames')
@@ -831,36 +842,23 @@ async def handle_nanobanana_history_append(request):
         if not filenames:
             return _error_response(CCCError('nanobanana_history_no_filename', 'ファイル名が指定されていません。'), status=400)
 
-        model = _clip_history_field(data.get('model', ''), 100)
-        width, height = data.get('width'), data.get('height')
-        image_size = _clip_history_field(data.get('image_size', ''), 20)
-        seed = data.get('seed')
-        prompt = _clip_history_field(data.get('prompt', ''), _MAX_HISTORY_FIELD_CHARS)
-        negative = _clip_history_field(data.get('negative_prompt', ''), _MAX_HISTORY_FIELD_CHARS)
-
-        lines = [f"==== {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===="]
-        if model:
-            lines.append(f"モデル: {model}")
-        res = f"{width}x{height}" if width and height else ''
-        if image_size:
-            res = f"{res} / 出力解像度: {image_size}" if res else f"出力解像度: {image_size}"
-        if res:
-            lines.append(f"解像度: {res}")
-        if seed is not None and seed != '':
-            lines.append(f"シード: {seed}")
-        lines.append("ファイル:")
-        for fn in filenames[:_MAX_HISTORY_FILENAMES]:
-            lines.append(f"  {_clip_history_field(fn, 300)}")
-        lines.append(f"Positive: {prompt}")
-        if negative:
-            lines.append(f"Negative: {negative}")
-        lines.append("")
-        block = "\n".join(lines) + "\n"
+        entry = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'engine': _clip_history_field(data.get('engine', 'gemini'), 20) or 'gemini',
+            'model': _clip_history_field(data.get('model', ''), 100),
+            'width': data.get('width'),
+            'height': data.get('height'),
+            'image_size': _clip_history_field(data.get('image_size', ''), 20),
+            'seed': data.get('seed'),
+            'filenames': [_clip_history_field(fn, 300) for fn in filenames[:_MAX_HISTORY_FILENAMES]],
+            'prompt': _clip_history_field(data.get('prompt', ''), _MAX_HISTORY_FIELD_CHARS),
+            'negative_prompt': _clip_history_field(data.get('negative_prompt', ''), _MAX_HISTORY_FIELD_CHARS),
+        }
 
         OUTPUT_NANOBANANA_DIR.mkdir(parents=True, exist_ok=True)
         with open(_nanobanana_history_path(), 'a', encoding='utf-8') as f:
-            f.write(block)
-        return web.json_response({'status': 'ok'})
+            f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+        return web.json_response({'status': 'ok', 'entry': entry})
     except CCCError as e:
         return _error_response(e, status=400)
     except Exception as e:

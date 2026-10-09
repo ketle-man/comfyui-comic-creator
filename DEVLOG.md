@@ -2,6 +2,22 @@
 
 ---
 
+## 2026-10-09（Nanobanana生成履歴をJSON Lines形式へ変更、v1.53.1）
+
+v1.53.0でリリースした生成履歴機能（自由記述のテキストブロック形式、`history.txt`）について、ユーザーから「Workflow Studio側で履歴ファイルを読んで別表示する連携を確実にやる」という方針が示されたため、着手前にフォーマットをJSON Lines（1行1件のJSON）へ変更した。自由記述テキストは外部ツールからのパースが不安定になるため、プログラムからも人の手編集からも扱いやすいJSONLへ先に揃えておく判断。
+
+- **ファイル名を`history.txt`→`history.jsonl`に変更**（`py/ccc.py`の`_NANOBANANA_HISTORY_FILENAME`）。旧`history.txt`は参照しなくなるが自動削除・移行はしていない（テスト記録2件が残ったまま、ユーザー判断で削除可）。
+- **`handle_nanobanana_history_append`**: 従来の`====`区切りテキストブロック生成をやめ、`{timestamp, engine, model, width, height, image_size, seed, filenames, prompt, negative_prompt}`の辞書を`json.dumps(..., ensure_ascii=False) + '\n'`で1行追記するだけに変更。`engine`フィールドは今回追加（既定`'gemini'`）で、[[comic-creator-workflow]]に記録予定の次回作業（`PLAN_nanobanana_local_image_edit.md`、ローカルImage Edit対応）で`'local'`等を入れられるようにする先回りの変更。
+- **`handle_nanobanana_history_get`**: ファイルを1行ずつ`json.loads`し、`entries`配列として返すように変更（従来の生テキスト`text`も互換のため残す）。手編集等で壊れた行は例外を握りつぶさず`{line, raw, parse_error}`として`entries`に含め、エラーで履歴全体が読めなくなることを避けた。
+- **フロント（`nanobanana.js`）**: 履歴サブタブの表示は後方互換のため変更せず、`fetchNanobananaHistory()`が返す`entries`から`formatHistoryEntry()`で従来と同じ見た目のブロックテキストを組み立ててtextareaへ表示する（保存形式はJSONLだが、UI上の見た目は変えていない）。`appendNanobananaHistoryEntry()`自体は送信フィールドの形は変えておらず、`lastGenerationMeta`に`engine: 'gemini'`を追加しただけ。
+- ヘルプ（ja/en/zh）・README（ja/en/zh）の`history.txt`表記をすべて`history.jsonl`に更新し、JSON Lines形式である旨を明記した。
+
+**検証**: `python -m py_compile`・`node --check`・`vm.SourceTextModule`で構文確認のみ実施。ComfyUI再起動後の実機確認（自動記録・手動記録・履歴表示、特に`formatHistoryEntry`が旧形式と同じ見た目で表示されること）は未実施。
+
+**How to apply**: 外部ツール（Workflow Studio等）からの連携を予定しているログ・記録系ファイルは、自由記述テキストではなく最初からJSON Lines等の構造化フォーマットで設計する。UI側の見た目を変えたくない場合は、保存はJSONL・表示はクライアント側で整形、という形で両立できる（今回の`formatHistoryEntry()`参照）。
+
+---
+
 ## 2026-10-09（Nanobananaタブに生成履歴（テキストファイル）機能を追加、v1.53.0）
 
 ユーザーから「Nanobananaで生成した画像にプロンプトを埋め込み、Workflow StudioのGalleryのプロンプト/Metadataタブで見たい」という依頼を受け、まずWFS側（`ComfyUI-Workflow-Studio`リポジトリ）のGallery実装を調査した。
