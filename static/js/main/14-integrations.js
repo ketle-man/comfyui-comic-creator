@@ -68,8 +68,9 @@ function initEagleSettings() {
 
     // 保存済み設定を反映
     urlInput.value        = _eagleSettings.url        || 'http://localhost:41595';
-    if (cbComfyUI)  cbComfyUI.checked  = !!_eagleSettings.autoSaveComfyUI;
-    if (cbNano)     cbNano.checked     = !!_eagleSettings.autoSaveNanobanana;
+    // ComfyUI 生成画像の自動保存は Workflow Studio 側の設定で行う（CC側は無効表示のみ）
+    if (cbComfyUI)  cbComfyUI.checked  = false;
+    if (cbNano)    cbNano.checked     = !!_eagleSettings.autoSaveNanobanana;
     if (cbGmic)     cbGmic.checked     = !!_eagleSettings.autoSaveGmic;
 
     // 接続確認
@@ -90,7 +91,6 @@ function initEagleSettings() {
     if (saveBtn) {
         saveBtn.addEventListener('click', () => {
             _eagleSettings.url                = urlInput.value.trim() || 'http://localhost:41595';
-            _eagleSettings.autoSaveComfyUI    = cbComfyUI  ? cbComfyUI.checked  : false;
             _eagleSettings.autoSaveNanobanana = cbNano     ? cbNano.checked     : false;
             _eagleSettings.autoSaveGmic       = cbGmic     ? cbGmic.checked     : false;
             _saveEagleSettings();

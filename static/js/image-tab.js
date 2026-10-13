@@ -706,7 +706,7 @@ class ImageTab {
             this._drawTool._stamp    = null;
             this._drawTool._imgStamp = null;
         } catch {
-            this._toast("Could not read pixel color", "error");
+            this._toast(window.t("image.msg.pixelColorFail"), "error");
         }
         this._setEyedropperActive(false);
         if (this._activeTool === "draw") this._renderDrawProps();
@@ -718,7 +718,7 @@ class ImageTab {
         document.querySelectorAll(".ie-tool-btn[data-tool]").forEach(btn => {
             btn.addEventListener("click", () => {
                 const def = TOOL_DEFS.find(d => d.id === btn.dataset.tool);
-                if (!def?.ready) { this._toast(`${def?.label ?? btn.dataset.tool}: coming soon`, "info"); return; }
+                if (!def?.ready) { this._toast(window.t("image.msg.toolComingSoon", def?.label ?? btn.dataset.tool), "info"); return; }
                 this._setActiveTool(btn.dataset.tool);
             });
         });
@@ -1651,12 +1651,12 @@ class ImageTab {
     // Select→I2I実行本体。_runInpaint()と対称の構造（マスク不要・All/Layerモード分岐あり）。
     async _runSelectI2I() {
         if (this._selectI2IRunning) return;
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
 
         let sourceCanvas, targetLayer = null;
         if (this._selectI2IMode === "layer") {
             targetLayer = this._layerMgr.activeLayer;
-            if (!targetLayer) { this._toast("No active layer", "error"); return; }
+            if (!targetLayer) { this._toast(window.t("image.msg.noActiveLayer2"), "error"); return; }
             sourceCanvas = targetLayer.canvas;
         } else {
             sourceCanvas = this._buildCompositeCanvas();
@@ -1692,10 +1692,10 @@ class ImageTab {
             } else {
                 await this._loadFromDataUrl(result.url, "I2I Result");
             }
-            this._toast("I2I generation complete", "success");
+            this._toast(window.t("image.msg.i2iDone"), "success");
         } catch (err) {
             setStatus("Error");
-            this._toast(`I2I failed: ${err.message}`, "error");
+            this._toast(window.t("image.msg.i2iFailed", err.message), "error");
         } finally {
             this._selectI2IRunning = false;
             if (this._activeTool === "select") this._renderSelectI2IProps();
@@ -2078,7 +2078,7 @@ class ImageTab {
             document.getElementById("ie-ma-inv")?.addEventListener("change", e => { t.invert = e.target.checked; });
             document.getElementById("ie-ma-extract")?.addEventListener("click", () => {
                 const activeLayer = this._layerMgr?.activeLayer;
-                if (!activeLayer || activeLayer.type !== "mask") { this._toast("Select a mask layer first", "info"); return; }
+                if (!activeLayer || activeLayer.type !== "mask") { this._toast(window.t("image.msg.selectMaskFirst"), "info"); return; }
                 const bgCv = this._buildBgCanvas();
                 this._maskAlphaTool.setCanvas(activeLayer.canvas);
                 this._maskAlphaTool.setSourceImage(bgCv);
@@ -2778,13 +2778,13 @@ class ImageTab {
     // Workflow Studio(iframe)に送信し、実行結果を新規レイヤーとして追加する
     async _runInpaint() {
         if (this._inpaintRunning) return;
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
 
         // 非表示のマスクレイヤーはInpaint対象から除外する（目玉アイコンOFF=対象外）
         const maskLayer = (this._layerMgr.activeLayer?.type === "mask" && this._layerMgr.activeLayer.visible)
             ? this._layerMgr.activeLayer
             : this._layerMgr.layers.find(l => l.type === "mask" && l.visible);
-        if (!maskLayer) { this._toast("Create or show a mask layer first (Mask tool)", "info"); return; }
+        if (!maskLayer) { this._toast(window.t("image.msg.createMaskFirst"), "info"); return; }
 
         const runBtn   = document.getElementById("ie-inpaint-run-btn");
         const statusEl = document.getElementById("ie-inpaint-status");
@@ -2812,10 +2812,10 @@ class ImageTab {
 
             setStatus("Done");
             await this._loadFromDataUrl(result.url, "Inpaint Result");
-            this._toast("Inpaint generation complete", "success");
+            this._toast(window.t("image.msg.inpaintDone"), "success");
         } catch (err) {
             setStatus("Error");
-            this._toast(`Inpaint failed: ${err.message}`, "error");
+            this._toast(window.t("image.msg.inpaintFailed", err.message), "error");
         } finally {
             this._inpaintRunning = false;
             if (this._activeTool === "mask" && this._maskSubtool === "inpaint") this._renderMaskProps("inpaint");
@@ -2854,11 +2854,11 @@ class ImageTab {
     // （失敗時はキャンバスに何も変更を加えない）。
     async _runOutpaint() {
         if (this._outpaintRunning) return;
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
 
         const rawPad = this._outpaintPad;
         if (rawPad.top === 0 && rawPad.right === 0 && rawPad.bottom === 0 && rawPad.left === 0) {
-            this._toast("Set padding for at least one side", "info");
+            this._toast(window.t("image.msg.setPaddingFirst"), "info");
             return;
         }
         const { top, right, bottom, left, newW, newH } = this._outpaintAdjustedPad(rawPad);
@@ -2923,10 +2923,10 @@ class ImageTab {
 
             await this._loadFromDataUrl(result.url, "Outpaint Result");
             if (typeof this._fitToView === "function") this._fitToView();
-            this._toast("Outpaint generation complete", "success");
+            this._toast(window.t("image.msg.outpaintDone"), "success");
         } catch (err) {
             setStatus("Error");
-            this._toast(`Outpaint failed: ${err.message}`, "error");
+            this._toast(window.t("image.msg.outpaintFailed", err.message), "error");
         } finally {
             this._outpaintRunning = false;
             if (this._activeTool === "mask" && this._maskSubtool === "outpaint") this._renderMaskProps("outpaint");
@@ -3138,7 +3138,7 @@ class ImageTab {
         } else if (this._activeTool === "mask") {
             const activeLayer = this._layerMgr.activeLayer;
             if (!activeLayer || activeLayer.type !== "mask") {
-                this._toast("Select a mask layer first", "info");
+                this._toast(window.t("image.msg.selectMaskFirst"), "info");
                 return;
             }
             const sub = this._maskSubtool;
@@ -3449,7 +3449,7 @@ class ImageTab {
         this._refreshLayerList();
         this._renderToolOptions("select");
         if (typeof this._fitToView === "function") this._fitToView();
-        this._toast(`Cropped: ${w}×${h}`, "success");
+        this._toast(window.t("image.msg.cropped", w, h), "success");
     }
 
     /** クロップ範囲編集中のX/Y/W/H入力欄とApply/Cancelをツールプロパティペインに表示する */
@@ -3665,7 +3665,7 @@ class ImageTab {
         this._refreshLayerList();
         this._renderToolOptions("select");
         if (typeof this._fitToView === "function") this._fitToView();
-        this._toast(`Extended: ${newW}×${newH}`, "success");
+        this._toast(window.t("image.msg.extended", newW, newH), "success");
     }
 
     /**
@@ -3710,7 +3710,7 @@ class ImageTab {
             i.onerror = () => resolve(null);
             i.src = dataUrl;
         });
-        if (!img) { this._toast("Failed to load image", "error"); return; }
+        if (!img) { this._toast(window.t("image.msg.loadImageFailed"), "error"); return; }
 
         const hasLayers = this._layerMgr && this._layerMgr.layers.length > 0;
 
@@ -3731,7 +3731,7 @@ class ImageTab {
             this._updateCompositeView();
             this._refreshLayerList();
             document.getElementById("ie-placeholder").style.display = "none";
-            this._toast(`Image added: ${img.width}×${img.height}`, "success");
+            this._toast(window.t("image.msg.imageAdded", img.width, img.height), "success");
             return;
         }
 
@@ -3759,7 +3759,7 @@ class ImageTab {
         this._fitToView();
 
         document.getElementById("ie-placeholder").style.display = "none";
-        this._toast(`Loaded: ${img.width}×${img.height}`, "success");
+        this._toast(window.t("image.msg.loaded", img.width, img.height), "success");
     }
 
     // PSD(Photoshop)ファイルをレイヤー構成ごと読み込む。ブラウザはPSDをネイティブデコードできないため
@@ -3775,7 +3775,7 @@ class ImageTab {
             data = await r.json();
             if (data.status !== "ok") throw new Error(data.message || "unknown error");
         } catch (err) {
-            this._toast("Failed to open PSD: " + err.message, "error");
+            this._toast(window.t("image.msg.openPsdFailed") + err.message, "error");
             return;
         }
 
@@ -3803,7 +3803,7 @@ class ImageTab {
         this._fitToView();
 
         document.getElementById("ie-placeholder").style.display = "none";
-        this._toast(`PSD loaded: ${data.layers.length} layer(s)`, "success");
+        this._toast(window.t("image.msg.psdLoaded", data.layers.length), "success");
     }
 
     /** 現在のドキュメントを閉じる（未保存確認あり）。空の状態なら何もしない */
@@ -3857,20 +3857,20 @@ class ImageTab {
         const placeholder = document.getElementById("ie-placeholder");
         if (placeholder) placeholder.style.display = "";
 
-        this._toast("Document closed", "info");
+        this._toast(window.t("image.msg.docClosed"), "info");
     }
 
     _newCanvas() {
         const current = `${this._canvasW || 512}x${this._canvasH || 512}`;
-        const input   = prompt("Canvas size (WxH):", current);
+        const input   = prompt(window.t("image.msg.canvasSizePrompt"), current);
         if (!input) return;
         const m = input.match(/^(\d+)\s*[x×]\s*(\d+)$/i);
-        if (!m) { this._toast("Invalid format. Use WxH (e.g. 512x512)", "error"); return; }
+        if (!m) { this._toast(window.t("image.msg.invalidSizeFormat"), "error"); return; }
         const w = parseInt(m[1]), h = parseInt(m[2]);
-        if (w < 1 || h < 1 || w > 8192 || h > 8192) { this._toast("Size must be between 1 and 8192", "error"); return; }
+        if (w < 1 || h < 1 || w > 8192 || h > 8192) { this._toast(window.t("image.msg.sizeRange"), "error"); return; }
 
         this._createNewCanvasWithSize(w, h, "new-canvas");
-        this._toast(`New canvas: ${w}×${h}`, "success");
+        this._toast(window.t("image.msg.newCanvas", w, h), "success");
     }
 
     /**
@@ -3881,7 +3881,7 @@ class ImageTab {
     _newDraftFromActiveWork() {
         const work = state.activeWork;
         if (!work || !work.width || !work.height) {
-            this._toast("No active work is open. Open or create a work in the Page tab first.", "error");
+            this._toast(window.t("image.msg.noActiveWork"), "error");
             return;
         }
         const DRAFT_DPI = 72;
@@ -3890,7 +3890,7 @@ class ImageTab {
         const h = mmToPx(work.height);
 
         this._createNewCanvasWithSize(w, h, "draft");
-        this._toast(`New draft canvas: ${w}×${h}`, "success");
+        this._toast(window.t("image.msg.newDraftCanvas", w, h), "success");
     }
 
     /** 指定サイズで新規キャンバスを作成する共通処理（_newCanvas / _newDraftFromActiveWork から呼ばれる） */
@@ -4393,7 +4393,7 @@ class ImageTab {
         });
 
         document.getElementById("ie-add-mask-btn")?.addEventListener("click", () => {
-            if (!this._layerMgr) { this._toast("Open an image first", "info"); return; }
+            if (!this._layerMgr) { this._toast(window.t("image.msg.openImageFirst"), "info"); return; }
             this._syncActiveLayerFromCanvas();
             this._saveUndo();
             const maskCount = this._layerMgr.layers.filter(l => l.type === "mask").length + 1;
@@ -4408,11 +4408,11 @@ class ImageTab {
             this._updateCompositeView();
             this._refreshLayerList();
             document.getElementById("ie-placeholder").style.display = "none";
-            this._toast("Mask layer added", "success");
+            this._toast(window.t("image.msg.maskLayerAdded"), "success");
         });
 
         document.getElementById("ie-adj-add-btn")?.addEventListener("click", () => {
-            if (!this._layerMgr) { this._toast("Open an image first", "info"); return; }
+            if (!this._layerMgr) { this._toast(window.t("image.msg.openImageFirst"), "info"); return; }
             const select = document.getElementById("ie-adj-type-select");
             const adjType = select?.value || "brightness";
             const def = ADJ_DEFS[adjType];
@@ -4429,7 +4429,7 @@ class ImageTab {
             this._updateCompositeView();
             this._refreshLayerList();
             document.getElementById("ie-placeholder").style.display = "none";
-            this._toast(`${def.label} layer added`, "success");
+            this._toast(window.t("image.msg.layerAdded", def.label), "success");
         });
 
         document.getElementById("ie-del-layer-btn")?.addEventListener("click", () => {
@@ -4477,7 +4477,7 @@ class ImageTab {
         document.getElementById("ie-group-btn")?.addEventListener("click", () => this._groupSelectedLayers());
 
         document.getElementById("ie-layer-duplicate-btn")?.addEventListener("click", () => {
-            if (!this._layerMgr) { this._toast("Open an image first", "info"); return; }
+            if (!this._layerMgr) { this._toast(window.t("image.msg.openImageFirst"), "info"); return; }
             const active = this._layerMgr.activeLayer;
             if (!active) { this._toast(t("image.duplicateSelectFirst"), "info"); return; }
             this._syncActiveLayerFromCanvas();
@@ -4503,7 +4503,7 @@ class ImageTab {
         }
 
         if (this._layerMgr.layers.length === 1 && this._layerMgr.layers[0].type === "image") {
-            this._toast("Nothing to flatten", "info");
+            this._toast(window.t("image.msg.nothingToFlatten"), "info");
             return;
         }
         if (!confirm(t("image.flattenConfirm"))) return;
@@ -4523,7 +4523,7 @@ class ImageTab {
         this._activateCurrentTool();
         this._updateCompositeView();
         this._refreshLayerList();
-        this._toast("Layers flattened", "success");
+        this._toast(window.t("image.msg.flattened"), "success");
     }
 
     // 選択中の2枚以上のレイヤーのみを1枚に統合する（他のレイヤーはそのまま残す）
@@ -4848,13 +4848,13 @@ class ImageTab {
     }
 
     _savePng() {
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
         const canvas = this._buildCompositeCanvas();
         const a = document.createElement("a");
         a.href     = canvas.toDataURL("image/png");
         a.download = (this._baseName || "image") + "-output.png";
         a.click();
-        this._toast("PNG saved", "success");
+        this._toast(window.t("image.msg.pngSaved"), "success");
     }
 
     // _renderLayersComposite と同じ走査順(背面→前面)でレイヤーを辿り、PSDの1レイヤーずつに対応する
@@ -4912,10 +4912,10 @@ class ImageTab {
 
     // レイヤー編集状態を1枚のPSD(Photoshop)ファイルとして書き出す。
     async _saveAsPsd() {
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
         this._syncActiveLayerFromCanvas();
         const exportLayers = this._buildPsdExportLayers();
-        if (exportLayers.length === 0) { this._toast("No layers to export", "error"); return; }
+        if (exportLayers.length === 0) { this._toast(window.t("image.msg.noLayersToExport"), "error"); return; }
 
         try {
             const r = await fetch("/api/ccc/psd/export-layers", {
@@ -4934,9 +4934,9 @@ class ImageTab {
             a.download = (this._baseName || "comic-creator-image") + ".psd";
             a.click();
             URL.revokeObjectURL(url);
-            this._toast("PSD saved", "success");
+            this._toast(window.t("image.msg.psdSaved"), "success");
         } catch (err) {
-            this._toast("PSD save failed: " + err.message, "error");
+            this._toast(window.t("image.msg.psdSaveFailed") + err.message, "error");
         }
     }
 
@@ -4945,9 +4945,9 @@ class ImageTab {
     // loadProjectFromUrl() でレイヤー構成ごと編集を再開できる。
     /** @returns {Promise<boolean>} 保存できた（キャンセル・失敗ではない）か。Closeダイアログの「保存して閉じる」から呼び出す際の可否判定に使う */
     async _saveProject() {
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return false; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return false; }
         const defaultName = this._baseName || "image";
-        const filename = window.prompt("Save Project — file name (without extension):", defaultName);
+        const filename = window.prompt(window.t("image.msg.saveProjectPrompt"), defaultName);
         if (filename === null) return false; // キャンセル
         const safeName = filename.trim() || defaultName;
 
@@ -4963,11 +4963,11 @@ class ImageTab {
             });
             const data = await r.json();
             if (data.status !== "ok") throw new Error(data.message || "unknown error");
-            this._toast(`Project saved: ${safeName}`, "success");
+            this._toast(window.t("image.msg.projectSaved", safeName), "success");
             loadAssets(true);
             return true;
         } catch (err) {
-            this._toast("Save Project failed: " + err.message, "error");
+            this._toast(window.t("image.msg.saveProjectFailed") + err.message, "error");
             return false;
         }
     }
@@ -4975,14 +4975,14 @@ class ImageTab {
     // comic-creator既存のEagle連携（main.js の saveToEagle）を使って保存する。
     // workflow studio側の「Save to Gallery」に相当（wfmギャラリーが無いためEagleに差し替え）。
     async _saveToEagle() {
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
 
         const now = new Date();
         const pad = n => String(n).padStart(2, "0");
         const ts  = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
         const defaultName = `cc-image-${ts}`;
 
-        const filename = window.prompt("Save to Eagle — file name (without extension):", defaultName);
+        const filename = window.prompt(window.t("image.msg.saveEaglePrompt"), defaultName);
         if (filename === null) return; // キャンセル
         const safeName = filename.trim() || defaultName;
 
@@ -4991,17 +4991,17 @@ class ImageTab {
 
         try {
             const { ok, message } = await saveToEagle(dataUrl, safeName, ["comfyui-comic-creator", "image-tab"]);
-            if (ok) this._toast(`Saved to Eagle: ${safeName}.png`, "success");
+            if (ok) this._toast(window.t("image.msg.savedToEagle", safeName), "success");
             else this._toast(message ? `Eagle save failed: ${message}` : "Eagle save failed", "error");
         } catch (err) {
-            this._toast("Eagle save failed: " + err.message, "error");
+            this._toast(window.t("image.msg.eagleSaveFailed") + err.message, "error");
         }
     }
 
     // ComfyUIの標準アップロードAPI（/upload/image）に type=output, subfolder=cc を指定して保存する。
     // フォルダが存在しなくてもComfyUI側(server.py image_upload)が自動作成する。
     async _saveToGallery() {
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
         const canvas = this._buildCompositeCanvas();
         const blob   = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
         const now = new Date();
@@ -5016,9 +5016,9 @@ class ImageTab {
         try {
             const r    = await fetch("/upload/image", { method: "POST", body: form });
             const data = await r.json();
-            this._toast(`Saved to Gallery: ${data.subfolder}/${data.name}`, "success");
+            this._toast(window.t("image.msg.savedToGallery", data.subfolder, data.name), "success");
         } catch (err) {
-            this._toast("Save to Gallery failed: " + err.message, "error");
+            this._toast(window.t("image.msg.saveGalleryFailed") + err.message, "error");
         }
     }
 
@@ -5029,9 +5029,9 @@ class ImageTab {
     // ボタン（FileExport.sendToWorkflow）と同じブリッジ（web/comfyui/node_sets_menu.js の
     // window.wfmSendImageToSelectedNode）を利用する。
     async _sendToLoadImageNode() {
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
         if (!window.opener || typeof window.opener.wfmSendImageToSelectedNode !== "function") {
-            this._toast("Open Comic Creator from ComfyUI's top menu to use this feature", "error");
+            this._toast(window.t("image.msg.openFromComfyMenu"), "error");
             return;
         }
         const canvas = this._buildCompositeCanvas();
@@ -5045,15 +5045,15 @@ class ImageTab {
             const data = await r.json();
             const filename = data.subfolder ? `${data.subfolder}/${data.name}` : data.name;
             window.opener.wfmSendImageToSelectedNode(filename);
-            this._toast(`Sent "${filename}" to workflow`, "success");
+            this._toast(window.t("image.msg.sentToWorkflow", filename), "success");
         } catch (err) {
-            this._toast(`Send to workflow failed: ${err.message}`, "error");
+            this._toast(window.t("image.msg.sendWorkflowFailed", err.message), "error");
         }
     }
 
     // 合成結果をWorkflow StudioのGenerate UI Image入力スロットへ送信する（I2I連携・旧I2I機能）
     async _sendToI2I() {
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
         const canvas = this._buildCompositeCanvas();
         const blob   = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
         await sendImageToWorkflowStudioI2I(blob, this._baseName || "cc-image", "image");
@@ -5071,7 +5071,7 @@ class ImageTab {
             });
             await this._loadFromDataUrl(dataUrl, name || url.split("/").pop().replace(/\.[^.]+$/, "") || "external-image");
         } catch {
-            this._toast("Failed to load image from URL", "error");
+            this._toast(window.t("image.msg.loadUrlFailed"), "error");
         }
     }
 
@@ -5098,9 +5098,9 @@ class ImageTab {
             this._fitToView();
 
             document.getElementById("ie-placeholder").style.display = "none";
-            this._toast(`Project loaded: ${this._baseName}`, "success");
+            this._toast(window.t("image.msg.projectLoaded", this._baseName), "success");
         } catch (err) {
-            this._toast("Failed to load project: " + err.message, "error");
+            this._toast(window.t("image.msg.loadProjectFailed") + err.message, "error");
         }
     }
 
@@ -5128,7 +5128,7 @@ class ImageTab {
      * New/Uploadで作成した新規ドキュメントの場合はレイアウトの選択中コマ/オーバーレイに新規画像として挿入する。
      */
     async _saveToLayout() {
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
 
         this._syncActiveLayerFromCanvas();
         const canvas  = this._buildCompositeCanvas();
@@ -5151,10 +5151,10 @@ class ImageTab {
                         await savePanelSvg(panelId, svgEl);
                     }
                 }
-                this._toast("Saved to layout", "success");
+                this._toast(window.t("image.msg.savedToLayout"), "success");
                 await switchTab("layout");
             } catch (err) {
-                this._toast("Failed to save to layout: " + err.message, "error");
+                this._toast(window.t("image.msg.saveLayoutFailed") + err.message, "error");
             }
             return;
         }
@@ -5175,10 +5175,10 @@ class ImageTab {
             }
             const inserted = await insertImage(dataUrl, canvas.width, canvas.height, {}, placement);
             if (!inserted) return; // insertImage側でコマ未選択等のalertを表示済み
-            this._toast("Sent to layout", "success");
+            this._toast(window.t("image.msg.sentToLayout"), "success");
             await switchTab("layout");
         } catch (err) {
-            this._toast("Failed to send to layout: " + err.message, "error");
+            this._toast(window.t("image.msg.sendLayoutFailed") + err.message, "error");
         }
     }
 
@@ -5718,7 +5718,7 @@ class ImageTab {
     _applyWholeBlur(amount) {
         if (!this._layerMgr) return;
         const layer = this._layerMgr.activeLayer;
-        if (!layer) { this._toast("No active layer", "error"); return; }
+        if (!layer) { this._toast(window.t("image.msg.noActiveLayer2"), "error"); return; }
         this._saveUndo();
         const w = layer.canvas.width, h = layer.canvas.height;
         const tmp = document.createElement("canvas");
@@ -5735,7 +5735,7 @@ class ImageTab {
     _applyWholeMosaic(size) {
         if (!this._layerMgr) return;
         const layer = this._layerMgr.activeLayer;
-        if (!layer) { this._toast("No active layer", "error"); return; }
+        if (!layer) { this._toast(window.t("image.msg.noActiveLayer2"), "error"); return; }
         this._saveUndo();
         _applyMosaicToRegion(layer.ctx, 0, 0, layer.canvas.width, layer.canvas.height, size);
         this._updateCompositeView();
@@ -5899,9 +5899,9 @@ class ImageTab {
     }
 
     async _applyBgRemove() {
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
         const layer = this._layerMgr.activeLayer;
-        if (!layer)  { this._toast("No active layer", "error"); return; }
+        if (!layer)  { this._toast(window.t("image.msg.noActiveLayer2"), "error"); return; }
 
         const model    = document.getElementById("ie-bgremove-model")?.value ?? "imgly";
         const quality  = document.getElementById("ie-bgremove-quality")?.value ?? "medium";
@@ -5952,11 +5952,11 @@ class ImageTab {
             this._refreshLayerList();
             setStatus("Done!");
             setTimeout(() => setStatus(""), 3000);
-            this._toast("Background removed", "success");
+            this._toast(window.t("image.msg.bgRemoved"), "success");
 
         } catch (err) {
             setStatus("Error: " + err.message);
-            this._toast("BG remove failed: " + err.message, "error");
+            this._toast(window.t("image.msg.bgRemoveFailed") + err.message, "error");
         } finally {
             if (btn) btn.disabled = false;
         }
@@ -5965,9 +5965,9 @@ class ImageTab {
     // ── アップスケール（imgeditタブの実行パイプラインを移植） ──
 
     async _applyUpscale() {
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
         const layer = this._layerMgr.activeLayer;
-        if (!layer)  { this._toast("No active layer", "error"); return; }
+        if (!layer)  { this._toast(window.t("image.msg.noActiveLayer2"), "error"); return; }
 
         const scale   = parseFloat(document.getElementById("ie-upscale-scale")?.value ?? "2");
         const sharpen = parseInt(document.getElementById("ie-upscale-sharpen")?.value ?? "30", 10) / 100;
@@ -6004,10 +6004,10 @@ class ImageTab {
             this._refreshLayerList();
             setStatus(t("common.done"));
             setTimeout(() => setStatus(""), 3000);
-            this._toast(`Upscaled to ${img.width}×${img.height}`, "success");
+            this._toast(window.t("image.msg.upscaled", img.width, img.height), "success");
         } catch (err) {
             setStatus(t("common.errorPrefix", err.message));
-            this._toast("Upscale failed: " + err.message, "error");
+            this._toast(window.t("image.msg.upscaleFailed") + err.message, "error");
         } finally {
             if (btn) btn.disabled = false;
         }
@@ -6016,9 +6016,9 @@ class ImageTab {
     // ── G'MIC連携（comic-creator既存ルート /api/ccc/local-gmic/* を使用） ──
 
     async _gmicOpenGui() {
-        if (!this._layerMgr) { this._toast("No image loaded", "error"); return; }
+        if (!this._layerMgr) { this._toast(window.t("image.msg.noImageLoaded2"), "error"); return; }
         const layer = this._layerMgr.activeLayer;
-        if (!layer)  { this._toast("No active layer", "error"); return; }
+        if (!layer)  { this._toast(window.t("image.msg.noActiveLayer2"), "error"); return; }
         this._syncActiveLayerFromCanvas();
 
         if (this._gmicState.processing) return;
@@ -6052,7 +6052,7 @@ class ImageTab {
             await this._gmicWaitForJob(data.job_id);
         } catch (e) {
             if (e.message !== "__aborted__") {
-                this._toast("G'MIC Error: " + e.message, "error");
+                this._toast(window.t("image.msg.gmicError") + e.message, "error");
             }
             this._gmicState.processing = false;
             this._gmicState.aborted = false;
@@ -6092,7 +6092,7 @@ class ImageTab {
                     if (applyBtn) applyBtn.disabled = false;
                     if (progressLbl) progressLbl.textContent = t("image.gmicApplyHint");
                     this._gmicState.processing = false;
-                    this._toast("G'MIC filtering complete. Click Apply to insert result.", "success");
+                    this._toast(window.t("image.msg.gmicFilterDone"), "success");
                     return;
                 }
                 if (status.status === "failed") {
@@ -6108,7 +6108,7 @@ class ImageTab {
 
     async _gmicApplyResult() {
         if (!this._gmicState.lastResultJobId) {
-            this._toast("No G'MIC result to apply", "error");
+            this._toast(window.t("image.msg.noGmicResult"), "error");
             return;
         }
         const applyBtn = document.getElementById("ie-gmic-apply-btn");
@@ -6149,7 +6149,7 @@ class ImageTab {
 
             this._updateCompositeView();
             this._refreshLayerList();
-            this._toast("G'MIC filter applied successfully", "success");
+            this._toast(window.t("image.msg.gmicApplied"), "success");
 
             // 設定タブの「G'MIC結果を自動保存」がONならEagleへも自動保存する（imgeditタブの挙動を移植）
             if (this._isEagleAutoSaveGmicEnabled()) {
@@ -6163,7 +6163,7 @@ class ImageTab {
             if (progressArea) progressArea.style.display = "none";
             this._renderToolOptions("filter");
         } catch (err) {
-            this._toast("Failed to apply G'MIC result: " + err.message, "error");
+            this._toast(window.t("image.msg.gmicApplyFailed") + err.message, "error");
             if (applyBtn) applyBtn.disabled = false;
         }
     }
@@ -6184,13 +6184,13 @@ class ImageTab {
     async _runSam3Segment() {
         if (!this._layerMgr || this._sam3Loading) return;
         const prompt = this._sam3Prompt.trim();
-        if (!prompt) { this._toast("Please enter a prompt", "info"); return; }
+        if (!prompt) { this._toast(window.t("image.msg.enterPrompt"), "info"); return; }
 
         let imageLayer = this._layerMgr.activeLayer;
         if (!imageLayer || imageLayer.type === "mask") {
             imageLayer = this._layerMgr.layers.find(l => l.type !== "mask" && l.visible);
         }
-        if (!imageLayer) { this._toast("No image layer found", "error"); return; }
+        if (!imageLayer) { this._toast(window.t("image.msg.noImageLayer"), "error"); return; }
 
         const NODE_ID = "cc_image_tab_sam3";
         this._sam3Loading  = true;
@@ -6215,10 +6215,10 @@ class ImageTab {
             const json = await resp.json();
             if (json.error) throw new Error(json.error);
             this._sam3Results = json.masks || [];
-            if (this._sam3Results.length === 0) this._toast("No masks found", "info");
-            else this._toast(`${this._sam3Results.length} mask(s) found`, "success");
+            if (this._sam3Results.length === 0) this._toast(window.t("image.msg.noMasksFound"), "info");
+            else this._toast(window.t("image.msg.masksFound", this._sam3Results.length), "success");
         } catch (err) {
-            this._toast("SAM3 error: " + err.message, "error");
+            this._toast(window.t("image.msg.sam3Error") + err.message, "error");
         } finally {
             this._sam3Loading = false;
             this._renderToolOptions("mask");
@@ -6252,7 +6252,7 @@ class ImageTab {
 
         this._updateCompositeView();
         this._refreshLayerList();
-        this._toast(`SAM3: ${masks.length} mask(s) applied (${this._sam3Mode})`, "success");
+        this._toast(window.t("image.msg.sam3Applied", masks.length, this._sam3Mode), "success");
     }
 
     _applySam3Mask(maskLayer, maskB64, mode = "add") {

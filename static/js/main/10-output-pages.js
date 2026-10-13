@@ -39,12 +39,21 @@ function initOutputManager() {
         exportBtn.addEventListener('click', handleExport);
     }
 
-    // レイヤー別出力の排他制御
-    const bgOnly = document.getElementById('export-bg-only');
-    const balloonOnly = document.getElementById('export-balloon-only');
-    if (bgOnly && balloonOnly) {
-        bgOnly.addEventListener('change', () => { if (bgOnly.checked) balloonOnly.checked = false; });
-        balloonOnly.addEventListener('change', () => { if (balloonOnly.checked) bgOnly.checked = false; });
+    // PDF・EPUB は別処理に分岐するため「背景のみ」「zip保存」は無効。形式に応じてチェックボックスを無効表示にする
+    const formatSel = document.getElementById('export-format');
+    if (formatSel) {
+        const syncFormatOptions = () => {
+            const multiPage = formatSel.value === 'pdf' || formatSel.value === 'epub';
+            ['export-bg-only', 'export-zip'].forEach(id => {
+                const cb = document.getElementById(id);
+                if (!cb) return;
+                cb.disabled = multiPage;
+                const group = cb.closest('.control-group');
+                if (group) group.style.opacity = multiPage ? '0.45' : '';
+            });
+        };
+        formatSel.addEventListener('change', syncFormatOptions);
+        syncFormatOptions();
     }
 
     const widthInput = document.getElementById('export-width');
@@ -540,8 +549,11 @@ async function _sortPageOrder() {
 }
 
 /**
- * 出力ページ範囲入力の max を更新。初期値は1〜1、ユーザーが任意に変更可能
+ * 出力ページ範囲入力を更新する。
+ * 一覧の総ページ数が変わった（作品/グループの切り替え等）ときは 1〜総ページ数 にリセットし、
+ * 総数が同じ再描画ではユーザーの入力値を保持する（範囲外の場合のみ補正）。
  */
+let _exportRangeLastTotal = null;
 function _updateExportPageRange(total) {
     const startEl = document.getElementById('export-page-start');
     const endEl   = document.getElementById('export-page-end');
@@ -549,11 +561,16 @@ function _updateExportPageRange(total) {
     const n = total || 1;
     startEl.max = n;
     endEl.max   = n;
-    // 範囲外の場合のみ1にリセット（ユーザーの入力値を保持）
+    if (_exportRangeLastTotal !== n) {
+        _exportRangeLastTotal = n;
+        startEl.value = 1;
+        endEl.value   = n;
+        return;
+    }
     const currentStart = parseInt(startEl.value, 10);
     const currentEnd   = parseInt(endEl.value, 10);
     if (!currentStart || currentStart < 1 || currentStart > n) startEl.value = 1;
-    if (!currentEnd   || currentEnd   < 1 || currentEnd   > n) endEl.value   = 1;
+    if (!currentEnd   || currentEnd   < 1 || currentEnd   > n) endEl.value   = n;
 }
 
 /**
@@ -711,9 +728,20 @@ async function importImageAsPage(file) {
     }
 }
 
+let _autoFilteredWork = null;
 async function onSwitchToOutputTab() {
     // サブタブ切り替えイベントを初回のみ登録
     _initOutputSubtabs();
+
+    // 作業中の作品があれば、その作品で自動的に絞り込む（作業中の作品が変わったときのみ。
+    // 手動でフィルタ解除した場合は、同じ作品のうちは再適用しない）
+    const workName = state.activeWork ? state.activeWork.name : null;
+    if (workName !== _autoFilteredWork) {
+        _autoFilteredWork = workName;
+        if (workName && !_outputFilterGroup && _pageMgrGroups.data[workName]) {
+            _outputFilterGroup = workName;
+        }
+    }
 
     // ページ一覧を描画
     await renderOutputPageList();

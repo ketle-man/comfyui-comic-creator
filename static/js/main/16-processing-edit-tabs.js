@@ -15,6 +15,8 @@ import { _layerDrawShapeToPng } from './17b-layer-draw-commit.js';
 import { _svgColorState, _svgColorLoad, _svgColorApply, _svgToPngConvert } from './18-svg-color-png.js';
 import { openImageTabWithSelected, openLayoutI2IModal, moveSelectedObjectToCenter } from './15-pixifx-bridge.js';
 import { state } from './01-state.js';
+import { getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
+import { savePanelSvg } from './07-pages.js';
 
 // ============================================================
 // Processing タブ（アップスケール・背景除去）
@@ -53,6 +55,7 @@ function initProcessingTab() {
     };
     bgRemoveChk.addEventListener('change', syncBgUI);
     bgModelSelect.addEventListener('change', syncBgUI);
+    _procCheckBiRefNetAvailability(bgModelSelect);
     runBtn.addEventListener('click', _procRun);
 }
 
@@ -75,6 +78,19 @@ async function _procRun() {
         return;
     }
 
+    // 元画像の位置・表示サイズ・回転を引き継いで挿入し、成功後に元画像を非表示にする
+    const origEl = state.selectedImageEl;
+    const origId = origEl.id;
+    const num = (n) => parseFloat(origEl.getAttribute(n));
+    const placement = [num('x'), num('y'), num('width'), num('height')].every(Number.isFinite)
+        ? { x: num('x'), y: num('y'), width: num('width'), height: num('height') }
+        : null;
+    const extraAttrs = {};
+    for (const a of ['transform', 'preserveAspectRatio']) {
+        const v = origEl.getAttribute(a);
+        if (v) extraAttrs[a] = v;
+    }
+
     statusEl.textContent = t('layout.processing');
     document.getElementById('proc-run-btn').disabled = true;
 
@@ -90,7 +106,8 @@ async function _procRun() {
             }
             statusEl.textContent = t('layout.procInserting');
             const { w, h } = _getSvgSize(dataUrl);
-            await insertImage(dataUrl, w, h);
+            await insertImage(dataUrl, w, h, extraAttrs, placement);
+            await _procHideOriginal(origId);
             statusEl.textContent = t('common.done');
             setTimeout(() => { statusEl.textContent = ''; }, 3000);
             return;
@@ -114,7 +131,8 @@ async function _procRun() {
             img.onerror = reject;
             img.src = dataUrl;
         });
-        await insertImage(dataUrl, img.width, img.height);
+        await insertImage(dataUrl, img.width, img.height, extraAttrs, placement);
+        await _procHideOriginal(origId);
         statusEl.textContent = t('common.done');
         setTimeout(() => { statusEl.textContent = ''; }, 3000);
 
@@ -124,6 +142,20 @@ async function _procRun() {
     } finally {
         document.getElementById('proc-run-btn').disabled = false;
     }
+}
+
+// 実行後に元画像を非表示にして保存する（レイヤーパネルの👁ボタンと同じ状態。再表示も👁ボタンで可能）
+async function _procHideOriginal(origId) {
+    if (!origId) return;
+    const svg = getPanelLayerSvg();
+    const el = svg && Array.from(svg.querySelectorAll('.inserted-image')).find(e => e.id === origId);
+    if (!el) return;
+    el.style.display = 'none';
+    const panelId = el.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') ||
+                    el.getAttribute('data-panel-id') || state.selectedPanelId || 'panel-0';
+    await savePanelSvg(panelId, svg);
+    if (state.selectedImageId === origId) { state.selectedImageId = null; state.selectedImageEl = null; }
+    renderLayerPanel();
 }
 
 // base64 SVG dataUrl を UTF-8 テキストにデコードするヘルパー
@@ -216,11 +248,79 @@ async function _procRemoveBackgroundImgly(dataUrl, quality = 'medium') {
     });
 }
 
-// BiRefNet 背景除去（将来実装）
-// eslint-disable-next-line no-unused-vars
+// BiRefNet 背景除去（Mask Editor One の /mask_editor/birefnet/* ルートを利用。Imageタブと同じ経路）
 async function _procRemoveBackgroundBiRefNet(dataUrl) {
-    // TODO: Transformers.js (WebGPU) または Python バックエンドで実装予定
-    throw new Error('BiRefNet は未実装です');
+    const NODE_ID = 'cc_layout_proc_bgremove';
+    const storeResp = await fetch('/mask_editor/store_image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ node_id: NODE_ID, image_b64: dataUrl }),
+    });
+    if (!storeResp.ok) throw new Error('Failed to cache image for BiRefNet');
+
+    const resp = await fetch('/mask_editor/birefnet/remove_bg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ node_id: NODE_ID }),
+    });
+    const json = await resp.json();
+    if (json.error) throw new Error(json.error);
+    return await _procApplyMaskToImage(dataUrl, json.mask_b64);
+}
+
+// グレースケールマスク（白=前景）を元画像に destination-in で適用してRGBA PNGを返す
+async function _procApplyMaskToImage(imageB64, maskB64) {
+    const loadImage = src => new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Image load failed'));
+        img.src = src;
+    });
+    const [origImg, maskImg] = await Promise.all([loadImage(imageB64), loadImage(maskB64)]);
+    const w = origImg.naturalWidth;
+    const h = origImg.naturalHeight;
+
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = w;
+    maskCanvas.height = h;
+    const mc = maskCanvas.getContext('2d');
+    mc.drawImage(maskImg, 0, 0, w, h);
+    const maskData = mc.getImageData(0, 0, w, h);
+    const md = maskData.data;
+    for (let i = 0; i < md.length; i += 4) {
+        md[i + 3] = md[i]; // 輝度 → アルファ
+        md[i] = md[i + 1] = md[i + 2] = 255;
+    }
+    mc.putImageData(maskData, 0, 0);
+
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    const ctx = out.getContext('2d');
+    ctx.drawImage(origImg, 0, 0, w, h);
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.drawImage(maskCanvas, 0, 0, w, h);
+    return out.toDataURL('image/png');
+}
+
+// BiRefNet の利用可否を確認し、利用できない場合は選択肢を無効化して理由をラベルに表示する
+async function _procCheckBiRefNetAvailability(bgModelSelect) {
+    const opt = bgModelSelect.querySelector('option[value="birefnet"]');
+    if (!opt) return;
+    let available = false;
+    try {
+        const resp = await fetch('/mask_editor/birefnet/status');
+        if (resp.ok) {
+            const json = await resp.json();
+            available = json.loaded === true || json.model_found === true;
+        }
+    } catch (_) { /* Mask Editor One 未導入 */ }
+    opt.disabled = !available;
+    const key = available ? 'layout.bgModelBiRefNet' : 'layout.bgModelBiRefNetUnavailable';
+    opt.setAttribute('data-i18n', key);
+    opt.textContent = t(key);
+    if (!available && bgModelSelect.value === 'birefnet') bgModelSelect.value = 'imgly';
+    bgModelSelect.dispatchEvent(new Event('change'));
 }
 
 async function _procUpscale(dataUrl, scale, denoise, sharpenRatio) {

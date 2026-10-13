@@ -390,15 +390,15 @@ function initLayerDraw() {
     _loadDefaultOriginalImg();
 }
 
-// My曲線デフォルト画像（assets/mychain/t1.png）を読み込んでレイヤードロータブに設定
+// My曲線デフォルト画像（static/img/mychain_default.png。リポジトリに同梱）を読み込んでレイヤードロータブに設定
 function _loadDefaultOriginalImg() {
-    const DEFAULT_URL = '/ccc_assets/mychain/t1.png';
+    const DEFAULT_URL = '/ccc_static/img/mychain_default.png';
     const img = new Image();
     img.onload = () => {
         if (!_layerDrawState.originalImg) {
             _layerDrawState.originalImg = img;
             const nameEl = document.getElementById('layer-draw-original-name');
-            if (nameEl) nameEl.textContent = 't1.png';
+            if (nameEl) nameEl.textContent = 'mychain_default.png';
             const previewEl = document.getElementById('layer-draw-original-preview');
             if (previewEl) { previewEl.src = DEFAULT_URL; previewEl.style.display = 'inline'; }
         }

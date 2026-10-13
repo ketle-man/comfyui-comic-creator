@@ -113,8 +113,52 @@ const _tmplAutoStage = {
 // テンプレート管理
 // ==============================
 
+// 初回起動時に登録する基本テンプレート（A4縦・A4横の3コマ）。
+// テンプレートウィザードと同じ形式（1ユーザー単位=0.01mm、白背景rect + panel_0 + panel_N のpolygon）で生成する。
+// 一度登録したらフラグを立て、ユーザーが削除しても再登録しない。
+const _TMPL_DEFAULTS_FLAG = 'ccc_default_templates_seeded_v1';
+function _tmplBuildDefaultSvg(w, h, rects) {
+    const sw = Math.max(4, w * 0.003);
+    const parts = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">`,
+        `  <rect x="0" y="0" width="${w}" height="${h}" fill="#ffffff"/>`,
+        `  <polygon id="panel_0" points="0,0 ${w},0 ${w},${h} 0,${h}" fill="none" stroke="#000" stroke-width="${sw}"/>`];
+    rects.forEach(([x, y, rw, rh], i) => {
+        parts.push(`  <polygon id="panel_${i + 1}" points="${x},${y} ${x + rw},${y} ${x + rw},${y + rh} ${x},${y + rh}" fill="none" stroke="#000" stroke-width="${sw}"/>`);
+    });
+    parts.push('</svg>');
+    return parts.join('\n');
+}
+async function _tmplSeedDefaultTemplates() {
+    try {
+        if (localStorage.getItem(_TMPL_DEFAULTS_FLAG)) return;
+    } catch (_) { return; }
+    const M = 1000, G = 400; // 余白・コマ間
+    const defs = [];
+    { // A4縦 (210x297mm): 縦に3段
+        const w = 21000, h = 29700, ph = Math.round((h - 2 * M - 2 * G) / 3);
+        defs.push([t('tmpl.defaultA4Portrait'), w, h, [0, 1, 2].map(i => [M, M + i * (ph + G), w - 2 * M, ph])]);
+    }
+    { // A4横 (297x210mm): 横に3列
+        const w = 29700, h = 21000, pw = Math.round((w - 2 * M - 2 * G) / 3);
+        defs.push([t('tmpl.defaultA4Landscape'), w, h, [0, 1, 2].map(i => [M + i * (pw + G), M, pw, h - 2 * M])]);
+    }
+    try {
+        for (const [name, w, h, rects] of defs) {
+            if (await dbGet('templates', name)) continue;
+            const svgText = _tmplBuildDefaultSvg(w, h, rects);
+            const template = parseSVGForTemplate(svgText, name);
+            await saveTemplate(template, svgText);
+        }
+        localStorage.setItem(_TMPL_DEFAULTS_FLAG, '1');
+    } catch (e) {
+        console.error('[Template] default templates seed failed:', e);
+    }
+}
+
 async function initTemplateManager() {
     _tmplGroups.load();
+    await _tmplSeedDefaultTemplates();
+    await loadTemplates();
 
     const fileInput = document.getElementById('svg-upload');
     if (!fileInput) return;

@@ -375,7 +375,7 @@ async function _li2iRunWholePage(isT2I, wf, denoise, setStatus) {
 }
 
 // 対象=選択タブ・コマ: アクティブなプロンプトタブが示す単一コマだけを対象に、そのタブ自身の
-// プロンプトのみ（「全体」タブとは合成しない）でI2I/T2Iを実行し、結果でそのコマの画像を置き換える
+// プロンプトのみ（「全体」タブとは合成しない）でI2I/T2Iを実行し、結果をそのコマの既存画像の上に重ねて追加する（元の画像は削除しない）
 async function _li2iRunPanelTab(panelId, isT2I, wf, denoise, setStatus) {
     const panel = state.activePage?.panels?.find(p => p.id === panelId);
     const bbox = panel?.points ? getBoundingBoxFromPoints(panel.points) : null;
@@ -400,7 +400,7 @@ async function _li2iRunPanelTab(panelId, isT2I, wf, denoise, setStatus) {
 }
 
 // 対象=ページ全体＋batch ON: 現在ページの全コマそれぞれについて、「全体」タブのプロンプト＋
-// そのコマのタブのプロンプトを合成してI2I/T2Iを順次実行し、結果でそのコマの画像を置き換える
+// そのコマのタブのプロンプトを合成してI2I/T2Iを順次実行し、結果をそのコマの既存画像の上に重ねて追加する（元の画像は削除しない）
 async function _li2iRunBatch(isT2I, wf, denoise, setStatus) {
     const panels = state.activePage?.panels || [];
     if (panels.length === 0) { alert(t('layout.msgNoActivePage')); return null; }

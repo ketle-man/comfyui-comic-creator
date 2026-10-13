@@ -216,7 +216,7 @@ export class TextTool {
         textarea.className   = "ie-text-textarea";
         textarea.value       = this.text;
         textarea.rows        = 3;
-        textarea.placeholder = "Enter text…";
+        textarea.placeholder = window.t("image.textInputPlaceholder");
         overlay.appendChild(textarea);
 
         const btnRow    = document.createElement("div");
@@ -235,7 +235,7 @@ export class TextTool {
 
         const cancelBtn = document.createElement("button");
         cancelBtn.className   = "wfm-btn wfm-btn-sm";
-        cancelBtn.textContent = "Cancel";
+        cancelBtn.textContent = window.t("common.cancel");
         cancelBtn.onclick     = () => this._closeOverlay();
         btnRow.appendChild(cancelBtn);
 
@@ -245,7 +245,8 @@ export class TextTool {
         textarea.focus();
 
         textarea.addEventListener("keydown", e => {
-            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); okBtn.click(); }
+            // レイアウトタブの「テキスト入力」と同じ操作: Enter=改行、Ctrl/Cmd+Enter=確定、Esc=キャンセル
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); okBtn.click(); }
             else if (e.key === "Escape") this._closeOverlay();
         });
     }

@@ -877,7 +877,7 @@
                     File Open
                     <input type="file" id="ie-upload-input" accept="image/*" style="display:none;">
                   </label>
-                  <label class="it-btn it-btn-sm" style="cursor:pointer;" title="PSD(Photoshop)ファイルをレイヤー構成ごと開きます">
+                  <label class="it-btn it-btn-sm" style="cursor:pointer;" data-i18n-title="image.openPsdTitle" title="PSD(Photoshop)ファイルをレイヤー構成ごと開きます">
                     Open PSD
                     <input type="file" id="ie-open-psd-input" accept=".psd" style="display:none;">
                   </label>
@@ -1384,7 +1384,7 @@
                 <label for="svg-upload" class="btn" data-i18n="page.svgToTemplate">SVGからテンプレート作成</label>
                 <input type="file" id="svg-upload" accept=".svg" class="hidden" />
                 <button id="template-wizard-btn" class="btn" data-i18n="page.templateWizard">テンプレートを作成</button>
-                <button id="create-page-btn" class="btn secondary" data-i18n="page.createPage">ページ新規作成</button>
+                <button id="create-page-btn" class="btn secondary" data-i18n="page.createPage" data-i18n-title="page.createPageTitle" title="選択中のテンプレートから1ページを作成して、すぐレイアウトタブで開きます（コマの線幅はレイアウトタブで変更）">クイック</button>
                 <button id="template-rename-btn" class="btn secondary" disabled data-i18n="page.rename">名前変更</button>
                 <button id="template-delete-btn" class="btn danger" disabled data-i18n="common.delete">削除</button>
                 <select id="template-group-filter" style="margin-left:8px; padding:4px 8px; font-size:13px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);">
@@ -1475,10 +1475,6 @@
                 <div class="control-group checkbox">
                   <input type="checkbox" id="export-bg-only" />
                   <label for="export-bg-only" data-i18n="page.bgOnly">背景のみ</label>
-                </div>
-                <div class="control-group checkbox">
-                  <input type="checkbox" id="export-balloon-only" />
-                  <label for="export-balloon-only" data-i18n="page.balloonOnly">フキダシのみ</label>
                 </div>
                 <div class="control-group export-page-range">
                   <label data-i18n="page.exportPagesLabel">出力ページ:</label>
@@ -2244,10 +2240,11 @@
                 <span id="settings-eagle-status" style="font-size:12px; color:#888;"></span>
               </div>
               <p data-i18n="settings.autoSaveDesc" style="margin: 0 0 8px; font-size:12px; color:#888;">生成画像を自動的にEagleへ保存する（Eagle起動が必要）</p>
-              <div class="control-row" style="align-items:center; gap:8px; margin-bottom:6px;">
-                <input type="checkbox" id="eagle-auto-save-comfyui" style="width:16px; height:16px; cursor:pointer;" />
-                <label for="eagle-auto-save-comfyui" data-i18n="settings.autoSaveComfyUI" style="cursor:pointer; user-select:none;">ComfyUI 生成画像を自動保存</label>
+              <div class="control-row" style="align-items:center; gap:8px; margin-bottom:2px; opacity:0.5;">
+                <input type="checkbox" id="eagle-auto-save-comfyui" disabled style="width:16px; height:16px; cursor:not-allowed;" />
+                <label for="eagle-auto-save-comfyui" data-i18n="settings.autoSaveComfyUI" style="cursor:not-allowed; user-select:none;">ComfyUI 生成画像を自動保存</label>
               </div>
+              <p data-i18n="settings.autoSaveComfyUIWfmHint" style="margin: 0 0 8px 24px; font-size:12px; color:#888;">ComfyUI 生成画像（Generate・I2I など）の Eagle 自動保存は Workflow Studio の設定タブ＞Eagle で設定してください。</p>
               <div class="control-row" style="align-items:center; gap:8px; margin-bottom:6px;">
                 <input type="checkbox" id="eagle-auto-save-nanobanana" style="width:16px; height:16px; cursor:pointer;" />
                 <label for="eagle-auto-save-nanobanana" data-i18n="settings.autoSaveNanobanana" style="cursor:pointer; user-select:none;">Nanobanana 生成画像を自動保存</label>

@@ -16,6 +16,7 @@ class NanobananaManager {
         this.i2iImages = [];   // { b64: 'data:...', mime: 'image/png' }[]  最大14枚
         this.MAX_I2I = 14;
         this.generatedImages = [];
+        this.selectedResultIndex = 0; // 結果表示・「コマに挿入」の対象（サムネイルで選択）
         this.apiUrl = '/api/ccc/nanobanana/generate';
         this.lastGenerationMeta = null;   // 直近の生成パラメータ（履歴の手動記録用）
 
@@ -270,7 +271,7 @@ class NanobananaManager {
                 this.recordHistory({ silent: true });
             }
 
-            this.showResult(this.generatedImages[0].url);
+            this.showResult(0);
             progress.textContent = t('common.done');
 
             // ギャラリーを更新
@@ -329,19 +330,38 @@ class NanobananaManager {
         });
     }
 
-    showResult(url) {
+    // index番目の生成結果をプレビュー表示する。2枚以上ある場合はサムネイル一覧を出し、選んだ画像が挿入対象になる
+    showResult(index = 0) {
+        if (!this.generatedImages.length) return;
+        this.selectedResultIndex = Math.min(Math.max(0, index), this.generatedImages.length - 1);
         const img = document.getElementById('nanobanana-result-img');
         if (img) {
-            img.src = url;
+            img.src = this.generatedImages[this.selectedResultIndex].url;
             document.getElementById('nanobanana-insert-btn').disabled = false;
         }
-        
-        // 複数枚ある場合のサムネイル表示 (TBD)
+
+        const thumbs = document.getElementById('nanobanana-result-thumbs');
+        if (!thumbs) return;
+        if (this.generatedImages.length < 2) {
+            thumbs.style.display = 'none';
+            thumbs.innerHTML = '';
+            return;
+        }
+        thumbs.innerHTML = '';
+        this.generatedImages.forEach((g, i) => {
+            const th = document.createElement('img');
+            th.src = g.url;
+            th.className = 'comfyui-result-thumb' + (i === this.selectedResultIndex ? ' selected' : '');
+            th.title = `${i + 1} / ${this.generatedImages.length}`;
+            th.addEventListener('click', () => this.showResult(i));
+            thumbs.appendChild(th);
+        });
+        thumbs.style.display = 'flex';
     }
 
     async insertToPanel() {
         if (!this.generatedImages.length) return;
-        const currentImg = this.generatedImages[0]; // ひとまず最初の1枚
+        const currentImg = this.generatedImages[this.selectedResultIndex] || this.generatedImages[0]; // サムネイルで選択中の画像
         
         if (!state.selectedPanelId) {
             alert(t('nb.selectTargetPanel'));

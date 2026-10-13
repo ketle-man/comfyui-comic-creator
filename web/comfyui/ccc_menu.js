@@ -6,7 +6,7 @@ app.registerExtension({
         {
             icon: "pi pi-palette",
             label: "CC",
-            tooltip: "Comic Creator を開く",
+            tooltip: "Open Comic Creator",
             onClick: () => window.open("/ccc", "_blank"),
         },
     ],

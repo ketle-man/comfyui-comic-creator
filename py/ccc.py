@@ -1544,4 +1544,15 @@ class ComicCreator:
         except Exception as e:
             print(f"[ccc] assets scan error: {e}")
 
-        print("[ccc] Comic Creator loaded → http://127.0.0.1:8189/ccc")
+        # ポートは固定値ではなく、ComfyUI の起動引数（--listen / --port）から取得する
+        try:
+            from comfy.cli_args import args as _comfy_args
+            _port = getattr(_comfy_args, "port", None) or 8188
+            _host = str(getattr(_comfy_args, "listen", "") or "127.0.0.1").split(",")[0].strip()
+            if _host in ("", "0.0.0.0", "::"):
+                _host = "127.0.0.1"
+            elif ":" in _host:
+                _host = f"[{_host}]"
+        except Exception:
+            _host, _port = "127.0.0.1", 8188
+        print(f"[ccc] Comic Creator loaded → http://{_host}:{_port}/ccc")

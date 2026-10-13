@@ -458,18 +458,8 @@ async function createPageFromTemplate() {
         // （<polygon>を含まない形式で読み込まれたテンプレートは、保存済みのコマ座標から合成したSVGにフォールバック）
         const { svgDoc, polygons } = _prepareTemplateSvgDocForPage(_tmplResolveTemplateSvgForPage(templateRecord));
 
-        // コマの線幅を指定（既定値はテンプレートに保存されている線幅、小数点第2位まで）
-        const comaPolygons = Array.from(polygons).slice(1);
-        const defaultLineWidth = _round2(comaPolygons.length > 0
-            ? (getStrokeWidthFromElement(comaPolygons[0]) || 60)
-            : 60);
-        const lineWidthInput = prompt(t('page.promptPanelLineWidth'), String(defaultLineWidth));
-        if (lineWidthInput === null) return; // キャンセル時はページを作成しない
-        const parsedLineWidth = parseFloat(lineWidthInput);
-        const lineWidth = _round2(Math.max(0, isNaN(parsedLineWidth) ? defaultLineWidth : parsedLineWidth));
-        comaPolygons.forEach(poly => {
-            _tmplForceInlineStyle(poly, { 'stroke-width': String(lineWidth) });
-        });
+        // 「クイック」: コマの線幅はテンプレートに保存されている値のまま、確認なしで作成する
+        // （線幅の変更はレイアウトタブ上部の「コマ枠線幅」でユーザーが行う）
 
         const cleanSvgContent = new XMLSerializer().serializeToString(svgDoc.documentElement);
 
