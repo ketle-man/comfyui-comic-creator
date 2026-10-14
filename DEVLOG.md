@@ -2,6 +2,27 @@
 
 ---
 
+## 2026-10-14（Nanobanana: 生成方式を設定タブで切替し、半自動マンガ・Autoタブにも適用、v1.55.0）
+
+v1.54.0 で Nanobanana タブにだけ追加した「ComfyUIネイティブノード」方式を、共通の設定として設定タブで切り替えられるようにし、半自動マンガ（スクリプト）と Auto タブの Nanobanana 生成にも適用した。3か所とも `requestNanobananaGenerate(payload)`（base64画像の配列を返す共通の入口）を通るため、呼び出し側はほぼ無改修。
+
+**UI**
+- 設定タブに「Nanobanana 設定」（`settings-nanobanana-engine`）を追加。選択は localStorage（`ccc_nanobanana_engine`）に保存し、Nanobanana タブの選択欄と `ccc-nanobanana-engine-changed` イベントで連動する。接続状態（Gemini キー / `COMFY_API_KEY`）も表示。
+- `nanobanana.js`: `getNanobananaEngine` / `setNanobananaEngine` を追加・export。`checkNanobananaKeyStatus`（半自動マンガのモーダルでも使用）と `requestNanobananaGenerate` が設定に従う。
+
+**バックエンド（`ccc.py`）**
+- `POST /api/ccc/nanobanana/native/generate` に `return_b64` を追加: ワークフローの出力を `SaveImage` ではなく `PreviewImage`（temp、再起動で消える）にし、結果を `/view` から base64 で返す。呼び出し側が自前の保存先（`cc_nanobanana` / `cc_auto`）へ保存するため、ComfyUI の `output` に重複ファイルを残さない。PNG の `prompt` / `workflow` 埋め込みは SaveImage と同様に付くので、保存先のPNGにもメタデータが残る。
+- モデル名の対応: 半自動マンガ・Auto は Gemini の ID で指定してくるため、`gemini-nano-banana-2.1` → `Gemini Nano Banana 2.1`、`gemini-3.1-flash-image` → `Nano Banana 2 (Gemini 3.1 Flash Image)`、`gemini-3.1-flash-lite-image` → `Nano Banana 2 Lite` に対応づけ。`gemini-3-pro-image`（Nano Banana Pro）はネイティブでは別ノード（`GeminiImage2Node`）のため **未対応**（`nanobanana_native_unsupported_model`）。Lite の 2K/4K はエラー（黙って1Kに丸めない）。エラー文言は3言語。
+
+**実機確認（ComfyUI_5 / ポート8189、v0.40.0）**
+- 設定タブの切替が Nanobanana タブ（選択欄・モデル欄・接続状態）に連動すること、Pro 未対応・Lite の 2K・不正モデルのエラー文言が出ることを確認（課金なし）。
+- 半自動マンガと同じ形（参考画像1枚付き I2I、`gemini-nano-banana-2.1`）で共通の入口を実呼び出し: 18.4秒、base64 の PNG（848×1264、`prompt` / `workflow` チャンク入り）が返り、`output/cc_nanobanana_native/` に重複は増えない（プレビューと参考画像は temp）。
+- Auto タブの `generateAutoImage` は、生成リクエストをスタブにして、設定に応じて `/native/generate`（`return_b64: true`）と従来の `/nanobanana/generate` が切り替わり、どちらも `save-auto-image` へ保存することを確認。モデル名の対応表は関数単位で確認（高価な `gemini-3.1-flash-image` は課金回避のため実生成せず）。
+
+**注意**
+- 半自動マンガの画像は `cc_nanobanana` に保存される。Workflow Studio v0.8.6 で、メタデータが埋め込まれた画像は Prompt タブが表示されるようにした。
+- パートナーAPIノードの認証は、これまでどおり Comic Creator 側の `.env` の `COMFY_API_KEY`（サーバー側から付与）。
+
 ## 2026-10-14（Nanobanana: ComfyUIネイティブノード経由の生成を併用可能に、v1.54.0）
 
 ComfyUI v0.40.0 の確認の流れで、Nanobanana のメタデータ・履歴の扱いを見直した。現行の Gemini API 直叩き経路は、返却画像をバイト列のまま保存するため PNG に生成条件が入らず、`history.jsonl` への別記録が必要だった。一方 ComfyUI 本体のパートナーAPIノード（Nano Banana 2.1）は SaveImage が `prompt` / `workflow` を PNG に埋め込むため、履歴ファイルが不要になる。そこで **置き換えではなく併用** として、ネイティブ経路を追加した。

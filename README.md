@@ -82,7 +82,7 @@ ComfyUI 上で動作するマンガページ作成 SPA（シングルページ�
 - 出力解像度は 1K（既定）/2K/4K を指定可能（対応モデルのみ）、I2I は参照画像を最大 14 枚まで追加可能
 - 生成画像は ComfyUI 本体の `output/cc_nanobanana` フォルダへ自動保存
 - 生成履歴をJSON Lines形式のファイル（`output/cc_nanobanana/history.jsonl`、1行1件のJSON）に記録（日時・モデル・解像度・プロンプト等）。自動記録チェックボックス、または結果ごとの手動記録ボタンから利用（編集・削除はファイルを直接操作）
-- **生成方式の選択** — 「ComfyUIネイティブノード（Comfyクレジット）」を選ぶと、ComfyUI 本体の Nano Banana 2.1 ノード（Gemini Nano Banana 2.1 / Nano Banana 2 / Nano Banana 2 Lite）を ComfyUI の `/prompt` 経由で実行できる（Gemini API 直叩きと併用可）。画像は `output/cc_nanobanana_native/` にプロンプト・設定を埋め込んだ PNG として保存されるため履歴の記録は不要（Workflow Studio のメタデータ／ギャラリーでも確認可能）。認証は `.env` の `COMFY_API_KEY`、課金は Comfy クレジット
+- **生成方式の選択** — 設定タブの「Nanobanana 設定」（または Nanobanana タブ）で「ComfyUIネイティブノード（Comfyクレジット）」を選ぶと、Nanobanana タブ・半自動マンガ・Auto タブ（画像生成エンジンが Gemini のとき）の生成に共通で適用される。ComfyUI 本体の Nano Banana 2.1 ノード（Gemini Nano Banana 2.1 / Nano Banana 2 / Nano Banana 2 Lite）を ComfyUI の `/prompt` 経由で実行できる（Gemini API 直叩きと併用可）。画像は `output/cc_nanobanana_native/` にプロンプト・設定を埋め込んだ PNG として保存されるため履歴の記録は不要（Workflow Studio のメタデータ／ギャラリーでも確認可能）。認証は `.env` の `COMFY_API_KEY`、課金は Comfy クレジット。Nano Banana Pro（`gemini-3-pro-image`）はネイティブ方式では未対応
 
 </details>
 

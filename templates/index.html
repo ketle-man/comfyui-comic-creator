@@ -2244,6 +2244,19 @@
             </div>
 
             <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
+              <h3 data-i18n="settings.nanobananaTitle">Nanobanana 設定</h3>
+              <div class="control-row" style="margin-bottom: 8px; align-items: center; gap: 8px;">
+                <label for="settings-nanobanana-engine" data-i18n="nb.engineLabel" style="white-space:nowrap; min-width:160px;">生成方式:</label>
+                <select id="settings-nanobanana-engine" class="comfyui-select">
+                  <option value="gemini" data-i18n="nb.engineGemini">Gemini API（自分のAPIキー）</option>
+                  <option value="comfyui" data-i18n="nb.engineComfyui">ComfyUIネイティブノード（Comfyクレジット）</option>
+                </select>
+                <span id="settings-nanobanana-engine-status" style="font-size:12px; color:#888;"></span>
+              </div>
+              <p data-i18n="settings.nanobananaEngineDesc" style="margin: 0; font-size:12px; color:#888;">Nanobananaタブ・半自動マンガ・Autoタブ（画像生成エンジンがGeminiのとき）の生成に共通で適用されます。</p>
+            </div>
+
+            <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
               <h3 data-i18n="settings.eagleTitle">Eagle 設定</h3>
               <div class="control-row" style="margin-bottom: 10px; align-items: center; gap: 8px;">
                 <label for="settings-eagle-url" data-i18n="settings.eagleUrlLabel" style="white-space:nowrap; min-width:160px;">Eagle API URL</label>

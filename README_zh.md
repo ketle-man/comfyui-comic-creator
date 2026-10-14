@@ -82,7 +82,7 @@
 - 输出分辨率可指定为 1K（默认）/2K/4K（仅部分模型支持），I2I 最多可添加 14 张参考图像
 - 生成的图像会自动保存到 ComfyUI 本体的 `output/cc_nanobanana` 文件夹
 - 生成历史会记录到JSON Lines格式的文件（`output/cc_nanobanana/history.jsonl`，1行1条JSON：日期时间・模型・分辨率・提示词等），可通过自动记录复选框或针对单次结果的手动按钮记录（编辑・删除请直接打开该文件）
-- **生成方式选择** — 选择“ComfyUI原生节点（Comfy积分）”后，可通过ComfyUI的 `/prompt` 运行ComfyUI自带的Nano Banana 2.1节点（Gemini Nano Banana 2.1 / Nano Banana 2 / Nano Banana 2 Lite），可与直接调用Gemini API的方式并用。图片会作为嵌入了提示词和设置的PNG保存到 `output/cc_nanobanana_native/`，因此无需记录历史（也可在Workflow Studio的元数据标签/图库中查看）。认证使用 `.env` 中的 `COMFY_API_KEY`，费用按Comfy积分计算
+- **生成方式选择** — 在设置标签的“Nanobanana 设置”（或Nanobanana标签）中选择“ComfyUI原生节点（Comfy积分）”后，该设置同样适用于Nanobanana标签、半自动漫画和Auto标签（图像生成引擎为Gemini时）。可通过ComfyUI的 `/prompt` 运行ComfyUI自带的Nano Banana 2.1节点（Gemini Nano Banana 2.1 / Nano Banana 2 / Nano Banana 2 Lite），可与直接调用Gemini API的方式并用。图片会作为嵌入了提示词和设置的PNG保存到 `output/cc_nanobanana_native/`，因此无需记录历史（也可在Workflow Studio的元数据标签/图库中查看）。认证使用 `.env` 中的 `COMFY_API_KEY`，费用按Comfy积分计算。原生方式不支持Nano Banana Pro（`gemini-3-pro-image`）
 
 </details>
 

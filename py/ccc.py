@@ -818,6 +818,14 @@ _NATIVE_NB_THINKING = {   # 既定のthinking_level（ノード側の既定値�
     'Nano Banana 2 (Gemini 3.1 Flash Image)': 'MINIMAL',
     'Nano Banana 2 Lite': 'MINIMAL',
 }
+# 半自動マンガ・Autoタブ等は Gemini API のモデルIDで指定してくるため、ネイティブノードの選択肢へ対応づける。
+# gemini-3-pro-image（Nano Banana Pro）は別ノード（GeminiImage2Node）になるため、現状は未対応。
+_NATIVE_NB_GEMINI_IDS = {
+    'gemini-nano-banana-2.1': 'Gemini Nano Banana 2.1',
+    'gemini-3.1-flash-image': 'Nano Banana 2 (Gemini 3.1 Flash Image)',
+    'gemini-3.1-flash-lite-image': 'Nano Banana 2 Lite',
+}
+_NATIVE_NB_UNSUPPORTED_IDS = ('gemini-3-pro-image',)
 _NATIVE_NB_PREFIX = 'cc_nanobanana_native/NB'
 _NATIVE_NB_MAX_REFS = 14
 _NATIVE_NB_TIMEOUT_S = 300
@@ -851,7 +859,7 @@ def _nb_aspect_ratio(w, h) -> str:
             return ar
     return "1:1"
 
-def _native_nb_workflow(prompt, model, aspect_ratio, resolution, seed, ref_names):
+def _native_nb_workflow(prompt, model, aspect_ratio, resolution, seed, ref_names, preview=False):
     """API形式のワークフロー（Nano Banana 2.1ノード + SaveImage）を組み立てる。
     DynamicComboの子入力は "model.<名前>"、参考画像（Autogrow）は "model.images.image_<n>" のドット結合キー。"""
     wf = {}
@@ -869,9 +877,32 @@ def _native_nb_workflow(prompt, model, aspect_ratio, resolution, seed, ref_names
         wf[node_id] = {'class_type': 'LoadImage', 'inputs': {'image': f'{name} [temp]'}}
         inputs[f'model.images.image_{i}'] = [node_id, 0]
     wf['1'] = {'class_type': 'GeminiNanoBanana2V2', 'inputs': inputs, '_meta': {'title': 'Nano Banana 2.1'}}
-    wf['2'] = {'class_type': 'SaveImage', 'inputs': {'images': ['1', 0], 'filename_prefix': _NATIVE_NB_PREFIX},
-               '_meta': {'title': 'Save Image'}}
+    if preview:
+        # 呼び出し側が自前の保存先へ保存する用途（半自動マンガ・Auto等）。PreviewImageはtempへ書き出すだけで
+        # 再起動で消えるため、outputに重複ファイルを残さない（埋め込みメタデータはSaveImageと同様に付く）
+        wf['2'] = {'class_type': 'PreviewImage', 'inputs': {'images': ['1', 0]}, '_meta': {'title': 'Preview Image'}}
+    else:
+        wf['2'] = {'class_type': 'SaveImage', 'inputs': {'images': ['1', 0], 'filename_prefix': _NATIVE_NB_PREFIX},
+                   '_meta': {'title': 'Save Image'}}
     return wf
+
+def _native_nb_resolve_model(model):
+    """GeminiモデルID または ネイティブノードの選択肢名 → ネイティブノードの選択肢名。"""
+    model = model or 'Gemini Nano Banana 2.1'
+    if model in _NATIVE_NB_RESOLUTIONS:
+        return model
+    if model in _NATIVE_NB_GEMINI_IDS:
+        return _NATIVE_NB_GEMINI_IDS[model]
+    if model in _NATIVE_NB_UNSUPPORTED_IDS:
+        raise CCCError('nanobanana_native_unsupported_model', f'{model} はネイティブノード方式では未対応です', model=model)
+    raise CCCError('nanobanana_native_invalid_model', f'不正なモデル名です: {model!r}', model=str(model)[:100])
+
+async def _native_nb_fetch_b64(sess, base, im):
+    params = {'filename': im['filename'], 'subfolder': im.get('subfolder', ''), 'type': im.get('type', 'output')}
+    async with sess.get(f'{base}/view', params=params) as r:
+        if r.status != 200:
+            raise CCCError('nanobanana_native_failed', f'生成画像の取得に失敗しました (HTTP {r.status})', detail=f'view HTTP {r.status}')
+        return base64.b64encode(await r.read()).decode('ascii')
 
 async def _native_nb_upload_ref(sess, base, b64, mime, index):
     raw = base64.b64decode(b64)
@@ -925,9 +956,8 @@ async def handle_nanobanana_native_generate(request):
         if not key:
             raise CCCError('nanobanana_native_key_missing', 'Comfy APIキーが設定されていません。プラグインフォルダ直下の .env に COMFY_API_KEY=... を記載し、ComfyUIを再起動してください。')
         data = await _read_json_limited(request, MAX_JSON_IMAGE_UPLOAD_BYTES)
-        model = data.get('model') or 'Gemini Nano Banana 2.1'
-        if model not in _NATIVE_NB_RESOLUTIONS:
-            raise CCCError('nanobanana_native_invalid_model', f'不正なモデル名です: {model!r}', model=str(model)[:100])
+        model = _native_nb_resolve_model(data.get('model'))
+        return_b64 = bool(data.get('return_b64'))
         prompt = (data.get('prompt') or '').strip()
         if not prompt:
             raise CCCError('nanobanana_native_failed', 'プロンプトが空です', detail='empty prompt')
@@ -956,10 +986,14 @@ async def handle_nanobanana_native_generate(request):
             for i in range(num_images):
                 # seedはGeminiへは送られずComfyUIのキャッシュキーとして働く。同じ入力の再実行はキャッシュが返る
                 # （新しい画像にならない）ため、枚数ごとにseedをずらす
-                wf = _native_nb_workflow(full_prompt, model, aspect, resolution, base_seed + i, ref_names)
+                wf = _native_nb_workflow(full_prompt, model, aspect, resolution, base_seed + i, ref_names, preview=return_b64)
                 pid, imgs = await _native_nb_run(sess, base, key, wf)
                 prompt_ids.append(pid)
-                results.extend({'filename': im['filename'], 'subfolder': im.get('subfolder', ''), 'type': im.get('type', 'output')} for im in imgs)
+                for im in imgs:
+                    if return_b64:
+                        results.append(await _native_nb_fetch_b64(sess, base, im))   # Gemini直叩き経路と同じ「base64文字列の配列」
+                    else:
+                        results.append({'filename': im['filename'], 'subfolder': im.get('subfolder', ''), 'type': im.get('type', 'output')})
         if not results:
             raise CCCError('nanobanana_native_failed', '画像が生成されませんでした', detail='no images')
         return web.json_response({'status': 'ok', 'images': results, 'prompt_ids': prompt_ids,

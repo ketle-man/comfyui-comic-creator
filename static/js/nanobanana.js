@@ -10,6 +10,17 @@ import { state } from './main/01-state.js';
 
 const HISTORY_AUTO_KEY = 'ccc_nanobanana_history_auto';
 const ENGINE_KEY = 'ccc_nanobanana_engine';   // 'gemini'（Gemini API直叩き） | 'comfyui'（ComfyUIネイティブノード）
+const ENGINE_EVENT = 'ccc-nanobanana-engine-changed';
+
+// 生成方式の設定。設定タブ・Nanobananaタブ・半自動マンガ・Autoタブ（画像生成エンジン=Gemini）で共通に使う。
+function getNanobananaEngine() {
+    try { return localStorage.getItem(ENGINE_KEY) === 'comfyui' ? 'comfyui' : 'gemini'; } catch { return 'gemini'; }
+}
+function setNanobananaEngine(engine) {
+    const v = engine === 'comfyui' ? 'comfyui' : 'gemini';
+    try { localStorage.setItem(ENGINE_KEY, v); } catch { /* 無視 */ }
+    window.dispatchEvent(new CustomEvent(ENGINE_EVENT, { detail: v }));
+}
 
 class NanobananaManager {
     constructor() {
@@ -37,13 +48,16 @@ class NanobananaManager {
     // 生成方式（Gemini API / ComfyUIネイティブノード）の選択を復元し、表示を切り替える
     restoreEngineSetting() {
         const sel = document.getElementById('nanobanana-engine');
-        if (!sel) return;
-        try { this.engine = localStorage.getItem(ENGINE_KEY) === 'comfyui' ? 'comfyui' : 'gemini'; } catch { /* 無視 */ }
-        sel.value = this.engine;
+        this.engine = getNanobananaEngine();
+        if (sel) {
+            sel.value = this.engine;
+            sel.addEventListener('change', () => setNanobananaEngine(sel.value));
+        }
         this.applyEngineUi();
-        sel.addEventListener('change', () => {
-            this.engine = sel.value === 'comfyui' ? 'comfyui' : 'gemini';
-            try { localStorage.setItem(ENGINE_KEY, this.engine); } catch { /* 無視 */ }
+        // 設定タブなど他の場所で切り替えられたときも、この画面の表示と接続状態を追従させる
+        window.addEventListener(ENGINE_EVENT, () => {
+            this.engine = getNanobananaEngine();
+            if (sel) sel.value = this.engine;
             this.applyEngineUi();
             this.refreshApiKey();
         });
@@ -69,9 +83,7 @@ class NanobananaManager {
     }
 
     async refreshApiKey() {
-        const { connected, text } = this.engine === 'comfyui'
-            ? await checkNanobananaNativeStatus()
-            : await checkNanobananaKeyStatus();
+        const { connected, text } = await checkNanobananaKeyStatus();
         this.updateStatus(connected ? 'connected' : 'disconnected', text);
     }
 
@@ -464,6 +476,7 @@ class NanobananaManager {
 // Nanobanana APIキーの設定状況を確認する（NanobananaManager.refreshApiKey()・
 // 半自動マンガのNanobananaモーダル双方から利用する共通ロジック）。
 async function checkNanobananaKeyStatus() {
+    if (getNanobananaEngine() === 'comfyui') return checkNanobananaNativeStatus();   // 生成方式の設定に従う
     try {
         const response = await fetch('/api/ccc/nanobanana/key');
         const data = await response.json();
@@ -508,13 +521,16 @@ async function requestNanobananaNativeGenerate(payload) {
 }
 
 // Nanobanana画像生成APIを呼び出し、base64画像文字列の配列を返す（NanobananaManager.generate()・
-// 半自動マンガのNanobananaバッチ生成 双方から利用）。エラー時はresolveBackendErrorで
-// 多言語化済みメッセージのErrorをthrowする。
+// 半自動マンガのNanobananaバッチ生成・Autoタブ 共通の入口）。生成方式の設定（getNanobananaEngine）に従い、
+// ネイティブ方式ではComfyUIネイティブノードで生成して同じ「base64画像の配列」で返す（return_b64。
+// 呼び出し側が自前の保存先へ保存する前提で、ComfyUIのoutputには残さない）。
+// エラー時はresolveBackendErrorで多言語化済みメッセージのErrorをthrowする。
 async function requestNanobananaGenerate(payload) {
-    const response = await fetch('/api/ccc/nanobanana/generate', {
+    const native = getNanobananaEngine() === 'comfyui';
+    const response = await fetch(native ? '/api/ccc/nanobanana/native/generate' : '/api/ccc/nanobanana/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(native ? { ...payload, return_b64: true } : payload)
     });
     const data = await response.json();
     if (data.status !== 'ok') {
@@ -613,6 +629,26 @@ async function saveNanobananaImageAndMaybeEagle(rawB64, filenamePrefix, tags = [
     return { url, dataUrl };
 }
 
+// 設定タブの「生成方式」。Nanobananaタブ側の選択欄と同じ設定（localStorage）を共有し、互いに連動する
+function initNanobananaSettingsUi() {
+    const sel = document.getElementById('settings-nanobanana-engine');
+    if (!sel) return;
+    const statusEl = document.getElementById('settings-nanobanana-engine-status');
+    const refresh = async () => {
+        sel.value = getNanobananaEngine();
+        const { connected, text } = await checkNanobananaKeyStatus();
+        if (statusEl) {
+            statusEl.textContent = text;
+            statusEl.style.color = connected ? '#4caf50' : '#e57373';
+        }
+    };
+    sel.addEventListener('change', () => setNanobananaEngine(sel.value));
+    window.addEventListener(ENGINE_EVENT, refresh);
+    refresh();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initNanobananaSettingsUi);
+else initNanobananaSettingsUi();
+
 // 初期化
 let nanobananaManager = null;
 function initNanobananaTab() {
@@ -621,7 +657,7 @@ function initNanobananaTab() {
     }
 }
 
-export { initNanobananaTab, requestNanobananaGenerate, saveNanobananaImageAndMaybeEagle, checkNanobananaKeyStatus };
+export { initNanobananaTab, requestNanobananaGenerate, saveNanobananaImageAndMaybeEagle, checkNanobananaKeyStatus, getNanobananaEngine, setNanobananaEngine };
 
 // まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
 // （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
