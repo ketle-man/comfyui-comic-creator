@@ -1961,12 +1961,24 @@
                   <div class="comfyui-field-group" style="margin-top:12px">
                     <div class="comfyui-group-title" data-i18n="nb.basicSettings">基本設定</div>
                     <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="nb.engineLabel">生成方式:</label>
+                      <select id="nanobanana-engine" class="comfyui-select" title="" data-i18n-title="nb.engineHint">
+                        <option value="gemini" data-i18n="nb.engineGemini">Gemini API（自分のAPIキー）</option>
+                        <option value="comfyui" data-i18n="nb.engineComfyui">ComfyUIネイティブノード（Comfyクレジット）</option>
+                      </select>
+                    </div>
+                    <div class="comfyui-field">
                       <label class="comfyui-label" data-i18n="nb.modelLabel">モデル:</label>
                       <select id="nanobanana-model" class="comfyui-select">
                         <option value="gemini-3.1-flash-lite-image">gemini-3.1-flash-lite-image</option>
                         <option value="gemini-3.1-flash-image">gemini-3.1-flash-image</option>
                         <option value="gemini-3-pro-image">gemini-3-pro-image</option>
                         <option value="gemini-nano-banana-2.1">gemini-nano-banana-2.1</option>
+                      </select>
+                      <select id="nanobanana-model-native" class="comfyui-select" style="display:none">
+                        <option value="Gemini Nano Banana 2.1">Gemini Nano Banana 2.1</option>
+                        <option value="Nano Banana 2 (Gemini 3.1 Flash Image)">Nano Banana 2 (Gemini 3.1 Flash Image)</option>
+                        <option value="Nano Banana 2 Lite">Nano Banana 2 Lite (1K)</option>
                       </select>
                     </div>
                     <div class="comfyui-field">
@@ -1989,7 +2001,7 @@
                       <label class="comfyui-label" data-i18n="nb.batchLabel">生成枚数:</label>
                       <input type="number" id="nanobanana-batch-size" value="1" min="1" max="4" class="comfyui-input" />
                     </div>
-                    <div class="comfyui-field">
+                    <div class="comfyui-field" id="nanobanana-history-auto-field">
                       <label class="comfyui-checkbox-label" style="cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
                         <input type="checkbox" id="nanobanana-history-auto"> <span data-i18n="nb.historyAutoLabel">生成時に自動で履歴に記録</span>
                       </label>

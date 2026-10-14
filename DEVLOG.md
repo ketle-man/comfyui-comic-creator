@@ -2,6 +2,33 @@
 
 ---
 
+## 2026-10-14（Nanobanana: ComfyUIネイティブノード経由の生成を併用可能に、v1.54.0）
+
+ComfyUI v0.40.0 の確認の流れで、Nanobanana のメタデータ・履歴の扱いを見直した。現行の Gemini API 直叩き経路は、返却画像をバイト列のまま保存するため PNG に生成条件が入らず、`history.jsonl` への別記録が必要だった。一方 ComfyUI 本体のパートナーAPIノード（Nano Banana 2.1）は SaveImage が `prompt` / `workflow` を PNG に埋め込むため、履歴ファイルが不要になる。そこで **置き換えではなく併用** として、ネイティブ経路を追加した。
+
+**UI（Nanobanana タブ）**
+- 基本設定に「生成方式」を追加（`Gemini API（自分のAPIキー）` / `ComfyUIネイティブノード（Comfyクレジット）`）。選択は localStorage（`ccc_nanobanana_engine`）に保存。
+- ネイティブ選択時はモデル欄が Gemini Nano Banana 2.1 / Nano Banana 2 (Gemini 3.1 Flash Image) / Nano Banana 2 Lite に切り替わり、履歴の自動記録・「履歴に記録」ボタンは非表示。接続状態表示は `COMFY_API_KEY` の有無を見る。
+- 結果は ComfyUI の `/view` から表示し、Eagle 自動登録は絶対URLで行う（相対パスはプラグイン内ファイル扱いになるため）。
+
+**バックエンド（`ccc.py`）**
+- `GET /api/ccc/nanobanana/native/status`（キーの有無のみ）、`POST /api/ccc/nanobanana/native/generate` を追加。API形式のワークフロー（`GeminiNanoBanana2V2` + `SaveImage`、参考画像は `LoadImage`）を組み立て、ComfyUI 自身の `/prompt` へ投入して `/history` で完了を待つ。
+- 認証は `.env` の `COMFY_API_KEY`（platform.comfy.org で発行）を `extra_data.api_key_comfy_org` としてサーバー側から渡す（ブラウザへは出さない）。参考画像は temp 領域へアップロードし、`name [temp]` で参照する。
+- キー名: DynamicCombo の子入力は `model.aspect_ratio` / `model.resolution` / `model.thinking_level`、参考画像（Autogrow）は `model.images.image_<n>`。本体の展開ロジックで確定（未知キーは無視されるため、検証が通っても正しいとは限らない点に注意）。
+- 出力先は `output/cc_nanobanana_native/NB_*.png`。`cc_nanobanana` とは別フォルダにしたのは、Workflow Studio 側が `cc_nanobanana` を「メタデータ無し＋history.jsonl参照」の特別扱いにしているため。
+- `seed` は Gemini へは送られず ComfyUI のキャッシュキーとしてだけ働く（実コードで確認）。同じ入力の再実行はキャッシュが返るため、枚数ごとに seed をずらす。ネガティブプロンプトの専用入力は無いため、従来どおり `NEGATIVE_PROMPT:` としてプロンプト末尾へ追記する。
+- Lite は 1K のみ（2K/4K 指定は `nanobanana_native_resolution_unsupported`）。エラーコード（`nanobanana_native_key_missing` / `_unauthorized` / `_failed` / `_invalid_model` / `_resolution_unsupported`）は i18n（ja/en/zh）に追加。
+
+**実機確認（ComfyUI_5 / ポート8189、v0.40.0）**
+- ダミーキーで参考画像アップロード → `/prompt` 投入 → `/history` 判定 → `nanobanana_native_unauthorized` への変換まで確認（課金なし）。
+- 実キーで Nano Banana 2.1（1K・2:3）を1枚生成: 18秒、848×1264。PNG に `prompt` / `workflow` チャンクが入り、モデル・アスペクト比・解像度・thinking_level・シード・プロンプトが読める。
+- Workflow Studio の Metadata 抽出（モデル名・シード・プロンプト）と Gallery 一覧・画像メタ取得で、通常の画像として扱えることを確認（`cc_nanobanana_native` は history.jsonl 非対応のフォルダ）。
+- 画面操作（方式切替・生成ボタン・結果表示・「コマに挿入」の有効化）は、生成リクエストだけをスタブ化して確認。
+
+**対象外**
+- 半自動マンガの一括生成（Nanobanana バッチ）は従来の Gemini API 経路のまま。
+- 既存の `history.jsonl` と、Workflow Studio 側の `cc_nanobanana` フォルダの特別扱いは、過去の画像のため残す。
+
 ## 2026-10-13（マニュアル執筆中に見つかった改善候補20件への対応、v1.53.2）
 
 マニュアル執筆中に洗い出した仕様の落とし穴（`manual/改善候補メモ.md`、v1.53.1対象の20件）をすべて対応した。方針はユーザー判断で、実装・ヘルプ修正・項目削除のいずれかを項目ごとに選んだ。

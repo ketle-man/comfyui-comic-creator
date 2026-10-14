@@ -12,6 +12,7 @@ import urllib.error
 import uuid
 from datetime import datetime
 
+import aiohttp
 from aiohttp import web
 from server import PromptServer
 
@@ -801,6 +802,173 @@ async def handle_nanobanana_list_models(request):
     except Exception as e:
         return _error_response(e, status=500)
 
+# ─── Nano Banana: ComfyUI ネイティブAPIノード経路 ───────────────────────
+# ComfyUI本体のパートナーAPIノード（GeminiNanoBanana2V2 = "Nano Banana 2.1"）を、このプラグインから
+# ComfyUI自身の /prompt へ投入して実行する（Gemini API直叩き経路とは別の、併用用の経路）。
+# 認証はプラグインフォルダ直下の .env の COMFY_API_KEY（platform.comfy.org で発行するAPIキー。
+# 課金はComfyクレジット）を extra_data.api_key_comfy_org としてサーバー側から渡す（ブラウザへは出さない）。
+# 出力はSaveImageがプロンプト/設定をPNGへ埋め込むため、history.jsonl への記録は不要。
+_NATIVE_NB_RESOLUTIONS = {
+    'Gemini Nano Banana 2.1': ('1K', '2K', '4K'),
+    'Nano Banana 2 (Gemini 3.1 Flash Image)': ('1K', '2K', '4K'),
+    'Nano Banana 2 Lite': ('1K',),
+}
+_NATIVE_NB_THINKING = {   # 既定のthinking_level（ノード側の既定値に合わせる。MEDIUMは追加料金あり）
+    'Gemini Nano Banana 2.1': 'MEDIUM',
+    'Nano Banana 2 (Gemini 3.1 Flash Image)': 'MINIMAL',
+    'Nano Banana 2 Lite': 'MINIMAL',
+}
+_NATIVE_NB_PREFIX = 'cc_nanobanana_native/NB'
+_NATIVE_NB_MAX_REFS = 14
+_NATIVE_NB_TIMEOUT_S = 300
+
+def _native_comfy_key() -> str:
+    return (os.getenv('COMFY_API_KEY') or '').strip()
+
+def _comfy_local_base_url() -> str:
+    """ComfyUI自身の /prompt 等へ接続するベースURL（起動引数の --listen / --port から組み立てる）。"""
+    try:
+        from comfy.cli_args import args as _a
+        port = getattr(_a, 'port', None) or 8188
+        host = str(getattr(_a, 'listen', '') or '127.0.0.1').split(',')[0].strip()
+        if host in ('', '0.0.0.0', '::'):
+            host = '127.0.0.1'
+        elif ':' in host:
+            host = f'[{host}]'
+    except Exception:
+        host, port = '127.0.0.1', 8188
+    return f'http://{host}:{port}'
+
+def _nb_aspect_ratio(w, h) -> str:
+    try:
+        ratio = w / h
+    except Exception:
+        return '1:1'
+    for ar, rval in [("1:1", 1.0), ("2:3", 2/3), ("3:2", 3/2), ("3:4", 3/4), ("4:3", 4/3),
+                     ("9:16", 9/16), ("16:9", 16/9), ("21:9", 21/9), ("4:5", 4/5), ("5:4", 5/4),
+                     ("1:4", 1/4), ("4:1", 4/1), ("1:8", 1/8), ("8:1", 8/1)]:
+        if abs(ratio - rval) < 0.05:
+            return ar
+    return "1:1"
+
+def _native_nb_workflow(prompt, model, aspect_ratio, resolution, seed, ref_names):
+    """API形式のワークフロー（Nano Banana 2.1ノード + SaveImage）を組み立てる。
+    DynamicComboの子入力は "model.<名前>"、参考画像（Autogrow）は "model.images.image_<n>" のドット結合キー。"""
+    wf = {}
+    inputs = {
+        'prompt': prompt,
+        'model': model,
+        'model.aspect_ratio': aspect_ratio,
+        'model.resolution': resolution,
+        'model.thinking_level': _NATIVE_NB_THINKING[model],
+        'seed': seed,
+        'response_modalities': 'IMAGE',
+    }
+    for i, name in enumerate(ref_names, 1):
+        node_id = str(100 + i)
+        wf[node_id] = {'class_type': 'LoadImage', 'inputs': {'image': f'{name} [temp]'}}
+        inputs[f'model.images.image_{i}'] = [node_id, 0]
+    wf['1'] = {'class_type': 'GeminiNanoBanana2V2', 'inputs': inputs, '_meta': {'title': 'Nano Banana 2.1'}}
+    wf['2'] = {'class_type': 'SaveImage', 'inputs': {'images': ['1', 0], 'filename_prefix': _NATIVE_NB_PREFIX},
+               '_meta': {'title': 'Save Image'}}
+    return wf
+
+async def _native_nb_upload_ref(sess, base, b64, mime, index):
+    raw = base64.b64decode(b64)
+    ext = {'image/jpeg': '.jpg', 'image/webp': '.webp'}.get(mime, '.png')
+    form = aiohttp.FormData()
+    form.add_field('image', raw, filename=f'cc_nb_ref_{uuid.uuid4().hex[:10]}_{index}{ext}', content_type=mime or 'image/png')
+    form.add_field('type', 'temp')
+    form.add_field('overwrite', 'true')
+    async with sess.post(f'{base}/upload/image', data=form) as r:
+        if r.status != 200:
+            raise CCCError('nanobanana_native_failed', f'参考画像のアップロードに失敗しました (HTTP {r.status})', detail=f'upload HTTP {r.status}')
+        return (await r.json(content_type=None))['name']
+
+async def _native_nb_run(sess, base, key, wf):
+    """ワークフローを /prompt へ投入し、/history で完了を待って SaveImage の出力情報を返す。"""
+    payload = {'prompt': wf, 'client_id': 'ccc-nanobanana-native',
+               'extra_data': {'api_key_comfy_org': key, 'extra_pnginfo': {'workflow': wf}}}
+    async with sess.post(f'{base}/prompt', json=payload) as r:
+        body = await r.json(content_type=None)
+        if r.status != 200:
+            detail = json.dumps(body, ensure_ascii=False)[:500]
+            raise CCCError('nanobanana_native_failed', f'ComfyUIが実行要求を拒否しました: {detail}', detail=detail)
+    pid = body['prompt_id']
+    deadline = time.monotonic() + _NATIVE_NB_TIMEOUT_S
+    while time.monotonic() < deadline:
+        await asyncio.sleep(1.5)
+        async with sess.get(f'{base}/history/{pid}') as r:
+            hist = await r.json(content_type=None)
+        entry = hist.get(pid)
+        if not entry:
+            continue
+        st = entry.get('status') or {}
+        if st.get('completed') and st.get('status_str') != 'error':
+            return pid, (entry.get('outputs', {}).get('2', {}).get('images') or [])
+        msg = next((m[1].get('exception_message') for m in st.get('messages', []) if m[0] == 'execution_error'), None) or 'unknown error'
+        msg = str(msg).strip()
+        if 'unauthorized' in msg.lower() or 'login' in msg.lower():
+            raise CCCError('nanobanana_native_unauthorized', f'Comfy APIキーが認証されませんでした: {msg}', detail=msg)
+        raise CCCError('nanobanana_native_failed', f'生成に失敗しました: {msg}', detail=msg)
+    raise CCCError('nanobanana_native_failed', '生成がタイムアウトしました', detail='timeout')
+
+async def handle_nanobanana_native_status(request):
+    # APIキー本体は返さず、設定済みかどうかのみ通知する
+    key = _native_comfy_key()
+    masked = ('*' * (len(key) - 4) + key[-4:]) if len(key) > 4 else ('*' * len(key))
+    return web.json_response({'status': 'ok' if key else 'no_key', 'masked': masked if key else ''})
+
+async def handle_nanobanana_native_generate(request):
+    try:
+        key = _native_comfy_key()
+        if not key:
+            raise CCCError('nanobanana_native_key_missing', 'Comfy APIキーが設定されていません。プラグインフォルダ直下の .env に COMFY_API_KEY=... を記載し、ComfyUIを再起動してください。')
+        data = await _read_json_limited(request, MAX_JSON_IMAGE_UPLOAD_BYTES)
+        model = data.get('model') or 'Gemini Nano Banana 2.1'
+        if model not in _NATIVE_NB_RESOLUTIONS:
+            raise CCCError('nanobanana_native_invalid_model', f'不正なモデル名です: {model!r}', model=str(model)[:100])
+        prompt = (data.get('prompt') or '').strip()
+        if not prompt:
+            raise CCCError('nanobanana_native_failed', 'プロンプトが空です', detail='empty prompt')
+        negative = (data.get('negative_prompt') or '').strip()
+        full_prompt = prompt + (f"\n\nNEGATIVE_PROMPT: {negative}" if negative else '')
+        resolution = data.get('image_size') or '1K'
+        if resolution not in _NATIVE_NB_RESOLUTIONS[model]:
+            raise CCCError('nanobanana_native_resolution_unsupported', f'{model} は {resolution} に対応していません', model=model, resolution=str(resolution))
+        aspect = _nb_aspect_ratio(data.get('width', 1024), data.get('height', 1024))
+        num_images = min(max(int(data.get('num_images', 1) or 1), 1), 4)
+        base_seed = data.get('seed')
+        base_seed = int(base_seed) if isinstance(base_seed, (int, float)) and base_seed >= 0 else uuid.uuid4().int % 1_000_000
+
+        refs = []
+        for item in (data.get('images') or [])[:_NATIVE_NB_MAX_REFS]:
+            raw = item.get('data', '')
+            if ',' in raw:
+                raw = raw.split(',', 1)[1]
+            if raw:
+                refs.append((raw, item.get('mime', 'image/png')))
+
+        base = _comfy_local_base_url()
+        results, prompt_ids = [], []
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None, connect=10)) as sess:
+            ref_names = [await _native_nb_upload_ref(sess, base, b64, mime, i) for i, (b64, mime) in enumerate(refs, 1)]
+            for i in range(num_images):
+                # seedはGeminiへは送られずComfyUIのキャッシュキーとして働く。同じ入力の再実行はキャッシュが返る
+                # （新しい画像にならない）ため、枚数ごとにseedをずらす
+                wf = _native_nb_workflow(full_prompt, model, aspect, resolution, base_seed + i, ref_names)
+                pid, imgs = await _native_nb_run(sess, base, key, wf)
+                prompt_ids.append(pid)
+                results.extend({'filename': im['filename'], 'subfolder': im.get('subfolder', ''), 'type': im.get('type', 'output')} for im in imgs)
+        if not results:
+            raise CCCError('nanobanana_native_failed', '画像が生成されませんでした', detail='no images')
+        return web.json_response({'status': 'ok', 'images': results, 'prompt_ids': prompt_ids,
+                                  'model': model, 'seed': base_seed, 'resolution': resolution, 'aspect_ratio': aspect})
+    except CCCError as e:
+        return _error_response(e, status=400)
+    except Exception as e:
+        return _error_response(e, status=500)
+
 _NANOBANANA_HISTORY_FILENAME = 'history.jsonl'
 _MAX_HISTORY_FIELD_CHARS = 4000
 _MAX_HISTORY_FILENAMES = 50
@@ -1434,6 +1602,7 @@ def _build_dispatch_tables():
     _DISPATCH_GET = {
         "refresh-assets":         handle_refresh_assets,
         "nanobanana/key":         handle_nanobanana_key,
+        "nanobanana/native/status": handle_nanobanana_native_status,
         "nanobanana/models":      handle_nanobanana_list_models,
         "nanobanana/history":     handle_nanobanana_history_get,
         "app-server/settings":    handle_get_app_server_settings,
@@ -1450,6 +1619,7 @@ def _build_dispatch_tables():
         "psd/import-layers":           handle_psd_import_layers,
         "psd/export-layers":           handle_psd_export_layers,
         "nanobanana/generate":         handle_nanobanana_generate,
+        "nanobanana/native/generate":  handle_nanobanana_native_generate,
         "nanobanana/history/append":   handle_nanobanana_history_append,
         "eagle/add":                   handle_eagle_add,
         "vram/prepare":                handle_vram_prepare,
@@ -1499,6 +1669,7 @@ class ComicCreator:
         # GET APIs
         app.router.add_get("/api/ccc/refresh-assets",         handle_refresh_assets)
         app.router.add_get("/api/ccc/nanobanana/key",         handle_nanobanana_key)
+        app.router.add_get("/api/ccc/nanobanana/native/status", handle_nanobanana_native_status)
         app.router.add_get("/api/ccc/nanobanana/models",      handle_nanobanana_list_models)
         app.router.add_get("/api/ccc/nanobanana/history",     handle_nanobanana_history_get)
         app.router.add_get("/api/ccc/google-font-ttf",        handle_google_font_ttf)
@@ -1518,6 +1689,7 @@ class ComicCreator:
         app.router.add_post("/api/ccc/psd/import-layers",        handle_psd_import_layers)
         app.router.add_post("/api/ccc/psd/export-layers",        handle_psd_export_layers)
         app.router.add_post("/api/ccc/nanobanana/generate",      handle_nanobanana_generate)
+        app.router.add_post("/api/ccc/nanobanana/native/generate", handle_nanobanana_native_generate)
         app.router.add_post("/api/ccc/nanobanana/history/append", handle_nanobanana_history_append)
         app.router.add_post("/api/ccc/eagle/add",                handle_eagle_add)
         app.router.add_post("/api/ccc/vram/prepare",             handle_vram_prepare)

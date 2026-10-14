@@ -9,9 +9,11 @@ import { saveToEagle, _eagleSettings } from './main/14-integrations.js';
 import { state } from './main/01-state.js';
 
 const HISTORY_AUTO_KEY = 'ccc_nanobanana_history_auto';
+const ENGINE_KEY = 'ccc_nanobanana_engine';   // 'gemini'（Gemini API直叩き） | 'comfyui'（ComfyUIネイティブノード）
 
 class NanobananaManager {
     constructor() {
+        this.engine = 'gemini';
         this.status = 'disconnected';
         this.i2iImages = [];   // { b64: 'data:...', mime: 'image/png' }[]  最大14枚
         this.MAX_I2I = 14;
@@ -25,10 +27,36 @@ class NanobananaManager {
 
     async init() {
         console.log('NanobananaManager Initializing...');
+        this.restoreEngineSetting();
         await this.refreshApiKey();
         this.bindEvents();
         this.renderI2IGrid();
         this.restoreHistoryAutoSetting();
+    }
+
+    // 生成方式（Gemini API / ComfyUIネイティブノード）の選択を復元し、表示を切り替える
+    restoreEngineSetting() {
+        const sel = document.getElementById('nanobanana-engine');
+        if (!sel) return;
+        try { this.engine = localStorage.getItem(ENGINE_KEY) === 'comfyui' ? 'comfyui' : 'gemini'; } catch { /* 無視 */ }
+        sel.value = this.engine;
+        this.applyEngineUi();
+        sel.addEventListener('change', () => {
+            this.engine = sel.value === 'comfyui' ? 'comfyui' : 'gemini';
+            try { localStorage.setItem(ENGINE_KEY, this.engine); } catch { /* 無視 */ }
+            this.applyEngineUi();
+            this.refreshApiKey();
+        });
+    }
+
+    // ネイティブ方式では出力PNGに設定が埋め込まれるため、履歴記録のUIは不要
+    applyEngineUi() {
+        const native = this.engine === 'comfyui';
+        const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+        show('nanobanana-model', !native);
+        show('nanobanana-model-native', native);
+        show('nanobanana-history-auto-field', !native);
+        show('nanobanana-history-record-btn', !native);
     }
 
     restoreHistoryAutoSetting() {
@@ -41,7 +69,9 @@ class NanobananaManager {
     }
 
     async refreshApiKey() {
-        const { connected, text } = await checkNanobananaKeyStatus();
+        const { connected, text } = this.engine === 'comfyui'
+            ? await checkNanobananaNativeStatus()
+            : await checkNanobananaKeyStatus();
         this.updateStatus(connected ? 'connected' : 'disconnected', text);
     }
 
@@ -215,6 +245,7 @@ class NanobananaManager {
             alert(t('nb.promptRequired'));
             return;
         }
+        if (this.engine === 'comfyui') return this.generateNative(prompt);
 
         const model = document.getElementById('nanobanana-model').value;
         const negative = document.getElementById('nanobanana-negative').value;
@@ -279,6 +310,58 @@ class NanobananaManager {
 
         } catch (e) {
             console.error('Generation error:', e);
+            alert(t('common.errorPrefix', e.message));
+            progress.textContent = t('nb.generationErrorStatus');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // ComfyUIネイティブノード（Nano Banana 2.1）経由の生成。結果はComfyUIのoutput/cc_nanobanana_native/へ
+    // プロンプト・設定入りのPNGとして保存される（SaveImageの埋め込み）ため、history.jsonlへの記録は行わない。
+    async generateNative(prompt) {
+        const model = document.getElementById('nanobanana-model-native').value;
+        const negative = document.getElementById('nanobanana-negative').value;
+        const [width, height] = document.getElementById('nanobanana-resolution').value.split('x').map(Number);
+        const imageSize = document.getElementById('nanobanana-image-size')?.value || '1K';
+        const batchSize = parseInt(document.getElementById('nanobanana-batch-size').value) || 1;
+        const seed = parseInt(document.getElementById('nanobanana-seed').value);
+
+        const btn = document.getElementById('nanobanana-generate-btn');
+        const progress = document.getElementById('nanobanana-progress-text');
+        btn.disabled = true;
+        progress.textContent = t('nb.generating');
+
+        try {
+            const payload = {
+                model, prompt, negative_prompt: negative, width, height,
+                num_images: batchSize, image_size: imageSize,
+                seed: seed === -1 ? Math.floor(Math.random() * 1000000) : seed,
+            };
+            if (this.i2iImages.length > 0) {
+                payload.images = this.i2iImages.map(img => ({ data: img.b64, mime: img.mime }));
+            }
+            const outputs = await requestNanobananaNativeGenerate(payload);
+
+            this.generatedImages = [];
+            for (const im of outputs) {
+                const q = `filename=${encodeURIComponent(im.filename)}&subfolder=${encodeURIComponent(im.subfolder || '')}&type=${encodeURIComponent(im.type || 'output')}`;
+                const url = `/view?${q}`;
+                this.generatedImages.push({ url, b64: await this.urlToBase64(url) });
+                if (_eagleSettings.autoSaveNanobanana) {
+                    // Eagleは相対パスをプラグイン内ファイルとして扱うため、ComfyUIの/viewは絶対URLで渡す
+                    saveToEagle(`${location.origin}${url}`, im.filename, ['comfyui-comic-creator', 'nanobanana', 'comfyui-native']);
+                }
+            }
+
+            this.lastGenerationMeta = null;
+            const recordBtn = document.getElementById('nanobanana-history-record-btn');
+            if (recordBtn) recordBtn.disabled = true;
+
+            this.showResult(0);
+            progress.textContent = t('common.done');
+        } catch (e) {
+            console.error('Native generation error:', e);
             alert(t('common.errorPrefix', e.message));
             progress.textContent = t('nb.generationErrorStatus');
         } finally {
@@ -390,6 +473,38 @@ async function checkNanobananaKeyStatus() {
         console.error('Failed to fetch Nanobanana key:', e);
         return { connected: false, text: t('nb.serverError') };
     }
+}
+
+// ComfyUIネイティブノード経路のCOMFY_API_KEY設定状況を確認する（キー本体は返らない）
+async function checkNanobananaNativeStatus() {
+    try {
+        const response = await fetch('/api/ccc/nanobanana/native/status');
+        const data = await response.json();
+        if (data.status === 'ok') return { connected: true, text: t('nb.nativeConnected') };
+        return { connected: false, text: t('nb.nativeNoKey') };
+    } catch (e) {
+        console.error('Failed to fetch native Nanobanana status:', e);
+        return { connected: false, text: t('nb.serverError') };
+    }
+}
+
+// ComfyUIネイティブノード経由で生成し、出力画像の情報（filename/subfolder/type）の配列を返す。
+// エラー時はresolveBackendErrorで多言語化済みメッセージのErrorをthrowする。
+async function requestNanobananaNativeGenerate(payload) {
+    const response = await fetch('/api/ccc/nanobanana/native/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    if (data.status !== 'ok') {
+        throw new Error(resolveBackendError(data.error_code, data.error_params) || data.message || t('nb.generateFailed'));
+    }
+    const images = data.images || [];
+    if (images.length === 0) {
+        throw new Error(t('nb.noImagesGenerated'));
+    }
+    return images;
 }
 
 // Nanobanana画像生成APIを呼び出し、base64画像文字列の配列を返す（NanobananaManager.generate()・

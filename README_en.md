@@ -82,6 +82,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - Output size can be set to 1K (default)/2K/4K (supported models only); I2I accepts up to 14 reference images
 - Generated images are automatically saved to ComfyUI's own `output/cc_nanobanana` folder
 - Generation history is logged to a JSON Lines file (`output/cc_nanobanana/history.jsonl`, one JSON object per line: date/time, model, resolution, prompt, etc.), via an auto-record checkbox or a per-result manual button (edit/delete by opening the file directly)
+- **Engine selector** — choose "ComfyUI native node (Comfy credits)" to run ComfyUI's own Nano Banana 2.1 node (Gemini Nano Banana 2.1 / Nano Banana 2 / Nano Banana 2 Lite) through ComfyUI's `/prompt` (usable alongside the direct Gemini API route). Images are saved to `output/cc_nanobanana_native/` as PNGs with the prompt and settings embedded, so no history record is needed (also viewable in Workflow Studio's Metadata tab / Gallery). Authentication uses `COMFY_API_KEY` in `.env`; usage is billed as Comfy credits
 
 </details>
 
@@ -170,6 +171,16 @@ NANOBANANA_API_KEY=your-api-key
 ```
 
 Restart ComfyUI after saving.
+
+### Using Nanobanana through the ComfyUI native node
+
+Add a Comfy API key issued at [platform.comfy.org](https://platform.comfy.org) to the `.env` file directly under this folder (it is separate from the Gemini API key, and usage is billed as Comfy credits).
+
+```
+COMFY_API_KEY=your-comfy-api-key
+```
+
+Restart ComfyUI after setting it, then choose "ComfyUI native node" under "Engine" in the Nanobanana tab.
 
 ### To use G'MIC
 
