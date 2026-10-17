@@ -63,6 +63,7 @@ function initTextTools(textSvgEl, _imageSvgEl) {
     let textDragging = false;
     let textResizing = false;
     let textStretching = false;
+    let textMoved = false; // 実際に動かした場合のみ保存する（クリック選択だけで全SVG複製+DB保存を走らせない）
     let stretchType = null, stretchHW = 1, stretchHH = 1;
     let startAngle = 0, startAngleRad = 0;
     let startX = 0, startY = 0, initTx = 0, initTy = 0;
@@ -194,6 +195,7 @@ function initTextTools(textSvgEl, _imageSvgEl) {
 
     _textToolsDocMouseMove = (e) => {
         if (!selectedText) return;
+        if (textStretching || textResizing || textRotating || textDragging) textMoved = true;
 
         if (textStretching) {
             e.preventDefault();
@@ -318,9 +320,11 @@ function initTextTools(textSvgEl, _imageSvgEl) {
     document.addEventListener('mousemove', _textToolsDocMouseMove);
 
     const onTextMouseUp = async () => {
+        const moved = textMoved;
+        textMoved = false;
         if (textStretching) {
             textStretching = false;
-            if (selectedText) {
+            if (selectedText && moved) {
                 const panelId = selectedText.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
                 await savePanelSvg(panelId, textSvgEl);
             }
@@ -328,7 +332,7 @@ function initTextTools(textSvgEl, _imageSvgEl) {
         }
         if (textResizing) {
             textResizing = false;
-            if (selectedText) {
+            if (selectedText && moved) {
                 const PT_TO_SVG = 3.528;
                 const svgSize = parseFloat(selectedText.getAttribute('font-size'));
                 state.balloon.fontSize = Math.round(svgSize / PT_TO_SVG);
@@ -346,6 +350,7 @@ function initTextTools(textSvgEl, _imageSvgEl) {
                     delete ts.dataset.origX;
                     delete ts.dataset.origY;
                 });
+                if (!moved) return;
                 const panelId = selectedText.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
                 await savePanelSvg(panelId, textSvgEl);
             }

@@ -137,6 +137,7 @@ const state = {
         activeImgEl: null,     // オーバーレイ対象の<image data-video-src>要素（DOM参照）
         wrapper: null,         // DIVラッパー要素（内部に<video>を1つ持つ）
         resizeObserver: null,  // SVGリサイズ監視
+        moveMode: false,       // 移動モード（ON中はオーバーレイを止めて下の<image>を直接移動・リサイズできる）
     },
 };
 

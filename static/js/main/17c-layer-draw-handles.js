@@ -481,6 +481,7 @@ function initDrawShapeManipulation(svgEl) {
     let initBounds = null;
     let initAngle = 0, startAngleRad = 0;
     let vertexDragging = false, vertexIdx = -1;
+    let drawMoved = false; // 実際に動かした場合のみ保存する（クリック選択だけで全SVG複製+DB保存を走らせない）
 
     const getSvgPt = (clientX, clientY) => {
         const pt = svgEl.createSVGPoint();
@@ -578,6 +579,7 @@ function initDrawShapeManipulation(svgEl) {
 
     svgEl.addEventListener('mousemove', (e) => {
         if (!dragging && !resizing && !rotating && !vertexDragging) return;
+        drawMoved = true;
         // DOM再構築後もIDでDOM要素を再取得
         const el = state.selectedDrawId
             ? (svgEl.querySelector(`#${CSS.escape(state.selectedDrawId)}`) || state.selectedDrawEl)
@@ -657,6 +659,9 @@ function initDrawShapeManipulation(svgEl) {
         if ((!dragging && !resizing && !rotating && !vertexDragging) || !state.selectedDrawEl) return;
         dragging = resizing = rotating = vertexDragging = false;
         vertexIdx = -1;
+        const moved = drawMoved;
+        drawMoved = false;
+        if (!moved) return;
         const svgRoot = getPanelLayerSvg();
         if (!svgRoot) return;
         if (state.selectedOverlay) await saveOverlaySvg(svgRoot);

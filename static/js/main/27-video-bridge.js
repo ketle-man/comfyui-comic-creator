@@ -73,6 +73,14 @@ function _videoSyncPosition(imgEl) {
     wrapper.style.top    = `${rect.top  - parentRect.top  + previewContainer.scrollTop}px`;
     wrapper.style.width  = `${rect.width}px`;
     wrapper.style.height = `${rect.height}px`;
+    // ページ端をはみ出した動画オブジェクトは、プレビュー領域の外（直上のツールメニュー等）へ
+    // オーバーレイがはみ出して操作を妨げるため、プレビュー領域の範囲でクリップする
+    const clipT = Math.max(0, parentRect.top - rect.top);
+    const clipL = Math.max(0, parentRect.left - rect.left);
+    const clipB = Math.max(0, rect.bottom - parentRect.bottom);
+    const clipR = Math.max(0, rect.right - parentRect.right);
+    wrapper.style.clipPath = (clipT || clipL || clipB || clipR)
+        ? `inset(${clipT}px ${clipR}px ${clipB}px ${clipL}px)` : '';
 }
 
 function _videoUpdateControlsUI() {
@@ -173,6 +181,29 @@ function showVideoOverlay(panelId, imgEl) {
     _videoUpdateControlsUI();
 }
 
+// オーバーレイを見えなくして（クリックも透過）動画だけ止める。対象・コントロールUIは維持する
+function _videoSuspendOverlay() {
+    const w = state.video.wrapper;
+    if (!w) return;
+    w.querySelector('video')?.pause();
+    w.style.opacity = '0';
+    w.style.pointerEvents = 'none';
+}
+
+// 移動モードの切替。ON中はオーバーレイを止めて下の<image>を直接ドラッグ等できるようにし、
+// OFFにすると（移動後の）位置へオーバーレイを再表示する
+function _videoSetMoveMode(on) {
+    state.video.moveMode = !!on;
+    document.getElementById('video-move-btn')?.classList.toggle('active', !!on);
+    const el = state.video.activeImgEl;
+    if (!el) return;
+    if (on) {
+        _videoSuspendOverlay();
+    } else if (el.isConnected) {
+        showVideoOverlay(_videoResolvePanelId(el), el);
+    }
+}
+
 function hideVideoOverlay() {
     if (state.video.wrapper) {
         const video = state.video.wrapper.querySelector('video');
@@ -201,6 +232,8 @@ function _ccVideoOnObjectSelected(el) {
     if (!videoTabActive) return; // 動画サブタブを見ていない間はDOM操作しない（軽量ガード）
     if (el && el.dataset && el.dataset.videoSrc) {
         showVideoOverlay(_videoResolvePanelId(el), el);
+        // 移動モード中は、通常の画像と同様に移動・リサイズできるようオーバーレイを止めたままにする
+        if (state.video.moveMode) _videoSuspendOverlay();
     } else {
         hideVideoOverlay();
     }
@@ -209,6 +242,7 @@ function _ccVideoOnObjectSelected(el) {
 // ---- サブタブUIの操作バインド ----
 
 function initVideoTab() {
+    document.getElementById('video-move-btn')?.addEventListener('click', () => _videoSetMoveMode(!state.video.moveMode));
     const playBtn = document.getElementById('video-play-btn');
     const stopBtn = document.getElementById('video-stop-btn');
     const seek = document.getElementById('video-seek');

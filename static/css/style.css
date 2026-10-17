@@ -3373,3 +3373,9 @@ pre.help-code {
 .help-nav-group-header.appendix-group .help-nav-group-key {
   color: var(--accent-primary, #4a9eff);
 }
+
+/* 動画サブタブ: 移動モード切替ボタン（ON表示） */
+#video-move-btn.active {
+  background: var(--primary-color);
+  color: #fff;
+}
