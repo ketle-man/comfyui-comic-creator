@@ -631,9 +631,6 @@ function hidePose3DCanvas() {
 async function _pose3dInsertCaptureIntoPanel(editor, panelId) {
     // ポーズデータ・モデル情報を収集（再編集用）
     const poseJson  = editor.exportPose() ?? '';
-    const modelB64  = (!state.pose3d.modelIsDefault && state.pose3d.modelBuffer)
-        ? _arrayBufferToBase64(state.pose3d.modelBuffer)
-        : '';
 
     // キャプチャ（ボーン点を非表示にしてレンダリング）
     const dataUrl = editor.capture();
@@ -649,7 +646,6 @@ async function _pose3dInsertCaptureIntoPanel(editor, panelId) {
 
     await insertImage(dataUrl, w, h, {
         'data-pose3d-pose':  poseJson,
-        'data-pose3d-model': modelB64,
     });
 
     state.selectedPanelId = prevPanelId;

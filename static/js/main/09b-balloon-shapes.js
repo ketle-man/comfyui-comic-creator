@@ -202,7 +202,7 @@ async function saveOverlaySvg(panelLayerSvgEl) {
     const clone = panelLayerSvgEl.cloneNode(true);
     clone.querySelectorAll(
         '.panel-overlay, .panel-border, .panel-indication, .panel-hit-area, ' +
-        '#balloon-hit-bg, .balloon-handle, .balloon-bbox, .balloon-rotate-line, ' +
+        '#balloon-hit-bg, .balloon-handle, .balloon-bbox, .balloon-textbox, .balloon-textbox-mark, .balloon-rotate-line, ' +
         '.text-handle, .text-bbox, .text-rotate-line, ' +
         '.image-handle, .image-bbox, .image-rotate-line, ' +
         '.group-handle, .group-bbox, .group-rotate-line, ' +

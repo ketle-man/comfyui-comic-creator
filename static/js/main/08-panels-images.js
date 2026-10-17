@@ -1049,6 +1049,7 @@ function initImageManipulation(svgEl, balloonSvgEl) {
     let imgRotating = false;
     let imgResizeDir = null;
     let imgHistoryPushed = false; // 実際にドラッグで動かした場合のみhistoryへ積む（クリック選択だけでは積まない）
+    let imgMoved = false; // 実際に動かした（移動/リサイズ/回転）場合のみ保存する。クリックだけで全SVG複製+DB保存が走ると操作が重くなる
     let selectedImage = null;
     let startX, startY;
     let initX, initY, initW, initH;
@@ -1170,6 +1171,7 @@ function initImageManipulation(svgEl, balloonSvgEl) {
     _imgManipDocMouseMove = (e) => {
         if (!selectedImage) selectedImage = state.selectedImageEl || null;
         if (!selectedImage) return;
+        if (imgDragging || imgResizing || imgRotating) imgMoved = true;
 
         if (imgDragging) {
             if (!imgHistoryPushed) { pushHistory(); imgHistoryPushed = true; }
@@ -1282,7 +1284,9 @@ function initImageManipulation(svgEl, balloonSvgEl) {
             imgResizing = false;
             imgRotating = false;
             imgResizeDir = null;
-            if (selectedImage) {
+            const moved = imgMoved;
+            imgMoved = false;
+            if (moved && selectedImage) {
                 const panelId = selectedImage.getAttribute('data-panel-id') ||
                     selectedImage.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
                 await savePanelSvg(panelId, svgEl);
@@ -1382,8 +1386,12 @@ function initImageManipulation(svgEl, balloonSvgEl) {
         const balloonMouseUp = async () => {
             if (balloonDragging && balloonTarget) {
                 balloonDragging = false;
-                const panelId = balloonTarget.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
-                await savePanelSvg(panelId, balloonSvgEl);
+                // クリック選択だけ（実際に動かしていない）なら全SVG複製+DB保存は不要。
+                // 保存後のレイヤーパネル再描画がクリック中のレイヤー行を差し替えて選択が効かなくなるのも防ぐ
+                if (balloonHistoryPushed) {
+                    const panelId = balloonTarget.closest('g[data-clip-panel]')?.getAttribute('data-clip-panel') || state.selectedPanelId || 'panel-0';
+                    await savePanelSvg(panelId, balloonSvgEl);
+                }
                 balloonTarget = null;
                 balloonLinkedExts = [];
             }

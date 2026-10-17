@@ -502,6 +502,30 @@ async function createPageFromTemplate() {
 // ページプレビュー・SVG操作（レイアウト）
 // ==============================
 
+const _POSE3D_MODEL_ATTR_RE = /\sdata-pose3d-model="[^"]*"/g;
+// pageRecord内のSVG文字列から data-pose3d-model 属性を除去する。変更があればstate.activePageを
+// 差し替え（イミュータブル更新）てtrueを返す
+function _stripPose3dModelFromPage(pageRecord) {
+    const strip = (str) => (typeof str === 'string' && str.includes('data-pose3d-model='))
+        ? str.replace(_POSE3D_MODEL_ATTR_RE, '') : str;
+    let changed = false;
+    const next = { ...pageRecord };
+    ['svgContent', 'overlaySvgContent', 'draftSvgContent'].forEach(k => {
+        const v = strip(pageRecord[k]);
+        if (v !== pageRecord[k]) { next[k] = v; changed = true; }
+    });
+    if (Array.isArray(pageRecord.panels)) {
+        next.panels = pageRecord.panels.map(p => {
+            const v = strip(p.panelSvgContent);
+            if (v === p.panelSvgContent) return p;
+            changed = true;
+            return { ...p, panelSvgContent: v };
+        });
+    }
+    if (changed) state.activePage = next;
+    return changed;
+}
+
 async function renderLayoutTab() {
     // ドローツールのプロパティ変更がdebounce待ちのまま呼ばれると、DBの保存が
     // 完了する前に古いデータを読み込んでしまうため、必ず先にflushを待つ
@@ -524,6 +548,12 @@ async function renderLayoutTab() {
         }
 
         state.activePage = pageRecord;
+
+        // 旧版が3Dポーズ画像へ埋め込んだモデル(base64, 数十MB)を除去してDBへ書き戻す（読み出し側は無く、
+        // 残すとページを開くだけでパース・DOM構築・保存のすべてが著しく重くなる）
+        if (_stripPose3dModelFromPage(pageRecord)) {
+            try { await dbPut('pages', state.activePage, { deferThumb: true }); } catch (e) { console.error('pose3d model strip save error:', e); }
+        }
 
         // 背景SVG + 全コマコンテンツを1つのSVGに統合（clipPathが同一SVG内で解決される）
         // includeDraft: 下書きレイヤーはプレビュー専用（出力/エクスポート側は includeDraft を渡さないため自動的に除外される）
@@ -817,6 +847,10 @@ function _collectReferencedFilters(targetSvg, sourceDefs) {
 async function savePanelSvg(panelId, panelLayerSvgEl) {
     if (!state.activePage || !panelLayerSvgEl) return;
 
+    // 旧版が3Dポーズ画像に埋め込んでいたモデル(base64, 1枚あたり数十MB)は読み出し側が無く、
+    // 保存・複製・直列化のたびに操作を著しく重くするため、保存時に取り除く
+    panelLayerSvgEl.querySelectorAll('[data-pose3d-model]').forEach(el => el.removeAttribute('data-pose3d-model'));
+
     // panel-0 または __overlay__ はオーバーレイレイヤーとして扱う
     if (panelId === 'panel-0' || panelId === '__overlay__') {
         await saveOverlaySvg(panelLayerSvgEl);
@@ -833,7 +867,7 @@ async function savePanelSvg(panelId, panelLayerSvgEl) {
     const clone = panelLayerSvgEl.cloneNode(true);
     clone.querySelectorAll(
         '.panel-overlay, .panel-border, .panel-indication, .panel-hit-area, ' +
-        '#balloon-hit-bg, .balloon-handle, .balloon-bbox, .balloon-rotate-line, ' +
+        '#balloon-hit-bg, .balloon-handle, .balloon-bbox, .balloon-textbox, .balloon-textbox-mark, .balloon-rotate-line, ' +
         '.text-handle, .text-bbox, .text-rotate-line, ' +
         '.image-handle, .image-bbox, .image-rotate-line, ' +
         '.group-handle, .group-bbox, .group-rotate-line, ' +

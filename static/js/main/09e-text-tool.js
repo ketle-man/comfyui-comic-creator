@@ -15,7 +15,7 @@ import { _isObjectLocked, syncPanelSelectionToObject } from './03-layers-panel.j
 import { getPanelLayerSvg, renderLayerPanel } from './04b-layer-panel-render.js';
 import { pushHistory, savePanelSvg, saveTextSvg } from './07-pages.js';
 import { saveOverlaySvg, getOrCreateOverlayGroup } from './09b-balloon-shapes.js';
-import { syncFontFamilyUI, renderTextHandles, clearTextHandles, _textBuildTransform, _textGetDeform, _textHasDeform } from './09d-balloon-tools.js';
+import { syncFontFamilyUI, renderTextHandles, clearTextHandles, _textBuildTransform, _textGetDeform, _textHasDeform, _textLocalToSvg } from './09d-balloon-tools.js';
 import { state } from './01-state.js';
 import { _clearObjectSelection } from './08-panels-images.js';
 import { _scriptMangaGetSelectedDialogue } from './21a-script-manga.js';
@@ -25,6 +25,15 @@ import { _fontMgrLoadPresets } from './20-font-presets.js';
 // document登録リスナー参照（renderLayoutTab()経由の再初期化で積み上がらないよう保持）
 let _textToolsDocMouseMove = null;
 let _textToolsDocMouseUp = null;
+
+// テキストの指定した角（nw/ne/se/sw）の、現在の回転・変形を適用したSVG座標を返す
+function _textCornerSvgPt(el, type) {
+    const bb = el.getBBox();
+    const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
+    const lx = type.includes('w') ? bb.x : bb.x + bb.width;
+    const ly = type.includes('n') ? bb.y : bb.y + bb.height;
+    return _textLocalToSvg(el, lx, ly, cx, cy);
+}
 
 // 選択中テキストの縦長/横長/せん断の変形を解除する（「変形リセット」ボタン）
 async function _textResetDeform() {
@@ -58,6 +67,8 @@ function initTextTools(textSvgEl, _imageSvgEl) {
     let startAngle = 0, startAngleRad = 0;
     let startX = 0, startY = 0, initTx = 0, initTy = 0;
     let resizeInitFontSize = 0, resizeInitBboxDiag = 0, resizeCx = 0, resizeCy = 0;
+    // 角ハンドル: 反対側の角を固定し、ドラッグした角に追従して拡縮する
+    let resizeFixedType = null, resizeFixedPt = null, resizeHandleVec = null;
 
     const getSvgPt = (clientX, clientY) => {
         const pt = textSvgEl.createSVGPoint();
@@ -103,6 +114,17 @@ function initTextTools(textSvgEl, _imageSvgEl) {
                     parseFloat(handle.getAttribute('cy')) - cy) || 1);
                 startX = pt.x;
                 startY = pt.y;
+                // 反対側の角（固定点）のSVG座標と、そこからドラッグ角へのベクトルを記録
+                const oppositeOf = { nw: 'se', ne: 'sw', se: 'nw', sw: 'ne' };
+                resizeFixedType = oppositeOf[handle.dataset.handleType] || null;
+                if (resizeFixedType) {
+                    resizeFixedPt = _textCornerSvgPt(selectedText, resizeFixedType);
+                    resizeHandleVec = {
+                        x: parseFloat(handle.getAttribute('cx')) - resizeFixedPt.x,
+                        y: parseFloat(handle.getAttribute('cy')) - resizeFixedPt.y,
+                    };
+                }
+                if (_isObjectLocked(selectedText)) { textResizing = false; return; }
             }
             return;
         }
@@ -208,16 +230,36 @@ function initTextTools(textSvgEl, _imageSvgEl) {
             e.preventDefault();
             const pt = getSvgPt(e.clientX, e.clientY);
             // ハンドルのドラッグ量から、中心までの距離の変化比でフォントサイズを拡縮
-            const dx = pt.x - resizeCx;
-            const dy = pt.y - resizeCy;
-            const currentDist = Math.sqrt(dx * dx + dy * dy);
-            const ratio = currentDist / (resizeInitBboxDiag / 2);
+            let ratio;
+            if (resizeFixedPt && resizeHandleVec) {
+                // 固定角→ドラッグ角の対角線上へカーソルを射影した比で拡縮（ドラッグした方向に拡大/縮小）
+                const vx = pt.x - resizeFixedPt.x, vy = pt.y - resizeFixedPt.y;
+                const len2 = resizeHandleVec.x ** 2 + resizeHandleVec.y ** 2 || 1;
+                ratio = (vx * resizeHandleVec.x + vy * resizeHandleVec.y) / len2;
+            } else {
+                const dx = pt.x - resizeCx;
+                const dy = pt.y - resizeCy;
+                ratio = Math.sqrt(dx * dx + dy * dy) / (resizeInitBboxDiag / 2);
+            }
             const newSize = Math.max(6, Math.round(resizeInitFontSize * ratio));
             selectedText.setAttribute('font-size', newSize);
             // テクスチャ塗りのタイルサイズはフォントサイズに比例するため、パターンも追従させる
             _textSyncTexturePatternScale(selectedText);
             // tspan の x/y オフセットはフォントサイズに依存しないので再配置不要
             renderTextHandles(selectedText, textSvgEl);
+            if (resizeFixedPt) {
+                // 拡縮でずれた固定角を元の位置へ戻すよう、テキスト全体を平行移動する
+                const np = _textCornerSvgPt(selectedText, resizeFixedType);
+                const mdx = resizeFixedPt.x - np.x, mdy = resizeFixedPt.y - np.y;
+                if (Math.abs(mdx) > 1e-6 || Math.abs(mdy) > 1e-6) {
+                    selectedText.setAttribute('x', (parseFloat(selectedText.getAttribute('x')) || 0) + mdx);
+                    selectedText.setAttribute('y', (parseFloat(selectedText.getAttribute('y')) || 0) + mdy);
+                    selectedText.querySelectorAll('tspan[x]').forEach(ts => ts.setAttribute('x', parseFloat(ts.getAttribute('x')) + mdx));
+                    selectedText.querySelectorAll('tspan[y]').forEach(ts => ts.setAttribute('y', parseFloat(ts.getAttribute('y')) + mdy));
+                    _textSyncTexturePatternTransform(selectedText);
+                    renderTextHandles(selectedText, textSvgEl);
+                }
+            }
             // UIのサイズ表示も更新
             const fontSizeInput = document.getElementById('font-size');
             const PT_TO_SVG = 3.528;

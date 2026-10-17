@@ -116,6 +116,9 @@ function _bubbleTextRenderText(el, area) {
     const valign = el.dataset.textValign || 'center';
     const lineHeightMult = parseFloat(el.dataset.lineHeightMult) || 1.4;
     const lineHeight = fontSizeSvg * lineHeightMult;
+    // 点線ボックスのドラッグで指定した位置オフセット（フキダシのローカル座標、寄せ位置からの追加移動量）
+    const ox = parseFloat(el.dataset.textOffsetX) || 0;
+    const oy = parseFloat(el.dataset.textOffsetY) || 0;
     const k = area.kind === 'oval' ? Math.SQRT2 : 1;
     // 楕円形状は対角線方向の実効半径がrx/ryそのものより小さい（内接矩形相当のrx/k, ry/k）ため、
     // 折り返し判定だけでなく寄せ位置の計算にも同じkを反映し、どの方向に寄せてもpadding分の
@@ -173,8 +176,8 @@ function _bubbleTextRenderText(el, area) {
         const textY = align === 'left' ? (area.cy - vRange + padding) : align === 'right' ? (area.cy + vRange - padding) : area.cy;
         lines.forEach((line, i) => {
             const tspan = document.createElementNS(ns, 'tspan');
-            tspan.setAttribute('x', startX - i * lineHeight);
-            tspan.setAttribute('y', textY);
+            tspan.setAttribute('x', startX - i * lineHeight + ox);
+            tspan.setAttribute('y', textY + oy);
             tspan.textContent = line || ' ';
             textEl.appendChild(tspan);
         });
@@ -192,8 +195,8 @@ function _bubbleTextRenderText(el, area) {
             : (area.cy - totalH / 2 + lineHeight * 0.8);
         lines.forEach((line, i) => {
             const tspan = document.createElementNS(ns, 'tspan');
-            tspan.setAttribute('x', textX);
-            tspan.setAttribute('y', startY + i * lineHeight);
+            tspan.setAttribute('x', textX + ox);
+            tspan.setAttribute('y', startY + i * lineHeight + oy);
             tspan.textContent = line || ' '; // 空行も高さを保つためnbsp
             textEl.appendChild(tspan);
         });
@@ -289,6 +292,11 @@ async function applyBubbleTextToShape(el, { text, fontSizePt, textAlign, textVal
     el.dataset.bubbleText = text;
     el.dataset.fontFamily = ff;
     el.dataset.fontSizeSvg = fontSizeSvg;
+    // モーダルで寄せ位置を変えた場合は、ドラッグで付けた位置オフセットを解除して寄せ位置を優先する
+    if ((el.dataset.textAlign || 'center') !== (textAlign || 'center') || (el.dataset.textValign || 'center') !== (textValign || 'center')) {
+        delete el.dataset.textOffsetX;
+        delete el.dataset.textOffsetY;
+    }
     el.dataset.textAlign = textAlign || 'center';
     el.dataset.textValign = textValign || 'center';
     el.dataset.bubbleTextVertical = vertical ? '1' : '0';
@@ -666,7 +674,9 @@ function initBubbleTextTools(svgEl) {
     if (!svgEl) return;
     if (_bubbleTextDblClickHandler) svgEl.removeEventListener('dblclick', _bubbleTextDblClickHandler, true);
     _bubbleTextDblClickHandler = (e) => {
-        const shape = e.target.closest('.balloon-shape');
+        // 選択中フキダシのテキスト点線ボックスの三角コーナー（ハンドル層）のダブルクリックでも同じモーダルを開く
+        const shape = e.target.closest('.balloon-shape')
+            || (e.target.closest('.balloon-textbox-mark') ? document.getElementById(state.selectedShapeId) : null);
         if (!shape || !_bubbleTextCanHoldText(shape.dataset.shapeType)) return;
         if (typeof _isObjectLocked === 'function' && _isObjectLocked(shape)) return;
         e.preventDefault();

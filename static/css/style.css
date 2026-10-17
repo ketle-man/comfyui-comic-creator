@@ -1203,6 +1203,11 @@ input[type="number"] {
   pointer-events: none;
 }
 
+/* フキダシ内テキストの移動用点線ボックス */
+.balloon-textbox-mark:hover {
+  fill: #b39bff;
+}
+
 /* Image Handles */
 .image-handle {
   cursor: default;

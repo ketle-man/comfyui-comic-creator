@@ -13,9 +13,10 @@
 import { t } from '../i18n.js';
 import { _isObjectLocked } from './03-layers-panel.js';
 import { renderLayerPanel } from './04b-layer-panel-render.js';
-import { savePanelSvg } from './07-pages.js';
+import { savePanelSvg, pushHistory } from './07-pages.js';
 import { updateShapePath, _h2TailBoundaryPoint, _updateH2ShapePath } from './09b-balloon-shapes.js';
-import { _updateH2HandlePositions, _h2CalcCurveHandlePos, renderHandles, clearHandles } from './09c-balloon-handles.js';
+import { _updateH2HandlePositions, _h2CalcCurveHandlePos, renderHandles, clearHandles, updateBubbleTextBox } from './09c-balloon-handles.js';
+import { _bubbleTextRenderText, _bubbleTextAreaFor } from './09f-bubble-text.js';
 import { state } from './01-state.js';
 import { clearDrawShapeHandles } from './17c-layer-draw-handles.js';
 import { _fontMgr, _fontMgrCatLabel, _fontMgrCatNames, _fontMgrGoogleList } from './19-font-manager.js';
@@ -34,6 +35,7 @@ function initBalloonTools(overlaySvgEl, _panelSvgEl) {
     let startX, startY;
     let startCx, startCy, startRx, startRy;
     let startAngle = 0, startAngleRad = 0;
+    let textOffsetStart = null; // テキスト点線ボックスのドラッグ開始時の状態
 
     const getSvgPt = (clientX, clientY) => {
         const pt = overlaySvgEl.createSVGPoint();
@@ -48,6 +50,23 @@ function initBalloonTools(overlaySvgEl, _panelSvgEl) {
 
         // 編集モード
         if (state.balloon.isEditMode) {
+            // フキダシ内テキストの点線ボックス左下の三角コーナー: ドラッグでテキスト位置を移動
+            const textBox = e.target.closest('.balloon-textbox-mark');
+            if (textBox) {
+                const shape = document.getElementById(state.selectedShapeId);
+                if (!shape || _isObjectLocked(shape)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                isDragging = true;
+                dragTarget = 'text-offset';
+                targetShape = shape;
+                textOffsetStart = {
+                    x: pt.x, y: pt.y, moved: false,
+                    ox: parseFloat(shape.dataset.textOffsetX) || 0,
+                    oy: parseFloat(shape.dataset.textOffsetY) || 0,
+                };
+                return;
+            }
             const handle = e.target.closest('.balloon-handle');
             if (handle) {
                 e.preventDefault();
@@ -98,6 +117,18 @@ function initBalloonTools(overlaySvgEl, _panelSvgEl) {
         if (!isDragging || !targetShape) return;
         const pt = getSvgPt(e.clientX, e.clientY);
 
+        if (dragTarget === 'text-offset') {
+            if (!textOffsetStart) return;
+            if (!textOffsetStart.moved) { pushHistory(); textOffsetStart.moved = true; }
+            // マウス移動量(グローバル座標)をフキダシのローカル座標系(無回転)へ逆回転して加算する
+            const rad = (parseFloat(targetShape.dataset.angle || 0)) * Math.PI / 180;
+            const dxG = pt.x - textOffsetStart.x, dyG = pt.y - textOffsetStart.y;
+            targetShape.dataset.textOffsetX = textOffsetStart.ox + dxG * Math.cos(rad) + dyG * Math.sin(rad);
+            targetShape.dataset.textOffsetY = textOffsetStart.oy - dxG * Math.sin(rad) + dyG * Math.cos(rad);
+            _bubbleTextRenderText(targetShape, _bubbleTextAreaFor(targetShape));
+            updateBubbleTextBox(targetShape);
+            return;
+        }
         if (dragTarget === 'create') {
             const rx = Math.abs(pt.x - startX);
             const ry = Math.abs(pt.y - startY);
@@ -241,8 +272,12 @@ function initBalloonTools(overlaySvgEl, _panelSvgEl) {
             isDragging = false;
             const shape = targetShape;
             const dt = dragTarget;
+            const textMoved = dt === 'text-offset' && textOffsetStart?.moved;
+            textOffsetStart = null;
             dragTarget = null;
             targetShape = null;
+            // テキスト点線ボックスをクリックしただけ（動かしていない）なら保存しない
+            if (dt === 'text-offset' && !textMoved) return;
             if (state.balloon.isEditMode && state.selectedShapeId) {
                 // リサイズ/tail完了後にハンドルを正確に再描画
                 const s = document.getElementById(state.selectedShapeId);
@@ -515,6 +550,7 @@ function syncFontFamilyUI(textEl) {
 }
 
 export {
+    _textLocalToSvg,
     _loadFavoriteFontsToSelect, _loadGoogleFontsToSelect, _syncFontFavCatSelect,
     _textBuildTransform, _textGetDeform, _textHasDeform,
     clearTextHandles, initBalloonTools, loadSystemFontsToSelect, renderTextHandles, syncFontFamilyUI,

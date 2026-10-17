@@ -420,7 +420,7 @@ async function addExtensionBalloon() {
 }
 
 function clearHandles() {
-    document.querySelectorAll('.balloon-handle, .balloon-bbox, .balloon-rotate-line, .tail-cp-line').forEach(h => h.remove());
+    document.querySelectorAll('.balloon-handle, .balloon-bbox, .balloon-textbox, .balloon-textbox-mark, .balloon-rotate-line, .tail-cp-line').forEach(h => h.remove());
     const toImageBtn = document.getElementById('h2-to-image-btn');
     if (toImageBtn) toImageBtn.disabled = true;
     const addExtBtn = document.getElementById('h2-add-extension-btn');
@@ -592,6 +592,7 @@ function _updateH2HandlePositions(el) {
         if (angle) bboxEl.setAttribute('transform', `rotate(${angle},${cx},${cy})`);
         else bboxEl.removeAttribute('transform');
     }
+    if (svg.querySelector('.balloon-textbox')) updateBubbleTextBox(el); // ハンドル非表示中は作らない
     const positions = _balloonGetRotatedHandlePositions(cx, cy, rx, ry, angle);
     positions.tail = [tailTipX, tailTipY];
 
@@ -717,6 +718,9 @@ function renderHandles(el) {
     if (balloonAngle0) bboxEl.setAttribute('transform', `rotate(${balloonAngle0},${cx},${cy})`);
     svg.appendChild(bboxEl);
 
+    // 内包テキストがあれば、ドラッグで位置を動かせる点線ボックスを出す（ハンドルより下の層）
+    updateBubbleTextBox(el);
+
     // 8点リサイズハンドル。回転を考慮した位置に配置する
     const rotatedPts = _balloonGetRotatedHandlePositions(cx, cy, rx, ry, balloonAngle0);
     ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].forEach(hType => {
@@ -759,6 +763,58 @@ function renderHandles(el) {
     renderLayerPanel();
 }
 
+// フキダシ内包テキストの点線ボックス（ドラッグで位置移動、ダブルクリックでモーダル）を作成/更新する。
+// テキストが無ければ削除する。テキストはフキダシ要素のローカル座標なので、bboxと同じrotateを掛ける
+function updateBubbleTextBox(el) {
+    const svg = el.ownerSVGElement || el.closest('svg');
+    if (!svg) return;
+    const textEl = el.querySelector('.bubbletext-text');
+    let box = svg.querySelector('.balloon-textbox');
+    let mark = svg.querySelector('.balloon-textbox-mark');
+    if (!textEl || !(el.dataset.bubbleText || '').trim()) {
+        box?.remove(); mark?.remove();
+        return;
+    }
+    const ns = 'http://www.w3.org/2000/svg';
+    const bb = textEl.getBBox();
+    if (!bb.width && !bb.height) { box?.remove(); mark?.remove(); return; }
+    const vb = svg.viewBox.baseVal;
+    const rect = svg.getBoundingClientRect();
+    const scale = rect.width ? vb.width / rect.width : 1;
+    const pad = Math.round(scale * 4);
+    const sw = Math.max(1, Math.round(scale * 1.5));
+    if (!box) {
+        box = document.createElementNS(ns, 'rect');
+        box.setAttribute('class', 'balloon-textbox');
+        box.setAttribute('fill', 'none');
+        box.setAttribute('stroke', '#8a63d2');
+        box.style.pointerEvents = 'none'; // 点線は表示のみ。ドラッグは左下の三角コーナー(mark)で行う
+        // 直後に作られるハンドル群より下に置くため、bboxの直後へ挿入する
+        const anchor = svg.querySelector('.balloon-bbox');
+        if (anchor && anchor.nextSibling) svg.insertBefore(box, anchor.nextSibling); else svg.appendChild(box);
+    }
+    if (!mark) {
+        mark = document.createElementNS(ns, 'path');
+        mark.setAttribute('class', 'balloon-textbox-mark');
+        mark.setAttribute('fill', '#8a63d2');
+        mark.style.pointerEvents = 'all';
+        mark.style.cursor = 'move';
+        box.after(mark);
+    }
+    box.setAttribute('x', bb.x - pad);
+    box.setAttribute('y', bb.y - pad);
+    box.setAttribute('width', bb.width + pad * 2);
+    box.setAttribute('height', bb.height + pad * 2);
+    box.setAttribute('stroke-width', sw);
+    box.setAttribute('stroke-dasharray', `${Math.round(scale * 6)} ${Math.round(scale * 4)}`);
+    // 左下の角に直角三角形のグリップ（ドラッグでテキスト移動）。ボックス内側に収める
+    const gx = bb.x - pad, gy = bb.y + bb.height + pad, gs = Math.round(scale * 16);
+    mark.setAttribute('d', `M${gx},${gy}L${gx + gs},${gy}L${gx},${gy - gs}Z`);
+    const angle = parseFloat(el.dataset.angle || 0);
+    const tf = angle ? `rotate(${angle},${parseFloat(el.dataset.cx)},${parseFloat(el.dataset.cy)})` : '';
+    [box, mark].forEach(n => tf ? n.setAttribute('transform', tf) : n.removeAttribute('transform'));
+}
+
 function createHandle(svg, type, x, y, className) {
     const r = calcHandleR(svg);
     const strokeW = Math.round(r * 0.25);
@@ -776,7 +832,7 @@ function createHandle(svg, type, x, y, className) {
 export {
     _balloonGetRotateHandlePos, _balloonGetRotatedHandlePositions, _h2CalcCurveHandlePos,
     _syncH2UI, _updateH2HandlePositions, addExtensionBalloon, applyImageTransform, calcHandleR,
-    clearHandles, convertShapeToImage, createBalloonAtPosition, createHandle, flipSelected,
+    clearHandles, convertShapeToImage, createBalloonAtPosition, createHandle, updateBubbleTextBox, flipSelected,
     flipSelectedImage, flipSelectedShape, insertSmartBalloonTemplate, renderHandles,
 };
 

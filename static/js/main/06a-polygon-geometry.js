@@ -512,6 +512,7 @@ function initGroupManipulation(svgEl) {
     let groupResizing = false;
     let groupResizeDir = null;
     let targetGroup = null;
+    let groupMoved = false; // 実際に動かした場合のみ保存する（クリック選択だけで全SVG複製+DB保存を走らせない）
 
     let startX = 0, startY = 0;
     let initTx = 0, initTy = 0;
@@ -656,6 +657,7 @@ function initGroupManipulation(svgEl) {
 
     svgEl.addEventListener('mousemove', (e) => {
         if (!targetGroup) return;
+        if (groupDragging || groupRotating || groupResizing) groupMoved = true;
         const pt = getSvgPt(e.clientX, e.clientY);
 
         if (groupDragging) {
@@ -757,7 +759,8 @@ function initGroupManipulation(svgEl) {
 
     const onMouseUp = async () => {
         if (!targetGroup) { groupDragging = groupRotating = groupResizing = false; return; }
-        const wasActive = groupDragging || groupRotating || groupResizing;
+        const wasActive = (groupDragging || groupRotating || groupResizing) && groupMoved;
+        groupMoved = false;
         const savedGroup = targetGroup;
         groupDragging = false; groupRotating = false; groupResizing = false;
         groupResizeDir = null; targetGroup = null;
