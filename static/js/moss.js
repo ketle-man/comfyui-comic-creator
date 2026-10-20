@@ -195,7 +195,8 @@ function renderCanvas() {
         const badge = document.createElement('span');
         badge.className = 'moss-badge'; badge.textContent = String(idx + 1);
         const label = document.createElement('span');
-        label.className = 'moss-label'; label.textContent = it.type === 'text' ? (it.text || it.caption) : it.caption;
+        label.className = 'moss-label';
+        applyLabel(label, it);
         el.append(badge, label);
         for (const h of ['nw', 'ne', 'sw', 'se']) {
             const hd = document.createElement('div');
@@ -206,6 +207,59 @@ function renderCanvas() {
         cv.appendChild(el);
     });
     syncProps();
+}
+
+// 文字枠は描画する文字そのものを枠内に表示する（枠の大きさに合わせてフォントサイズを自動調整）。
+// 文字が未入力のときはcaptionを薄く表示する
+function textFontPx(it) {
+    const lens = (it.text || '').split('\n').map(l => Math.max(1, [...l].length));
+    const availW = Math.max(1, (it.w * S.scale - 6) * 0.9), availH = it.h * S.scale - 22;   // 0.9: 約物や半角混じりの幅の誤差の余裕
+    // 折り返し込みで枠に収まる最大のフォントサイズを探す（全角1文字≒1em）
+    for (let fs = 40; fs > 9; fs--) {
+        const perRow = Math.max(1, Math.floor(availW / fs));
+        const rows = lens.reduce((n, len) => n + Math.ceil(len / perRow), 0);
+        if (rows * fs * 1.25 <= availH) return fs;
+    }
+    return 9;
+}
+
+function applyLabel(label, it) {
+    if (it.type === 'text' && it.text) {
+        label.textContent = it.text;
+        label.style.fontSize = `${textFontPx(it)}px`;
+        label.classList.add('moss-label-text');
+        label.classList.remove('moss-label-dim');
+    } else {
+        label.textContent = it.type === 'text' ? (it.caption || t('moss.textEmptyLabel')) : it.caption;
+        label.style.fontSize = '';
+        label.classList.remove('moss-label-text');
+        label.classList.toggle('moss-label-dim', it.type === 'text');
+    }
+}
+
+// レイアウトタブのテキスト入力と同様に、キャンバス上の枠の中へ直接文字を入力する
+function openInlineEdit(it) {
+    const el = $('moss-layout-canvas').querySelector(`.moss-box[data-id="${it.id}"]`);
+    if (!el || el.querySelector('.moss-inline-edit')) return;
+    const ta = document.createElement('textarea');
+    ta.className = 'moss-inline-edit';
+    ta.value = it.text;
+    ta.placeholder = t('moss.textPlaceholder');
+    ta.style.fontSize = `${Math.max(12, textFontPx({ ...it, text: it.text || 'あ' }))}px`;
+    el.appendChild(ta);
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    ta.addEventListener('input', () => {
+        it.text = ta.value;
+        const side = $('moss-item-text');
+        if (side) side.value = it.text;
+        schedulePreview(); scheduleSave();
+    });
+    ta.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); ta.blur(); }
+    });
+    ta.addEventListener('blur', () => { renderCanvas(); scheduleSave(); });
 }
 
 function placeBox(el, it) {
@@ -247,11 +301,23 @@ function initCanvasInteraction() {
     let drag = null;   // { mode: 'draw'|'move'|'nw'..., item, start, orig }
 
     cv.addEventListener('pointerdown', (e) => {
+        if (e.target.classList.contains('moss-inline-edit')) return;   // 入力中のテキストエリアはドラッグ対象にしない
         const boxEl = e.target.closest('.moss-box');
         const p = canvasPoint(e);
         if (boxEl) {
             const it = S.items.find(i => i.id === Number(boxEl.dataset.id));
             const mode = e.target.dataset.h || 'move';
+            // 文字枠の二度押し（350ms以内）で枠内入力。pointerdownでpreventDefaultするためブラウザのdblclickは当てにできない
+            const now = performance.now();
+            const dbl = mode === 'move' && it.type === 'text' && S.lastDown && S.lastDown.id === it.id && now - S.lastDown.t < 350;
+            S.lastDown = { id: it.id, t: now };
+            if (dbl) {
+                S.lastDown = null;
+                e.preventDefault();
+                if (S.selId !== it.id) selectItem(it.id);
+                openInlineEdit(it);
+                return;
+            }
             if (S.selId !== it.id) selectItem(it.id);
             showPromptTab();
             drag = { mode, item: it, start: p, orig: { x: it.x, y: it.y, w: it.w, h: it.h } };
@@ -296,14 +362,25 @@ function initCanvasInteraction() {
             S.items = S.items.filter(i => i.id !== it.id);
             S.selId = null;
         }
+        const justDrew = drag.mode === 'draw' && S.items.includes(it);
         drag = null;
         try { cv.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
         renderCanvas();
         schedulePreview();
         scheduleSave();
+        if (justDrew && it.type === 'text') openInlineEdit(it);   // 文字枠は描いた直後にそのまま入力へ
     };
     cv.addEventListener('pointerup', end);
     cv.addEventListener('pointercancel', end);
+
+    // 文字枠をダブルクリックで再編集（枠はクリックのたびに再描画されるため、座標から対象を求める）
+    cv.addEventListener('dblclick', (e) => {
+        const p = canvasPoint(e);
+        const hit = [...S.items].reverse().find(i => p.x >= i.x && p.x <= i.x + i.w && p.y >= i.y && p.y <= i.y + i.h);
+        if (!hit || hit.type !== 'text') return;
+        selectItem(hit.id);
+        openInlineEdit(hit);
+    });
 
     // Deleteキーで選択中の要素を削除（入力欄にフォーカスがあるときは無視）
     document.addEventListener('keydown', (e) => {
@@ -338,14 +415,14 @@ function initItemProps() {
         const it = selItem(); if (!it) return;
         it.caption = $('moss-item-caption').value;
         const lb = $('moss-layout-canvas').querySelector(`.moss-box[data-id="${it.id}"] .moss-label`);
-        if (lb) lb.textContent = it.type === 'text' ? (it.text || it.caption) : it.caption;
+        if (lb) applyLabel(lb, it);
         schedulePreview(); scheduleSave();
     });
     $('moss-item-text').addEventListener('input', () => {
         const it = selItem(); if (!it) return;
         it.text = $('moss-item-text').value;
         const lb = $('moss-layout-canvas').querySelector(`.moss-box[data-id="${it.id}"] .moss-label`);
-        if (lb) lb.textContent = it.text || it.caption;
+        if (lb) applyLabel(lb, it);
         schedulePreview(); scheduleSave();
     });
     $('moss-item-del-btn').addEventListener('click', deleteSelected);

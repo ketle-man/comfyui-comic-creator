@@ -184,11 +184,11 @@
 
 /* ── MOSS-Image タブ: レイアウトエディタ ── */
 .moss-type-radio { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; cursor: pointer; }
-.moss-box { position: absolute; box-sizing: border-box; border: 2px solid var(--moss-c, #4aa3ff); background: color-mix(in srgb, var(--moss-c, #4aa3ff) 14%, transparent); cursor: move; overflow: visible; }
-.moss-box[data-type="character"] { --moss-c: #4caf50; }
-.moss-box[data-type="text"] { --moss-c: #ff9800; }
+.moss-box { position: absolute; box-sizing: border-box; border: 2px solid var(--moss-c, #4caf50); background: color-mix(in srgb, var(--moss-c, #4caf50) 14%, transparent); cursor: move; overflow: visible; }
+.moss-box[data-type="character"] { --moss-c: #ff69b4; }
+.moss-box[data-type="text"] { --moss-c: #4fd8ff; }
 .moss-box.selected { border-width: 3px; box-shadow: 0 0 0 1px #fff inset; }
-.moss-box .moss-badge { position: absolute; left: -2px; top: -2px; min-width: 16px; padding: 0 3px; font-size: 10px; line-height: 15px; background: var(--moss-c, #4aa3ff); color: #000; font-weight: 700; pointer-events: none; }
+.moss-box .moss-badge { position: absolute; left: -2px; top: -2px; min-width: 16px; padding: 0 3px; font-size: 10px; line-height: 15px; background: var(--moss-c, #4caf50); color: #000; font-weight: 700; pointer-events: none; }
 .moss-box .moss-label { position: absolute; left: 3px; top: 15px; right: 3px; bottom: 2px; overflow: hidden; font-size: 10px; color: #ddd; pointer-events: none; white-space: pre-wrap; word-break: break-all; }
 .moss-box .moss-handle { position: absolute; width: 10px; height: 10px; background: #fff; border: 1px solid #000; display: none; }
 .moss-box.selected .moss-handle { display: block; }
@@ -219,6 +219,11 @@
 .moss-type-btns { display: inline-flex; border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden; }
 .moss-type-btn { padding: 4px 12px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 0; border-right: 1px solid var(--border-color); cursor: pointer; }
 .moss-type-btn:last-child { border-right: 0; }
-.moss-type-btn[data-type="object"].active { background: #4aa3ff; color: #000; }
-.moss-type-btn[data-type="character"].active { background: #4caf50; color: #000; }
-.moss-type-btn[data-type="text"].active { background: #ff9800; color: #000; }
+.moss-type-btn[data-type="object"].active { background: #4caf50; color: #000; }
+.moss-type-btn[data-type="character"].active { background: #ff69b4; color: #000; }
+.moss-type-btn[data-type="text"].active { background: #4fd8ff; color: #000; }
+
+/* 文字枠: 描画する文字そのものを表示し、枠内で直接入力できる */
+.moss-box .moss-label.moss-label-text { color: #fff; font-weight: 600; line-height: 1.25; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+.moss-box .moss-label.moss-label-dim { color: #7fb8c8; font-style: italic; }
+.moss-box .moss-inline-edit { position: absolute; inset: 0; width: 100%; height: 100%; box-sizing: border-box; resize: none; border: 0; outline: 2px solid #4fd8ff; padding: 15px 3px 2px; background: rgba(0, 0, 0, 0.78); color: #fff; font-weight: 600; line-height: 1.25; z-index: 5; cursor: text; }
