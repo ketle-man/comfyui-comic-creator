@@ -2085,40 +2085,22 @@
                     <div class="comfyui-group-title" data-i18n="moss.layoutTitle">レイアウトエディタ（物体 / キャラ / 文字をbboxで指定）</div>
                     <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px;">
                       <span style="font-size:12px;" data-i18n="moss.drawType">描画種別:</span>
-                      <label class="moss-type-radio"><input type="radio" name="moss-draw-type" value="object" checked> <span data-i18n="moss.typeObject">物体</span></label>
-                      <label class="moss-type-radio"><input type="radio" name="moss-draw-type" value="character"> <span data-i18n="moss.typeCharacter">キャラ</span></label>
-                      <label class="moss-type-radio"><input type="radio" name="moss-draw-type" value="text"> <span data-i18n="moss.typeText">文字</span></label>
-                      <span style="font-size:11px; color:#888;" data-i18n="moss.drawHint">キャンバスをドラッグで追加 / 枠をドラッグで移動・角で拡縮</span>
+                      <div class="moss-type-btns" id="moss-draw-type">
+                        <button type="button" class="moss-type-btn active" data-type="object" data-i18n="moss.typeObject">物体</button>
+                        <button type="button" class="moss-type-btn" data-type="character" data-i18n="moss.typeCharacter">キャラ</button>
+                        <button type="button" class="moss-type-btn" data-type="text" data-i18n="moss.typeText">文字</button>
+                      </div>
+                      <button id="moss-item-up-btn" class="btn small secondary" disabled data-i18n="moss.itemFront">前面へ</button>
+                      <button id="moss-item-down-btn" class="btn small secondary" disabled data-i18n="moss.itemBack">背面へ</button>
+                      <button id="moss-item-del-btn" class="btn small danger" disabled data-i18n="common.delete">削除</button>
                     </div>
+                      <div style="font-size:11px; color:#888; margin-bottom:6px;" data-i18n="moss.drawHint">キャンバスをドラッグで追加 / 枠をドラッグで移動・角で拡縮</div>
                     <div id="moss-layout-wrap" style="width:100%; display:flex; justify-content:center;">
                       <div id="moss-layout-canvas" style="position:relative; background:#1a1a1a; border:1px solid #444; touch-action:none; user-select:none; overflow:visible;"></div>
                     </div>
                     <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
                       <button id="moss-layout-import-btn" class="btn small secondary" data-i18n="moss.importPanels">現在のページのコマを取り込む</button>
                       <button id="moss-layout-clear-btn" class="btn small danger" data-i18n="nb.clearAll">全クリア</button>
-                    </div>
-                  </div>
-
-                  <div id="moss-item-props" class="comfyui-field-group" style="margin-top:10px; display:none">
-                    <div class="comfyui-group-title"><span data-i18n="moss.itemProps">選択中の要素</span> <span id="moss-item-no"></span></div>
-                    <div class="comfyui-field">
-                      <label class="comfyui-label" data-i18n="moss.itemType">種別:</label>
-                      <select id="moss-item-type" class="comfyui-select">
-                        <option value="object" data-i18n="moss.typeObject">物体</option>
-                        <option value="character" data-i18n="moss.typeCharacter">キャラ</option>
-                        <option value="text" data-i18n="moss.typeText">文字</option>
-                      </select>
-                      <button id="moss-item-up-btn" class="btn small secondary" title="" data-i18n-title="moss.itemFront">前面へ</button>
-                      <button id="moss-item-down-btn" class="btn small secondary" title="" data-i18n-title="moss.itemBack">背面へ</button>
-                      <button id="moss-item-del-btn" class="btn small danger" data-i18n="common.delete">削除</button>
-                    </div>
-                    <div class="comfyui-field" id="moss-item-text-field">
-                      <label class="comfyui-label" data-i18n="moss.itemText">描画する文字（改行可）:</label>
-                      <textarea id="moss-item-text" rows="2" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
-                    </div>
-                    <div class="comfyui-field">
-                      <label class="comfyui-label" data-i18n="moss.itemCaption">説明（caption）:</label>
-                      <textarea id="moss-item-caption" rows="3" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
                     </div>
                   </div>
 
@@ -2147,6 +2129,25 @@
                     <div class="comfyui-field" style="margin-top:8px">
                       <label class="comfyui-label">Negative Prompt:</label>
                       <textarea id="moss-negative" rows="2" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                    </div>
+                  </div>
+                  <div id="moss-item-props" class="comfyui-field-group" style="margin-top:10px; display:none">
+                    <div class="comfyui-group-title"><span data-i18n="moss.itemProps">選択中の要素</span> <span id="moss-item-no"></span></div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="moss.itemType">種別:</label>
+                      <select id="moss-item-type" class="comfyui-select">
+                        <option value="object" data-i18n="moss.typeObject">物体</option>
+                        <option value="character" data-i18n="moss.typeCharacter">キャラ</option>
+                        <option value="text" data-i18n="moss.typeText">文字</option>
+                      </select>
+                    </div>
+                    <div class="comfyui-field" id="moss-item-text-field">
+                      <label class="comfyui-label" data-i18n="moss.itemText">描画する文字（改行可）:</label>
+                      <textarea id="moss-item-text" rows="2" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                    </div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="moss.itemCaption">説明（caption）:</label>
+                      <textarea id="moss-item-caption" rows="3" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
                     </div>
                   </div>
                 </div>

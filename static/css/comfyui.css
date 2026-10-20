@@ -214,3 +214,11 @@
   #moss-tab .comfyui-editor-layout { flex-wrap: wrap; overflow: auto; }
   #moss-tab .moss-layout-col { flex: 1 1 100%; }
 }
+
+/* 描画種別のセグメントボタン */
+.moss-type-btns { display: inline-flex; border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden; }
+.moss-type-btn { padding: 4px 12px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 0; border-right: 1px solid var(--border-color); cursor: pointer; }
+.moss-type-btn:last-child { border-right: 0; }
+.moss-type-btn[data-type="object"].active { background: #4aa3ff; color: #000; }
+.moss-type-btn[data-type="character"].active { background: #4caf50; color: #000; }
+.moss-type-btn[data-type="text"].active { background: #ff9800; color: #000; }

@@ -162,7 +162,18 @@ async function getActivePageSvgSize() {
 
 // ─── レイアウトエディタ ───
 const selItem = () => S.items.find(i => i.id === S.selId) || null;
-const drawType = () => document.querySelector('input[name="moss-draw-type"]:checked')?.value || 'object';
+const drawType = () => document.querySelector('#moss-draw-type .moss-type-btn.active')?.dataset.type || 'object';
+
+function initDrawTypeButtons() {
+    const btns = [...document.querySelectorAll('#moss-draw-type .moss-type-btn')];
+    btns.forEach(b => b.addEventListener('click', () => btns.forEach(x => x.classList.toggle('active', x === b))));
+}
+
+// 要素の編集欄はプロンプトタブにあるため、キャンバスで要素を選んだらそのタブへ切り替える
+function showPromptTab() {
+    const btn = document.querySelector('[data-moss-subtab="prompt"]');
+    if (btn && !btn.classList.contains('active')) btn.click();
+}
 
 function layoutPayload() {
     return { items: S.items.map(i => ({ type: i.type, caption: i.caption, text: i.text, x: i.x, y: i.y, w: i.w, h: i.h })) };
@@ -216,6 +227,7 @@ function selectItem(id) {
 function syncProps() {
     const it = selItem();
     $('moss-item-props').style.display = it ? '' : 'none';
+    for (const id of ['moss-item-up-btn', 'moss-item-down-btn', 'moss-item-del-btn']) $(id).disabled = !it;
     if (!it) return;
     $('moss-item-no').textContent = `#${S.items.indexOf(it) + 1}`;
     $('moss-item-type').value = it.type;
@@ -241,11 +253,13 @@ function initCanvasInteraction() {
             const it = S.items.find(i => i.id === Number(boxEl.dataset.id));
             const mode = e.target.dataset.h || 'move';
             if (S.selId !== it.id) selectItem(it.id);
+            showPromptTab();
             drag = { mode, item: it, start: p, orig: { x: it.x, y: it.y, w: it.w, h: it.h } };
         } else {
             const x = clamp(p.x, 0, S.W), y = clamp(p.y, 0, S.H);
             const it = addItem({ type: drawType(), x, y, w: 0, h: 0, caption: '', text: '' });
             S.selId = it.id;
+            showPromptTab();
             drag = { mode: 'draw', item: it, start: { x, y }, orig: null };
             renderCanvas();
         }
@@ -620,6 +634,7 @@ async function initMossTabOnce() {
     } catch (_) { /* ignore */ }
     initCanvasInteraction();
     initItemProps();
+    initDrawTypeButtons();
     await loadModelLists(saved);
 
     if (saved) {
