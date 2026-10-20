@@ -30,6 +30,7 @@
           <button class="tab-btn" data-tab="fontmgr" data-i18n="nav.font">フォント</button>
           <button class="tab-btn wfm-gallery-tab-btn" data-tab="wfmgallery" data-i18n="nav.wfmgallery">workflow studio</button>
           <button class="tab-btn" data-tab="nanobanana" data-i18n="nav.nanobanana">Nanobanana</button>
+          <button class="tab-btn" data-tab="moss" data-i18n="nav.moss">MOSS-Image</button>
           <button class="tab-btn" data-tab="auto" data-i18n="nav.auto">Auto</button>
           <button class="tab-btn" data-tab="project" data-i18n="nav.script">スクリプト</button>
           <button class="tab-btn" data-tab="settings" data-i18n="nav.settings">設定</button>
@@ -2068,6 +2069,186 @@
             </div>
           </section>
 
+          <!-- MOSS-Image Tab -->
+          <section id="moss-tab" class="tab-content">
+            <div class="comfyui-header-row">
+              <span id="moss-status-label" class="comfyui-status disconnected" data-i18n="moss.statusChecking">MOSS-Image: 確認中</span>
+              <div class="comfyui-url-group">
+                <span style="font-size:12px; color:var(--text-secondary);" data-i18n="moss.localHint">※ ComfyUI本体のネイティブ対応を使用（ローカル生成・Comfyクレジット不要）</span>
+                <button id="moss-reload-models-btn" class="btn small secondary" data-i18n="moss.reloadModels">モデル一覧を再読込</button>
+              </div>
+            </div>
+
+            <div class="comfyui-editor-layout">
+              <div class="comfyui-left-col">
+                <div class="comfyui-subtab-nav">
+                  <button class="comfyui-subtab-btn active" data-moss-subtab="prompt" data-i18n="moss.subtabPrompt">生成設定</button>
+                  <button class="comfyui-subtab-btn" data-moss-subtab="layout" data-i18n="moss.subtabLayout">レイアウト</button>
+                  <button class="comfyui-subtab-btn" data-moss-subtab="model" data-i18n="moss.subtabModel">モデル・サンプラー</button>
+                </div>
+
+                <div id="moss-subtab-prompt" class="comfyui-subtab-content">
+                  <div class="comfyui-field-group">
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="moss.promptLabel">プロンプト（画像全体の説明。レイアウト使用時はsummaryになる）:</label>
+                      <textarea id="moss-prompt" rows="6" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                    </div>
+                    <div class="comfyui-field" style="margin-top:8px">
+                      <label class="comfyui-label">Negative Prompt:</label>
+                      <textarea id="moss-negative" rows="2" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                    </div>
+                  </div>
+                  <div class="comfyui-field-group" style="margin-top:12px">
+                    <div class="comfyui-group-title" data-i18n="moss.targetTitle">生成対象</div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="moss.modeLabel">モード:</label>
+                      <select id="moss-mode" class="comfyui-select">
+                        <option value="page" data-i18n="moss.modePage">1頁まるごと（レイアウトで全コマ・文字を指定）</option>
+                        <option value="panel" data-i18n="moss.modePanel">コマ単位（各コマへ生成して配置）</option>
+                        <option value="free" data-i18n="moss.modeFree">自由サイズ（配置せず生成のみ）</option>
+                      </select>
+                    </div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="moss.sizeLabel">サイズ:</label>
+                      <select id="moss-size-preset" class="comfyui-select">
+                        <option value="1024x1024">1024 x 1024</option>
+                        <option value="832x1216">832 x 1216</option>
+                        <option value="1216x832">1216 x 832</option>
+                        <option value="1216x1824">1216 x 1824 (2:3)</option>
+                        <option value="1824x1216">1824 x 1216 (3:2)</option>
+                        <option value="768x1344">768 x 1344</option>
+                        <option value="1344x768">1344 x 768</option>
+                        <option value="custom" data-i18n="moss.sizeCustom">カスタム</option>
+                      </select>
+                      <input type="number" id="moss-width" value="1024" min="256" max="4096" step="16" class="comfyui-input" style="width:80px" />
+                      <span>×</span>
+                      <input type="number" id="moss-height" value="1024" min="256" max="4096" step="16" class="comfyui-input" style="width:80px" />
+                    </div>
+                    <div id="moss-size-note" style="font-size:11px; color:#888; margin-bottom:4px;"></div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="nb.batchLabel">生成枚数:</label>
+                      <input type="number" id="moss-batch" value="1" min="1" max="4" class="comfyui-input" />
+                    </div>
+                  </div>
+                  <div id="moss-panel-list-group" class="comfyui-field-group" style="margin-top:12px; display:none">
+                    <div class="comfyui-group-title" data-i18n="moss.panelListTitle">コマごとの内容（コマ単位モード）</div>
+                    <div style="display:flex; gap:6px; margin-bottom:6px;">
+                      <button id="moss-panel-reload-btn" class="btn small secondary" data-i18n="moss.panelReload">現在のページから取得</button>
+                    </div>
+                    <div id="moss-panel-list"></div>
+                  </div>
+                </div>
+
+                <div id="moss-subtab-layout" class="comfyui-subtab-content" style="display:none">
+                  <div class="comfyui-field-group">
+                    <div class="comfyui-group-title" data-i18n="moss.layoutTitle">レイアウトエディタ（物体 / キャラ / 文字をbboxで指定）</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px;">
+                      <span style="font-size:12px;" data-i18n="moss.drawType">描画種別:</span>
+                      <label class="moss-type-radio"><input type="radio" name="moss-draw-type" value="object" checked> <span data-i18n="moss.typeObject">物体</span></label>
+                      <label class="moss-type-radio"><input type="radio" name="moss-draw-type" value="character"> <span data-i18n="moss.typeCharacter">キャラ</span></label>
+                      <label class="moss-type-radio"><input type="radio" name="moss-draw-type" value="text"> <span data-i18n="moss.typeText">文字</span></label>
+                      <span style="font-size:11px; color:#888;" data-i18n="moss.drawHint">キャンバスをドラッグで追加 / 枠をドラッグで移動・角で拡縮</span>
+                    </div>
+                    <div id="moss-layout-wrap" style="width:100%; display:flex; justify-content:center;">
+                      <div id="moss-layout-canvas" style="position:relative; background:#1a1a1a; border:1px solid #444; touch-action:none; user-select:none; overflow:visible;"></div>
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+                      <button id="moss-layout-import-btn" class="btn small secondary" data-i18n="moss.importPanels">現在のページのコマを取り込む</button>
+                      <button id="moss-layout-clear-btn" class="btn small danger" data-i18n="nb.clearAll">全クリア</button>
+                    </div>
+                  </div>
+
+                  <div id="moss-item-props" class="comfyui-field-group" style="margin-top:10px; display:none">
+                    <div class="comfyui-group-title"><span data-i18n="moss.itemProps">選択中の要素</span> <span id="moss-item-no"></span></div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="moss.itemType">種別:</label>
+                      <select id="moss-item-type" class="comfyui-select">
+                        <option value="object" data-i18n="moss.typeObject">物体</option>
+                        <option value="character" data-i18n="moss.typeCharacter">キャラ</option>
+                        <option value="text" data-i18n="moss.typeText">文字</option>
+                      </select>
+                      <button id="moss-item-up-btn" class="btn small secondary" title="" data-i18n-title="moss.itemFront">前面へ</button>
+                      <button id="moss-item-down-btn" class="btn small secondary" title="" data-i18n-title="moss.itemBack">背面へ</button>
+                      <button id="moss-item-del-btn" class="btn small danger" data-i18n="common.delete">削除</button>
+                    </div>
+                    <div class="comfyui-field" id="moss-item-text-field">
+                      <label class="comfyui-label" data-i18n="moss.itemText">描画する文字（改行可）:</label>
+                      <textarea id="moss-item-text" rows="2" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                    </div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="moss.itemCaption">説明（caption）:</label>
+                      <textarea id="moss-item-caption" rows="3" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                    </div>
+                  </div>
+
+                  <div class="comfyui-field-group" style="margin-top:10px">
+                    <div class="comfyui-group-title" data-i18n="moss.jsonTitle">送信されるプロンプト（JSON）</div>
+                    <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px; margin-bottom:4px;">
+                      <input type="checkbox" id="moss-json-manual"> <span data-i18n="moss.jsonManual">JSONを直接編集して送信する（レイアウトは無視）</span>
+                    </label>
+                    <textarea id="moss-json-preview" rows="9" class="comfyui-textarea" readonly style="width:100%; background:#111; color:#ddd; box-sizing:border-box; font-family:monospace; font-size:11px;"></textarea>
+                  </div>
+                </div>
+
+                <div id="moss-subtab-model" class="comfyui-subtab-content" style="display:none">
+                  <div class="comfyui-field-group">
+                    <div class="comfyui-group-title" data-i18n="moss.presetTitle">プリセット</div>
+                    <div class="comfyui-field">
+                      <select id="moss-preset" class="comfyui-select">
+                        <option value="official" data-i18n="moss.presetOfficial">標準（50step / CFG 3 / euler）</option>
+                        <option value="template" data-i18n="moss.presetTemplate">軽量（25step / CFG 2.5 / er_sde・公式テンプレート）</option>
+                        <option value="dmd8" data-i18n="moss.presetDmd8">高速 DMD 8step（LoRA / CFG 1）</option>
+                        <option value="turbo4" data-i18n="moss.presetTurbo4">高速 Turbo 4step（LoRA / CFG 1）</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="comfyui-field-group" style="margin-top:10px">
+                    <div class="comfyui-group-title" data-i18n="moss.modelsTitle">モデル</div>
+                    <div class="comfyui-field"><label class="comfyui-label">UNet:</label><select id="moss-unet" class="comfyui-select"></select></div>
+                    <div class="comfyui-field"><label class="comfyui-label" data-i18n="moss.clipLabel">テキストエンコーダ (Qwen3.5-9B):</label><select id="moss-clip" class="comfyui-select"></select></div>
+                    <div class="comfyui-field"><label class="comfyui-label">VAE (FLUX.2):</label><select id="moss-vae" class="comfyui-select"></select></div>
+                    <div class="comfyui-field"><label class="comfyui-label">LoRA:</label><select id="moss-lora" class="comfyui-select"></select>
+                      <input type="number" id="moss-lora-strength" value="1" step="0.05" min="-2" max="2" class="comfyui-input" style="width:70px" /></div>
+                  </div>
+                  <div class="comfyui-field-group" style="margin-top:10px">
+                    <div class="comfyui-group-title" data-i18n="moss.samplerTitle">サンプラー</div>
+                    <div class="comfyui-field"><label class="comfyui-label">Steps:</label><input type="number" id="moss-steps" value="50" min="1" max="150" class="comfyui-input" style="width:80px" />
+                      <label class="comfyui-label" style="margin-left:8px;">CFG:</label><input type="number" id="moss-cfg" value="3" step="0.1" min="0" max="30" class="comfyui-input" style="width:80px" /></div>
+                    <div class="comfyui-field"><label class="comfyui-label">Sampler:</label><select id="moss-sampler" class="comfyui-select"></select></div>
+                    <div class="comfyui-field"><label class="comfyui-label">Scheduler:</label><select id="moss-scheduler" class="comfyui-select"></select></div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;">
+                        <input type="checkbox" id="moss-slg" checked> <span data-i18n="moss.slgLabel">Skip Layer Guidance（層22・前半50%。CFG&gt;1向け）</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="comfyui-right-col">
+                <div class="comfyui-generate-panel">
+                  <button id="moss-generate-btn" class="btn primary" style="width:100%" data-i18n="nb.generate">画像を生成</button>
+                  <div class="comfyui-progress-container">
+                    <div id="moss-progress-text" style="font-size:12px; margin-top:4px; text-align:center; min-height:1.2em;"></div>
+                  </div>
+                  <div class="comfyui-seed-panel" style="margin-top:10px">
+                    <div class="comfyui-field-inline">
+                      <label data-i18n="layout.seedLabel">シード:</label>
+                      <input type="number" id="moss-seed" value="-1" style="width:120px" />
+                    </div>
+                  </div>
+                </div>
+                <div class="comfyui-result-container" style="margin-top:12px">
+                  <img id="moss-result-img" alt="" style="max-width:100%; border-radius:4px;" />
+                </div>
+                <div id="moss-result-thumbs" class="comfyui-result-thumbs" style="display:none; margin-top:8px;"></div>
+                <div class="control-row" style="margin-top:10px">
+                  <button id="moss-insert-btn" class="btn secondary" style="width:100%" disabled data-i18n="moss.insertBtn">選択中の画像をページへ配置</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <!-- Script Tab -->
           <section id="project-tab" class="tab-content">
 
@@ -2543,6 +2724,7 @@
     <!-- i18n基盤: t()/getLang()/setLang()等をexportしつつ、windowにも公開する（ESモジュール化第1弾） -->
     <script type="module" src="/ccc_static/js/i18n.js"></script>
     <script type="module" src="/ccc_static/js/nanobanana.js"></script>
+    <script type="module" src="/ccc_static/js/moss.js"></script>
     <script type="module" src="/ccc_static/js/pixifx.js"></script>
     <script type="module" src="/ccc_static/js/text-style-modal.js"></script>
     <script type="module" src="/ccc_static/js/pose3d.js"></script>

@@ -916,17 +916,20 @@ async def _native_nb_upload_ref(sess, base, b64, mime, index):
             raise CCCError('nanobanana_native_failed', f'参考画像のアップロードに失敗しました (HTTP {r.status})', detail=f'upload HTTP {r.status}')
         return (await r.json(content_type=None))['name']
 
-async def _native_nb_run(sess, base, key, wf):
-    """ワークフローを /prompt へ投入し、/history で完了を待って SaveImage の出力情報を返す。"""
-    payload = {'prompt': wf, 'client_id': 'ccc-nanobanana-native',
-               'extra_data': {'api_key_comfy_org': key, 'extra_pnginfo': {'workflow': wf}}}
+async def _native_nb_run(sess, base, key, wf, out_node='2', client_id='ccc-nanobanana-native', timeout_s=None):
+    """ワークフローを /prompt へ投入し、/history で完了を待って出力ノード(out_node)の画像情報を返す。
+    keyが空ならパートナーAPIキーは付けない（ローカル生成のMOSS-Image等）。"""
+    extra = {'extra_pnginfo': {'workflow': wf}}
+    if key:
+        extra['api_key_comfy_org'] = key
+    payload = {'prompt': wf, 'client_id': client_id, 'extra_data': extra}
     async with sess.post(f'{base}/prompt', json=payload) as r:
         body = await r.json(content_type=None)
         if r.status != 200:
             detail = json.dumps(body, ensure_ascii=False)[:500]
             raise CCCError('nanobanana_native_failed', f'ComfyUIが実行要求を拒否しました: {detail}', detail=detail)
     pid = body['prompt_id']
-    deadline = time.monotonic() + _NATIVE_NB_TIMEOUT_S
+    deadline = time.monotonic() + (timeout_s or _NATIVE_NB_TIMEOUT_S)
     while time.monotonic() < deadline:
         await asyncio.sleep(1.5)
         async with sess.get(f'{base}/history/{pid}') as r:
@@ -936,7 +939,7 @@ async def _native_nb_run(sess, base, key, wf):
             continue
         st = entry.get('status') or {}
         if st.get('completed') and st.get('status_str') != 'error':
-            return pid, (entry.get('outputs', {}).get('2', {}).get('images') or [])
+            return pid, (entry.get('outputs', {}).get(out_node, {}).get('images') or [])
         msg = next((m[1].get('exception_message') for m in st.get('messages', []) if m[0] == 'execution_error'), None) or 'unknown error'
         msg = str(msg).strip()
         if 'unauthorized' in msg.lower() or 'login' in msg.lower():
@@ -1000,6 +1003,150 @@ async def handle_nanobanana_native_generate(request):
                                   'model': model, 'seed': base_seed, 'resolution': resolution, 'aspect_ratio': aspect})
     except CCCError as e:
         return _error_response(e, status=400)
+    except Exception as e:
+        return _error_response(e, status=500)
+
+# ─── MOSS-Image: ローカル生成（ComfyUIネイティブ対応済みのDiT。標準ノードで /prompt へ直接投入）────
+# manga_base ワークフローと同じ構成: UNETLoader→(LoRA)→(SkipLayerGuidance)→KSampler、CLIPLoader(type=moss_image)。
+# レイアウトJSON（物体/キャラ/文字をbboxで指定）は ComfyUI 標準の MOSSImageLayoutPrompt と同じ形式で自前生成する
+# （bboxは「キャンバス中心原点・[y0,x0,y1,x1]・ピクセル」= abs_centralized / yxyx）。
+_MOSS_PREFIX = 'cc_moss/MOSS'
+_MOSS_TIMEOUT_S = 900          # 50step・4MPでも収まる余裕。生成中はComfyUIキューに積まれる
+_MOSS_OUT_NODE = '10'
+_MOSS_LABELS = ('object', 'character', 'text')
+_MOSS_MAX_ITEMS = 200
+
+def _moss_layout_prompt(summary, items, width, height, meta=None, canvas=None):
+    """レイアウト要素（ピクセル・左上原点の x,y,w,h）からMOSS-Imageのレイアウトプロンプト(JSON文字列)を作る。
+    itemsの並びは「背景→前景」。要素が空なら通常のプロンプト文字列（summary）をそのまま返す。"""
+    summary = (summary or '').strip()
+    if not isinstance(items, list) or not items:
+        return summary
+    out = []
+    for it in items[:_MOSS_MAX_ITEMS]:
+        if not isinstance(it, dict):
+            continue
+        label = it.get('type') if it.get('type') in _MOSS_LABELS else 'object'
+        try:
+            x, y, w, h = (float(it.get(k, 0)) for k in ('x', 'y', 'w', 'h'))
+        except (TypeError, ValueError):
+            continue
+        if w < 0:
+            x, w = x + w, -w
+        if h < 0:
+            y, h = y + h, -h
+        if w < 1 or h < 1:
+            continue
+        item = {'label': label, 'caption': str(it.get('caption') or '').strip()}
+        if label == 'text':
+            item['text'] = str(it.get('text') or '')
+        palette = it.get('palette')
+        if isinstance(palette, list) and palette:
+            item['palette'] = [str(c)[:16] for c in palette[:5]]
+        # 画像座標(左上原点) → 中心原点の整数ピクセル。外へはみ出す枠も許可（「両端で切れる」表現に使える）
+        item['bbox'] = [math.floor(y) - height // 2, math.floor(x) - width // 2,
+                        math.ceil(y + h) - height // 2, math.ceil(x + w) - width // 2]
+        out.append(item)
+    if not out:
+        return summary
+    head = {'caption': summary}
+    if isinstance(meta, list) and meta:
+        head = {'meta': [str(m)[:60] for m in meta[:12]], **({'canvas': str(canvas)[:30]} if canvas else {}), 'caption': summary}
+    layout = {'summary': head, 'items': out, 'bbox_coord_space': 'abs_centralized', 'bbox_format': 'yxyx'}
+    return json.dumps(layout, ensure_ascii=False, separators=(',', ':'))
+
+def _moss_workflow(p):
+    """MOSS-Image T2Iの API形式ワークフロー。pは検証済みパラメータdict。出力ノードIDは _MOSS_OUT_NODE。"""
+    wf = {
+        '1': {'class_type': 'UNETLoader', 'inputs': {'unet_name': p['unet'], 'weight_dtype': 'default'}},
+        '2': {'class_type': 'CLIPLoader', 'inputs': {'clip_name': p['clip'], 'type': 'moss_image', 'device': 'default'}},
+        '3': {'class_type': 'VAELoader', 'inputs': {'vae_name': p['vae']}},
+        '5': {'class_type': 'CLIPTextEncode', 'inputs': {'text': p['prompt'], 'clip': ['2', 0]}},
+        '6': {'class_type': 'CLIPTextEncode', 'inputs': {'text': p['negative'], 'clip': ['2', 0]}},
+        '7': {'class_type': 'EmptyFlux2LatentImage', 'inputs': {'width': p['width'], 'height': p['height'], 'batch_size': 1}},
+    }
+    model = ['1', 0]
+    if p.get('lora'):
+        wf['4'] = {'class_type': 'LoraLoaderModelOnly',
+                   'inputs': {'model': model, 'lora_name': p['lora'], 'strength_model': p['lora_strength']}}
+        model = ['4', 0]
+    if p.get('slg'):
+        # 公式既定: ネガ側ではなくモデル側のレイヤースキップ（single層22、前半50%）。CFG>1のときのみ意味を持つ
+        wf['12'] = {'class_type': 'SkipLayerGuidanceDiTSimple',
+                    'inputs': {'model': model, 'double_layers': '', 'single_layers': '22', 'start_percent': 0.0, 'end_percent': 0.5}}
+        model = ['12', 0]
+    wf['8'] = {'class_type': 'KSampler', 'inputs': {
+        'model': model, 'seed': p['seed'], 'steps': p['steps'], 'cfg': p['cfg'],
+        'sampler_name': p['sampler'], 'scheduler': p['scheduler'],
+        'positive': ['5', 0], 'negative': ['6', 0], 'latent_image': ['7', 0], 'denoise': 1.0}}
+    wf['9'] = {'class_type': 'VAEDecode', 'inputs': {'samples': ['8', 0], 'vae': ['3', 0]}}
+    wf[_MOSS_OUT_NODE] = {'class_type': 'SaveImage', 'inputs': {'images': ['9', 0], 'filename_prefix': _MOSS_PREFIX}}
+    return wf
+
+def _moss_str(data, key, default='', limit=300):
+    v = data.get(key)
+    return (str(v).strip()[:limit] if v is not None else default) or default
+
+async def handle_moss_generate(request):
+    try:
+        data = await _read_json_limited(request, MAX_JSON_IMAGE_UPLOAD_BYTES)
+        width = min(max(int(data.get('width') or 1024), 256), 4096) // 16 * 16
+        height = min(max(int(data.get('height') or 1024), 256), 4096) // 16 * 16
+        if (data.get('layout') or {}).get('items'):
+            lay = data['layout']
+            prompt = _moss_layout_prompt(data.get('prompt'), lay.get('items'), width, height, lay.get('meta'), lay.get('canvas'))
+        else:
+            prompt = (data.get('prompt') or '').strip()
+        if not prompt:
+            raise CCCError('moss_failed', 'プロンプトが空です', detail='empty prompt')
+        unet, clip, vae = (_moss_str(data, k) for k in ('unet', 'clip', 'vae'))
+        if not (unet and clip and vae):
+            raise CCCError('moss_failed', 'モデル（拡散モデル/テキストエンコーダ/VAE）を選択してください', detail='model missing')
+        base_seed = data.get('seed')
+        base_seed = int(base_seed) if isinstance(base_seed, (int, float)) and base_seed >= 0 else uuid.uuid4().int % (2 ** 32)
+        num_images = min(max(int(data.get('num_images') or 1), 1), 4)
+        params = {
+            'prompt': prompt, 'negative': (data.get('negative_prompt') or '').strip(),
+            'width': width, 'height': height, 'unet': unet, 'clip': clip, 'vae': vae,
+            'steps': min(max(int(data.get('steps') or 50), 1), 150),
+            'cfg': min(max(float(data.get('cfg') if data.get('cfg') is not None else 3.0), 0.0), 30.0),
+            'sampler': _moss_str(data, 'sampler', 'euler'), 'scheduler': _moss_str(data, 'scheduler', 'simple'),
+            'lora': _moss_str(data, 'lora'), 'lora_strength': min(max(float(data.get('lora_strength') if data.get('lora_strength') is not None else 1.0), -2.0), 2.0),
+            'slg': bool(data.get('slg')),
+        }
+        base = _comfy_local_base_url()
+        results, prompt_ids = [], []
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None, connect=10)) as sess:
+            for i in range(num_images):
+                wf = _moss_workflow({**params, 'seed': base_seed + i})
+                pid, imgs = await _native_nb_run(sess, base, '', wf, out_node=_MOSS_OUT_NODE,
+                                                 client_id='ccc-moss', timeout_s=_MOSS_TIMEOUT_S)
+                prompt_ids.append(pid)
+                for im in imgs:
+                    # 画像本体は返さず /view 用の参照のみ（ブラウザは同一オリジンの /view?... から取得する）
+                    results.append({'filename': im['filename'], 'subfolder': im.get('subfolder', ''),
+                                    'type': im.get('type', 'output'), 'seed': base_seed + i})
+        if not results:
+            raise CCCError('moss_failed', '画像が生成されませんでした', detail='no images')
+        return web.json_response({'status': 'ok', 'images': results, 'prompt_ids': prompt_ids, 'seed': base_seed,
+                                  'width': width, 'height': height, 'prompt': prompt})
+    except CCCError as e:
+        return _error_response(e, status=400)
+    except (ValueError, TypeError) as e:
+        return _error_response(CCCError('moss_failed', f'パラメータが不正です: {e}', detail=str(e)), status=400)
+    except Exception as e:
+        return _error_response(e, status=500)
+
+async def handle_moss_layout_prompt(request):
+    """レイアウト要素 → レイアウトJSON文字列（生成せずプレビュー・コピー用）。"""
+    try:
+        data = await _read_json_limited(request, MAX_JSON_IMAGE_UPLOAD_BYTES)
+        width, height = int(data.get('width') or 1024), int(data.get('height') or 1024)
+        lay = data.get('layout') or {}
+        text = _moss_layout_prompt(data.get('prompt'), lay.get('items'), width, height, lay.get('meta'), lay.get('canvas'))
+        return web.json_response({'status': 'ok', 'prompt': text})
+    except (ValueError, TypeError) as e:
+        return _error_response(CCCError('moss_failed', f'パラメータが不正です: {e}', detail=str(e)), status=400)
     except Exception as e:
         return _error_response(e, status=500)
 
@@ -1654,6 +1801,8 @@ def _build_dispatch_tables():
         "psd/export-layers":           handle_psd_export_layers,
         "nanobanana/generate":         handle_nanobanana_generate,
         "nanobanana/native/generate":  handle_nanobanana_native_generate,
+        "moss/generate":               handle_moss_generate,
+        "moss/layout-prompt":          handle_moss_layout_prompt,
         "nanobanana/history/append":   handle_nanobanana_history_append,
         "eagle/add":                   handle_eagle_add,
         "vram/prepare":                handle_vram_prepare,
@@ -1724,6 +1873,8 @@ class ComicCreator:
         app.router.add_post("/api/ccc/psd/export-layers",        handle_psd_export_layers)
         app.router.add_post("/api/ccc/nanobanana/generate",      handle_nanobanana_generate)
         app.router.add_post("/api/ccc/nanobanana/native/generate", handle_nanobanana_native_generate)
+        app.router.add_post("/api/ccc/moss/generate",            handle_moss_generate)
+        app.router.add_post("/api/ccc/moss/layout-prompt",       handle_moss_layout_prompt)
         app.router.add_post("/api/ccc/nanobanana/history/append", handle_nanobanana_history_append)
         app.router.add_post("/api/ccc/eagle/add",                handle_eagle_add)
         app.router.add_post("/api/ccc/vram/prepare",             handle_vram_prepare)

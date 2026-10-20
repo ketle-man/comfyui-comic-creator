@@ -181,3 +181,20 @@
   margin-top: 10px;
   border: 1px solid var(--border-color);
 }
+
+/* ── MOSS-Image タブ: レイアウトエディタ ── */
+.moss-type-radio { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; cursor: pointer; }
+.moss-box { position: absolute; box-sizing: border-box; border: 2px solid var(--moss-c, #4aa3ff); background: color-mix(in srgb, var(--moss-c, #4aa3ff) 14%, transparent); cursor: move; overflow: visible; }
+.moss-box[data-type="character"] { --moss-c: #4caf50; }
+.moss-box[data-type="text"] { --moss-c: #ff9800; }
+.moss-box.selected { border-width: 3px; box-shadow: 0 0 0 1px #fff inset; }
+.moss-box .moss-badge { position: absolute; left: -2px; top: -2px; min-width: 16px; padding: 0 3px; font-size: 10px; line-height: 15px; background: var(--moss-c, #4aa3ff); color: #000; font-weight: 700; pointer-events: none; }
+.moss-box .moss-label { position: absolute; left: 3px; top: 15px; right: 3px; bottom: 2px; overflow: hidden; font-size: 10px; color: #ddd; pointer-events: none; white-space: pre-wrap; word-break: break-all; }
+.moss-box .moss-handle { position: absolute; width: 10px; height: 10px; background: #fff; border: 1px solid #000; display: none; }
+.moss-box.selected .moss-handle { display: block; }
+.moss-handle[data-h="nw"] { left: -6px; top: -6px; cursor: nwse-resize; }
+.moss-handle[data-h="ne"] { right: -6px; top: -6px; cursor: nesw-resize; }
+.moss-handle[data-h="sw"] { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.moss-handle[data-h="se"] { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.moss-panel-row { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 6px; }
+.moss-panel-row textarea { flex: 1; background: #111; color: #fff; box-sizing: border-box; }
