@@ -11,6 +11,7 @@ import { prepareVramForGeneration } from './vram-prepare.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'ccc_moss_v1';
+const SUBTAB_KEY = 'ccc_moss_subtab';
 const FIELD_IDS = ['moss-prompt', 'moss-negative', 'moss-mode', 'moss-size-preset', 'moss-width', 'moss-height', 'moss-batch',
     'moss-unet', 'moss-clip', 'moss-vae', 'moss-lora', 'moss-lora-strength', 'moss-steps', 'moss-cfg', 'moss-sampler',
     'moss-scheduler', 'moss-slg', 'moss-seed', 'moss-preset', 'moss-json-manual'];
@@ -601,11 +602,11 @@ function initSubtabs() {
         btn.addEventListener('click', () => {
             const key = btn.dataset.mossSubtab;
             document.querySelectorAll('[data-moss-subtab]').forEach(b => b.classList.toggle('active', b === btn));
-            for (const k of ['prompt', 'layout', 'model']) {
+            for (const k of ['prompt', 'target', 'model']) {
                 const el = $(`moss-subtab-${k}`);
                 if (el) el.style.display = k === key ? '' : 'none';
             }
-            if (key === 'layout') { renderCanvas(); refreshPreview(); }
+            try { localStorage.setItem(SUBTAB_KEY, key); } catch (_) { /* ignore */ }
         });
     });
 }
@@ -613,6 +614,10 @@ function initSubtabs() {
 async function initMossTabOnce() {
     const saved = loadSettings();
     initSubtabs();
+    try {
+        const last = localStorage.getItem(SUBTAB_KEY);
+        if (['prompt', 'target', 'model'].includes(last)) document.querySelector(`[data-moss-subtab="${last}"]`)?.click();
+    } catch (_) { /* ignore */ }
     initCanvasInteraction();
     initItemProps();
     await loadModelLists(saved);

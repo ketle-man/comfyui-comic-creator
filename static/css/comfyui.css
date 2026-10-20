@@ -198,3 +198,19 @@
 .moss-handle[data-h="se"] { right: -6px; bottom: -6px; cursor: nwse-resize; }
 .moss-panel-row { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 6px; }
 .moss-panel-row textarea { flex: 1; background: #111; color: #fff; box-sizing: border-box; }
+
+/* ── MOSS-Image タブ: 3カラム（レイアウト | 設定 | 生成・結果） ── */
+.moss-settings-col {
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  border-left: 1px solid var(--border-color);
+  padding-left: 20px;
+  flex-shrink: 0;
+}
+@media (max-width: 1500px) {
+  #moss-tab .comfyui-editor-layout { flex-wrap: wrap; overflow: auto; }
+  #moss-tab .moss-layout-col { flex: 1 1 100%; }
+}

@@ -2080,66 +2080,7 @@
             </div>
 
             <div class="comfyui-editor-layout">
-              <div class="comfyui-left-col">
-                <div class="comfyui-subtab-nav">
-                  <button class="comfyui-subtab-btn active" data-moss-subtab="prompt" data-i18n="moss.subtabPrompt">生成設定</button>
-                  <button class="comfyui-subtab-btn" data-moss-subtab="layout" data-i18n="moss.subtabLayout">レイアウト</button>
-                  <button class="comfyui-subtab-btn" data-moss-subtab="model" data-i18n="moss.subtabModel">モデル・サンプラー</button>
-                </div>
-
-                <div id="moss-subtab-prompt" class="comfyui-subtab-content">
-                  <div class="comfyui-field-group">
-                    <div class="comfyui-field">
-                      <label class="comfyui-label" data-i18n="moss.promptLabel">プロンプト（画像全体の説明。レイアウト使用時はsummaryになる）:</label>
-                      <textarea id="moss-prompt" rows="6" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
-                    </div>
-                    <div class="comfyui-field" style="margin-top:8px">
-                      <label class="comfyui-label">Negative Prompt:</label>
-                      <textarea id="moss-negative" rows="2" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
-                    </div>
-                  </div>
-                  <div class="comfyui-field-group" style="margin-top:12px">
-                    <div class="comfyui-group-title" data-i18n="moss.targetTitle">生成対象</div>
-                    <div class="comfyui-field">
-                      <label class="comfyui-label" data-i18n="moss.modeLabel">モード:</label>
-                      <select id="moss-mode" class="comfyui-select">
-                        <option value="page" data-i18n="moss.modePage">1頁まるごと（レイアウトで全コマ・文字を指定）</option>
-                        <option value="panel" data-i18n="moss.modePanel">コマ単位（各コマへ生成して配置）</option>
-                        <option value="free" data-i18n="moss.modeFree">自由サイズ（配置せず生成のみ）</option>
-                      </select>
-                    </div>
-                    <div class="comfyui-field">
-                      <label class="comfyui-label" data-i18n="moss.sizeLabel">サイズ:</label>
-                      <select id="moss-size-preset" class="comfyui-select">
-                        <option value="1024x1024">1024 x 1024</option>
-                        <option value="832x1216">832 x 1216</option>
-                        <option value="1216x832">1216 x 832</option>
-                        <option value="1216x1824">1216 x 1824 (2:3)</option>
-                        <option value="1824x1216">1824 x 1216 (3:2)</option>
-                        <option value="768x1344">768 x 1344</option>
-                        <option value="1344x768">1344 x 768</option>
-                        <option value="custom" data-i18n="moss.sizeCustom">カスタム</option>
-                      </select>
-                      <input type="number" id="moss-width" value="1024" min="256" max="4096" step="16" class="comfyui-input" style="width:80px" />
-                      <span>×</span>
-                      <input type="number" id="moss-height" value="1024" min="256" max="4096" step="16" class="comfyui-input" style="width:80px" />
-                    </div>
-                    <div id="moss-size-note" style="font-size:11px; color:#888; margin-bottom:4px;"></div>
-                    <div class="comfyui-field">
-                      <label class="comfyui-label" data-i18n="nb.batchLabel">生成枚数:</label>
-                      <input type="number" id="moss-batch" value="1" min="1" max="4" class="comfyui-input" />
-                    </div>
-                  </div>
-                  <div id="moss-panel-list-group" class="comfyui-field-group" style="margin-top:12px; display:none">
-                    <div class="comfyui-group-title" data-i18n="moss.panelListTitle">コマごとの内容（コマ単位モード）</div>
-                    <div style="display:flex; gap:6px; margin-bottom:6px;">
-                      <button id="moss-panel-reload-btn" class="btn small secondary" data-i18n="moss.panelReload">現在のページから取得</button>
-                    </div>
-                    <div id="moss-panel-list"></div>
-                  </div>
-                </div>
-
-                <div id="moss-subtab-layout" class="comfyui-subtab-content" style="display:none">
+              <div class="comfyui-left-col moss-layout-col">
                   <div class="comfyui-field-group">
                     <div class="comfyui-group-title" data-i18n="moss.layoutTitle">レイアウトエディタ（物体 / キャラ / 文字をbboxで指定）</div>
                     <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px;">
@@ -2187,6 +2128,68 @@
                       <input type="checkbox" id="moss-json-manual"> <span data-i18n="moss.jsonManual">JSONを直接編集して送信する（レイアウトは無視）</span>
                     </label>
                     <textarea id="moss-json-preview" rows="9" class="comfyui-textarea" readonly style="width:100%; background:#111; color:#ddd; box-sizing:border-box; font-family:monospace; font-size:11px;"></textarea>
+                  </div>
+              </div>
+
+              <div class="moss-settings-col">
+                <div class="comfyui-subtab-nav">
+                  <button class="comfyui-subtab-btn active" data-moss-subtab="prompt" data-i18n="moss.subtabPrompt">プロンプト</button>
+                  <button class="comfyui-subtab-btn" data-moss-subtab="target" data-i18n="moss.subtabTarget">生成対象</button>
+                  <button class="comfyui-subtab-btn" data-moss-subtab="model" data-i18n="moss.subtabModel">モデル・サンプラー</button>
+                </div>
+
+                <div id="moss-subtab-prompt" class="comfyui-subtab-content">
+                  <div class="comfyui-field-group">
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="moss.promptLabel">プロンプト（画像全体の説明。レイアウト使用時はsummaryになる）:</label>
+                      <textarea id="moss-prompt" rows="6" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                    </div>
+                    <div class="comfyui-field" style="margin-top:8px">
+                      <label class="comfyui-label">Negative Prompt:</label>
+                      <textarea id="moss-negative" rows="2" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="moss-subtab-target" class="comfyui-subtab-content" style="display:none">
+                  <div class="comfyui-field-group" style="margin-top:12px">
+                    <div class="comfyui-group-title" data-i18n="moss.targetTitle">生成対象</div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="moss.modeLabel">モード:</label>
+                      <select id="moss-mode" class="comfyui-select">
+                        <option value="page" data-i18n="moss.modePage">1頁まるごと（レイアウトで全コマ・文字を指定）</option>
+                        <option value="panel" data-i18n="moss.modePanel">コマ単位（各コマへ生成して配置）</option>
+                        <option value="free" data-i18n="moss.modeFree">自由サイズ（配置せず生成のみ）</option>
+                      </select>
+                    </div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="moss.sizeLabel">サイズ:</label>
+                      <select id="moss-size-preset" class="comfyui-select">
+                        <option value="1024x1024">1024 x 1024</option>
+                        <option value="832x1216">832 x 1216</option>
+                        <option value="1216x832">1216 x 832</option>
+                        <option value="1216x1824">1216 x 1824 (2:3)</option>
+                        <option value="1824x1216">1824 x 1216 (3:2)</option>
+                        <option value="768x1344">768 x 1344</option>
+                        <option value="1344x768">1344 x 768</option>
+                        <option value="custom" data-i18n="moss.sizeCustom">カスタム</option>
+                      </select>
+                      <input type="number" id="moss-width" value="1024" min="256" max="4096" step="16" class="comfyui-input" style="width:80px" />
+                      <span>×</span>
+                      <input type="number" id="moss-height" value="1024" min="256" max="4096" step="16" class="comfyui-input" style="width:80px" />
+                    </div>
+                    <div id="moss-size-note" style="font-size:11px; color:#888; margin-bottom:4px;"></div>
+                    <div class="comfyui-field">
+                      <label class="comfyui-label" data-i18n="nb.batchLabel">生成枚数:</label>
+                      <input type="number" id="moss-batch" value="1" min="1" max="4" class="comfyui-input" />
+                    </div>
+                  </div>
+                  <div id="moss-panel-list-group" class="comfyui-field-group" style="margin-top:12px; display:none">
+                    <div class="comfyui-group-title" data-i18n="moss.panelListTitle">コマごとの内容（コマ単位モード）</div>
+                    <div style="display:flex; gap:6px; margin-bottom:6px;">
+                      <button id="moss-panel-reload-btn" class="btn small secondary" data-i18n="moss.panelReload">現在のページから取得</button>
+                    </div>
+                    <div id="moss-panel-list"></div>
                   </div>
                 </div>
 
