@@ -148,10 +148,12 @@ function onSizePresetChange() {
     scheduleSave();
 }
 
-async function getActivePageSvgSize() {
+async function getActivePageRecord() {
     if (!state.activePage) return null;
-    const rec = await dbGet('pages', state.activePage.name);
-    if (!rec) return null;
+    return (await dbGet('pages', state.activePage.name)) || null;
+}
+
+function pageSvgSizeOf(rec) {
     let w = rec.width, h = rec.height;
     if (!(w > 0) || !(h > 0)) {
         const svg = new DOMParser().parseFromString(rec.svgContent || '', 'image/svg+xml').querySelector('svg');
@@ -159,6 +161,11 @@ async function getActivePageSvgSize() {
         w = vb[2] || 21000; h = vb[3] || 29700;
     }
     return { w, h };
+}
+
+async function getActivePageSvgSize() {
+    const rec = await getActivePageRecord();
+    return rec ? pageSvgSizeOf(rec) : null;
 }
 
 // ─── レイアウトエディタ ───
@@ -267,7 +274,7 @@ function textExtent(text, fs, vertical = false) {
 
 // 文字が入っていれば、左上を保ったまま枠を文字の大きさにする（キャンバスからはみ出す分は位置を戻す）
 function autoSizeText(it) {
-    if (it.type !== 'text' || !it.text) return;
+    if (it.type !== 'text' || !it.text || it.fitBox === false) return;   // fitBox=false: 枠はそのまま（取り込んだフキダシの輪郭など）
     if (!(it.fontSize > 0)) it.fontSize = defaultFontPx();
     const ext = textExtent(it.text, it.fontSize, it.vertical);
     it.w = Math.min(S.W, ext.w); it.h = Math.min(S.H, ext.h);
@@ -286,22 +293,34 @@ function fitFontToBox(it) {
 
 // 文字が未入力のときはcaptionを薄く表示する
 function applyLabel(label, it) {
+    const resetLayout = () => {
+        label.style.left = label.style.top = label.style.right = label.style.bottom = label.style.lineHeight = '';
+        label.style.display = label.style.alignItems = label.style.justifyContent = label.style.textAlign = '';
+        label.style.writingMode = label.style.textOrientation = '';
+    };
+    resetLayout();
     if (it.type === 'text' && it.text) {
         const fs = it.fontSize > 0 ? it.fontSize : defaultFontPx();
         label.textContent = it.text;
         label.style.fontSize = `${fs * S.scale}px`;
         label.style.lineHeight = String(TEXT_LINE_H);
-        const pad = `${fs * TEXT_PAD * S.scale}px`;
-        label.style.left = label.style.top = pad;
-        // 縦書き: 右上から下へ、列は右→左。右側にも余白を取る
-        label.style.right = it.vertical ? pad : '';
         label.style.writingMode = it.vertical ? 'vertical-rl' : '';
         label.style.textOrientation = it.vertical ? 'upright' : '';
+        if (it.fitBox === false) {
+            // 枠が文字より大きい（フキダシの輪郭など）: 枠の中央に文字を置く
+            label.style.left = label.style.top = label.style.right = label.style.bottom = '0';
+            label.style.display = 'flex';
+            label.style.alignItems = label.style.justifyContent = 'center';
+            label.style.textAlign = 'center';
+        } else {
+            const pad = `${fs * TEXT_PAD * S.scale}px`;
+            label.style.left = label.style.top = pad;
+            // 縦書き: 右上から下へ、列は右→左。右側にも余白を取る
+            label.style.right = it.vertical ? pad : '';
+        }
         label.classList.add('moss-label-text');
         label.classList.remove('moss-label-dim');
     } else {
-        label.style.left = label.style.top = label.style.right = label.style.lineHeight = '';
-        label.style.writingMode = label.style.textOrientation = '';
         label.textContent = it.type === 'text' ? (it.caption || t('moss.textEmptyLabel')) : it.caption;
         label.style.fontSize = '';
         label.classList.remove('moss-label-text');
@@ -375,9 +394,11 @@ function syncProps() {
     $('moss-item-text-field').style.display = it.type === 'text' ? '' : 'none';
     $('moss-item-font-field').style.display = it.type === 'text' ? '' : 'none';
     $('moss-item-writing-field').style.display = it.type === 'text' ? '' : 'none';
+    $('moss-item-fit-field').style.display = it.type === 'text' ? '' : 'none';
     if (it.type === 'text') {
         $('moss-item-fontsize').value = it.fontSize > 0 ? it.fontSize : defaultFontPx();
         $('moss-item-writing').value = it.vertical ? '1' : '0';
+        $('moss-item-fit').checked = it.fitBox !== false;
     }
 }
 
@@ -483,7 +504,7 @@ function initCanvasInteraction() {
         }
         const justDrew = drag.mode === 'draw' && S.items.includes(it);
         // 文字枠を手でリサイズしたら、その枠に収まる最大のフォントサイズに更新し、枠を文字の大きさに揃える
-        if (it.type === 'text' && S.items.includes(it) && drag.mode !== 'move' && drag.mode !== 'draw') {
+        if (it.type === 'text' && it.fitBox !== false && S.items.includes(it) && drag.mode !== 'move' && drag.mode !== 'draw') {
             it.fontSize = fitFontToBox(it);
             S.lastFontPx = it.fontSize;
             autoSizeText(it);
@@ -553,6 +574,12 @@ function initItemProps() {
         if (el) { placeBox(el, it); applyLabel(el.querySelector('.moss-label'), it); }
         schedulePreview(); scheduleSave();
     });
+    $('moss-item-fit').addEventListener('change', () => {
+        const it = selItem(); if (!it || it.type !== 'text') return;
+        it.fitBox = $('moss-item-fit').checked;
+        if (it.fitBox) autoSizeText(it);
+        renderCanvas(); schedulePreview(); scheduleSave();
+    });
     $('moss-item-writing').addEventListener('change', () => setItemWriting(selItem(), $('moss-item-writing').value === '1'));
     // フォントサイズ（画像上のpx）。変更すると枠が文字の大きさに合わせて更新される
     $('moss-item-fontsize').addEventListener('input', () => {
@@ -610,6 +637,79 @@ async function importPagePanels() {
         });
     }
     renderCanvas(); schedulePreview(); scheduleSave();
+}
+
+// ─── フキダシ・セリフの取り込み ───
+// ページのフキダシ（g.balloon-shape。オーバーレイと各コマのSVGの両方）から、セリフ入りのものを取り出す。
+// 位置・大きさは data-cx/cy/rx/ry（ページのSVG座標）、セリフは data-bubble-text、フォントサイズは data-font-size-svg
+const BALLOON_PHRASE = {
+    normal: 'Speech bubble.', rect: 'Rectangular speech bubble.', thought: 'Thought bubble.',
+    bomb: 'Shouting burst-shaped bubble.', caption: 'Caption box.',
+    cloudpuffy: 'Puffy cloud-shaped bubble.', cloudwavy: 'Wavy cloud-shaped bubble.',
+    'textbox-rect': 'Text box.', 'textbox-rounded': 'Rounded text box.', 'textbox-oval': 'Oval text box.',
+};
+
+function extractBalloons(rec) {
+    const parser = new DOMParser();
+    const sources = [rec.overlaySvgContent, ...(rec.panels || []).map(p => p.panelSvgContent)].filter(Boolean);
+    const seen = new Set();
+    const out = [];
+    for (const src of sources) {
+        const doc = parser.parseFromString(src, 'image/svg+xml');
+        for (const g of doc.querySelectorAll('g.balloon-shape')) {
+            const text = (g.getAttribute('data-bubble-text') || '').trim();
+            const num = (name) => parseFloat(g.getAttribute(name));
+            const cx = num('data-cx'), cy = num('data-cy'), rx = num('data-rx'), ry = num('data-ry');
+            if (!text || ![cx, cy, rx, ry].every(Number.isFinite) || rx <= 0 || ry <= 0) continue;
+            const id = g.getAttribute('id') || `${cx},${cy}`;
+            if (seen.has(id)) continue;
+            seen.add(id);
+            out.push({
+                id, text, cx, cy, rx, ry,
+                shapeType: g.getAttribute('data-shape-type') || 'normal',
+                vertical: g.getAttribute('data-bubble-text-vertical') === '1',
+                fontSizeSvg: num('data-font-size-svg'),
+            });
+        }
+    }
+    // 読み順（上から下、同じ段は右から左）
+    const band = Math.max(1, ...out.map(b => b.ry)) * 1.2;
+    out.sort((a, b) => (Math.abs(a.cy - b.cy) < band ? b.cx - a.cx : a.cy - b.cy));
+    return out;
+}
+
+async function importBalloons() {
+    const rec = await getActivePageRecord();
+    if (!rec) { alert(t('layout.msgNoActivePage')); return; }
+    const svg = pageSvgSizeOf(rec);
+    const list = extractBalloons(rec);
+    if (!list.length) { alert(t('moss.noBalloons')); return; }
+    // キャンバスの縦横比がページと違えば、ページに合わせる（既存の枠も同じ比率で拡縮する）
+    if (Math.abs((S.W / S.H) / (svg.w / svg.h) - 1) > 0.02) {
+        if (S.items.length && !confirm(t('moss.confirmFitCanvas'))) return;
+        const { w, h } = sizeForAspect(svg.w / svg.h, PAGE_TARGET_PIXELS);
+        const kx = w / S.W, ky = h / S.H;
+        for (const it of S.items) {
+            it.x *= kx; it.w *= kx; it.y *= ky; it.h *= ky;
+            if (it.fontSize > 0) it.fontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, Math.round(it.fontSize * ky)));
+        }
+        setSize(w, h);
+    }
+    S.items = S.items.filter(i => i.src !== 'balloon');   // 再取込: 前回取り込んだ枠だけ入れ替える（手で足した枠は残す）
+    if (S.selId && !S.items.some(i => i.id === S.selId)) S.selId = null;
+    const sx = S.W / svg.w, sy = S.H / svg.h;
+    for (const b of list) {
+        const x = clamp((b.cx - b.rx) * sx, 0, S.W - MIN_BOX_PX), y = clamp((b.cy - b.ry) * sy, 0, S.H - MIN_BOX_PX);
+        const it = addItem({
+            type: 'text', src: 'balloon', text: b.text, vertical: b.vertical, fitBox: false,   // 枠はフキダシの輪郭（文字の大きさに合わせない）
+            caption: BALLOON_PHRASE[b.shapeType] || 'Speech bubble.',
+            x, y, w: Math.min(b.rx * 2 * sx, S.W - x), h: Math.min(b.ry * 2 * sy, S.H - y),
+            fontSize: b.fontSizeSvg > 0 ? Math.min(FONT_MAX, Math.max(FONT_MIN, Math.round(b.fontSizeSvg * sy))) : 0,
+        });
+        if (!(it.fontSize > 0)) it.fontSize = fitFontToBox(it);
+    }
+    renderCanvas(); schedulePreview(); scheduleSave();
+    $('moss-progress-text').textContent = t('moss.balloonsImported', list.length);
 }
 
 // ─── JSONプレビュー ───
@@ -921,6 +1021,7 @@ async function initMossTabOnce() {
     $('moss-json-manual').addEventListener('change', onJsonManualToggle);
     $('moss-json-preview').addEventListener('input', scheduleSave);
     $('moss-layout-import-btn').addEventListener('click', importPagePanels);
+    $('moss-layout-import-balloons-btn').addEventListener('click', importBalloons);
     $('moss-panel-reload-btn').addEventListener('click', reloadPanelList);
     $('moss-reload-models-btn').addEventListener('click', () => loadModelLists(loadSettings()));
     $('moss-generate-btn').addEventListener('click', onGenerate);
@@ -940,4 +1041,4 @@ function initMossTab() {
     initMossTabOnce();
 }
 
-export { initMossTab };
+export { initMossTab, extractBalloons };

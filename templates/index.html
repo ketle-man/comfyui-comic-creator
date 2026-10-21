@@ -2104,6 +2104,7 @@
                     </div>
                     <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
                       <button id="moss-layout-import-btn" class="btn small secondary" data-i18n="moss.importPanels">現在のページのコマを取り込む</button>
+                      <button id="moss-layout-import-balloons-btn" class="btn small secondary" data-i18n="moss.importBalloons">フキダシ・セリフを取り込む</button>
                       <button id="moss-layout-clear-btn" class="btn small danger" data-i18n="nb.clearAll">全クリア</button>
                     </div>
                   </div>
@@ -2194,6 +2195,11 @@
                         <option value="0" data-i18n="moss.writingH">横書き</option>
                         <option value="1" data-i18n="moss.writingV">縦書き</option>
                       </select>
+                    </div>
+                    <div class="comfyui-field" id="moss-item-fit-field">
+                      <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+                        <input type="checkbox" id="moss-item-fit" checked> <span data-i18n="moss.itemFit">枠を文字の大きさに合わせる</span>
+                      </label>
                     </div>
                     <div class="comfyui-field">
                       <label class="comfyui-label" data-i18n="moss.itemCaption">説明（caption）:</label>
