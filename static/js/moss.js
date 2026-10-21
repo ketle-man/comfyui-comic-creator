@@ -780,11 +780,12 @@ function initSubtabs() {
         btn.addEventListener('click', () => {
             const key = btn.dataset.mossSubtab;
             document.querySelectorAll('[data-moss-subtab]').forEach(b => b.classList.toggle('active', b === btn));
-            for (const k of ['prompt', 'target', 'model']) {
+            for (const k of ['prompt', 'json', 'model']) {
                 const el = $(`moss-subtab-${k}`);
                 if (el) el.style.display = k === key ? '' : 'none';
             }
             try { localStorage.setItem(SUBTAB_KEY, key); } catch (_) { /* ignore */ }
+            if (key === 'json') refreshPreview();
         });
     });
 }
@@ -794,7 +795,7 @@ async function initMossTabOnce() {
     initSubtabs();
     try {
         const last = localStorage.getItem(SUBTAB_KEY);
-        if (['prompt', 'target', 'model'].includes(last)) document.querySelector(`[data-moss-subtab="${last}"]`)?.click();
+        if (['prompt', 'json', 'model'].includes(last)) document.querySelector(`[data-moss-subtab="${last}"]`)?.click();
     } catch (_) { /* ignore */ }
     initCanvasInteraction();
     initItemProps();
