@@ -234,3 +234,4 @@
 .moss-collapse > summary::before { content: "\25B6"; font-size: 10px; transition: transform 0.15s; }
 .moss-collapse[open] > summary::before { transform: rotate(90deg); }
 .moss-collapse[open] > summary { margin-bottom: 4px; }
+.moss-type-btn[data-vertical].active { background: #4fd8ff; color: #000; }

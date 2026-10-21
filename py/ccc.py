@@ -1015,6 +1015,7 @@ _MOSS_TIMEOUT_S = 900          # 50step・4MPでも収まる余裕。生成中�
 _MOSS_OUT_NODE = '10'
 _MOSS_LABELS = ('object', 'character', 'text')
 _MOSS_MAX_ITEMS = 200
+_MOSS_VERTICAL_HINT = 'Vertical text, written top to bottom, columns from right to left.'
 
 def _moss_layout_prompt(summary, items, width, height, meta=None, canvas=None):
     """レイアウト要素（ピクセル・左上原点の x,y,w,h）からMOSS-Imageのレイアウトプロンプト(JSON文字列)を作る。
@@ -1040,6 +1041,9 @@ def _moss_layout_prompt(summary, items, width, height, meta=None, canvas=None):
         item = {'label': label, 'caption': str(it.get('caption') or '').strip()}
         if label == 'text':
             item['text'] = str(it.get('text') or '')
+            if it.get('vertical'):
+                # レイアウト形式に書字方向の項目は無いため、captionの英文で縦書き（改行=列、右から左）を指示する
+                item['caption'] = (item['caption'] + ' ' + _MOSS_VERTICAL_HINT).strip()
         palette = it.get('palette')
         if isinstance(palette, list) and palette:
             item['palette'] = [str(c)[:16] for c in palette[:5]]

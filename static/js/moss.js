@@ -48,7 +48,7 @@ function sizeForAspect(aspect, pixels) {
 // ─── 設定の保存・復元（localStorage。使えない環境ではスキップ） ───
 function saveSettings() {
     try {
-        const data = { items: S.items, nextId: S.nextId, W: S.W, H: S.H };
+        const data = { items: S.items, nextId: S.nextId, W: S.W, H: S.H, writingVertical: !!S.writingVertical };
         for (const id of FIELD_IDS) {
             const el = $(id);
             if (el) data[id] = el.type === 'checkbox' ? el.checked : el.value;
@@ -174,6 +174,31 @@ function initTargetCollapse() {
     d.addEventListener('toggle', () => { try { localStorage.setItem(COLLAPSE_KEY, d.open ? '1' : '0'); } catch (_) { /* ignore */ } });
 }
 
+// 横書き/縦書きトグル。文字枠を選択中ならその枠に適用し、新しく描く文字枠の既定にもなる
+function setWritingToggle(vertical) {
+    document.querySelectorAll('#moss-writing-mode .moss-type-btn').forEach(b => b.classList.toggle('active', (b.dataset.vertical === '1') === vertical));
+}
+
+function initWritingToggle() {
+    const btns = [...document.querySelectorAll('#moss-writing-mode .moss-type-btn')];
+    setWritingToggle(!!S.writingVertical);
+    btns.forEach(b => b.addEventListener('click', () => {
+        S.writingVertical = b.dataset.vertical === '1';   // 新しく描く文字枠の書字方向（描いた後の変更は「選択中の要素」で行う）
+        setWritingToggle(S.writingVertical);
+        scheduleSave();
+    }));
+}
+
+// 選択中の文字枠の書字方向を切り替える。文字があれば枠を文字の大きさにし、空なら縦横を入れ替える
+function setItemWriting(it, vertical) {
+    if (!it || it.type !== 'text' || !!it.vertical === vertical) return;
+    it.vertical = vertical;
+    if (it.text) autoSizeText(it);
+    else { const w = it.w; it.w = Math.min(S.W, it.h); it.h = Math.min(S.H, w); }
+    it.x = clamp(it.x, 0, S.W - it.w); it.y = clamp(it.y, 0, S.H - it.h);
+    renderCanvas(); schedulePreview(); scheduleSave();
+}
+
 function initDrawTypeButtons() {
     const btns = [...document.querySelectorAll('#moss-draw-type .moss-type-btn')];
     btns.forEach(b => b.addEventListener('click', () => btns.forEach(x => x.classList.toggle('active', x === b))));
@@ -186,7 +211,7 @@ function showPromptTab() {
 }
 
 function layoutPayload() {
-    return { items: S.items.map(i => ({ type: i.type, caption: i.caption, text: i.text, x: i.x, y: i.y, w: i.w, h: i.h })) };
+    return { items: S.items.map(i => ({ type: i.type, caption: i.caption, text: i.text, vertical: !!i.vertical, x: i.x, y: i.y, w: i.w, h: i.h })) };
 }
 
 function renderCanvas() {
@@ -228,17 +253,23 @@ const FONT_MIN = 8, FONT_MAX = 400;
 const defaultFontPx = () => Math.max(FONT_MIN, Math.round(S.H / 28));
 const charEm = (ch) => (/[ -~｡-ﾟ]/.test(ch) ? 0.55 : 1);
 
-function textExtent(text, fs) {
+// 縦書きは、改行ごとに1列（右→左）、1文字=1em（字を立てて上→下）として見積もる
+function textExtent(text, fs, vertical = false) {
     const lines = String(text || '').split('\n');
+    const pad = fs * TEXT_PAD * 2;
+    if (vertical) {
+        const rows = Math.max(1, ...lines.map(l => [...l].length));
+        return { w: lines.length * fs * TEXT_LINE_H + pad, h: rows * fs + pad };
+    }
     const em = Math.max(1, ...lines.map(l => [...l].reduce((n, ch) => n + charEm(ch), 0)));
-    return { w: em * fs + fs * TEXT_PAD * 2, h: lines.length * fs * TEXT_LINE_H + fs * TEXT_PAD * 2 };
+    return { w: em * fs + pad, h: lines.length * fs * TEXT_LINE_H + pad };
 }
 
 // 文字が入っていれば、左上を保ったまま枠を文字の大きさにする（キャンバスからはみ出す分は位置を戻す）
 function autoSizeText(it) {
     if (it.type !== 'text' || !it.text) return;
     if (!(it.fontSize > 0)) it.fontSize = defaultFontPx();
-    const ext = textExtent(it.text, it.fontSize);
+    const ext = textExtent(it.text, it.fontSize, it.vertical);
     it.w = Math.min(S.W, ext.w); it.h = Math.min(S.H, ext.h);
     it.x = clamp(it.x, 0, S.W - it.w); it.y = clamp(it.y, 0, S.H - it.h);
 }
@@ -247,7 +278,7 @@ function autoSizeText(it) {
 function fitFontToBox(it) {
     const text = it.text || 'あ';
     for (let fs = FONT_MAX; fs > FONT_MIN; fs--) {
-        const ext = textExtent(text, fs);
+        const ext = textExtent(text, fs, it.vertical);
         if (ext.w <= it.w && ext.h <= it.h) return fs;
     }
     return FONT_MIN;
@@ -260,11 +291,17 @@ function applyLabel(label, it) {
         label.textContent = it.text;
         label.style.fontSize = `${fs * S.scale}px`;
         label.style.lineHeight = String(TEXT_LINE_H);
-        label.style.left = label.style.top = `${fs * TEXT_PAD * S.scale}px`;
+        const pad = `${fs * TEXT_PAD * S.scale}px`;
+        label.style.left = label.style.top = pad;
+        // 縦書き: 右上から下へ、列は右→左。右側にも余白を取る
+        label.style.right = it.vertical ? pad : '';
+        label.style.writingMode = it.vertical ? 'vertical-rl' : '';
+        label.style.textOrientation = it.vertical ? 'upright' : '';
         label.classList.add('moss-label-text');
         label.classList.remove('moss-label-dim');
     } else {
-        label.style.left = label.style.top = label.style.lineHeight = '';
+        label.style.left = label.style.top = label.style.right = label.style.lineHeight = '';
+        label.style.writingMode = label.style.textOrientation = '';
         label.textContent = it.type === 'text' ? (it.caption || t('moss.textEmptyLabel')) : it.caption;
         label.style.fontSize = '';
         label.classList.remove('moss-label-text');
@@ -286,6 +323,8 @@ function openInlineEdit(it) {
         ta.style.fontSize = `${Math.max(11, fs)}px`;
         ta.style.lineHeight = String(TEXT_LINE_H);
         ta.style.padding = `${Math.max(2, it.fontSize * TEXT_PAD * S.scale)}px`;
+        ta.style.writingMode = it.vertical ? 'vertical-rl' : '';
+        ta.style.textOrientation = it.vertical ? 'upright' : '';
     };
     styleTa();
     el.appendChild(ta);
@@ -314,6 +353,7 @@ function placeBox(el, it) {
 function addItem(partial) {
     const it = { id: S.nextId++, type: 'object', caption: '', text: '', x: 0, y: 0, w: 100, h: 100, ...partial };
     if (it.type === 'text' && !(it.fontSize > 0)) it.fontSize = S.lastFontPx || defaultFontPx();
+    if (it.type === 'text' && it.vertical === undefined) it.vertical = !!S.writingVertical;
     S.items.push(it);
     return it;
 }
@@ -334,7 +374,11 @@ function syncProps() {
     $('moss-item-text').value = it.text;
     $('moss-item-text-field').style.display = it.type === 'text' ? '' : 'none';
     $('moss-item-font-field').style.display = it.type === 'text' ? '' : 'none';
-    if (it.type === 'text') $('moss-item-fontsize').value = it.fontSize > 0 ? it.fontSize : defaultFontPx();
+    $('moss-item-writing-field').style.display = it.type === 'text' ? '' : 'none';
+    if (it.type === 'text') {
+        $('moss-item-fontsize').value = it.fontSize > 0 ? it.fontSize : defaultFontPx();
+        $('moss-item-writing').value = it.vertical ? '1' : '0';
+    }
 }
 
 function canvasPoint(e) {
@@ -509,6 +553,7 @@ function initItemProps() {
         if (el) { placeBox(el, it); applyLabel(el.querySelector('.moss-label'), it); }
         schedulePreview(); scheduleSave();
     });
+    $('moss-item-writing').addEventListener('change', () => setItemWriting(selItem(), $('moss-item-writing').value === '1'));
     // フォントサイズ（画像上のpx）。変更すると枠が文字の大きさに合わせて更新される
     $('moss-item-fontsize').addEventListener('input', () => {
         const it = selItem(); if (!it || it.type !== 'text') return;
@@ -809,6 +854,7 @@ async function initMossTabOnce() {
     initCanvasInteraction();
     initItemProps();
     initDrawTypeButtons();
+    initWritingToggle();
     initTargetCollapse();
     await loadModelLists(saved);
 
@@ -820,6 +866,7 @@ async function initMossTabOnce() {
             if (el.type === 'checkbox') el.checked = !!saved[id]; else el.value = saved[id];
         }
         S.items = Array.isArray(saved.items) ? saved.items : [];
+        S.writingVertical = !!saved.writingVertical;
         S.W = Number(saved.W) || S.W; S.H = Number(saved.H) || S.H;   // fitFontToBoxが現在のキャンバスサイズを使うため先に復元
         for (const it of S.items) if (it.type === 'text' && !(it.fontSize > 0)) it.fontSize = fitFontToBox(it);   // フォントサイズ導入前の保存データ
         S.nextId = saved.nextId || (S.items.reduce((m, i) => Math.max(m, i.id), 0) + 1);

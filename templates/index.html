@@ -2090,6 +2090,10 @@
                         <button type="button" class="moss-type-btn" data-type="character" data-i18n="moss.typeCharacter">キャラ</button>
                         <button type="button" class="moss-type-btn" data-type="text" data-i18n="moss.typeText">文字</button>
                       </div>
+                      <div class="moss-type-btns" id="moss-writing-mode">
+                        <button type="button" class="moss-type-btn active" data-vertical="0" data-i18n="moss.writingH">横書き</button>
+                        <button type="button" class="moss-type-btn" data-vertical="1" data-i18n="moss.writingV">縦書き</button>
+                      </div>
                       <button id="moss-item-up-btn" class="btn small secondary" disabled data-i18n="moss.itemFront">前面へ</button>
                       <button id="moss-item-down-btn" class="btn small secondary" disabled data-i18n="moss.itemBack">背面へ</button>
                       <button id="moss-item-del-btn" class="btn small danger" disabled data-i18n="common.delete">削除</button>
@@ -2183,6 +2187,13 @@
                       <label class="comfyui-label" data-i18n="moss.itemFontSize">フォントサイズ(px):</label>
                       <input type="number" id="moss-item-fontsize" min="8" max="400" step="1" value="40" class="comfyui-input" style="width:90px" />
                       <span style="font-size:11px; color:#888;" data-i18n="moss.itemFontHint">画像上の大きさ(近似)。入力した文字がこの大きさの枠になります</span>
+                    </div>
+                    <div class="comfyui-field" id="moss-item-writing-field">
+                      <label class="comfyui-label" data-i18n="moss.itemWriting">書字方向:</label>
+                      <select id="moss-item-writing" class="comfyui-select" style="width:auto">
+                        <option value="0" data-i18n="moss.writingH">横書き</option>
+                        <option value="1" data-i18n="moss.writingV">縦書き</option>
+                      </select>
                     </div>
                     <div class="comfyui-field">
                       <label class="comfyui-label" data-i18n="moss.itemCaption">説明（caption）:</label>
