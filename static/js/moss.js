@@ -25,6 +25,7 @@ const PRESETS = {
 };
 const PAGE_TARGET_PIXELS = 2_000_000;   // 1頁モードの総画素数（manga_baseの1216x1824≒2.2MP相当）
 const PANEL_TARGET_PIXELS = 1_000_000;  // コマ単位モード（公式推奨1MP）
+const EDGE_PX = 7;                       // 枠の縁として扱う幅(css px)。縁のドラッグは常に移動
 const MIN_BOX_PX = 24;                   // これ未満のドラッグは追加しない
 
 const S = {
@@ -209,27 +210,52 @@ function renderCanvas() {
     syncProps();
 }
 
-// 文字枠は描画する文字そのものを枠内に表示する（枠の大きさに合わせてフォントサイズを自動調整）。
-// 文字が未入力のときはcaptionを薄く表示する
-function textFontPx(it) {
-    const lens = (it.text || '').split('\n').map(l => Math.max(1, [...l].length));
-    const availW = Math.max(1, (it.w * S.scale - 6) * 0.9), availH = it.h * S.scale - 22;   // 0.9: 約物や半角混じりの幅の誤差の余裕
-    // 折り返し込みで枠に収まる最大のフォントサイズを探す（全角1文字≒1em）
-    for (let fs = 40; fs > 9; fs--) {
-        const perRow = Math.max(1, Math.floor(availW / fs));
-        const rows = lens.reduce((n, len) => n + Math.ceil(len / perRow), 0);
-        if (rows * fs * 1.25 <= availH) return fs;
-    }
-    return 9;
+// ── 文字枠: フォントサイズ(画像上のpx)と文字からbboxの大きさを決める（近似） ──
+// 全角1文字≒1em・半角≒0.55em・行間1.2・上下左右にフォントサイズの0.3倍の余白、で見積もる。
+// 文字を入力する/フォントサイズを変えると枠が文字の大きさになり、枠を手でリサイズするとその枠に収まる最大のフォントサイズに更新される
+const TEXT_LINE_H = 1.2;
+const TEXT_PAD = 0.3;
+const FONT_MIN = 8, FONT_MAX = 400;
+const defaultFontPx = () => Math.max(FONT_MIN, Math.round(S.H / 28));
+const charEm = (ch) => (/[ -~｡-ﾟ]/.test(ch) ? 0.55 : 1);
+
+function textExtent(text, fs) {
+    const lines = String(text || '').split('\n');
+    const em = Math.max(1, ...lines.map(l => [...l].reduce((n, ch) => n + charEm(ch), 0)));
+    return { w: em * fs + fs * TEXT_PAD * 2, h: lines.length * fs * TEXT_LINE_H + fs * TEXT_PAD * 2 };
 }
 
+// 文字が入っていれば、左上を保ったまま枠を文字の大きさにする（キャンバスからはみ出す分は位置を戻す）
+function autoSizeText(it) {
+    if (it.type !== 'text' || !it.text) return;
+    if (!(it.fontSize > 0)) it.fontSize = defaultFontPx();
+    const ext = textExtent(it.text, it.fontSize);
+    it.w = Math.min(S.W, ext.w); it.h = Math.min(S.H, ext.h);
+    it.x = clamp(it.x, 0, S.W - it.w); it.y = clamp(it.y, 0, S.H - it.h);
+}
+
+// 枠に収まる最大のフォントサイズ（手動リサイズ後や、フォントサイズ未設定の既存データ用）
+function fitFontToBox(it) {
+    const text = it.text || 'あ';
+    for (let fs = FONT_MAX; fs > FONT_MIN; fs--) {
+        const ext = textExtent(text, fs);
+        if (ext.w <= it.w && ext.h <= it.h) return fs;
+    }
+    return FONT_MIN;
+}
+
+// 文字が未入力のときはcaptionを薄く表示する
 function applyLabel(label, it) {
     if (it.type === 'text' && it.text) {
+        const fs = it.fontSize > 0 ? it.fontSize : defaultFontPx();
         label.textContent = it.text;
-        label.style.fontSize = `${textFontPx(it)}px`;
+        label.style.fontSize = `${fs * S.scale}px`;
+        label.style.lineHeight = String(TEXT_LINE_H);
+        label.style.left = label.style.top = `${fs * TEXT_PAD * S.scale}px`;
         label.classList.add('moss-label-text');
         label.classList.remove('moss-label-dim');
     } else {
+        label.style.left = label.style.top = label.style.lineHeight = '';
         label.textContent = it.type === 'text' ? (it.caption || t('moss.textEmptyLabel')) : it.caption;
         label.style.fontSize = '';
         label.classList.remove('moss-label-text');
@@ -245,12 +271,21 @@ function openInlineEdit(it) {
     ta.className = 'moss-inline-edit';
     ta.value = it.text;
     ta.placeholder = t('moss.textPlaceholder');
-    ta.style.fontSize = `${Math.max(12, textFontPx({ ...it, text: it.text || 'あ' }))}px`;
+    if (!(it.fontSize > 0)) it.fontSize = defaultFontPx();
+    const styleTa = () => {
+        const fs = it.fontSize * S.scale;
+        ta.style.fontSize = `${Math.max(11, fs)}px`;
+        ta.style.lineHeight = String(TEXT_LINE_H);
+        ta.style.padding = `${Math.max(2, it.fontSize * TEXT_PAD * S.scale)}px`;
+    };
+    styleTa();
     el.appendChild(ta);
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
     ta.addEventListener('input', () => {
         it.text = ta.value;
+        autoSizeText(it);          // 入力した文字の大きさに枠が追従する
+        placeBox(el, it);
         const side = $('moss-item-text');
         if (side) side.value = it.text;
         schedulePreview(); scheduleSave();
@@ -269,6 +304,7 @@ function placeBox(el, it) {
 
 function addItem(partial) {
     const it = { id: S.nextId++, type: 'object', caption: '', text: '', x: 0, y: 0, w: 100, h: 100, ...partial };
+    if (it.type === 'text' && !(it.fontSize > 0)) it.fontSize = S.lastFontPx || defaultFontPx();
     S.items.push(it);
     return it;
 }
@@ -288,6 +324,8 @@ function syncProps() {
     $('moss-item-caption').value = it.caption;
     $('moss-item-text').value = it.text;
     $('moss-item-text-field').style.display = it.type === 'text' ? '' : 'none';
+    $('moss-item-font-field').style.display = it.type === 'text' ? '' : 'none';
+    if (it.type === 'text') $('moss-item-fontsize').value = it.fontSize > 0 ? it.fontSize : defaultFontPx();
 }
 
 function canvasPoint(e) {
@@ -304,8 +342,19 @@ function initCanvasInteraction() {
         if (e.target.classList.contains('moss-inline-edit')) return;   // 入力中のテキストエリアはドラッグ対象にしない
         const boxEl = e.target.closest('.moss-box');
         const p = canvasPoint(e);
-        if (boxEl) {
-            const it = S.items.find(i => i.id === Number(boxEl.dataset.id));
+        const hit = boxEl ? S.items.find(i => i.id === Number(boxEl.dataset.id)) : null;
+        // 枠の縁・番号・ハンドル、または選択中の枠の中は、その枠の移動/拡縮。
+        // 選択されていない枠の中のドラッグは「その上に新しい要素を描く」（クリックのみなら選択）。Shift+ドラッグは常に描画
+        let grab = false;
+        if (hit && !e.shiftKey) {
+            const r = boxEl.getBoundingClientRect();
+            const edge = Math.min(e.clientX - r.left, r.right - e.clientX, e.clientY - r.top, r.bottom - e.clientY) < EDGE_PX;
+            grab = !!e.target.dataset.h || edge || e.target.classList.contains('moss-badge') || S.selId === hit.id;
+        }
+        if (hit && !e.shiftKey && !grab) {
+            drag = { mode: 'pending', item: hit, start: p, orig: null, cx: e.clientX, cy: e.clientY };
+        } else if (hit && grab) {
+            const it = hit;
             const mode = e.target.dataset.h || 'move';
             // 文字枠の二度押し（350ms以内）で枠内入力。pointerdownでpreventDefaultするためブラウザのdblclickは当てにできない
             const now = performance.now();
@@ -335,6 +384,15 @@ function initCanvasInteraction() {
 
     cv.addEventListener('pointermove', (e) => {
         if (!drag) return;
+        if (drag.mode === 'pending') {
+            if (Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) < 4) return;   // まだクリックの範囲
+            const x = clamp(drag.start.x, 0, S.W), y = clamp(drag.start.y, 0, S.H);
+            const created = addItem({ type: drawType(), x, y, w: 0, h: 0, caption: '', text: '' });
+            S.selId = created.id;
+            showPromptTab();
+            drag = { mode: 'draw', item: created, start: { x, y }, orig: null };
+            renderCanvas();
+        }
         const p = canvasPoint(e), it = drag.item, o = drag.orig;
         if (drag.mode === 'draw') {
             const x = clamp(p.x, 0, S.W), y = clamp(p.y, 0, S.H);
@@ -358,11 +416,25 @@ function initCanvasInteraction() {
     const end = (e) => {
         if (!drag) return;
         const it = drag.item;
+        if (drag.mode === 'pending') {   // 動かさずに離した = 枠のクリック（選択）
+            drag = null;
+            try { cv.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+            S.lastDown = { id: it.id, t: performance.now() };
+            selectItem(it.id);
+            showPromptTab();
+            return;
+        }
         if (drag.mode === 'draw' && (it.w < MIN_BOX_PX || it.h < MIN_BOX_PX)) {
             S.items = S.items.filter(i => i.id !== it.id);
             S.selId = null;
         }
         const justDrew = drag.mode === 'draw' && S.items.includes(it);
+        // 文字枠を手でリサイズしたら、その枠に収まる最大のフォントサイズに更新し、枠を文字の大きさに揃える
+        if (it.type === 'text' && S.items.includes(it) && drag.mode !== 'move' && drag.mode !== 'draw') {
+            it.fontSize = fitFontToBox(it);
+            S.lastFontPx = it.fontSize;
+            autoSizeText(it);
+        }
         drag = null;
         try { cv.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
         renderCanvas();
@@ -409,6 +481,8 @@ function initItemProps() {
     $('moss-item-type').addEventListener('change', () => {
         const it = selItem(); if (!it) return;
         it.type = $('moss-item-type').value;
+        if (it.type === 'text' && !(it.fontSize > 0)) it.fontSize = fitFontToBox(it);
+        autoSizeText(it);
         renderCanvas(); schedulePreview(); scheduleSave();
     });
     $('moss-item-caption').addEventListener('input', () => {
@@ -421,8 +495,21 @@ function initItemProps() {
     $('moss-item-text').addEventListener('input', () => {
         const it = selItem(); if (!it) return;
         it.text = $('moss-item-text').value;
-        const lb = $('moss-layout-canvas').querySelector(`.moss-box[data-id="${it.id}"] .moss-label`);
-        if (lb) applyLabel(lb, it);
+        autoSizeText(it);
+        const el = $('moss-layout-canvas').querySelector(`.moss-box[data-id="${it.id}"]`);
+        if (el) { placeBox(el, it); applyLabel(el.querySelector('.moss-label'), it); }
+        schedulePreview(); scheduleSave();
+    });
+    // フォントサイズ（画像上のpx）。変更すると枠が文字の大きさに合わせて更新される
+    $('moss-item-fontsize').addEventListener('input', () => {
+        const it = selItem(); if (!it || it.type !== 'text') return;
+        const v = Number($('moss-item-fontsize').value);
+        if (!(v >= FONT_MIN)) return;
+        it.fontSize = Math.min(FONT_MAX, Math.round(v));
+        S.lastFontPx = it.fontSize;
+        autoSizeText(it);
+        const el = $('moss-layout-canvas').querySelector(`.moss-box[data-id="${it.id}"]`);
+        if (el) { placeBox(el, it); applyLabel(el.querySelector('.moss-label'), it); }
         schedulePreview(); scheduleSave();
     });
     $('moss-item-del-btn').addEventListener('click', deleteSelected);
@@ -722,6 +809,8 @@ async function initMossTabOnce() {
             if (el.type === 'checkbox') el.checked = !!saved[id]; else el.value = saved[id];
         }
         S.items = Array.isArray(saved.items) ? saved.items : [];
+        S.W = Number(saved.W) || S.W; S.H = Number(saved.H) || S.H;   // fitFontToBoxが現在のキャンバスサイズを使うため先に復元
+        for (const it of S.items) if (it.type === 'text' && !(it.fontSize > 0)) it.fontSize = fitFontToBox(it);   // フォントサイズ導入前の保存データ
         S.nextId = saved.nextId || (S.items.reduce((m, i) => Math.max(m, i.id), 0) + 1);
         $('moss-json-preview').value = saved['moss-json-text'] || '';
     }
