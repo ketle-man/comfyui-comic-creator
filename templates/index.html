@@ -2250,23 +2250,23 @@
               <div class="comfyui-right-col">
                 <div class="comfyui-generate-panel">
                   <button id="moss-generate-btn" class="btn primary" style="width:100%" data-i18n="nb.generate">画像を生成</button>
-                  <div class="comfyui-progress-container">
-                    <div id="moss-progress-text" style="font-size:12px; margin-top:4px; text-align:center; min-height:1.2em;"></div>
-                  </div>
-                  <div class="comfyui-seed-panel" style="margin-top:10px">
-                    <div class="comfyui-field-inline" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-start; gap:6px;">
-                      <label data-i18n="layout.seedLabel" style="white-space:nowrap;">シード:</label>
+                  <div class="comfyui-seed-panel" style="margin-top:0">
+                    <div><label data-i18n="layout.seedLabel" style="font-weight:bold;">シード:</label></div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
                       <select id="moss-seed-mode" class="comfyui-select" style="width:auto">
                         <option value="random" data-i18n="moss.seedRandom">ランダム</option>
                         <option value="fixed" data-i18n="moss.seedFixed">固定</option>
                         <option value="increment" data-i18n="moss.seedIncrement">生成ごとに+1</option>
                       </select>
-                      <input type="number" id="moss-seed" value="-1" style="width:110px" />
+                      <input type="number" id="moss-seed" value="-1" style="flex:1; min-width:0;" />
                     </div>
-                    <div style="font-size:11px; color:#888; margin-top:4px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <div style="font-size:11px; color:#888; margin-top:8px; display:flex; gap:6px; align-items:center; justify-content:space-between;">
                       <span id="moss-seed-last"></span>
                       <button id="moss-seed-keep" class="btn small secondary" disabled data-i18n="moss.seedKeep">このシードを固定</button>
                     </div>
+                  </div>
+                  <div class="comfyui-progress-container">
+                    <div id="moss-progress-text" style="font-size:12px; text-align:center; min-height:1.2em;"></div>
                   </div>
                 </div>
                 <div class="comfyui-result-container" style="margin-top:12px">
