@@ -14,7 +14,7 @@ const STORE_KEY = 'ccc_moss_v1';
 const SUBTAB_KEY = 'ccc_moss_subtab';
 const FIELD_IDS = ['moss-prompt', 'moss-negative', 'moss-mode', 'moss-size-preset', 'moss-width', 'moss-height', 'moss-batch',
     'moss-unet', 'moss-clip', 'moss-vae', 'moss-lora', 'moss-lora-strength', 'moss-steps', 'moss-cfg', 'moss-sampler',
-    'moss-scheduler', 'moss-slg', 'moss-seed', 'moss-preset', 'moss-json-manual'];
+    'moss-scheduler', 'moss-slg', 'moss-seed', 'moss-seed-mode', 'moss-preset', 'moss-json-manual'];
 
 // プリセット名 → サンプラー設定。loraはファイル名に含まれる正規表現（無ければLoRAなし）
 const PRESETS = {
@@ -688,15 +688,46 @@ function updateModeUi() {
 function currentParams() {
     const v = (id) => $(id).value;
     const seedRaw = Number(v('moss-seed'));
+    const randomSeed = (v('moss-seed-mode') || 'random') === 'random';   // ランダムのときは入力欄の値に関係なく毎回-1（サーバー側で乱数）
     return {
         negative_prompt: v('moss-negative'),
         unet: v('moss-unet'), clip: v('moss-clip'), vae: v('moss-vae'),
         lora: v('moss-lora'), lora_strength: Number(v('moss-lora-strength')),
         steps: Number(v('moss-steps')), cfg: Number(v('moss-cfg')),
         sampler: v('moss-sampler'), scheduler: v('moss-scheduler'), slg: $('moss-slg').checked,
-        seed: seedRaw >= 0 ? seedRaw : -1,
+        seed: !randomSeed && seedRaw >= 0 ? Math.floor(seedRaw) : -1,
     };
 }
+
+// ─── シード ───
+// ランダム: 毎回ランダム（入力欄は使わない）／固定: 入力欄の値／生成ごとに+1: 入力欄の値から始め、生成後に使った枚数ぶん進める
+// （入力欄が負のときは初回だけランダム）。ランダムで使われたシードは「直前のシード」に表示し、「このシードを固定」で再現用に固定できる
+function updateSeedUi() {
+    const mode = $('moss-seed-mode').value;
+    $('moss-seed').disabled = mode === 'random';
+    $('moss-seed-keep').disabled = S.lastSeed == null;
+    $('moss-seed-last').textContent = S.lastSeed == null ? '' : t('moss.seedLast', S.lastSeed);
+}
+
+function afterSeedUsed(usedSeed, nextSeed) {
+    S.lastSeed = usedSeed;
+    if ($('moss-seed-mode').value === 'increment') $('moss-seed').value = nextSeed;
+    updateSeedUi();
+    scheduleSave();
+}
+
+function initSeedControls() {
+    $('moss-seed-mode').addEventListener('change', () => { updateSeedUi(); scheduleSave(); });
+    $('moss-seed-keep').addEventListener('click', () => {
+        if (S.lastSeed == null) return;
+        $('moss-seed-mode').value = 'fixed';
+        $('moss-seed').value = S.lastSeed;
+        updateSeedUi();
+        scheduleSave();
+    });
+    updateSeedUi();
+}
+
 
 async function postGenerate(body) {
     const r = await fetch('/api/ccc/moss/generate', {
@@ -731,7 +762,7 @@ async function onGenerate() {
             else { body.prompt = mainPrompt; body.layout = layoutPayload(); }
             const d = await postGenerate(body);
             showResults(d.images.map(im => ({ url: viewUrl(im), im, w: d.width, h: d.height })));
-            if (base.seed < 0) $('moss-seed').value = d.seed;
+            afterSeedUsed(d.seed, d.seed + body.num_images);
             progress.textContent = t('moss.done');
         }
     } catch (e) {
@@ -748,6 +779,7 @@ async function generatePanels(base, mainPrompt, progress) {
     const targets = S.panels.filter(p => p.use);
     if (!targets.length) { alert(t('moss.noPanels')); return; }
     const all = [];
+    let firstSeed = null;
     for (let i = 0; i < targets.length; i++) {
         const p = targets[i];
         progress.textContent = t('moss.generatingPanel', i + 1, targets.length);
@@ -755,11 +787,13 @@ async function generatePanels(base, mainPrompt, progress) {
         const prompt = [mainPrompt, p.caption.trim()].filter(Boolean).join('\n');
         if (!prompt) { alert(t('moss.promptEmpty')); return; }
         const d = await postGenerate({ ...base, prompt, width: w, height: h, num_images: 1, seed: base.seed >= 0 ? base.seed + i : -1 });
+        if (firstSeed == null) firstSeed = d.seed;
         const im = d.images[0];
         all.push({ url: viewUrl(im), im, w: d.width, h: d.height });
         await insertIntoPanel(viewUrl(im), p.id, p.bbox);
     }
     showResults(all);
+    if (firstSeed != null) afterSeedUsed(firstSeed, (base.seed >= 0 ? base.seed : firstSeed) + targets.length);
     progress.textContent = t('moss.donePanels', targets.length);
 }
 
@@ -855,6 +889,7 @@ async function initMossTabOnce() {
     initItemProps();
     initDrawTypeButtons();
     initWritingToggle();
+    initSeedControls();
     initTargetCollapse();
     await loadModelLists(saved);
 

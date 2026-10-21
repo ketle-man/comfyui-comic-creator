@@ -2254,9 +2254,18 @@
                     <div id="moss-progress-text" style="font-size:12px; margin-top:4px; text-align:center; min-height:1.2em;"></div>
                   </div>
                   <div class="comfyui-seed-panel" style="margin-top:10px">
-                    <div class="comfyui-field-inline">
-                      <label data-i18n="layout.seedLabel">シード:</label>
-                      <input type="number" id="moss-seed" value="-1" style="width:120px" />
+                    <div class="comfyui-field-inline" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-start; gap:6px;">
+                      <label data-i18n="layout.seedLabel" style="white-space:nowrap;">シード:</label>
+                      <select id="moss-seed-mode" class="comfyui-select" style="width:auto">
+                        <option value="random" data-i18n="moss.seedRandom">ランダム</option>
+                        <option value="fixed" data-i18n="moss.seedFixed">固定</option>
+                        <option value="increment" data-i18n="moss.seedIncrement">生成ごとに+1</option>
+                      </select>
+                      <input type="number" id="moss-seed" value="-1" style="width:110px" />
+                    </div>
+                    <div style="font-size:11px; color:#888; margin-top:4px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                      <span id="moss-seed-last"></span>
+                      <button id="moss-seed-keep" class="btn small secondary" disabled data-i18n="moss.seedKeep">このシードを固定</button>
                     </div>
                   </div>
                 </div>
