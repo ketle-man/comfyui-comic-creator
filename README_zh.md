@@ -87,6 +87,20 @@
 </details>
 
 <details>
+<summary><strong>MOSS-Image（本地图像生成・布局指定）</strong></summary>
+
+- 在专用标签页中本地使用 ComfyUI 原生支持的 MOSS-Image（OpenMOSS，5B DiT，Apache-2.0）生成图像（无需 Comfy 积分或外部 API 密钥）。擅长渲染包括日文在内的文字
+- 三栏结构: 左侧为**布局编辑器**，中间为设置（顶部标签: 提示词 / JSON / 模型・采样器，"生成对象"可折叠），右侧为生成与结果
+- **布局编辑器** — 在画布上拖动放置物体（绿）、角色（粉）、文字（青）的框（bbox）。拖动框的边缘、编号或选中框的内部可移动，拖动角可缩放。在未选中的框上也可拖动绘制新框（Shift+拖动始终绘制）
+- **文字框** — 绘制后直接在框内输入（Escape / Ctrl+Enter 确定，快速连续点击两次可再次编辑）。可指定字号（px）和**横排/竖排**，输入的文字大小即为框（bbox）大小（近似）。竖排将换行视为列（从右到左）
+- "导入当前页面的分格"可将布局标签页的分格框作为物体框导入（画布自动调整为页面宽高比，约 2MP）
+- **生成模式** — 整页（铺满整页）/ 按分格（按各分格宽高比以约 1MP 生成并放入分格）/ 自由尺寸（仅生成）
+- 发送的提示词（MOSS-Image 布局 JSON）可在"JSON"标签页查看，也可直接编辑后发送。支持预设（标准 50 步 / 轻量 25 步 / 快速 DMD 8 步・Turbo 4 步）、Skip Layer Guidance 和 LoRA
+- 生成的图像保存到 ComfyUI 本体的 `output/cc_moss` 文件夹
+
+</details>
+
+<details>
 <summary><strong>Auto（AI漫画自动创作）</strong></summary>
 
 - 根据主题和页数，用AI分两步自动创作**故事 → 脚本**（以创作后由人编辑完成为前提；与脚本标签页无关联，作为新作品独立管理）
@@ -182,6 +196,17 @@ COMFY_API_KEY=你的Comfy API密钥
 
 设置后需要重启ComfyUI，然后在Nanobanana标签的“生成方式”中选择“ComfyUI原生节点”即可使用。
 
+### 使用 MOSS-Image
+
+ComfyUI 本体需要支持 MOSS-Image（请将 ComfyUI 更新到最新版）。请将以下模型放入 ComfyUI 的对应文件夹（权重可在 [Comfy-Org/MOSS-Image](https://huggingface.co/Comfy-Org/MOSS-Image) 等处获取）。
+
+- 扩散模型: `diffusion_models/` 中的 MOSS-Image Base 或 SFT
+- 文本编码器: `text_encoders/` 中的 Qwen3.5-9B（`qwen3.5_9b_*.safetensors`）
+- VAE: `vae/` 中的 `flux2-vae.safetensors`
+- LoRA（可选）: 用于快速生成的 DMD 8 步 / Turbo 4 步
+
+MOSS-Image 标签页顶部的状态显示"可用"即准备完毕。更新 `py/ccc.py` 后需要重启 ComfyUI。
+
 ### 使用 G'MIC
 
 在设置标签的"G'MIC设置"中指定 G'MIC Qt 可执行文件（`gmic_qt.exe`）的完整路径。保存后立即生效，无需重启 ComfyUI。
@@ -265,6 +290,7 @@ comfyui-comic-creator/
 │   │   ├── image-tab/           # Image标签专用工具（DrawTool/ShapeTool/FillTool/MaskTool等）
 │   │   ├── i18n.js              # 多语言词典（ja/en/zh）+ t()
 │   │   ├── nanobanana.js        # Nanobanana（Gemini API）联动
+│   │   ├── moss.js              # MOSS-Image（本地生成・布局编辑器）
 │   │   ├── auto-ai-client.js    # Auto标签页 LLM客户端（本地LLM / Gemini）
 │   │   ├── auto-story-core.js   # Auto标签页 脚本提示词与解析（不依赖DOM）
 │   │   ├── auto-decision.js     # Auto标签页 用决策模型推断对话框形状・分格重要度
@@ -286,6 +312,8 @@ comfyui-comic-creator/
 | GET | `/ccc` | SPA 入口 |
 | GET | `/api/ccc/refresh-assets` | 重新生成素材列表 |
 | POST | `/api/ccc/nanobanana/generate` | 生成 Nanobanana 图像 |
+| POST | `/api/ccc/moss/generate` | 生成 MOSS-Image 图像（本地） |
+| POST | `/api/ccc/moss/layout-prompt` | 生成 MOSS-Image 布局 JSON |
 | POST | `/api/ccc/auto/gemini-text` | Auto标签页的Gemini文本生成 |
 | POST | `/api/ccc/auto/unsloth-proxy` | Auto标签页的Unsloth转发（LLM・决策模型） |
 | POST | `/api/ccc/save-auto-image` | 保存Auto标签页生成的图像 |

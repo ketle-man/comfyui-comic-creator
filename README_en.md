@@ -87,6 +87,20 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 </details>
 
 <details>
+<summary><strong>MOSS-Image (local image generation with layout control)</strong></summary>
+
+- Generate locally from a dedicated tab with MOSS-Image (OpenMOSS, 5B DiT, Apache-2.0), which ComfyUI supports natively (no Comfy credits or external API key). Strong at rendering text, including Japanese
+- Three columns: **layout editor** on the left, settings in the middle (top tabs: Prompt / JSON / Model & Sampler; the "Target" group is collapsible), generate and result on the right
+- **Layout editor** — drag on the canvas to place Object (green), Character (pink), and Text (cyan) boxes (bboxes). Drag a box edge, its number, or the inside of the selected box to move it, and a corner to resize. You can also draw a new box over an unselected box (Shift+drag always draws)
+- **Text boxes** — type directly inside the box right after drawing it (finish with Escape / Ctrl+Enter, press twice quickly to edit again). Set the font size (px) and **horizontal / vertical** writing; the typed text becomes the box (bbox) size (approximate). Vertical text treats line breaks as columns (right to left)
+- "Import panels from current page" brings the Layout tab's panel frames in as Object boxes (the canvas switches to the page aspect ratio, about 2MP)
+- **Generation modes** — whole page (placed over the full page) / per panel (about 1MP from each panel aspect ratio, placed in the panel) / free size (generate only)
+- The sent prompt (MOSS-Image layout JSON) can be checked in the "JSON" tab and also edited and sent directly. Presets (standard 50 steps / light 25 steps / fast DMD 8-step and Turbo 4-step), Skip Layer Guidance, and LoRA are supported
+- Generated images are saved to ComfyUI's own `output/cc_moss` folder
+
+</details>
+
+<details>
 <summary><strong>Auto (AI manga auto-creation)</strong></summary>
 
 - Creates a **story and then a script** with AI from a theme and page count (assumes a person edits and finishes the result; independent of the Script tab as a new work)
@@ -182,6 +196,17 @@ COMFY_API_KEY=your-comfy-api-key
 
 Restart ComfyUI after setting it, then choose "ComfyUI native node" under "Engine" in the Nanobanana tab.
 
+### To use MOSS-Image
+
+Your ComfyUI must support MOSS-Image (update ComfyUI to the latest version). Place these models in the ComfyUI folders (weights are available at [Comfy-Org/MOSS-Image](https://huggingface.co/Comfy-Org/MOSS-Image) and similar).
+
+- Diffusion model: MOSS-Image Base or SFT in `diffusion_models/`
+- Text encoder: Qwen3.5-9B (`qwen3.5_9b_*.safetensors`) in `text_encoders/`
+- VAE: `flux2-vae.safetensors` in `vae/`
+- LoRA (optional): DMD 8-step / Turbo 4-step for fast generation
+
+You are set when the status at the top of the MOSS-Image tab shows "ready". Restart ComfyUI after updating `py/ccc.py`.
+
 ### To use G'MIC
 
 In the Settings tab's "G'MIC Settings", specify the full path to the G'MIC Qt executable (`gmic_qt.exe`). It takes effect immediately after saving — no ComfyUI restart required.
@@ -265,6 +290,7 @@ comfyui-comic-creator/
 │   │   ├── image-tab/           # Image-tab-specific tools (DrawTool/ShapeTool/FillTool/MaskTool, etc.)
 │   │   ├── i18n.js              # Multilingual dictionary (ja/en/zh) + t()
 │   │   ├── nanobanana.js        # Nanobanana (Gemini API) integration
+│   │   ├── moss.js              # MOSS-Image (local generation, layout editor)
 │   │   ├── auto-ai-client.js    # Auto tab LLM client (local LLM / Gemini)
 │   │   ├── auto-story-core.js   # Auto tab script prompts and parsing (DOM-free)
 │   │   ├── auto-decision.js     # Auto tab balloon shape / panel importance estimation with a decision model
@@ -286,6 +312,8 @@ comfyui-comic-creator/
 | GET | `/ccc` | SPA entry point |
 | GET | `/api/ccc/refresh-assets` | Regenerate the asset list |
 | POST | `/api/ccc/nanobanana/generate` | Generate a Nanobanana image |
+| POST | `/api/ccc/moss/generate` | Generate a MOSS-Image image (local) |
+| POST | `/api/ccc/moss/layout-prompt` | Build the MOSS-Image layout JSON |
 | POST | `/api/ccc/auto/gemini-text` | Gemini text generation for the Auto tab |
 | POST | `/api/ccc/auto/unsloth-proxy` | Unsloth relay for the Auto tab (LLM and decision model) |
 | POST | `/api/ccc/save-auto-image` | Save an image generated in the Auto tab |

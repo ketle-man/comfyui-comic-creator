@@ -87,6 +87,20 @@ ComfyUI 上で動作するマンガページ作成 SPA（シングルページ�
 </details>
 
 <details>
+<summary><strong>MOSS-Image（ローカル画像生成・レイアウト指定）</strong></summary>
+
+- ComfyUI 本体がネイティブ対応した画像生成モデル MOSS-Image（OpenMOSS、5B DiT、Apache-2.0）を専用タブからローカルで生成（Comfy クレジット・外部 API キー不要）。日本語を含む文字の描画に強い
+- 3 カラム構成: 左＝**レイアウトエディタ**、中＝設定（プロンプト / JSON / モデル・サンプラー の上部タブ。「生成対象」は折りたたみ可）、右＝生成・結果
+- **レイアウトエディタ** — キャンバスをドラッグして物体（緑）・キャラ（ピンク）・文字（水色）の枠（bbox）を配置。枠の縁・番号・選択中の枠の内側のドラッグで移動、角で拡縮。未選択の枠の上でもドラッグで新しい枠を描ける（Shift+ドラッグは常に描画）
+- **文字枠** — 描いた直後に枠内へ直接入力（Escape / Ctrl+Enter で確定、すばやく 2 回押して再編集）。フォントサイズ（px）と**横書き／縦書き**を指定でき、入力した文字の大きさが枠（bbox）になる（近似）。縦書きは改行を列（右→左）として扱う
+- 「現在のページのコマを取り込む」でレイアウトタブのコマ枠を物体の枠として取り込み（キャンバスはページの縦横比・約 2MP に自動調整）
+- **生成モード** — 1 頁まるごと（ページ全面へ配置）／コマ単位（各コマの縦横比で約 1MP 生成してコマへ配置）／自由サイズ（生成のみ）
+- 送信されるプロンプト（MOSS-Image のレイアウト JSON）を「JSON」タブで確認でき、直接編集して送信も可能。プリセット（標準 50step／軽量 25step／高速 DMD 8step・Turbo 4step）・Skip Layer Guidance・LoRA に対応
+- 生成画像は ComfyUI 本体の `output/cc_moss` フォルダへ保存
+
+</details>
+
+<details>
 <summary><strong>Auto（AI マンガ自動作成）</strong></summary>
 
 - お題とページ数から、AI で**ストーリー → 脚本**の 2 段階で自動作成（作成後に人が編集して仕上げる前提。既存のスクリプトタブとは独立した新規作品）
@@ -182,6 +196,17 @@ COMFY_API_KEY=あなたのComfy APIキー
 
 設定後は ComfyUI の再起動が必要です。Nanobanana タブの「生成方式」で「ComfyUIネイティブノード」を選ぶと使えます。
 
+### MOSS-Image を使う場合
+
+ComfyUI 本体が MOSS-Image に対応している必要があります（ComfyUI を最新に更新）。次のモデルを ComfyUI の各フォルダへ配置してください（重みは [Comfy-Org/MOSS-Image](https://huggingface.co/Comfy-Org/MOSS-Image) など）。
+
+- 拡散モデル: `diffusion_models/` に MOSS-Image の Base または SFT
+- テキストエンコーダ: `text_encoders/` に Qwen3.5-9B（`qwen3.5_9b_*.safetensors`）
+- VAE: `vae/` に `flux2-vae.safetensors`
+- LoRA（任意）: 高速生成用の DMD 8step / Turbo 4step
+
+MOSS-Image タブ上部のステータスが「利用可能」になれば準備完了です。`py/ccc.py` を更新した場合は ComfyUI の再起動が必要です。
+
 ### G'MIC を使う場合
 
 設定タブの「G'MIC設定」で、G'MIC Qt 実行ファイル（`gmic_qt.exe`）のフルパスを指定してください。保存後すぐに反映され、ComfyUI の再起動は不要です。
@@ -265,6 +290,7 @@ comfyui-comic-creator/
 │   │   ├── image-tab/         # Imageタブ専用ツール（DrawTool/ShapeTool/FillTool/MaskTool 等）
 │   │   ├── i18n.js            # 多言語辞書（ja/en/zh）+ t()
 │   │   ├── nanobanana.js      # Nanobanana（Gemini API）連携
+│   │   ├── moss.js            # MOSS-Image（ローカル生成・レイアウトエディタ）
 │   │   ├── auto-ai-client.js  # Autoタブ LLM クライアント（ローカル LLM / Gemini）
 │   │   ├── auto-story-core.js # Autoタブ 脚本のプロンプト生成・パース（DOM 非依存）
 │   │   ├── auto-decision.js   # Autoタブ 意思決定モデルでフキダシの形・コマの重要度を推定
@@ -286,6 +312,8 @@ comfyui-comic-creator/
 | GET      | `/ccc`                                | SPA エントリポイント         |
 | GET      | `/api/ccc/refresh-assets`             | アセット一覧の再生成         |
 | POST     | `/api/ccc/nanobanana/generate`        | Nanobanana 画像生成          |
+| POST     | `/api/ccc/moss/generate`              | MOSS-Image 画像生成（ローカル） |
+| POST     | `/api/ccc/moss/layout-prompt`         | MOSS-Image レイアウト JSON の生成 |
 | POST     | `/api/ccc/auto/gemini-text`           | Auto タブの Gemini テキスト生成 |
 | POST     | `/api/ccc/auto/unsloth-proxy`         | Auto タブの Unsloth 中継（LLM・意思決定モデル） |
 | POST     | `/api/ccc/save-auto-image`            | Auto タブの生成画像保存      |

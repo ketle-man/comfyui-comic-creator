@@ -24,7 +24,7 @@ const _HELP_DATA = [
         sections: [
             { heading: 'ComfyUI Comic Creator について', body: 'ComfyUI 上で動作するマンガページ作成アプリです。作品（ページグループ）単位でページを管理し、テンプレートからページを作成してコマに画像・フキダシ・テキストを配置し、JPEG/PNG/WebP/SVG/PDF/EPUB形式で出力できます。' },
             { heading: '基本ワークフロー', body: '<ol><li>ページタブ「作品管理」で作品名とサイズを入力して「新規作成」（レイアウトタブへ自動遷移します）。</li><li>レイアウトタブ左のアセットパネル「テンプレート」からテンプレートを選び「ページとして挿入」。</li><li>コマに画像・フキダシ・テキストを配置して編集し、「保存」。</li><li>◀▶のページ送りとテンプレート挿入を繰り返して複数ページを作成。</li><li>ページタブ「出力」（または作品管理の「出力」ボタン）で形式・範囲を指定して保存。</li></ol>' },
-            { heading: '画面構成', body: '<ul><li><b>タブバー</b>: ページ / レイアウト / Image / フォント / workflow studio / Nanobanana / Auto / スクリプト / 設定 / ヘルプ。</li><li><b>アセットパネル</b>（左サイドバー）: タブに応じて表示されるタブ構成が切り替わります。レイアウトタブ＝A/P/T/F/I（素材・ページ・テンプレート・フォントスタイル/プリセット・画像プロジェクト）、Imageタブ＝A/F/I（素材・フォント・画像プロジェクト）、スクリプトタブ＝S（保存済み作品・ページ作品）。</li><li><b>ツールペイン</b>（アセットパネルの右隣）: ドロー/フキダシ/テキスト/画像/動画/マスク/3Dポーズ/3Dテキストを切り替えるボタン列（レイアウトタブでのみ表示）。</li><li><b>レイヤーパネル</b>（レイアウトタブ右）: オブジェクトの重ね順・グループ・表示サイズの管理。</li></ul>' },
+            { heading: '画面構成', body: '<ul><li><b>タブバー</b>: ページ / レイアウト / Image / フォント / workflow studio / Nanobanana / MOSS-Image / Auto / スクリプト / 設定 / ヘルプ。</li><li><b>アセットパネル</b>（左サイドバー）: タブに応じて表示されるタブ構成が切り替わります。レイアウトタブ＝A/P/T/F/I（素材・ページ・テンプレート・フォントスタイル/プリセット・画像プロジェクト）、Imageタブ＝A/F/I（素材・フォント・画像プロジェクト）、スクリプトタブ＝S（保存済み作品・ページ作品）。</li><li><b>ツールペイン</b>（アセットパネルの右隣）: ドロー/フキダシ/テキスト/画像/動画/マスク/3Dポーズ/3Dテキストを切り替えるボタン列（レイアウトタブでのみ表示）。</li><li><b>レイヤーパネル</b>（レイアウトタブ右）: オブジェクトの重ね順・グループ・表示サイズの管理。</li></ul>' },
         ],
     },
     {
@@ -85,6 +85,24 @@ const _HELP_DATA = [
             { heading: '生成画像の保存先', body: '生成した画像はComfyUI本体のoutputフォルダ配下の <code>cc_nanobanana</code> フォルダ（例: <code>ComfyUI/output/cc_nanobanana</code>）に自動保存されます。フォルダが存在しない場合はComfyUI起動時に自動作成されます。' },
             { heading: '生成方式（Gemini API / ComfyUIネイティブノード）', body: '<ul><li>「生成方式」で、Gemini API（自分のAPIキー。従来方式）とComfyUIネイティブノード（ComfyUI本体のNano Banana 2.1ノード。Comfyクレジットを消費）を切り替えられます。設定タブの「Nanobanana 設定」でも同じ設定を切り替えられ、半自動マンガ・Autoタブ（画像生成エンジンがGeminiのとき）の生成にも共通で適用されます。</li><li>ネイティブノードの利用には、プラグインフォルダ直下の<code>.env</code>に<code>COMFY_API_KEY=...</code>（platform.comfy.orgで発行）が必要です。設定後はComfyUIを再起動してください。</li><li>モデルは Gemini Nano Banana 2.1 / Nano Banana 2 / Nano Banana 2 Lite（Liteは1Kのみ）です。Nano Banana Pro（gemini-3-pro-image）は未対応で、ネイティブ方式のときに選ぶとエラーになります。ネガティブプロンプト欄の内容は、プロンプト末尾に<code>NEGATIVE_PROMPT:</code>として追記されます。</li><li>画像はComfyUIの<code>output/cc_nanobanana_native/</code>に、プロンプトと設定を埋め込んだPNGとして保存されるため、履歴への記録は不要です（Workflow Studioのメタデータ／ギャラリーで確認できます）。</li><li>seedはGeminiへは送られずComfyUIのキャッシュキーとして働くため、同じ設定のまま再実行しても新しい画像にはならずキャッシュが返ります（課金もされません）。</li></ul>' },
             { heading: '生成履歴', body: '<ul><li>基本設定の「生成時に自動で履歴に記録」をONにすると、画像を生成するたびに日時・モデル・解像度・出力解像度・シード・ファイル名・プロンプトを<code>output/cc_nanobanana/history.jsonl</code>へ自動で追記します（設定はブラウザに記憶されます）。</li><li>OFFのままでも、結果プレビュー欄の「履歴に記録」ボタンで、任意の生成結果だけを選んで記録できます。</li><li>「履歴」サブタブで内容を閲覧できます（読み取り専用。「更新」ボタンで再読込）。</li><li>ファイルはJSON Lines形式（1行＝1件のJSON）です。記録はアプリからは追記のみで、編集・削除はアプリ内では行えません。該当行を探してテキストエディタで直接削除・編集してください。</li></ul>' },
+        ],
+    },
+    {
+        id: 'moss',
+        label: 'MOSS-Image',
+        tab: 'moss',
+        kana: 'mossimage',
+        sections: [
+            { heading: '概要', body: 'ComfyUI本体がネイティブ対応した画像生成モデル「MOSS-Image」（OpenMOSS、5B DiT）を、ローカルのComfyUIで実行する専用タブです。Comfyクレジットや外部APIキーは不要です。日本語を含む文字の描画に強く、物体・キャラ・文字の位置をバウンディングボックス（bbox）で指定して生成できます。' },
+            { heading: '準備', body: '<ul><li>ComfyUI本体がMOSS-Imageに対応している必要があります（最新版へ更新）。</li><li>ComfyUIのフォルダへ次のモデルを配置します: 拡散モデル（<code>diffusion_models</code> のMOSS-Image Base/SFT）、テキストエンコーダ（<code>text_encoders</code> のQwen3.5-9B）、VAE（<code>vae</code> の <code>flux2-vae</code>）。高速生成用のLoRA（DMD 8step・Turbo 4step）は任意です。</li><li>タブ上部のステータスが「利用可能」になれば準備完了です。ComfyUI側にモデルを追加したら「モデル一覧を再読込」を押します。</li></ul>' },
+            { heading: '画面構成', body: '<ul><li><b>左</b>: レイアウトエディタ（常時表示）。</li><li><b>中</b>: 設定パネル。上部タブは「プロンプト」「JSON」「モデル・サンプラー」。</li><li><b>右</b>: 生成ボタン・シード・結果・配置ボタン。</li></ul>プロンプトタブ最上段の「生成対象」は、見出しをクリックして折りたためます（開閉状態は保存されます）。' },
+            { heading: 'レイアウトエディタ', body: '<ul><li>「描画種別」の <b>物体（緑）／キャラ（ピンク）／文字（水色）</b> を選び、キャンバスをドラッグして枠（bbox）を描きます。要素は「背景→前景」の順で、前面へ／背面へ／削除ボタンで入れ替え・削除できます。</li><li>枠の縁・番号・ハンドル、または選択中の枠の内側をドラッグすると移動、角のハンドルで拡縮します。</li><li><b>選択されていない枠の内側をドラッグすると、その上に新しい枠を描けます</b>（コマの上にセリフ枠を置けます）。動かさずにクリックすると枠を選択します。Shift+ドラッグは常に新しい枠を描き、Deleteキーで選択中の枠を削除します。</li><li>枠を選ぶとプロンプトタブの「選択中の要素」で種別・説明（caption。英語推奨）を編集できます。</li><li>「全クリア」で全要素を削除します。</li></ul>' },
+            { heading: '文字枠（入力・フォントサイズ・縦書き）', body: '<ul><li>文字枠は<b>描いた直後に枠の中へ直接入力</b>できます。Escape／Ctrl+Enter／枠の外のクリックで確定し、Enterは改行です。文字枠をすばやく2回押すと再編集できます。</li><li>「選択中の要素」の<b>フォントサイズ（画像上のpx）</b>を指定すると、入力した文字の大きさが枠になります（近似: 全角1em・半角0.55em・行間1.2）。枠を手でリサイズすると、その枠に収まる最大のフォントサイズへ更新されます。</li><li><b>縦書き</b>: 描画種別の「文字」の右隣の <b>横書き／縦書き</b> トグルは、これから描く文字枠の書字方向です。描いた後は「選択中の要素」の「書字方向」で切り替えます。縦書きは改行を列（右→左）として扱い、送信JSONのcaptionに縦書きの指示が自動で付きます。</li></ul>' },
+            { heading: 'コマの取り込み', body: '「現在のページのコマを取り込む」で、レイアウトタブで開いているページのコマ枠を「物体」の枠として取り込みます。キャンバスはページの縦横比（約2MP）に自動で変わり、captionにはコマの位置（Top-left panel. など）が入ります。既存のレイアウトは置き換えの確認が出ます。' },
+            { heading: '生成モード', body: '<ul><li><b>1頁まるごと</b>: キャンバス全体を1枚で生成し、ページ全面（オーバーレイ）へ配置します。</li><li><b>コマ単位</b>: 選んだコマごとに、コマの縦横比から約1MPで生成し、そのコマへ配置します。コマごとの内容（英語推奨）を入力できます。</li><li><b>自由サイズ</b>: 指定サイズで生成のみ行います。</li></ul>結果が複数枚のときはサムネイルで選び、「選択中の画像を…配置」で配置します。' },
+            { heading: 'JSONタブ', body: '実際に送信されるプロンプトを表示します。レイアウトの要素があるとMOSS-Imageのレイアウト形式（<code>summary</code>／<code>items</code>／中心原点の <code>yxyx</code> のbbox）のJSONになり、要素がなければ通常のプロンプト文字列です。「JSONを直接編集して送信する」をONにすると、手書きのJSONをそのまま送ります（レイアウトは無視）。' },
+            { heading: 'モデル・サンプラー', body: '<ul><li>プリセット: 標準（50step・CFG 3・euler）／軽量（25step・CFG 2.5・er_sde）／高速 DMD 8step／高速 Turbo 4step（LoRA・CFG 1）。</li><li>UNet・テキストエンコーダ・VAE・LoRA（強度）・Steps・CFG・Sampler・Scheduler・Skip Layer Guidance（CFGが1より大きいとき向け）を個別に変更できます。</li></ul>' },
+            { heading: '保存先と注意', body: '<ul><li>生成画像はComfyUI本体の <code>output/cc_moss</code> フォルダへ保存されます。</li><li>設定とレイアウトはブラウザに保存され、リロード後も復元されます。</li><li>日本語の文字は公式の対応言語（英語・中国語）外のため、描画の精度は確認しながら使ってください。画像編集（I2I）には対応していません。</li><li>生成前に、設定タブの「VRAM調整」（Ollamaのモデルのアンロード）が有効なら自動で実行されます。</li></ul>' },
         ],
     },
     {
@@ -412,7 +430,7 @@ const _HELP_I18N = {
             sections: [
                 { heading: 'About ComfyUI Comic Creator', body: 'A manga page creation app that runs on top of ComfyUI. Pages are managed in units of "works" (page groups); you create pages from templates, place images, speech balloons, and text into panels, and export as JPEG/PNG/WebP/SVG/PDF/EPUB.' },
                 { heading: 'Basic Workflow', body: '<ol><li>In the Page tab "Work Management", enter a work name and size, then click "New" (this automatically switches to the Layout tab).</li><li>Choose a template from the "Template" asset panel on the left of the Layout tab and click "Insert as Page".</li><li>Place and edit images, speech balloons, and text in the panels, then click "Save".</li><li>Repeat page navigation (◀▶) and template insertion to create multiple pages.</li><li>In the Page tab "Export" (or the "Export" button in Work Management), specify the format and range, then save.</li></ol>' },
-                { heading: 'Screen Layout', body: '<ul><li><b>Tab bar</b>: Page / Layout / Image / Font / workflow studio / Nanobanana / Auto / Script / Settings / Help.</li><li><b>Asset panel</b> (left sidebar): The set of sub-tabs shown depends on the active tab. Layout tab = A/P/T/F/I (Assets / Pages / Templates / Font styles &amp; presets / Image projects), Image tab = A/F/I (Assets / Fonts / Image projects), Script tab = S (Saved works / Page works).</li><li><b>Tool pane</b> (next to the asset panel): A column of buttons for switching between Draw / Balloon / Text / Image / Video / Mask / 3D Pose / 3D Text (shown only in the Layout tab).</li><li><b>Layer panel</b> (right side of the Layout tab): Manages stacking order, groups, and display size of objects.</li></ul>' },
+                { heading: 'Screen Layout', body: '<ul><li><b>Tab bar</b>: Page / Layout / Image / Font / workflow studio / Nanobanana / MOSS-Image / Auto / Script / Settings / Help.</li><li><b>Asset panel</b> (left sidebar): The set of sub-tabs shown depends on the active tab. Layout tab = A/P/T/F/I (Assets / Pages / Templates / Font styles &amp; presets / Image projects), Image tab = A/F/I (Assets / Fonts / Image projects), Script tab = S (Saved works / Page works).</li><li><b>Tool pane</b> (next to the asset panel): A column of buttons for switching between Draw / Balloon / Text / Image / Video / Mask / 3D Pose / 3D Text (shown only in the Layout tab).</li><li><b>Layer panel</b> (right side of the Layout tab): Manages stacking order, groups, and display size of objects.</li></ul>' },
             ],
         },
         'page-template': {
@@ -485,6 +503,21 @@ const _HELP_I18N = {
                 { heading: 'Overview', body: 'Embeds and displays the ComfyUI-Workflow-Studio gallery within this tab (requires ComfyUI-Workflow-Studio to be installed).' },
                 { heading: 'Operations', body: '<ul><li>The "ws Reload" button in the top navigation reloads the embedded view.</li><li>The "ws Open in New Tab" button opens Workflow Studio directly in a separate tab.</li></ul>' },
                 { heading: 'If Nothing Is Displayed', body: 'If the ComfyUI-Workflow-Studio custom node is not installed, or ComfyUI is not running, a "Not found" message is shown. Please install the custom node and restart ComfyUI.' },
+            ],
+        },
+        moss: {
+            label: 'MOSS-Image',
+            sections: [
+                { heading: 'Overview', body: 'A dedicated tab that runs MOSS-Image (OpenMOSS, 5B DiT), which ComfyUI supports natively, on your local ComfyUI. No Comfy credits or external API key are needed. It is strong at rendering text, including Japanese, and lets you specify the position of objects, characters, and text with bounding boxes (bboxes).' },
+                { heading: 'Setup', body: '<ul><li>Your ComfyUI must support MOSS-Image (update to the latest version).</li><li>Place these models in the ComfyUI folders: a diffusion model (MOSS-Image Base/SFT in <code>diffusion_models</code>), a text encoder (Qwen3.5-9B in <code>text_encoders</code>), and a VAE (<code>flux2-vae</code> in <code>vae</code>). LoRAs for fast generation (DMD 8-step, Turbo 4-step) are optional.</li><li>When the status at the top of the tab shows "ready", you are set. After adding models on the ComfyUI side, press "Reload model lists".</li></ul>' },
+                { heading: 'Screen Layout', body: '<ul><li><b>Left</b>: the layout editor (always visible).</li><li><b>Center</b>: the settings panel, with the tabs "Prompt", "JSON", and "Model / Sampler".</li><li><b>Right</b>: the Generate button, seed, result, and place button.</li></ul>The "Target" group at the top of the Prompt tab can be collapsed by clicking its heading (the state is remembered).' },
+                { heading: 'Layout Editor', body: '<ul><li>Choose a draw type, <b>Object (green) / Character (pink) / Text (cyan)</b>, then drag on the canvas to draw a box (bbox). Items are ordered background to foreground; use Bring forward / Send backward / Delete to reorder or remove them.</li><li>Drag a box edge, its number, a handle, or the inside of the selected box to move it; drag a corner handle to resize.</li><li><b>Dragging inside an unselected box draws a new box on top of it</b> (so you can put a text box over a panel). A click without moving selects the box. Shift+drag always draws a new box, and the Delete key removes the selected box.</li><li>When a box is selected, edit its type and caption (English recommended) under "Selected item" in the Prompt tab.</li><li>"Clear all" removes every item.</li></ul>' },
+                { heading: 'Text Boxes (Typing, Font Size, Vertical)', body: '<ul><li>For a text box, <b>type directly inside the box right after drawing it</b>. Finish with Escape, Ctrl+Enter, or a click outside; Enter inserts a line break. Press the text box twice quickly to edit it again.</li><li>Set the <b>font size (px on the image)</b> under "Selected item" and the box becomes the size of the typed text (approximate: full-width 1em, half-width 0.55em, line height 1.2). Resizing the box by hand updates the font size to the largest that fits.</li><li><b>Vertical text</b>: the <b>Horizontal / Vertical</b> toggle to the right of the "Text" draw type sets the writing direction of text boxes you draw next. For an existing box, change "Writing" under "Selected item". Vertical text treats line breaks as columns (right to left), and an instruction for vertical writing is added to the caption of the sent JSON automatically.</li></ul>' },
+                { heading: 'Importing Panels', body: '"Import panels from current page" brings the panel frames of the page open in the Layout tab in as Object boxes. The canvas switches to the page aspect ratio (about 2MP) and the captions get the panel position (for example Top-left panel.). You are asked to confirm before an existing layout is replaced.' },
+                { heading: 'Generation Modes', body: '<ul><li><b>Whole page</b>: generates the whole canvas as one image and places it over the full page (overlay).</li><li><b>Per panel</b>: generates each selected panel at about 1MP from its aspect ratio and places it in that panel. You can enter content for each panel (English recommended).</li><li><b>Free size</b>: generates at the specified size only.</li></ul>When there are several results, pick one from the thumbnails and place it with the place button.' },
+                { heading: 'JSON Tab', body: 'Shows the prompt that is actually sent. With layout items it is JSON in the MOSS-Image layout format (<code>summary</code> / <code>items</code> / center-origin <code>yxyx</code> bboxes); with no items it is the plain prompt text. Turn on "Edit the JSON directly and send it" to send hand-written JSON as is (the layout is ignored).' },
+                { heading: 'Model / Sampler', body: '<ul><li>Presets: Standard (50 steps, CFG 3, euler) / Light (25 steps, CFG 2.5, er_sde) / Fast DMD 8-step / Fast Turbo 4-step (LoRA, CFG 1).</li><li>You can change the UNet, text encoder, VAE, LoRA (strength), Steps, CFG, Sampler, Scheduler, and Skip Layer Guidance (for CFG above 1) individually.</li></ul>' },
+                { heading: 'Save Location and Notes', body: '<ul><li>Generated images are saved to the <code>output/cc_moss</code> folder under ComfyUI.</li><li>Settings and the layout are saved in the browser and restored after a reload.</li><li>Japanese is outside the officially supported languages (English and Chinese), so check the rendering quality as you go. Image editing (I2I) is not supported.</li><li>Before generating, "VRAM adjustment" (unloading Ollama models) in the Settings tab runs automatically when enabled.</li></ul>' },
             ],
         },
         auto: {
@@ -698,7 +731,7 @@ const _HELP_I18N = {
             sections: [
                 { heading: '关于 ComfyUI Comic Creator', body: '一款运行在 ComfyUI 之上的漫画页面制作应用。以"作品"（页面组）为单位管理页面，可从模板创建页面，在分格中放置图像、对话气泡和文字，并可导出为 JPEG/PNG/WebP/SVG/PDF/EPUB 格式。' },
                 { heading: '基本工作流程', body: '<ol><li>在页面标签页的"作品管理"中输入作品名称和尺寸，点击"新建"（会自动跳转到排版标签页）。</li><li>在排版标签页左侧的素材面板"模板"中选择模板，点击"作为页面插入"。</li><li>在分格中放置并编辑图像、对话气泡和文字，然后点击"保存"。</li><li>重复使用◀▶翻页和插入模板来创建多个页面。</li><li>在页面标签页的"输出"（或作品管理中的"输出"按钮）中指定格式和范围后保存。</li></ol>' },
-                { heading: '界面结构', body: '<ul><li><b>标签栏</b>：页面 / 排版 / Image / 字体 / workflow studio / Nanobanana / Auto / 脚本 / 设置 / 帮助。</li><li><b>素材面板</b>（左侧边栏）：显示的子标签会根据当前标签切换。排版标签 = A/P/T/F/I（素材・页面・模板・字体样式/预设・图像项目），Image标签 = A/F/I（素材・字体・图像项目），脚本标签 = S（已保存的作品・页面作品）。</li><li><b>工具面板</b>（素材面板右侧）：用于切换绘制/对话气泡/文字/图像/视频/蒙版/3D姿势/3D文字的按钮列（仅在排版标签中显示）。</li><li><b>图层面板</b>（排版标签右侧）：管理对象的层叠顺序、分组和显示尺寸。</li></ul>' },
+                { heading: '界面结构', body: '<ul><li><b>标签栏</b>：页面 / 排版 / Image / 字体 / workflow studio / Nanobanana / MOSS-Image / Auto / 脚本 / 设置 / 帮助。</li><li><b>素材面板</b>（左侧边栏）：显示的子标签会根据当前标签切换。排版标签 = A/P/T/F/I（素材・页面・模板・字体样式/预设・图像项目），Image标签 = A/F/I（素材・字体・图像项目），脚本标签 = S（已保存的作品・页面作品）。</li><li><b>工具面板</b>（素材面板右侧）：用于切换绘制/对话气泡/文字/图像/视频/蒙版/3D姿势/3D文字的按钮列（仅在排版标签中显示）。</li><li><b>图层面板</b>（排版标签右侧）：管理对象的层叠顺序、分组和显示尺寸。</li></ul>' },
             ],
         },
         'page-template': {
@@ -771,6 +804,21 @@ const _HELP_I18N = {
                 { heading: '概述', body: '在此标签内嵌入显示ComfyUI-Workflow-Studio的图库（需要安装ComfyUI-Workflow-Studio）。' },
                 { heading: '操作', body: '<ul><li>顶部导航的"ws重新加载"按钮可重新加载内嵌显示内容。</li><li>"ws在新标签中打开"按钮可在单独的标签中直接打开Workflow Studio。</li></ul>' },
                 { heading: '未显示内容时', body: '若未安装ComfyUI-Workflow-Studio自定义节点，或ComfyUI未启动，会显示"未找到"的提示信息。请安装该自定义节点并重启ComfyUI。' },
+            ],
+        },
+        moss: {
+            label: 'MOSS-Image',
+            sections: [
+                { heading: '概述', body: '这是在本地 ComfyUI 上运行 MOSS-Image（OpenMOSS，5B DiT，ComfyUI 原生支持）的专用标签页。无需 Comfy 积分或外部 API 密钥。它擅长渲染包括日文在内的文字，可以用边界框（bbox）指定物体、角色和文字的位置来生成图像。' },
+                { heading: '准备', body: '<ul><li>ComfyUI 本体需要支持 MOSS-Image（请更新到最新版）。</li><li>请将以下模型放入 ComfyUI 的文件夹: 扩散模型（<code>diffusion_models</code> 中的 MOSS-Image Base/SFT）、文本编码器（<code>text_encoders</code> 中的 Qwen3.5-9B）、VAE（<code>vae</code> 中的 <code>flux2-vae</code>）。用于快速生成的 LoRA（DMD 8步、Turbo 4步）为可选。</li><li>标签页顶部的状态显示"可用"即准备完毕。在 ComfyUI 一侧添加模型后，请点击"重新加载模型列表"。</li></ul>' },
+                { heading: '界面结构', body: '<ul><li><b>左侧</b>: 布局编辑器（始终显示）。</li><li><b>中间</b>: 设置面板，顶部标签为"提示词""JSON""模型・采样器"。</li><li><b>右侧</b>: 生成按钮、种子、结果和放置按钮。</li></ul>提示词标签页最上方的"生成对象"可点击标题折叠（状态会被保存）。' },
+                { heading: '布局编辑器', body: '<ul><li>选择绘制类型 <b>物体（绿）/ 角色（粉）/ 文字（青）</b>，在画布上拖动绘制框（bbox）。元素按"背景→前景"排列，可用"置于前面/置于后面/删除"调整或删除。</li><li>拖动框的边缘、编号、控制点，或选中框的内部可移动，拖动角上的控制点可缩放。</li><li><b>在未选中的框内部拖动，会在其上绘制新框</b>（可在分格上放置台词框）。不移动而点击则选中该框。Shift+拖动始终绘制新框，Delete 键删除选中的框。</li><li>选中框后，可在提示词标签页的"选中的元素"中编辑类型和描述（caption，建议使用英文）。</li><li>"全部清除"会删除所有元素。</li></ul>' },
+                { heading: '文字框（输入・字号・竖排）', body: '<ul><li>文字框在<b>绘制后可直接在框内输入</b>。按 Escape、Ctrl+Enter 或点击框外即可确定，Enter 为换行。快速连续点击两次文字框可再次编辑。</li><li>在"选中的元素"中指定<b>字号（图像上的 px）</b>后，输入的文字大小就是框的大小（近似: 全角 1em、半角 0.55em、行距 1.2）。手动缩放框时，字号会更新为能放入该框的最大值。</li><li><b>竖排</b>: 绘制类型"文字"右侧的<b>横排/竖排</b>开关，决定接下来绘制的文字框的书写方向。绘制之后请在"选中的元素"的"书写方向"中切换。竖排将换行视为列（从右到左），发送的 JSON 的 caption 中会自动加入竖排指示。</li></ul>' },
+                { heading: '导入分格', body: '"导入当前页面的分格"会把布局标签页中打开的页面的分格框作为"物体"框导入。画布会自动调整为页面的宽高比（约 2MP），caption 中会写入分格位置（如 Top-left panel.）。替换已有布局前会显示确认。' },
+                { heading: '生成模式', body: '<ul><li><b>整页</b>: 一次生成整个画布，并铺满整页（叠加层）放置。</li><li><b>按分格</b>: 对选中的每个分格，按其宽高比以约 1MP 生成并放入该分格。可输入每个分格的内容（建议使用英文）。</li><li><b>自由尺寸</b>: 仅按指定尺寸生成。</li></ul>结果有多张时，从缩略图中选择，再用放置按钮放置。' },
+                { heading: 'JSON 标签页', body: '显示实际发送的提示词。有布局元素时是 MOSS-Image 布局格式（<code>summary</code> / <code>items</code> / 以中心为原点的 <code>yxyx</code> bbox）的 JSON，没有元素时是普通提示词文本。开启"直接编辑 JSON 并发送"后，将原样发送手写的 JSON（忽略布局）。' },
+                { heading: '模型・采样器', body: '<ul><li>预设: 标准（50步、CFG 3、euler）/ 轻量（25步、CFG 2.5、er_sde）/ 快速 DMD 8步 / 快速 Turbo 4步（LoRA、CFG 1）。</li><li>可单独更改 UNet、文本编码器、VAE、LoRA（强度）、Steps、CFG、Sampler、Scheduler、Skip Layer Guidance（适用于 CFG 大于 1 时）。</li></ul>' },
+                { heading: '保存位置与注意事项', body: '<ul><li>生成的图像保存到 ComfyUI 本体的 <code>output/cc_moss</code> 文件夹。</li><li>设置和布局保存在浏览器中，刷新后会恢复。</li><li>日文不在官方支持的语言（英语和中文）之内，请边使用边确认渲染效果。不支持图像编辑（I2I）。</li><li>生成前，若已启用设置标签页的"VRAM 调整"（卸载 Ollama 模型），会自动执行。</li></ul>' },
             ],
         },
         auto: {
@@ -997,7 +1045,7 @@ const _HELP_ORDER = [
     'about',
     'page-work', 'page-template', 'page-export',
     'layout', 'image-tab', 'assetpanel',
-    'font', 'wfmgallery', 'nanobanana', 'auto', 'project', 'settings',
+    'font', 'wfmgallery', 'nanobanana', 'moss', 'auto', 'project', 'settings',
     'appendix-svg-template', 'appendix-balloon', 'appendix-inkscape-template', 'appendix-inkscape-balloon',
 ];
 
