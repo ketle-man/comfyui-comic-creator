@@ -165,6 +165,15 @@ async function getActivePageSvgSize() {
 const selItem = () => S.items.find(i => i.id === S.selId) || null;
 const drawType = () => document.querySelector('#moss-draw-type .moss-type-btn.active')?.dataset.type || 'object';
 
+// 「生成対象」の折りたたみ状態を保存する（既定は開く）
+const COLLAPSE_KEY = 'ccc_moss_target_open';
+function initTargetCollapse() {
+    const d = $('moss-target-details');
+    if (!d) return;
+    try { if (localStorage.getItem(COLLAPSE_KEY) === '0') d.open = false; } catch (_) { /* ignore */ }
+    d.addEventListener('toggle', () => { try { localStorage.setItem(COLLAPSE_KEY, d.open ? '1' : '0'); } catch (_) { /* ignore */ } });
+}
+
 function initDrawTypeButtons() {
     const btns = [...document.querySelectorAll('#moss-draw-type .moss-type-btn')];
     btns.forEach(b => b.addEventListener('click', () => btns.forEach(x => x.classList.toggle('active', x === b))));
@@ -800,6 +809,7 @@ async function initMossTabOnce() {
     initCanvasInteraction();
     initItemProps();
     initDrawTypeButtons();
+    initTargetCollapse();
     await loadModelLists(saved);
 
     if (saved) {
