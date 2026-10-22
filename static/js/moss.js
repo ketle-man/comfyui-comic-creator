@@ -296,6 +296,7 @@ function applyLabel(label, it) {
     const resetLayout = () => {
         label.style.left = label.style.top = label.style.right = label.style.bottom = label.style.lineHeight = '';
         label.style.display = label.style.alignItems = label.style.justifyContent = label.style.textAlign = label.style.padding = '';
+        label.style.whiteSpace = label.style.overflowWrap = '';
         label.style.writingMode = label.style.textOrientation = '';
     };
     resetLayout();
@@ -310,6 +311,8 @@ function applyLabel(label, it) {
             // 枠が文字より大きい（フキダシの輪郭など）: 枠の中央に文字を置く
             label.style.left = label.style.top = label.style.right = label.style.bottom = '0';
             label.style.display = 'flex';
+            label.style.whiteSpace = 'pre-wrap';        // 枠の幅で折り返す（MOSS-Imageも枠の中で文字を折り返す）
+            label.style.overflowWrap = 'anywhere';
             if (it.src === 'text') {
                 // 取り込んだ単独テキスト: 枠は実測した文字の範囲（＋余白）なので、左上（縦書きは右上）から置く
                 label.style.alignItems = label.style.justifyContent = 'flex-start';
