@@ -14,7 +14,7 @@ const STORE_KEY = 'ccc_moss_v1';
 const SUBTAB_KEY = 'ccc_moss_subtab';
 const FIELD_IDS = ['moss-prompt', 'moss-negative', 'moss-mode', 'moss-size-preset', 'moss-width', 'moss-height', 'moss-batch',
     'moss-unet', 'moss-clip', 'moss-vae', 'moss-lora', 'moss-lora-strength', 'moss-steps', 'moss-cfg', 'moss-sampler',
-    'moss-scheduler', 'moss-slg', 'moss-seed', 'moss-seed-mode', 'moss-preset', 'moss-json-manual'];
+    'moss-scheduler', 'moss-slg', 'moss-seed', 'moss-seed-mode', 'moss-preset', 'moss-json-manual', 'moss-import-texts'];
 
 // プリセット名 → サンプラー設定。loraはファイル名に含まれる正規表現（無ければLoRAなし）
 const PRESETS = {
@@ -295,7 +295,7 @@ function fitFontToBox(it) {
 function applyLabel(label, it) {
     const resetLayout = () => {
         label.style.left = label.style.top = label.style.right = label.style.bottom = label.style.lineHeight = '';
-        label.style.display = label.style.alignItems = label.style.justifyContent = label.style.textAlign = '';
+        label.style.display = label.style.alignItems = label.style.justifyContent = label.style.textAlign = label.style.padding = '';
         label.style.writingMode = label.style.textOrientation = '';
     };
     resetLayout();
@@ -310,8 +310,15 @@ function applyLabel(label, it) {
             // 枠が文字より大きい（フキダシの輪郭など）: 枠の中央に文字を置く
             label.style.left = label.style.top = label.style.right = label.style.bottom = '0';
             label.style.display = 'flex';
-            label.style.alignItems = label.style.justifyContent = 'center';
-            label.style.textAlign = 'center';
+            if (it.src === 'text') {
+                // 取り込んだ単独テキスト: 枠は実測した文字の範囲（＋余白）なので、左上（縦書きは右上）から置く
+                label.style.alignItems = label.style.justifyContent = 'flex-start';
+                label.style.textAlign = 'start';
+                label.style.padding = `${fs * 0.15 * S.scale}px`;
+            } else {
+                label.style.alignItems = label.style.justifyContent = 'center';
+                label.style.textAlign = 'center';
+            }
         } else {
             const pad = `${fs * TEXT_PAD * S.scale}px`;
             label.style.left = label.style.top = pad;
@@ -672,18 +679,72 @@ function extractBalloons(rec) {
             });
         }
     }
-    // 読み順（上から下、同じ段は右から左）
-    const band = Math.max(1, ...out.map(b => b.ry)) * 1.2;
-    out.sort((a, b) => (Math.abs(a.cy - b.cy) < band ? b.cx - a.cx : a.cy - b.cy));
-    return out;
+    return sortReadingOrder(out);
 }
+
+// 読み順（上から下、同じ段は右から左）。要素は cx, cy, ry（縦の半径）を持つこと
+function sortReadingOrder(list) {
+    const band = Math.max(1, ...list.map(b => b.ry)) * 1.2;
+    return list.sort((a, b) => (Math.abs(a.cy - b.cy) < band ? b.cx - a.cx : a.cy - b.cy));
+}
+
+// ページの吹き出しなしの単独テキスト（テキストツールの <text>）を取り出す。
+// 回転・拡縮・せん断・縦書きを含む実際の見た目の範囲が要るため、ページのSVGを画面外へ描画して実測する。
+// フキダシの中のテキスト（g.balloon-shape の子）と、defs 内のテキストは対象外
+async function extractFreeTexts(rec, svg) {
+    const sources = [rec.overlaySvgContent, ...(rec.panels || []).map(p => p.panelSvgContent)].filter(Boolean);
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed; left:-100000px; top:0; width:1000px; pointer-events:none; opacity:0;';
+    document.body.appendChild(holder);
+    const out = [];
+    try {
+        for (const src of sources) {
+            holder.innerHTML = src;
+            const rootEl = holder.querySelector('svg');
+            if (!rootEl) continue;
+            const texts = [...rootEl.querySelectorAll('text')].filter(el => !el.closest('g.balloon-shape, defs, clipPath, mask, pattern') && el.textContent.trim());
+            if (!texts.length) continue;
+            rootEl.setAttribute('width', '1000');
+            rootEl.setAttribute('height', String(1000 * svg.h / svg.w));
+            const vb = rootEl.viewBox && rootEl.viewBox.baseVal && rootEl.viewBox.baseVal.width ? rootEl.viewBox.baseVal : { x: 0, y: 0, width: svg.w, height: svg.h };
+            rootEl.getBoundingClientRect();        // レイアウトを走らせ、Webフォントの読み込みを始めさせる
+            try { await document.fonts.ready; } catch (_) { /* ignore */ }
+            const rr = rootEl.getBoundingClientRect();
+            const k = vb.width / rr.width;
+            for (const el of texts) {
+                const r = el.getBoundingClientRect();
+                if (!(r.width > 0) || !(r.height > 0)) continue;
+                const tspans = [...el.querySelectorAll('tspan')].map(ts => ts.textContent);
+                const text = (tspans.length ? tspans : [el.textContent]).join('\n').replace(/\s+$/, '');
+                if (!text.trim()) continue;
+                const num = (name, def) => { const v = parseFloat(el.getAttribute(name)); return Number.isFinite(v) && v > 0 ? v : def; };
+                const fontSize = num('font-size', parseFloat(getComputedStyle(el).fontSize) || 0);
+                const w = r.width * k, h = r.height * k;
+                const x = vb.x + (r.left - rr.left) * k, y = vb.y + (r.top - rr.top) * k;
+                out.push({
+                    text, x, y, w, h, cx: x + w / 2, cy: y + h / 2, ry: h / 2,
+                    vertical: /^vertical/.test(getComputedStyle(el).writingMode || ''),
+                    fontSizeSvg: fontSize * Math.sqrt(num('data-scale-x', 1) * num('data-scale-y', 1)),   // 縦横の拡縮は幾何平均で
+                });
+            }
+        }
+    } finally {
+        holder.remove();
+    }
+    return sortReadingOrder(out);
+}
+
+// 単独テキストの用途の推定: 短い（6文字以下）なら擬音、それ以外はナレーション文として caption に英文で入れる
+const textCaptionOf = (text) => ([...text.replace(/\s/g, '')].length <= 6 ? 'Sound effect.' : 'Narration text.');
 
 async function importBalloons() {
     const rec = await getActivePageRecord();
     if (!rec) { alert(t('layout.msgNoActivePage')); return; }
     const svg = pageSvgSizeOf(rec);
+    const includeTexts = $('moss-import-texts').checked;
     const list = extractBalloons(rec);
-    if (!list.length) { alert(t('moss.noBalloons')); return; }
+    const texts = includeTexts ? await extractFreeTexts(rec, svg) : [];
+    if (!list.length && !texts.length) { alert(t('moss.noBalloons')); return; }
     // キャンバスの縦横比がページと違えば、ページに合わせる（既存の枠も同じ比率で拡縮する）
     if (Math.abs((S.W / S.H) / (svg.w / svg.h) - 1) > 0.02) {
         if (S.items.length && !confirm(t('moss.confirmFitCanvas'))) return;
@@ -695,21 +756,35 @@ async function importBalloons() {
         }
         setSize(w, h);
     }
-    S.items = S.items.filter(i => i.src !== 'balloon');   // 再取込: 前回取り込んだ枠だけ入れ替える（手で足した枠は残す）
+    // 再取込: 前回取り込んだ枠だけ入れ替える（手で足した枠は残す）。単独テキストを含めないときは、前回の単独テキストの枠も残す
+    S.items = S.items.filter(i => !(i.src === 'balloon' || (includeTexts && i.src === 'text')));
     if (S.selId && !S.items.some(i => i.id === S.selId)) S.selId = null;
     const sx = S.W / svg.w, sy = S.H / svg.h;
+    const fontPx = (fs) => (fs > 0 ? Math.min(FONT_MAX, Math.max(FONT_MIN, Math.round(fs * sy))) : 0);
+    const place = (x, y, w, h) => {
+        const px = clamp(x * sx, 0, S.W - MIN_BOX_PX), py = clamp(y * sy, 0, S.H - MIN_BOX_PX);
+        return { x: px, y: py, w: Math.min(w * sx, S.W - px), h: Math.min(h * sy, S.H - py) };
+    };
     for (const b of list) {
-        const x = clamp((b.cx - b.rx) * sx, 0, S.W - MIN_BOX_PX), y = clamp((b.cy - b.ry) * sy, 0, S.H - MIN_BOX_PX);
         const it = addItem({
             type: 'text', src: 'balloon', text: b.text, vertical: b.vertical, fitBox: false,   // 枠はフキダシの輪郭（文字の大きさに合わせない）
             caption: BALLOON_PHRASE[b.shapeType] || 'Speech bubble.',
-            x, y, w: Math.min(b.rx * 2 * sx, S.W - x), h: Math.min(b.ry * 2 * sy, S.H - y),
-            fontSize: b.fontSizeSvg > 0 ? Math.min(FONT_MAX, Math.max(FONT_MIN, Math.round(b.fontSizeSvg * sy))) : 0,
+            ...place(b.cx - b.rx, b.cy - b.ry, b.rx * 2, b.ry * 2), fontSize: fontPx(b.fontSizeSvg),
+        });
+        if (!(it.fontSize > 0)) it.fontSize = fitFontToBox(it);
+    }
+    for (const b of texts) {
+        // 単独テキストの枠は、実測した文字の範囲に少し余白を足したもの
+        const pad = b.fontSizeSvg > 0 ? b.fontSizeSvg * 0.15 : 0;
+        const it = addItem({
+            type: 'text', src: 'text', text: b.text, vertical: b.vertical, fitBox: false,
+            caption: textCaptionOf(b.text),
+            ...place(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2), fontSize: fontPx(b.fontSizeSvg),
         });
         if (!(it.fontSize > 0)) it.fontSize = fitFontToBox(it);
     }
     renderCanvas(); schedulePreview(); scheduleSave();
-    $('moss-progress-text').textContent = t('moss.balloonsImported', list.length);
+    $('moss-progress-text').textContent = t('moss.balloonsImported', list.length + texts.length);
 }
 
 // ─── JSONプレビュー ───
@@ -1041,4 +1116,4 @@ function initMossTab() {
     initMossTabOnce();
 }
 
-export { initMossTab, extractBalloons };
+export { initMossTab, extractBalloons, extractFreeTexts };
