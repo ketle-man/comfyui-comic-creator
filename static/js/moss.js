@@ -6,6 +6,7 @@
 import { t } from './i18n.js';
 import { state } from './main/01-state.js';
 import { dbGet } from './main/00-db.js';
+import { sanitizeSvgTree } from './main/02-assets.js';
 import { insertImage, insertImageFromUrl, getBoundingBoxFromPoints } from './main/08-panels-images.js';
 import { prepareVramForGeneration } from './vram-prepare.js';
 
@@ -699,7 +700,14 @@ async function extractFreeTexts(rec, svg) {
     const out = [];
     try {
         for (const src of sources) {
-            holder.innerHTML = src;
+            // 保存済みSVGを文字列のままDOMへ入れず、パース→サニタイズ（script・on*属性・javascript:の除去）してから取り込む。
+            // 文字の実測に画像は不要なので、重い <image>（base64の画像など）も除去する
+            const parsedDoc = new DOMParser().parseFromString(src, 'image/svg+xml');
+            const parsed = parsedDoc.documentElement;
+            if (!parsed || parsed.localName !== 'svg' || parsedDoc.querySelector('parsererror')) continue;
+            sanitizeSvgTree(parsed);
+            parsed.querySelectorAll('image').forEach(el => el.remove());
+            holder.replaceChildren(document.importNode(parsed, true));
             const rootEl = holder.querySelector('svg');
             if (!rootEl) continue;
             const texts = [...rootEl.querySelectorAll('text')].filter(el => !el.closest('g.balloon-shape, defs, clipPath, mask, pattern') && el.textContent.trim());
