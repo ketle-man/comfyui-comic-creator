@@ -94,7 +94,9 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Layout editor** — drag on the canvas to place Object (green), Character (pink), and Text (cyan) boxes (bboxes). Drag a box edge, its number, or the inside of the selected box to move it, and a corner to resize. You can also draw a new box over an unselected box (Shift+drag always draws)
 - **Text boxes** — type directly inside the box right after drawing it (finish with Escape / Ctrl+Enter, press twice quickly to edit again). Set the font size (px) and **horizontal / vertical** writing; the typed text becomes the box (bbox) size (approximate). Vertical text treats line breaks as columns (right to left)
 - "Import panels from current page" brings the Layout tab's panel frames in as Object boxes (the canvas switches to the page aspect ratio, about 2MP)
+- **Importing balloons and lines** — "Import balloons and lines" brings the balloons that contain text in as Text boxes in one go (the box is the balloon outline; the writing direction, font size, and shape are carried over; re-importing replaces only the boxes imported earlier)
 - **Generation modes** — whole page (placed over the full page) / per panel (about 1MP from each panel aspect ratio, placed in the panel) / free size (generate only)
+- **Seed** — choose Random (default) / Fixed / Increment per run. "Last seed" and "Fix this seed" let you reproduce a result you like
 - The sent prompt (MOSS-Image layout JSON) can be checked in the "JSON" tab and also edited and sent directly. Presets (standard 50 steps / light 25 steps / fast DMD 8-step and Turbo 4-step), Skip Layer Guidance, and LoRA are supported
 - Generated images are saved to ComfyUI's own `output/cc_moss` folder
 
