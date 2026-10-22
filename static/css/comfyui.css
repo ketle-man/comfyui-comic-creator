@@ -185,6 +185,7 @@
 /* ── MOSS-Image タブ: レイアウトエディタ ── */
 .moss-type-radio { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; cursor: pointer; }
 .moss-box { position: absolute; box-sizing: border-box; border: 2px solid var(--moss-c, #4caf50); background: color-mix(in srgb, var(--moss-c, #4caf50) 14%, transparent); cursor: move; overflow: visible; }
+.moss-box[data-type="panel"] { --moss-c: #ffc107; }
 .moss-box[data-type="character"] { --moss-c: #ff69b4; }
 .moss-box[data-type="text"] { --moss-c: #4fd8ff; }
 .moss-box.selected { border-width: 3px; box-shadow: 0 0 0 1px #fff inset; }
@@ -220,6 +221,7 @@
 .moss-type-btn { padding: 4px 12px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 0; border-right: 1px solid var(--border-color); cursor: pointer; }
 .moss-type-btn:last-child { border-right: 0; }
 .moss-type-btn[data-type="object"].active { background: #4caf50; color: #000; }
+.moss-type-btn[data-type="panel"].active { background: #ffc107; color: #000; }
 .moss-type-btn[data-type="character"].active { background: #ff69b4; color: #000; }
 .moss-type-btn[data-type="text"].active { background: #4fd8ff; color: #000; }
 
@@ -235,3 +237,4 @@
 .moss-collapse[open] > summary::before { transform: rotate(90deg); }
 .moss-collapse[open] > summary { margin-bottom: 4px; }
 .moss-type-btn[data-vertical].active { background: #4fd8ff; color: #000; }
+.moss-box.moss-skipped { border-style: dashed; opacity: 0.55; }

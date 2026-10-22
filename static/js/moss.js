@@ -14,7 +14,7 @@ const STORE_KEY = 'ccc_moss_v1';
 const SUBTAB_KEY = 'ccc_moss_subtab';
 const FIELD_IDS = ['moss-prompt', 'moss-negative', 'moss-mode', 'moss-size-preset', 'moss-width', 'moss-height', 'moss-batch',
     'moss-unet', 'moss-clip', 'moss-vae', 'moss-lora', 'moss-lora-strength', 'moss-steps', 'moss-cfg', 'moss-sampler',
-    'moss-scheduler', 'moss-slg', 'moss-seed', 'moss-seed-mode', 'moss-preset', 'moss-json-manual', 'moss-import-texts'];
+    'moss-scheduler', 'moss-slg', 'moss-seed', 'moss-seed-mode', 'moss-preset', 'moss-json-manual', 'moss-import-texts', 'moss-import-panel-label'];
 
 // プリセット名 → サンプラー設定。loraはファイル名に含まれる正規表現（無ければLoRAなし）
 const PRESETS = {
@@ -231,7 +231,9 @@ function renderCanvas() {
     cv.innerHTML = '';
     S.items.forEach((it, idx) => {
         const el = document.createElement('div');
+        // 文字が空（空白のみ）の文字枠は送信されない（JSONから除外される）ので、破線で薄く表示する
         el.className = 'moss-box' + (it.id === S.selId ? ' selected' : '');
+        updateSkipped(el, it);
         el.dataset.id = it.id;
         el.dataset.type = it.type;
         const badge = document.createElement('span');
@@ -363,6 +365,7 @@ function openInlineEdit(it) {
         it.text = ta.value;
         autoSizeText(it);          // 入力した文字の大きさに枠が追従する
         placeBox(el, it);
+        updateSkipped(el, it);
         const side = $('moss-item-text');
         if (side) side.value = it.text;
         schedulePreview(); scheduleSave();
@@ -372,6 +375,11 @@ function openInlineEdit(it) {
         if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); ta.blur(); }
     });
     ta.addEventListener('blur', () => { renderCanvas(); scheduleSave(); });
+}
+
+// 文字が空（空白のみ）の文字枠は送信されないため、破線で薄く表示する（入力のたびに切り替える）
+function updateSkipped(el, it) {
+    if (el) el.classList.toggle('moss-skipped', it.type === 'text' && !(it.text || '').trim());
 }
 
 function placeBox(el, it) {
@@ -581,7 +589,7 @@ function initItemProps() {
         it.text = $('moss-item-text').value;
         autoSizeText(it);
         const el = $('moss-layout-canvas').querySelector(`.moss-box[data-id="${it.id}"]`);
-        if (el) { placeBox(el, it); applyLabel(el.querySelector('.moss-label'), it); }
+        if (el) { placeBox(el, it); applyLabel(el.querySelector('.moss-label'), it); updateSkipped(el, it); }
         schedulePreview(); scheduleSave();
     });
     $('moss-item-fit').addEventListener('change', () => {
@@ -642,7 +650,7 @@ async function importPagePanels() {
         const b = p.bbox;
         const cx = (b.x + b.width / 2) / svg.w, cy = (b.y + b.height / 2) / svg.h;
         addItem({
-            type: 'object', caption: `${positionPhrase(cx, cy)} panel.`,
+            type: $('moss-import-panel-label').checked ? 'panel' : 'object', caption: `${positionPhrase(cx, cy)} panel.`,   // 既定は object（公開仕様）。panel ラベルは使い分け用
             x: b.x * sx, y: b.y * sy, w: b.width * sx, h: b.height * sy,
         });
     }

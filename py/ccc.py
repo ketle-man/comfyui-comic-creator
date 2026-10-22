@@ -1013,7 +1013,7 @@ async def handle_nanobanana_native_generate(request):
 _MOSS_PREFIX = 'cc_moss/MOSS'
 _MOSS_TIMEOUT_S = 900          # 50step・4MPでも収まる余裕。生成中はComfyUIキューに積まれる
 _MOSS_OUT_NODE = '10'
-_MOSS_LABELS = ('object', 'character', 'text')
+_MOSS_LABELS = ('object', 'panel', 'character', 'text')   # panel は学習時のlabel（公開コンパイラは object/character/text のみ）。コマの使い分け用
 _MOSS_MAX_ITEMS = 200
 _MOSS_VERTICAL_HINT = 'Vertical text, written top to bottom, columns from right to left.'
 
@@ -1037,6 +1037,10 @@ def _moss_layout_prompt(summary, items, width, height, meta=None, canvas=None):
         if h < 0:
             y, h = y + h, -h
         if w < 1 or h < 1:
+            continue
+        # 文字が空（空白のみ）の text item は送らない。モデルが「文字を書く領域」と解釈して、その領域に
+        # 紙のようなものを描いてしまうため（公式コンパイラも空の text を拒否する）
+        if label == 'text' and not str(it.get('text') or '').strip():
             continue
         item = {'label': label, 'caption': str(it.get('caption') or '').strip()}
         if label == 'text':
