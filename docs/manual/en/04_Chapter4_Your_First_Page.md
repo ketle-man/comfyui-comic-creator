@@ -23,14 +23,10 @@ The first time you start Comic Creator, two templates, "A4縦_3コマ" (A4 portr
 1. Open the "Page" tab and choose the "Templates" sub-tab at the top.
 2. Press "Create Template". The wizard opens.
 
-   [Image: The first screen of the template wizard (page orientation, width, height, frame width)]
-
 3. Under "Page orientation", choose "Portrait". Leave width, height, and frame width as they are for now.
 4. Press "Create Base". A white frame shaped like the page (the canvas) appears.
 5. Check that "Cut mode" is set to "Cut All".
 6. On the canvas, drag horizontally from left to right to draw a line. The panel is split in two along the line.
-
-   [Image: Splitting the panel by drawing a line on the canvas]
 
 7. In the same way, split the lower panel in two with a vertical line. If you switch "Cut mode" to "Cut Single Panel", only the panel where you start the line is split.
 8. When you have three panels, press "Save as Template".
@@ -51,8 +47,6 @@ Next, create a "work" to hold your pages.
 1. Choose the "Works" sub-tab of the "Page" tab.
 2. Press "New Work". The "Create New Work" dialog opens.
 
-   [Image: The "Create New Work" dialog]
-
 3. Enter a name in "Title:". Example: `my first work`
 4. Choose the paper size in "Size:". Here, choose "A4 portrait (210×297mm)".
 5. Press "Create".
@@ -70,8 +64,6 @@ Add a page to your new work using the template from 4-1.
 2. Click the template you made in 4-1 to select it.
 3. Press "Insert as Page" at the bottom of the asset panel.
 
-   [Image: Selecting a template in the asset panel's T tab and pressing "Insert as Page"]
-
 A three-panel page appears in the preview. The template has been automatically stretched to fit the work's size (A4 portrait). Also check that the page number in the control bar reads "1 / 1".
 
 > **Caution**
@@ -83,8 +75,6 @@ The easiest way is to drag and drop images from a folder on your PC.
 
 1. Open the folder containing your images in File Explorer (Finder on Mac).
 2. Drag an image file over the panel in the preview where you want it, and release.
-
-   [Image: Dragging and dropping an image file onto a panel]
 
 The image is aligned to the top left of the panel and sized to the full width of the panel. Parts outside the panel are hidden.
 
@@ -115,8 +105,6 @@ Put images into the remaining panels in the same way.
 3. Under "Type:", choose "Normal (Ellipse)".
 4. Press "Insert". A balloon is placed in the center of the selected panel.
 
-   [Image: A balloon just inserted (with handles)]
-
 Drag the handles around the balloon to resize it. Change the direction and length of the tail (the pointed part) with "Angle:" and "Length:" under "Tail".
 
 > **Tip**
@@ -126,8 +114,6 @@ Drag the handles around the balloon to resize it. Change the direction and lengt
 
 1. Click the balloon to select it.
 2. Press "Embed Text". The "Embed Text" window opens.
-
-   [Image: The "Embed Text" window]
 
 3. Type the dialogue in "Text". You can use line breaks.
 4. Check "Vertical" if you want vertical text.
@@ -159,8 +145,6 @@ Export your finished pages as PNG images.
 1. Open the "Works" sub-tab of the "Page" tab.
 2. Click the work you just made in the works list on the left.
 3. Press the "Export" button at the top. The screen switches to the "Export" sub-tab, and only this work's pages are listed.
-
-   [Image: The Export sub-tab (settings on the left, page list on the right)]
 
 4. Choose "PNG" under "Format:".
 5. Enter the range of pages to export in "Pages:". To export both pages, enter `1` to `2`.

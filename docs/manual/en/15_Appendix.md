@@ -51,6 +51,15 @@
 
 In the Layout tab, use the "Undo" button in the control bar to undo.
 
+### MOSS-Image tab (layout editor)
+
+| Operation | Effect |
+| --- | --- |
+| Shift + drag | Always draw a new box |
+| Delete | Delete the selected box |
+| Esc / Ctrl + Enter | Finish typing in a text box |
+| Press a text box twice quickly | Edit its text again |
+
 ### Page tab
 
 | Operation | Effect |

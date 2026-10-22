@@ -22,7 +22,7 @@ When something does not work, try these three things first. They solve most prob
 | No CC button | ComfyUI not restarted, folder in the wrong place, old ComfyUI frontend | Chapter 2, 2-7. You can also open it by adding `/ccc` to the address |
 | Works you made before are missing | Opened in a different browser or at a different address (`127.0.0.1` vs `localhost`, port number) | Open it in your usual browser at your usual address (Chapter 1) |
 | Shown in Japanese though you want English | You chose Japanese before, or your browser language is Japanese or one that is not supported (the first time, it follows the browser language) | Choose English in "設定" (Settings) > "言語" (Language) |
-| Some text stays in Japanese / some names stay in English | Some parts of the app, such as tool and button names in the Image tab, are not translated | This is how v1.53.2 works. This book follows the screen |
+| Some text stays in Japanese / some names stay in English | Some parts of the app, such as tool and button names in the Image tab, are not translated | This is how v1.59.0 works. This book follows the screen |
 
 ### Works and pages
 
@@ -63,6 +63,11 @@ When something does not work, try these three things first. They solve most prob
 | --- | --- | --- |
 | Nanobanana says the API key is not set | No `.env`, wrong format, or ComfyUI not restarted | Chapter 10, 10-3. `.env` goes directly in the Comic Creator folder |
 | Nanobanana's second and later images cannot be inserted | You have not chosen them from the thumbnails (the first image is selected at first) | Click a thumbnail below the result to choose it, then press "Insert into Panel". The images are also kept in `ComfyUI/output/cc_nanobanana/` |
+| Nanobanana (native) says "COMFY_API_KEY not set" | No `COMFY_API_KEY` in `.env`, or ComfyUI not restarted | Write `COMFY_API_KEY=your key` in `.env` and restart. If you do not use it, set "Engine" in the Settings tab back to Gemini API (Chapter 10) |
+| Nano Banana Pro is unavailable, or 2K/4K cannot be chosen for Lite | Limits of the native node route (Pro unsupported; Lite is 1K only) | Set "Engine" in the Settings tab to Gemini API |
+| MOSS-Image says "ComfyUI is too old (please update)" | ComfyUI is too old to support MOSS-Image | Update ComfyUI and restart |
+| MOSS-Image says "model not found" | The diffusion model, text encoder, or VAE is not in the expected folder | Place them as in the table in 10-6 (Chapter 10), then press "Reload model lists" |
+| Nothing is drawn where an empty Text box was | Boxes with no text are not sent | Type text into the box |
 | The "workflow studio" tab says "was not found" | ComfyUI-Workflow-Studio is not installed | Install it and restart ComfyUI (or ignore it if you do not use it) |
 | After Generate, the original image is still there | Generated images are layered on top | Delete unneeded originals in the layer panel |
 | Auto shows "Failed to fetch" | The local LLM URL and the address you opened do not match | Match the host name (`http://127.0.0.1:11434` if you opened `127.0.0.1`) |

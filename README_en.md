@@ -275,6 +275,10 @@ See the in-app **Help** tab (available in Japanese, English, and Chinese, with s
   <img src="docs/17_3DPose_2.png" width="260" alt="Light & Pose Editor (Light/pose/Image tabs, keyframe timeline)">
 </p>
 
+## Manual
+
+A text-only beginner manual (for v1.59.0) is included: Japanese in [docs/manual/ja/](docs/manual/ja/) and English in [docs/manual/en/](docs/manual/en/). Start from `00_Contents.md` (English) or `00_目次.md` (Japanese).
+
 ## Architecture
 
 ```

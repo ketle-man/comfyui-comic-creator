@@ -275,6 +275,10 @@ MOSS-Image タブ上部のステータスが「利用可能」になれば準備
   <img src="docs/17_3DPose_2.png" width="260" alt="Light & Pose Editor（Light/pose/Imageタブ、キーフレームタイムライン）">
 </p>
 
+## マニュアル
+
+画像なしの入門マニュアル（v1.59.0対応）を同梱しています。日本語は [docs/manual/ja/](docs/manual/ja/)、英語は [docs/manual/en/](docs/manual/en/) です。目次は各フォルダの `00_目次.md`（英語は `00_Contents.md`）から。
+
 ## アーキテクチャ
 
 ```

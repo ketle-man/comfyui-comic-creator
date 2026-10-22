@@ -4,8 +4,6 @@ This chapter explains the items in the "Settings" tab and how to protect your wo
 
 ## 13-1 Settings Tab Items
 
-[Image: The Settings tab]
-
 The "Settings" tab has the following items, from top to bottom.
 
 | Item | Description | Chapter |
@@ -13,6 +11,7 @@ The "Settings" tab has the following items, from top to bottom.
 | Language | Display language (日本語 / English / 中文). The screen reloads when you switch | Chapter 2 |
 | Backup & Restore | Save all data to a zip / restore from a zip | 13-2 in this chapter |
 | VRAM Management (Ollama) | Unload Ollama's models before image generation to free GPU memory | Table below |
+| Nanobanana | Nanobanana engine (Gemini API / ComfyUI native node), shared by the Nanobanana tab, Semi-Auto Manga, and Auto | Chapter 10 |
 | Eagle Settings | Eagle connection and auto-save | Chapter 12 |
 | G'MIC Settings | Location of the G'MIC Qt executable | Chapter 12 |
 | Inpaint Settings | Workflow used by Inpaint in the Image tab | Chapter 10 |

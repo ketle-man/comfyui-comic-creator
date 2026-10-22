@@ -38,6 +38,9 @@ Comic Creator offers two ways to make AI pictures.
 
 You can use just one of them. This chapter explains both.
 
+> **Tip**
+> There is also the "MOSS-Image" tab, which uses an image model that ComfyUI itself supports (10-6). It also runs on your own PC, and lets you specify where objects, characters, and dialogue go so you can generate a whole page at once.
+
 ## 10-3 Preparing Nanobanana
 
 Nanobanana creates images with Google's Gemini API. It requires an API key.
@@ -65,11 +68,25 @@ Open the "Nanobanana" tab. If there is no message saying the API key is not set,
 > **Caution**
 > `.env` is read when ComfyUI starts. Always restart ComfyUI after adding or changing the key.
 
+### Switching the engine: ComfyUI native node
+
+Besides generating with your own Gemini API key, Nanobanana can use ComfyUI's own Nano Banana node. Switch with "Engine" under "Nanobanana" in the "Settings" tab.
+
+- **Gemini API (your own API key)** (default): generates directly with Google's Gemini API. History is recorded in `history.jsonl`. Needs `NANOBANANA_API_KEY` in `.env`.
+- **ComfyUI native node (Comfy credits)**: generates with ComfyUI's own Nano Banana node and uses Comfy credits. Needs `COMFY_API_KEY` in `.env` (issued at platform.comfy.org).
+
+This setting applies to the Nanobanana tab, to Semi-Auto Manga in the Script tab, and to the Auto tab (when its image engine is Gemini). The same selector also appears in the Nanobanana tab's basic settings and stays in sync with the Settings tab.
+
+- **History**: with the native node, the generation settings are embedded in the output PNG, so automatic history recording and the "Record in History" button do not appear.
+- **Save location**: images from the Nanobanana tab are saved to `ComfyUI/output/cc_nanobanana_native/`.
+- **Unsupported**: Nano Banana Pro (gemini-3-pro-image) is not supported, and Nano Banana 2 Lite is 1K only.
+
+> **Caution**
+> `COMFY_API_KEY` also takes effect only after you write it in `.env` and restart ComfyUI. Without it, the connection status reads "COMFY_API_KEY not set".
+
 ## 10-4 Making Backgrounds and Characters with Nanobanana
 
 ### Making a background
-
-[Image: The Nanobanana tab (Generation sub-tab)]
 
 1. Open the "Nanobanana" tab and choose the "Generation" sub-tab.
 2. Enter a Positive Prompt (a description of the picture you want).
@@ -135,8 +152,6 @@ With ComfyUI-Workflow-Studio (Workflow Studio below) installed, you can generate
 ### "Generate" in the Layout tab
 
 Press "Generate" in the Layout tab's control bar to open the generation window.
-
-[Image: The Generate window (Target, prompt tabs, T2I, Run)]
 
 | Item | Description |
 | --- | --- |
@@ -205,9 +220,117 @@ Example: if Mike's hand looks wrong, paint around the hand with the Mask tool, c
 
 If you write scripts with a local AI (Ollama) while also generating images, GPU memory (VRAM) can run short. In the "Settings" tab, "VRAM Management (Ollama)" can unload Ollama's models before image generation (Chapter 13).
 
+## 10-6 Making a Whole Page in the MOSS-Image Tab
+
+The "MOSS-Image" tab generates images on your own PC with MOSS-Image, an image model that ComfyUI itself supports. It needs no Comfy credits and no API key.
+
+Its main feature is the "layout editor". You place boxes for "Object", "Character", and "Text" in the image to say what goes where. Because you can even fix where Japanese dialogue and sound effects go, you can generate a whole page (panel layout and dialogue) at once.
+
+### What you need
+
+- A ComfyUI that supports MOSS-Image (an older ComfyUI shows "ComfyUI is too old (please update)"; update ComfyUI)
+- The model files placed in ComfyUI
+
+| Kind | Where | Example file |
+| --- | --- | --- |
+| Diffusion model | `ComfyUI/models/diffusion_models/` | `moss_image_sft_int8_convrot.safetensors`, etc. |
+| Text encoder | `ComfyUI/models/text_encoders/` | `qwen3.5_9b_w4a8_gptq.safetensors` |
+| VAE | `ComfyUI/models/vae/` | `flux2-vae.safetensors` |
+| LoRA (optional) | `ComfyUI/models/loras/` | DMD 8-step for fast generation, etc. |
+
+A status line at the top of the tab shows one of "MOSS-Image: ready", "model not found", "ComfyUI is too old (please update)", or "cannot reach ComfyUI". After adding models, press "Reload model lists".
+
+> **Tip**
+> Check the model's distribution page for file names and where to get them; this book does not cover that. English and Chinese are MOSS-Image's officially supported languages; Japanese is outside official support, so the text in a box may not always come out accurately. Check the result after generating.
+
+### The screen
+
+- **Left**: the layout editor, where you draw boxes to place objects, characters, and text.
+- **Middle**: three tabs, "Prompt", "JSON", and "Model / Sampler".
+- **Right**: the generate button, the seed, the results, and the buttons that place an image in the page.
+
+### Your first image: generate a whole page
+
+1. In the "Layout" tab, open a page that already has its dialogue.
+2. Open the "MOSS-Image" tab. In "Target" on the middle "Prompt" tab, set Mode to "Whole page".
+3. Press "Import panels from current page" on the left. The page's panels come in as "Object" boxes, and the canvas changes to the page's aspect ratio (about 2MP).
+4. Press "Import balloons and lines". Balloons with dialogue come in as "Text" boxes.
+5. In "Prompt", describe the whole image (English is recommended).
+6. Press "Generate Images" on the right.
+7. When the result appears, press "Place selected image over the whole page". The image goes into the full-page overlay.
+
+> **Tip**
+> For speed, choose "Fast DMD 8-step" as the preset in the "Model / Sampler" tab (a LoRA is required). The standard preset uses 50 steps and takes longer.
+
+### Generation modes
+
+- **Whole page**: generates the whole canvas as one image and places it over the page (the layout specifies every panel and text).
+- **Per panel**: generates for each chosen panel at that panel's aspect ratio and places it in that panel. You can enter content for each panel (English recommended).
+- **Free size**: generates only, without placing.
+
+### Using the layout editor
+
+Choose what to draw under "Draw as": Object (green), Character (pink), Text (light blue), or Panel (yellow), then drag on the canvas to draw a box.
+
+- **Drag on an empty spot**: draw a new box of the chosen kind.
+- **Drag a box's edge, number, or the inside of the selected box**: move it.
+- **Drag a box's corner**: resize it.
+- **Drag inside an unselected box**: draw a new box on top of it (so you can put a dialogue box over a panel).
+- **Click inside an unselected box**: select it.
+- **Shift + drag**: always draw a new box.
+- **Delete key**: delete the selected box.
+
+"Bring forward" and "Send backward" change the stacking order, and "Clear All" removes every box. When you select a box, "Selected item" appears in the middle where you can edit its type, caption (English recommended), and more.
+
+### Text boxes
+
+- Right after you draw a "Text" box, you can type directly into it. Finish with Esc, Ctrl+Enter, or a click outside (Enter adds a line break).
+- Press a text box twice quickly to edit it again.
+- You can set the font size (px on the image). The box fits the typed text (an approximation).
+- The "Horizontal / Vertical" toggle next to "Text" sets the writing direction of boxes you draw next. To change it after drawing, use "Writing" in "Selected item".
+
+> **Tip**
+> MOSS-Image has no setting for vertical writing, so for a vertical box an English instruction is added automatically to the end of its caption. You can check it in the JSON tab.
+
+> **Caution**
+> A "Text" box with no text is not sent when you generate (sending it can make a lined-paper-like patch appear in that spot). It is shown faintly with a dashed outline.
+
+### Importing from the page
+
+- **Import panels from current page**: brings in the open page's panel frames. If "Import panels with the panel label" is checked they become "Panel" (yellow); otherwise "Object".
+- **Import balloons and lines**: brings in balloons with dialogue as "Text" boxes sized to the balloon outline, keeping the balloon shape (normal, thought, shout, etc.), vertical writing, and font size.
+- **Also import text without a balloon** (on by default): also turns text placed with the Text tool, outside any balloon, into "Text" boxes.
+
+Notes on importing:
+
+- Imported boxes are arranged in reading order (top to bottom; within a row, right to left).
+- Importing again replaces only the boxes imported before; boxes you added yourself stay.
+- If the canvas aspect ratio differs from the page, you are asked whether to fit the canvas and scale existing boxes too.
+- Editing the text of an imported box does not shrink the box ("Fit the box to the text size" is off).
+- Rotated text is imported as the outer rectangle of the rotated shape, because MOSS-Image boxes cannot express rotation.
+- Whether text is a sound effect or narration is a simple guess from its length (6 characters or fewer: sound effect; otherwise: narration).
+
+### Seed behavior
+
+- **Random** (default): a different seed every time. The value in the box is not used.
+- **Fixed**: uses the value in the box, so the same settings give a similar result.
+- **Increment per run**: starts from the value in the box and goes up by one each time you generate.
+
+The seed actually used under Random is shown as "Last seed". If you like a result, press "Fix this seed" beside it to switch to Fixed.
+
+### Other settings
+
+- The middle "JSON" tab shows what is actually sent (the layout JSON). Check "Edit the JSON directly and send it" to send hand-written JSON as it is (the layout is ignored).
+- The "Model / Sampler" tab has presets (Standard, Light, Fast DMD 8-step, Fast Turbo 4-step) and the model, LoRA, steps, CFG, and so on.
+- Generated images are saved in ComfyUI's `output/cc_moss/`.
+- Settings and the layout are saved in the browser and come back when you reopen the tab.
+- "VRAM Management (Ollama)" in the Settings tab (Chapter 13) also works before MOSS-Image generation.
+
 > **Chapter summary**
 > - Nanobanana generates with Google's Gemini API. Write `NANOBANANA_API_KEY` in `.env` and restart ComfyUI
 > - When Nanobanana makes two or more images, "Insert into Panel" inserts the one you chose from the thumbnails. All images are also kept in `output/cc_nanobanana`
 > - Adding reference images in "I2I Input" helps keep a character's look consistent
 > - With Workflow Studio, "Generate" in the Layout tab can generate panel by panel. The original image remains underneath
 > - Inpaint and Outpaint in the Image tab fix parts or extend the image
+> - "Nanobanana" in the Settings tab switches between the Gemini API and the native node (`COMFY_API_KEY`)
+> - The MOSS-Image tab generates a whole page on your own PC, with boxes that say where objects, characters, and text go. Panels and dialogue can be imported from the page

@@ -22,8 +22,6 @@ You can choose from seven types under "Type:".
 | Cloud (puffy) | Inner voice, soft lines |
 | Cloud (wavy) | Anxiety, wavering feelings |
 
-[Image: The seven balloon types side by side]
-
 ### Placing and adjusting
 
 1. Click the panel where you want the balloon.
@@ -68,6 +66,16 @@ Select a balloon and press "Embed Text" to open the "Embed Text" window (Chapter
 
 Dialogue wraps automatically to fit the balloon. The balloon itself does not grow, so if text overflows, enlarge the balloon with its handles. Double-click a balloon to edit its dialogue.
 
+### Moving the dialogue by dragging
+
+When you select a balloon that has dialogue, a purple dotted box appears around the text, with a small triangle corner at its lower left.
+
+- **Drag the triangle corner**: moves only the dialogue, leaving the balloon where it is (on a rotated balloon, it moves along the balloon's direction).
+- **Double-click the triangle corner or the balloon**: opens the dialogue input screen, as before.
+
+> **Caution**
+> If you change the vertical alignment or text alignment in the input screen, the offset you dragged is reset and the alignment takes priority.
+
 > **Tip**
 > Burst and Cloud balloons have bumpy outlines, so the text area is a little inside the shape.
 
@@ -78,8 +86,6 @@ You can split long dialogue across two or more connected balloons.
 1. Select the original balloon.
 2. Press "Add Extension". A balloon of the same shape and color is added, joined by a narrow neck.
 3. Move the new balloon where you like and use "Embed Text" to add the rest of the dialogue.
-
-[Image: Two balloons joined as extension balloons]
 
 | Behavior | Description |
 | --- | --- |
@@ -104,8 +110,6 @@ To place text without a balloon, use "Text" in the tool pane. Use it for titles,
 4. In the preview, click where you want the text. The "Text Input" window opens.
 5. Type the text and press OK. Line breaks are allowed.
 
-[Image: The Text sub-tab (font, Vertical, Color, Style)]
-
 Double-click placed text to retype it.
 
 ### Changing size and shape
@@ -115,7 +119,7 @@ Click text to show a frame and handles around it.
 | Operation | How |
 | --- | --- |
 | Move | Drag the text |
-| Font size | Drag a green corner handle |
+| Font size | Drag a green corner handle (the opposite corner stays fixed, and the size follows how far you pull from it) |
 | Stretch tall or wide | Drag a blue handle at the middle of an edge |
 | Slant | Hold Shift and drag a blue edge handle |
 | Undo stretching and slanting | Press "Reset deform" |
@@ -134,8 +138,6 @@ If a font does not appear in the list, press "Reload".
 ### Style: outlines, shadows, gradients
 
 Press "Style" to open a window for detailed text appearance.
-
-[Image: The Style window (preview and settings)]
 
 | Item | Description |
 | --- | --- |
@@ -179,8 +181,6 @@ Adjust while watching the preview. If text is selected, the change applies to it
 3. Set "Draw:" to "ON" and drag inside the panel.
 
 Set "Draw:" to "OFF" to select drawn shapes and move or reshape them.
-
-[Image: A shape drawn in Draw mode]
 
 | Shape | How to draw |
 | --- | --- |
@@ -247,8 +247,6 @@ A mask hides parts of an image or panel like an eraser. The original image is no
 3. Set "Edit:" to "ON".
 4. Set the brush "Size:" and "Hardness:", then drag over the areas to hide (or show).
 
-[Image: Part of an image hidden with a mask (with red display)]
-
 | Item | Description |
 | --- | --- |
 | Brush: Paint / Erase | Paint = add to the mask, Erase = remove from the mask |
@@ -276,8 +274,6 @@ Each button opens a window with a preview. Switch the preview background with "S
 
 ### Halftone
 
-[Image: The Halftone window]
-
 | Mode | Description |
 | --- | --- |
 | Convert image | Replace the selected image with a halftone version. Adjust tone with Brightness, Contrast, Binarize, and Min darkness |
@@ -303,8 +299,6 @@ Creates a transparent effect image the size of the selected panel (or overlay) a
 | Vignette | Darkens the edges to draw the eye to the center. The color can be chosen |
 | Screentone noise | Paper-like graininess. Adjust with "Grain size" |
 | Speed lines | Choose Radial, Uni flash, Uni ring, or Linear (flow lines) |
-
-[Image: A panel with speed lines]
 
 Main speed-line settings:
 

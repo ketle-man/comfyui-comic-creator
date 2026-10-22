@@ -12,8 +12,6 @@ The "Page" tab has three sub-tabs at the top.
 
 ## 5-1 Works
 
-[Image: The Works sub-tab (numbered: ① toolbar ② works list / groups ③ page list ④ right panel)]
-
 The Works screen consists of a toolbar at the top and three areas: left, center, and right.
 
 | No. | Area | Role |
@@ -109,8 +107,6 @@ Pages removed from the trash with "Delete Forever" cannot be restored.
 
 ## 5-2 Templates
 
-[Image: The Templates sub-tab (template list and Group Management on the right)]
-
 In the template list, each card shows the size and the frame width below its name (for example, `21000×29700 / Frame 63`).
 
 | Button | What it does |
@@ -163,8 +159,6 @@ When you have many templates, grouping makes them easier to find.
 Choose a group in the drop-down above the list to show only that group's templates. The "T" tab of the Layout tab's asset panel also shows them in collapsible groups.
 
 ## 5-3 Export
-
-[Image: The Export sub-tab (settings on the left, preview in the center, page list on the right)]
 
 ### Export steps
 

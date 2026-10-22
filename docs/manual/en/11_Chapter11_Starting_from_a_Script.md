@@ -22,7 +22,7 @@ To add dialogue to the work from Chapter 10, use the Script tab (11-2, 11-3). To
 3. Enter `Morning at the Cat Café` as the title and choose "Manga" as the "Media type:".
 
 > **Caution**
-> The media type cannot be changed after creation. "Manga" and "Semi-Auto Manga" use the same screen; only their saved data is kept separately. "Novel" and "Screenplay" are still in development in v1.53.2, and their plot screens cannot be used.
+> The media type cannot be changed after creation. "Manga" and "Semi-Auto Manga" use the same screen; only their saved data is kept separately. "Novel" and "Screenplay" are still in development in v1.59.0, and their plot screens cannot be used.
 
 > **Tip**
 > If you click a work name under "Page Works" in the asset panel's "S" tab and then press "New Work", that name is used as the title.
@@ -40,8 +40,6 @@ You can write a synopsis of the whole work in the field on the right.
 ### Writing the plot
 
 In the "Plot" sub-tab, write the script page by page and panel by panel.
-
-[Image: The Script tab plot (Scene, Panel #, Image Prompt, Line #, Elements, Dialogue / Description, Balloon Shape)]
 
 | Column | What to write |
 | --- | --- |
@@ -90,8 +88,6 @@ Automatically add balloons and dialogue from the Script tab to a page in the Lay
 3. Press "Get from Layout" to match the panel count to the layout page.
 4. Press "Map this page to the layout". The panel-by-panel mapping is listed.
 5. Press "Auto-generate balloons". Balloons are created for each line in the panels that have dialogue, and the screen switches to the Layout tab.
-
-[Image: A page with auto-generated balloons]
 
 Balloon shapes follow the "Balloon Shape" column; rows left at "Default" become Rounded Rect. Balloon and text sizes are decided automatically according to the amount of dialogue. Then adjust positions and shapes as in Chapter 7.
 
@@ -160,8 +156,6 @@ In the "Auto" tab, AI creates a story and script from a theme, and even the pane
 1. In the "Script" tab in the center, press "Create script from story".
 2. A script is created in the form page → panel → dialogue.
 
-[Image: The Auto Script tab]
-
 | Panel item | Description |
 | --- | --- |
 | Importance | High, medium, low. Used by Auto Layout to decide panel size |
@@ -193,8 +187,6 @@ Give the work a name in the work bar at the top and press "Save". Your work is a
 ## 11-6 Turning It into Pages with Auto Layout
 
 In the "Auto Layout" sub-tab, create panel layouts from the script and send them to the Layout tab.
-
-[Image: Auto Layout (settings on the left, preview in the center, properties on the right)]
 
 ### Creating the panel layout
 

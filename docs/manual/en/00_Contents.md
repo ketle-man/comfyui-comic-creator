@@ -2,7 +2,7 @@
 
 Author: ketle-man
 
-Target version: v1.53.2 (`pyproject.toml`)
+Target version: v1.59.0 (`pyproject.toml`)
 
 ## Editions
 
@@ -94,6 +94,7 @@ One source manuscript is maintained; at build time `[Image: ...]` lines are remo
 - 10-3 Preparing Nanobanana
 - 10-4 Making Backgrounds and Characters with Nanobanana
 - 10-5 Working with Workflow Studio
+- 10-6 Making a Whole Page in the MOSS-Image Tab
 
 ### Chapter 11 Starting from a Script: Script Tab and Auto (11)
 - 11-1 Two Methods

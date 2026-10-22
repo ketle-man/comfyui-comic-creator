@@ -6,8 +6,6 @@ This chapter explains the terms used in Comic Creator and the flow from start to
 
 These words appear again and again on screen and in this book. Learning them first will make the following chapters easier to read.
 
-[Image: Names of the parts of a page (work, page, panel, balloon, overlay)]
-
 | Term | Meaning |
 | --- | --- |
 | Work | A set of pages, like one book or one episode. A work has a **width and height (paper size)** |
@@ -26,8 +24,6 @@ These words appear again and again on screen and in this book. Learning them fir
 
 Making a work in Comic Creator follows this flow:
 
-[Image: Workflow diagram (create a work → insert a template → place images, balloons, and dialogue → export)]
-
 | Step | What to do | Tab | Chapter |
 | --- | --- | --- | --- |
 | 1 | Create a work (decide the title and paper size) | "Page" tab > "Works" | Chapters 4 and 5 |
@@ -43,7 +39,7 @@ Combine the basic flow with the following tasks as needed:
 | --- | --- | --- |
 | Edit images in detail with layers, or add text to an image | "Image" tab | Chapter 9 |
 | Choose fonts and save text styles (outline, shadow, etc.) | "Font" tab | Chapter 8 |
-| Create images with AI | "Nanobanana" tab, Workflow Studio integration | Chapter 10 |
+| Create images with AI | "Nanobanana" tab, "MOSS-Image" tab, Workflow Studio integration | Chapter 10 |
 | Write a script before making pages, or have AI create the script and panel layout | "Script" tab, "Auto" tab | Chapter 11 |
 
 ## 1-3 Common Stumbling Points

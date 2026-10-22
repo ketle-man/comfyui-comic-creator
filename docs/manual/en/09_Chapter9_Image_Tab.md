@@ -9,8 +9,6 @@ The "Image" tab is an image editor that works with stacked layers. You work on a
 
 ## 9-1 The Screen
 
-[Image: The Image tab (numbered: ① toolbar ② action bar ③ options bar ④ canvas ⑤ properties and layer panel)]
-
 | No. | Area | Role |
 | --- | --- | --- |
 | ① | Toolbar (left) | Tool buttons. Hover over an icon to see its name |
@@ -32,8 +30,6 @@ First, let's go through the most common task: adding text to an image and saving
 3. Press "T" (Text) in the toolbar.
 4. In the options bar, choose Color, Size, and Font. Check "Vertical" for vertical text.
 5. Click where you want the text. An input box opens; type the text and press "OK".
-
-   [Image: Text added to an image in the Image tab]
 
 6. To reposition the text, press "▲" (Select) and drag the text.
 7. To add an outline or shadow, select the text and press "Style" in the options bar (the same window as in Chapter 7, 7-2).
@@ -119,8 +115,6 @@ When Workflow Studio is installed, the Mask tool shows "Inpaint" (redraw an area
 > The "BiRefNet" model in BG Remove can be chosen only when the custom node "Mask Editor One" and the BiRefNet model are installed. If they are not, it is grayed out, so use the light model.
 
 ## 9-5 The Layer Panel
-
-[Image: The Image tab layer panel]
 
 | Button | What it does |
 | --- | --- |

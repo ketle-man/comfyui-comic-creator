@@ -2,8 +2,6 @@
 
 In the "Font" tab you can compare and choose fonts and save text appearances (styles). Saved styles can be used with one click in the Layout tab and the Image tab.
 
-[Image: The Font tab (font list on the left, preview in the center, tags and categories on the right)]
-
 The screen has three areas.
 
 | Area | Role |
@@ -79,8 +77,6 @@ A tag is a note-like label attached to a font. Type a tag in "Add Tag" to attach
 2. Type the text to check in "Preview text:".
 3. Set fill, stroke, outline, shadow, and so on. The items are the same as the "Style" window in the Layout tab (Chapter 7, 7-2).
 4. Enter a name and press "Save".
-
-[Image: Creating a style in the Style tab]
 
 | Item | Description |
 | --- | --- |

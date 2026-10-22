@@ -47,8 +47,6 @@ Click an image to show handles around it.
 
 ## 6-2 The Layer Panel
 
-[Image: The layer panel (panel rows with image and balloon rows under them)]
-
 The layer panel lists what is on the page in the order "panel → items inside it".
 
 ### Buttons on panel rows
@@ -106,8 +104,6 @@ Create a small panel (sub-panel) inside a panel to insert a different shot. You 
 2. Set "Add sub-panel:" to "ON" and choose a shape: "Rect" or "Circle".
 3. In the preview, drag inside the panel where you want the sub-panel.
 
-   [Image: A sub-panel created inside a panel]
-
 After creation, "Add sub-panel:" switches back to "OFF" automatically.
 
 | Operation | How |
@@ -139,8 +135,6 @@ Only the chosen panel is split in two; other panels do not change.
 1. Press "Deform" in the tool pane.
 2. Set "Deform panel:" to "ON" and click the panel you want to change. Its corners (●) and edges appear.
 3. Drag a corner to move only that corner. Drag an edge to move that edge in parallel.
-
-   [Image: Dragging a corner in Deform mode]
 
 | Operation | How |
 | --- | --- |
@@ -204,8 +198,6 @@ Balloons and text registered this way are inserted as editable balloons and text
 ## 6-6 Processing Images (Image Sub-tab)
 
 "Image" in the tool pane lets you apply simple processing to the selected image.
-
-[Image: The Image sub-tab]
 
 | Item | Description |
 | --- | --- |

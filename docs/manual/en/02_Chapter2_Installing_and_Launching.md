@@ -27,13 +27,9 @@ In every environment, custom nodes go inside `ComfyUI/custom_nodes/`.
 
 ComfyUI has a "Nodes Manager" where you can search for and install custom nodes. This is the easiest way.
 
-[Image: "Nodes Manager" in the "Extensions" menu]
-
 1. Start ComfyUI and open the "Extensions" menu at the top of the screen.
 2. Choose "Nodes Manager".
 3. Type `comic creator` in the search box.
-
-   [Image: Search results for "comic creator" in the Nodes Manager]
 
 4. Install "ComfyUI Comic Creator" from the search results.
 5. When installation finishes, restart ComfyUI.
@@ -87,13 +83,9 @@ Everything except PSD works without `psd-tools`.
 
 After restarting ComfyUI, a **CC** button is added to the bar at the top of the screen (the top bar).
 
-[Image: The CC button in ComfyUI's top bar]
-
 1. Open ComfyUI in your browser.
 2. Click the **CC** button in the top bar.
 3. Comic Creator opens in a new browser tab.
-
-[Image: The screen right after opening Comic Creator (Page tab)]
 
 The address of the new tab is ComfyUI's address followed by `/ccc`. For example, if you open ComfyUI at `http://127.0.0.1:8188`, Comic Creator is at `http://127.0.0.1:8188/ccc`.
 
@@ -112,8 +104,6 @@ Comic Creator can be displayed in Japanese, English, or Chinese. **The first tim
 1. Click the "設定" tab (Settings). It is the second tab from the right in the tab bar at the top.
 2. Under "言語" (Language), choose "English".
 3. The whole screen reloads and is shown in English.
-
-[Image: The "言語" (Language) setting on the Settings tab]
 
 Your choice is remembered by the browser, so it opens in English from then on.
 

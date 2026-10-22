@@ -4,11 +4,9 @@ This chapter explains where things are on the Comic Creator screen. You do not n
 
 ## 3-1 The Tabs
 
-When you open Comic Creator, ten tabs are lined up at the top of the screen. The first time you open it, the "Page" tab is shown.
+When you open Comic Creator, eleven tabs are lined up at the top of the screen. The first time you open it, the "Page" tab is shown.
 
-[Image: The tab bar at the top of the screen (ten tabs)]
-
-The ten tabs are easier to understand when grouped by role into three groups.
+The eleven tabs are easier to understand when grouped by role into three groups.
 
 ### Create
 
@@ -28,6 +26,7 @@ Tabs for creating images and scripts with AI. They require AI setup.
 | Tab | What you can do | Chapter |
 | --- | --- | --- |
 | Nanobanana | Generate images with Google's Gemini API | Chapter 10 |
+| MOSS-Image | Generate images on ComfyUI on your own PC, specifying where objects, characters, and text go | Chapter 10 |
 | Auto | Create a story, script, and panel layout from a theme with AI | Chapter 11 |
 | Script | Write and manage scripts (synopsis, plot, dialogue per panel). Works without AI | Chapter 11 |
 
@@ -47,8 +46,6 @@ Tabs that help your work.
 ## 3-2 The Layout Tab Screen
 
 The tab you will use the longest is the "Layout" tab. From left to right, the screen is divided as follows.
-
-[Image: Layout tab screen layout (numbered: ① asset panel ② tool pane ③ control bar ④ tool settings ⑤ preview ⑥ layer panel)]
 
 | No. | Area | Role |
 | --- | --- | --- |
@@ -134,16 +131,13 @@ Other tabs are explained in their own chapters. Here is just how to tell them ap
 | Image | Asset panel (A, F, I) on the left, tool buttons at the top, layers on the right |
 | Font | A list of fonts and a preview |
 | Nanobanana | Three sub-tabs: "Generation", "I2I Input", and "History" |
+| MOSS-Image | Layout editor on the left; three tabs in the middle ("Prompt", "JSON", "Model / Sampler"); the generate button and results on the right |
 | Auto | Two sub-tabs: "Story & Script" and "Auto Layout" |
 | Script | Asset panel (S) on the left, plot in the center |
-
-[Image: The Page tab screen]
 
 ## 3-4 Using the Help Tab
 
 The "Help" tab is a manual built into Comic Creator. It covers features in even more detail than this book.
-
-[Image: The Help tab (search box and topic list on the left, explanation on the right)]
 
 1. Open the "Help" tab.
 2. Type what you want to look up in the search box at the top left ("Search features..."). Examples: `balloon`, `backup`
@@ -153,10 +147,10 @@ The "Help" tab is a manual built into Comic Creator. It covers features in even 
 Help is available in Japanese, English, and Chinese, and follows the language chosen in the "Settings" tab.
 
 > **Tip**
-> This book is based on v1.53.2. If button names or positions differ from this book, search the Help tab to find the explanation for your current version.
+> This book is based on v1.59.0. If button names or positions differ from this book, search the Help tab to find the explanation for your current version.
 
 > **Chapter summary**
-> - Tabs fall into three groups: "Create", "Create with AI", and "Support". The ones you use most are "Page" and "Layout"
+> - The eleven tabs fall into three groups: "Create", "Create with AI", and "Support". The ones you use most are "Page" and "Layout"
 > - From left to right, the Layout tab has the asset panel, the tool pane, the control bar and tool settings, the preview, and the layer panel
 > - A, P, T, F, and I in the asset panel are Assets, Page, Templates, Font, and Image
 > - If you are unsure about something, search the Help tab

@@ -26,8 +26,6 @@ Place a 3D model in VRM, GLB, or GLTF format in a panel, pose it, and put it int
 4. Adjust the pose and camera.
 5. Press "Commit to Panel" to put the current view into the panel as an image.
 
-[Image: Posing a model with 3D Pose]
-
 | Operation | How |
 | --- | --- |
 | Rotate / pan / zoom the camera | Left drag / right drag / wheel |
@@ -78,8 +76,6 @@ With comfyUI-particle-pixijs installed, you can composite particle and filter ef
 3. Adjust shape, size, spread, wind, and so on, and check the motion with "▶ Play".
 4. Press "■ Stop & Capture" to commit that moment as a still image.
 
-[Image: The PixiJS FX window]
-
 From "🎬 Filter Library" you can stack filters such as color adjustment, blur, glitch, and emboss. Combinations can be saved as presets.
 
 > **Tip**
@@ -93,6 +89,8 @@ Place an MP4 video in a panel, play it, and cut out any frame as a still image.
 2. Select the video in the layer panel and press "Video" in the tool pane.
 3. Use ▶ play, ■ stop, and the seek bar to find the scene you want.
 4. Press "Capture Frame as Still Image" to add that scene as an image in the same panel.
+
+To move or resize the video, press "✥" (move mode), just left of the play button (▶). While it is on, the video preview is paused and you can drag, resize, and rotate the video like an ordinary image. Turn it off to bring the playback preview back at the new position.
 
 You can also send a video by selecting it in the Workflow Studio gallery and pressing "Send CC".
 
