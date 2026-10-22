@@ -6,7 +6,6 @@
 import { t } from './i18n.js';
 import { state } from './main/01-state.js';
 import { dbGet } from './main/00-db.js';
-import { sanitizeSvgTree } from './main/02-assets.js';
 import { insertImage, insertImageFromUrl, getBoundingBoxFromPoints } from './main/08-panels-images.js';
 import { prepareVramForGeneration } from './vram-prepare.js';
 
@@ -690,8 +689,79 @@ function sortReadingOrder(list) {
 }
 
 // ページの吹き出しなしの単独テキスト（テキストツールの <text>）を取り出す。
-// 回転・拡縮・せん断・縦書きを含む実際の見た目の範囲が要るため、ページのSVGを画面外へ描画して実測する。
+// 回転・拡縮・せん断・縦書きを含む実際の見た目の範囲が要るため、文字だけの新しいSVGを画面外へ描画して実測する。
+// 保存済みSVGは描画せず（パースしただけのDOMは何も実行しない）、<text>/<tspan>と、許可リストの属性・祖先の transform だけを
+// 新しいSVGへ写す。禁止リスト方式のサニタイザでは名前空間付きの要素やアニメーション要素等の抜け道を塞ぎきれないため。
 // フキダシの中のテキスト（g.balloon-shape の子）と、defs 内のテキストは対象外
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const SAFE_TEXT_ATTRS = ['x', 'y', 'dx', 'dy', 'rotate', 'font-size', 'font-family', 'font-weight', 'font-style',
+    'letter-spacing', 'word-spacing', 'text-anchor', 'transform', 'data-scale-x', 'data-scale-y'];
+const SAFE_STYLE_PROPS = new Set(['white-space', 'writing-mode', 'text-orientation', 'font-size', 'font-family', 'font-weight',
+    'font-style', 'letter-spacing', 'word-spacing', 'text-anchor', 'line-height']);
+const SAFE_VALUE = /^[\w\s.,%#'"+\-\u0080-\uFFFF]*$/;   // 括弧・セミコロン・コロン・スラッシュを通さない（url() や式を入れられない）
+const SAFE_TRANSFORM = /^(?:\s*(?:matrix|translate|scale|rotate|skewX|skewY)\([\d\s.,eE+\-]*\)\s*,?)*$/;
+
+function copySafeAttrs(from, to) {
+    for (const name of SAFE_TEXT_ATTRS) {
+        const v = from.getAttribute(name);
+        if (v == null) continue;
+        if (!(name === 'transform' ? SAFE_TRANSFORM : SAFE_VALUE).test(v)) continue;
+        to.setAttribute(name, v);
+    }
+    const style = from.getAttribute('style');
+    if (style) {
+        const kept = [];
+        for (const decl of style.split(';')) {
+            const i = decl.indexOf(':');
+            if (i < 0) continue;
+            const prop = decl.slice(0, i).trim().toLowerCase(), val = decl.slice(i + 1).trim();
+            if (SAFE_STYLE_PROPS.has(prop) && SAFE_VALUE.test(val)) kept.push(`${prop}: ${val}`);
+        }
+        if (kept.length) to.setAttribute('style', kept.join('; '));
+    }
+}
+
+// parsed（パースしただけのSVGルート）から対象の <text> だけを写した新しいSVGを作る。対象が無ければ null
+function buildTextOnlySvg(parsed, svg) {
+    const fresh = document.createElementNS(SVG_NS, 'svg');
+    const nums = (parsed.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+    const vb = nums.length === 4 && nums.every(Number.isFinite) && nums[2] > 0 && nums[3] > 0
+        ? { x: nums[0], y: nums[1], width: nums[2], height: nums[3] } : { x: 0, y: 0, width: svg.w, height: svg.h };
+    fresh.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.width} ${vb.height}`);
+    fresh.setAttribute('width', '1000');
+    fresh.setAttribute('height', String(1000 * vb.height / vb.width));
+    let count = 0;
+    for (const el of parsed.getElementsByTagNameNS(SVG_NS, 'text')) {
+        if (!el.textContent.trim() || el.closest('g.balloon-shape, defs, clipPath, mask, pattern')) continue;
+        const t = document.createElementNS(SVG_NS, 'text');
+        copySafeAttrs(el, t);
+        for (const node of el.childNodes) {
+            if (node.nodeType === 3) {
+                t.appendChild(document.createTextNode(node.nodeValue));
+            } else if (node.nodeType === 1 && node.namespaceURI === SVG_NS && node.localName === 'tspan') {
+                const ts = document.createElementNS(SVG_NS, 'tspan');
+                copySafeAttrs(node, ts);
+                ts.textContent = node.textContent;
+                t.appendChild(ts);
+            }
+        }
+        // 祖先の g の transform だけを、同じ入れ子で再現する（グループ移動・回転の位置を保つため）
+        let node = t;
+        for (let a = el.parentNode; a && a !== parsed; a = a.parentNode) {
+            const tr = a.localName === 'g' && a.namespaceURI === SVG_NS ? a.getAttribute('transform') : null;
+            if (tr && SAFE_TRANSFORM.test(tr)) {
+                const g = document.createElementNS(SVG_NS, 'g');
+                g.setAttribute('transform', tr);
+                g.appendChild(node);
+                node = g;
+            }
+        }
+        fresh.appendChild(node);
+        count++;
+    }
+    return count ? { svg: fresh, vb } : null;
+}
+
 async function extractFreeTexts(rec, svg) {
     const sources = [rec.overlaySvgContent, ...(rec.panels || []).map(p => p.panelSvgContent)].filter(Boolean);
     const holder = document.createElement('div');
@@ -700,21 +770,14 @@ async function extractFreeTexts(rec, svg) {
     const out = [];
     try {
         for (const src of sources) {
-            // 保存済みSVGを文字列のままDOMへ入れず、パース→サニタイズ（script・on*属性・javascript:の除去）してから取り込む。
-            // 文字の実測に画像は不要なので、重い <image>（base64の画像など）も除去する
             const parsedDoc = new DOMParser().parseFromString(src, 'image/svg+xml');
             const parsed = parsedDoc.documentElement;
             if (!parsed || parsed.localName !== 'svg' || parsedDoc.querySelector('parsererror')) continue;
-            sanitizeSvgTree(parsed);
-            parsed.querySelectorAll('image').forEach(el => el.remove());
-            holder.replaceChildren(document.importNode(parsed, true));
-            const rootEl = holder.querySelector('svg');
-            if (!rootEl) continue;
-            const texts = [...rootEl.querySelectorAll('text')].filter(el => !el.closest('g.balloon-shape, defs, clipPath, mask, pattern') && el.textContent.trim());
-            if (!texts.length) continue;
-            rootEl.setAttribute('width', '1000');
-            rootEl.setAttribute('height', String(1000 * svg.h / svg.w));
-            const vb = rootEl.viewBox && rootEl.viewBox.baseVal && rootEl.viewBox.baseVal.width ? rootEl.viewBox.baseVal : { x: 0, y: 0, width: svg.w, height: svg.h };
+            const built = buildTextOnlySvg(parsed, svg);
+            if (!built) continue;
+            const { svg: rootEl, vb } = built;
+            holder.replaceChildren(rootEl);
+            const texts = [...rootEl.querySelectorAll('text')];
             rootEl.getBoundingClientRect();        // レイアウトを走らせ、Webフォントの読み込みを始めさせる
             try { await document.fonts.ready; } catch (_) { /* ignore */ }
             const rr = rootEl.getBoundingClientRect();
