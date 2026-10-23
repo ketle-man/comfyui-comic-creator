@@ -2084,6 +2084,7 @@
                   <div class="comfyui-field-group">
                     <div class="comfyui-group-title" data-i18n="moss.layoutTitle">レイアウトエディタ（物体 / キャラ / 文字をbboxで指定）</div>
                     <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px;">
+                      <button id="moss-layout-new-btn" class="btn small danger" data-i18n="moss.newLayout" data-i18n-title="moss.newLayoutTitle">新規作成</button>
                       <span style="font-size:12px;" data-i18n="moss.drawType">描画種別:</span>
                       <div class="moss-type-btns" id="moss-draw-type">
                         <button type="button" class="moss-type-btn active" data-type="object" data-i18n="moss.typeObject">物体</button>
@@ -2108,7 +2109,7 @@
                       <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px; font-size:12px; cursor:pointer;" data-i18n-title="moss.importPanelLabelHint"><input type="checkbox" id="moss-import-panel-label"> <span data-i18n="moss.importPanelLabel">コマを panel ラベルで取り込む</span></label>
                       <button id="moss-layout-import-balloons-btn" class="btn small secondary" data-i18n="moss.importBalloons">フキダシ・セリフを取り込む</button>
                       <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px; font-size:12px; cursor:pointer;"><input type="checkbox" id="moss-import-texts" checked> <span data-i18n="moss.importTexts">吹き出しなしの文字も取り込む</span></label>
-                      <button id="moss-layout-clear-btn" class="btn small danger" data-i18n="nb.clearAll">全クリア</button>
+                      <button id="moss-layout-clear-btn" class="btn small danger" data-i18n="moss.clearImported" data-i18n-title="moss.clearImportedTitle">取り込み全クリア</button>
                     </div>
                   </div>
 
