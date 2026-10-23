@@ -98,6 +98,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **Generation modes** — whole page (placed over the full page) / per panel (about 1MP from each panel aspect ratio, placed in the panel) / free size (generate only)
 - **Seed** — choose Random (default) / Fixed / Increment per run. "Last seed" and "Fix this seed" let you reproduce a result you like
 - The sent prompt (MOSS-Image layout JSON) can be checked in the "JSON" tab and also edited and sent directly. Presets (standard 50 steps / light 25 steps / fast DMD 8-step and Turbo 4-step), Skip Layer Guidance, and LoRA are supported
+- "Enhance the prompt" lets the text encoder (LLM) rewrite a short idea into a detailed caption before generating (the same enable_prompt_enhancer as the official template; not applied when a layout is used). In the layout, "New" deletes everything and "Clear Imported" deletes only imported boxes
 - Generated images are saved to ComfyUI's own `output/cc_moss` folder
 
 </details>

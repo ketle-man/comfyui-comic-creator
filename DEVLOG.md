@@ -2,6 +2,31 @@
 
 ---
 
+## 2026-10-23（MOSS-Image タブ: プロンプト拡張、レイアウトの新規作成/取り込み全クリア、v1.60.0）
+
+**1. プロンプト拡張（enable_prompt_enhancer）のON/OFF（新機能）**
+- ComfyUI公式テンプレート「Text to Image (MOSS-Image)」（サブグラフ）のスイッチと同じ方式。ONにすると、`CLIPLoader`（type `moss_image` = Qwen3.5-9B）を `TextGenerate`（LLM）として使い、公式のシステムプロンプトで短い指示を詳細な英語キャプションに書き換えてから `CLIPTextEncode` へ渡す。CCの従来のワークフローには拡張処理がなかった（実質OFF）。
+- `py/ccc.py` の `_moss_workflow` に `TextGenerate`（ノード `20`）を追加し、ポジティブの `text` を `['20', 0]` に差し替える。システムプロンプトは定数 `_MOSS_ENHANCER_SYSTEM`。`TextGenerate` の動的コンボ（`sampling_mode`）はAPI形式では `sampling_mode: 'on'` と `sampling_mode.temperature` のようなドット区切りキーで渡す（検証エラーなし・実行成功を確認）。
+- **レイアウト（bbox）使用時は拡張しない**: プロンプトがレイアウトJSONになり、LLMで書き換えると構造が壊れるため（`has_layout` のとき `enhance=False`）。コマ単位モードと、枠のない1頁モードで有効。UIは `moss-enhance` チェック（プロンプト欄の下）、リクエストは `enhance_prompt`、応答に `enhanced`。
+- 実測（seed固定、25step・CFG 2.5）: 「a cat sleeping in an orange bowl, manga style」はOFFだと効果線・擬似文字・吹き出しの混ざった漫画ページ風になり、ONだと約150語のキャプション（「No text appears in the image.」を含む）になって文字のない1枚絵になった。1サンプルの比較。
+- 拡張後の文はUIに出さない（`_native_nb_run` が出力ノードの画像しか返さないため）。
+
+**2. レイアウトの「新規作成」と「取り込み全クリア」**
+- 描画種別の左隣に「新規作成」（全bboxを削除）。従来の「全クリア」は「取り込み全クリア」に改名し、取り込んだ枠（`src` が `panel` / `balloon` / `text`）だけを削除する（手描きの枠は残す）。
+- 取り込みコマ枠には従来 `src` がなかったので `src: 'panel'` を付けた。旧バージョンで保存済みの取り込みコマ枠は印がなく、取り込み全クリアでは消えない（新規作成を使う）。
+
+**3. 調査したが採用しなかったこと（制限文）**
+- Soda-Storyboard の「コマ単位プロンプトに枠・文字・吹き出しを描かせない制限文を常に付ける」を試した。コマ単位モードで、シード固定・コマ内容固定で比較。
+  - CFG 1（dmd8・Turbo 4step）では **Negative Prompt が効かない**（Negativeの有無で画像が完全に同一）。
+  - 「No panel borders, no frames, no text, no speech bubbles.」だけだと枠・文字・吹き出しは残る。「A single illustration filling the entire image, not a manga page.」を足した文言＋CFG 2.5＋Negativeで、枠・吹き出しのない1枚絵になった。
+  - 1頁モード（コマbbox取込済み）では、全体に付加しても枠は残る（枠が取込bboxに引きずられる）。
+- 効果が1シード・1コマの比較で確実性が低いため、今回は実装しない判断にした。代わりにプロンプト拡張が同じ問題（文字・枠の混入）に効く可能性がある。
+- 検証用の生成が、作品「フキダシ見本」の1ページ目コマ1へ配置されて保存されていた（作品はそのままでよいとの判断）。
+
+**How to apply:** `py/ccc.py` を変更したため、更新後はComfyUIの再起動が必要。MOSS-Imageの検証でNegativeの効果を見るときは、CFGが1より大きいプリセット（標準・軽量）を使う。
+
+---
+
 ## 2026-10-22（同梱版マニュアルをv1.59.0に更新）
 
 `docs/manual/`（日本語・英語）をv1.53.2からv1.59.0対応に更新した。コード変更なし。
