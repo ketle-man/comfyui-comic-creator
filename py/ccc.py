@@ -1063,6 +1063,30 @@ def _moss_layout_prompt(summary, items, width, height, meta=None, canvas=None):
     layout = {'summary': head, 'items': out, 'bbox_coord_space': 'abs_centralized', 'bbox_format': 'yxyx'}
     return json.dumps(layout, ensure_ascii=False, separators=(',', ':'))
 
+# プロンプト拡張（enable_prompt_enhancer）: ComfyUI公式テンプレート「Text to Image (MOSS-Image)」のシステムプロンプト。
+# テキストエンコーダ(Qwen3.5)をLLMとして使い、ユーザーの短い指示を1つの詳細なキャプションに書き換えてからCLIPTextEncodeへ渡す
+_MOSS_ENHANCER_SYSTEM = '''You turn a user's image idea into one detailed caption for a text-to-image model. The model learned from captions that describe finished images, so write the caption as a description of the image itself, not as instructions.
+
+Keep the request
+- Keep everything the user specified: subjects, counts, actions, relationships, medium, style, mood, colors and anything they excluded. Never contradict or drop it.
+- Fill in what they left open with concrete visual choices: setting, composition and framing, viewpoint, lighting, materials and textures, color palette, and the artistic medium.
+- Describe only what can be seen. Leave out sounds, smells, backstory and intentions.
+- Do not invent real-world facts the user did not give, such as specific dates, prices, names or specifications.
+
+Text in the image
+- Quote every piece of visible text exactly, in double quotes. Keep the user's wording, language, spelling, capitalization, punctuation and line breaks; never translate it.
+- If the user asks for a designed image (poster, cover, menu, label, sign, infographic) without giving its text, write short, specific copy that fits instead of placeholders.
+- Describe where each text sits and how it looks: position, reading order, alignment, line breaks, relative size, font style, color and spacing.
+- Do not mention watermarks or artist signatures.
+
+Writing
+- Write in English, in plain prose: one to three paragraphs, usually 80 to 200 words, longer only when there is a lot of text to place.
+- Open with the medium and the main subject, then the setting and composition, then lighting, colors and finer details.
+- Give positions with words such as left, right, top, bottom, foreground and background. No coordinates, lists, headings, JSON or Markdown.
+- No quality keywords such as "masterpiece", "best quality", "8k" or "highly detailed", and no negative prompt.
+
+Reply with the caption only: no title, introduction, explanation or surrounding quotes.'''
+
 def _moss_workflow(p):
     """MOSS-Image T2Iの API形式ワークフロー。pは検証済みパラメータdict。出力ノードIDは _MOSS_OUT_NODE。"""
     wf = {
@@ -1073,6 +1097,13 @@ def _moss_workflow(p):
         '6': {'class_type': 'CLIPTextEncode', 'inputs': {'text': p['negative'], 'clip': ['2', 0]}},
         '7': {'class_type': 'EmptyFlux2LatentImage', 'inputs': {'width': p['width'], 'height': p['height'], 'batch_size': 1}},
     }
+    if p.get('enhance'):
+        wf['20'] = {'class_type': 'TextGenerate', 'inputs': {
+            'clip': ['2', 0], 'prompt': p['prompt'], 'max_length': 4096,
+            'sampling_mode': 'on', 'sampling_mode.temperature': 0.7, 'sampling_mode.top_k': 64, 'sampling_mode.top_p': 0.95,
+            'sampling_mode.min_p': 0.05, 'sampling_mode.repetition_penalty': 1.0, 'sampling_mode.seed': p['seed'],
+            'thinking': False, 'use_default_template': True, 'mtp': 'auto', 'system_prompt': _MOSS_ENHANCER_SYSTEM}}
+        wf['5']['inputs']['text'] = ['20', 0]
     model = ['1', 0]
     if p.get('lora'):
         wf['4'] = {'class_type': 'LoraLoaderModelOnly',
@@ -1100,7 +1131,8 @@ async def handle_moss_generate(request):
         data = await _read_json_limited(request, MAX_JSON_IMAGE_UPLOAD_BYTES)
         width = min(max(int(data.get('width') or 1024), 256), 4096) // 16 * 16
         height = min(max(int(data.get('height') or 1024), 256), 4096) // 16 * 16
-        if (data.get('layout') or {}).get('items'):
+        has_layout = bool((data.get('layout') or {}).get('items'))
+        if has_layout:
             lay = data['layout']
             prompt = _moss_layout_prompt(data.get('prompt'), lay.get('items'), width, height, lay.get('meta'), lay.get('canvas'))
         else:
@@ -1121,6 +1153,8 @@ async def handle_moss_generate(request):
             'sampler': _moss_str(data, 'sampler', 'euler'), 'scheduler': _moss_str(data, 'scheduler', 'simple'),
             'lora': _moss_str(data, 'lora'), 'lora_strength': min(max(float(data.get('lora_strength') if data.get('lora_strength') is not None else 1.0), -2.0), 2.0),
             'slg': bool(data.get('slg')),
+            # レイアウトJSONは構造を壊すので拡張しない（通常のテキストプロンプトのときだけ有効）
+            'enhance': bool(data.get('enhance_prompt')) and not has_layout,
         }
         base = _comfy_local_base_url()
         results, prompt_ids = [], []
@@ -1137,7 +1171,7 @@ async def handle_moss_generate(request):
         if not results:
             raise CCCError('moss_failed', '画像が生成されませんでした', detail='no images')
         return web.json_response({'status': 'ok', 'images': results, 'prompt_ids': prompt_ids, 'seed': base_seed,
-                                  'width': width, 'height': height, 'prompt': prompt})
+                                  'width': width, 'height': height, 'prompt': prompt, 'enhanced': params['enhance']})
     except CCCError as e:
         return _error_response(e, status=400)
     except (ValueError, TypeError) as e:

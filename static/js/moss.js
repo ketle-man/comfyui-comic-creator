@@ -14,7 +14,7 @@ const STORE_KEY = 'ccc_moss_v1';
 const SUBTAB_KEY = 'ccc_moss_subtab';
 const FIELD_IDS = ['moss-prompt', 'moss-negative', 'moss-mode', 'moss-size-preset', 'moss-width', 'moss-height', 'moss-batch',
     'moss-unet', 'moss-clip', 'moss-vae', 'moss-lora', 'moss-lora-strength', 'moss-steps', 'moss-cfg', 'moss-sampler',
-    'moss-scheduler', 'moss-slg', 'moss-seed', 'moss-seed-mode', 'moss-preset', 'moss-json-manual', 'moss-import-texts', 'moss-import-panel-label'];
+    'moss-scheduler', 'moss-slg', 'moss-seed', 'moss-seed-mode', 'moss-preset', 'moss-json-manual', 'moss-import-texts', 'moss-import-panel-label', 'moss-enhance'];
 
 // プリセット名 → サンプラー設定。loraはファイル名に含まれる正規表現（無ければLoRAなし）
 const PRESETS = {
@@ -953,6 +953,7 @@ function currentParams() {
         steps: Number(v('moss-steps')), cfg: Number(v('moss-cfg')),
         sampler: v('moss-sampler'), scheduler: v('moss-scheduler'), slg: $('moss-slg').checked,
         seed: !randomSeed && seedRaw >= 0 ? Math.floor(seedRaw) : -1,
+        enhance_prompt: $('moss-enhance').checked,
     };
 }
 
