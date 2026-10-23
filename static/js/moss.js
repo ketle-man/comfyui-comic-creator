@@ -614,9 +614,19 @@ function initItemProps() {
     $('moss-item-del-btn').addEventListener('click', deleteSelected);
     $('moss-item-up-btn').addEventListener('click', () => moveSelected(1));
     $('moss-item-down-btn').addEventListener('click', () => moveSelected(-1));
-    $('moss-layout-clear-btn').addEventListener('click', () => {
+    // 新規作成: すべてのbboxを削除してレイアウトを空にする
+    $('moss-layout-new-btn').addEventListener('click', () => {
         if (S.items.length && !confirm(t('moss.confirmClear'))) return;
         S.items = []; S.selId = null;
+        renderCanvas(); schedulePreview(); scheduleSave();
+    });
+    // 取り込み全クリア: 「コマ／フキダシ・セリフを取り込む」で入れた枠だけ削除（手で描いた枠は残す）
+    $('moss-layout-clear-btn').addEventListener('click', () => {
+        const imported = (i) => i.src === 'panel' || i.src === 'balloon' || i.src === 'text';
+        if (!S.items.some(imported)) return;
+        if (!confirm(t('moss.confirmClearImported'))) return;
+        S.items = S.items.filter(i => !imported(i));
+        if (S.selId && !S.items.some(i => i.id === S.selId)) S.selId = null;
         renderCanvas(); schedulePreview(); scheduleSave();
     });
 }
@@ -651,7 +661,7 @@ async function importPagePanels() {
         const cx = (b.x + b.width / 2) / svg.w, cy = (b.y + b.height / 2) / svg.h;
         addItem({
             type: $('moss-import-panel-label').checked ? 'panel' : 'object', caption: `${positionPhrase(cx, cy)} panel.`,   // 既定は object（公開仕様）。panel ラベルは使い分け用
-            x: b.x * sx, y: b.y * sy, w: b.width * sx, h: b.height * sy,
+            x: b.x * sx, y: b.y * sy, w: b.width * sx, h: b.height * sy, src: 'panel',
         });
     }
     renderCanvas(); schedulePreview(); scheduleSave();
