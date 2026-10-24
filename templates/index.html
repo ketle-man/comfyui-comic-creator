@@ -31,6 +31,7 @@
           <button class="tab-btn wfm-gallery-tab-btn" data-tab="wfmgallery" data-i18n="nav.wfmgallery">workflow studio</button>
           <button class="tab-btn" data-tab="nanobanana" data-i18n="nav.nanobanana">Nanobanana</button>
           <button class="tab-btn" data-tab="moss" data-i18n="nav.moss">MOSS-Image</button>
+          <button class="tab-btn" data-tab="ocr" data-i18n="nav.ocr">OCR</button>
           <button class="tab-btn" data-tab="auto" data-i18n="nav.auto">Auto</button>
           <button class="tab-btn" data-tab="project" data-i18n="nav.script">スクリプト</button>
           <button class="tab-btn" data-tab="settings" data-i18n="nav.settings">設定</button>
@@ -2287,6 +2288,78 @@
                 <div id="moss-result-thumbs" class="comfyui-result-thumbs" style="display:none; margin-top:8px;"></div>
                 <div class="control-row" style="margin-top:10px">
                   <button id="moss-insert-btn" class="btn secondary" style="width:100%" disabled data-i18n="moss.insertBtn">選択中の画像をページへ配置</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- OCR Tab -->
+          <section id="ocr-tab" class="tab-content">
+            <div class="comfyui-header-row">
+              <span id="ocr-status-label" class="comfyui-status disconnected" data-i18n="ocr.statusChecking">OCR: 確認中</span>
+              <div class="comfyui-url-group">
+                <span style="font-size:12px; color:var(--text-secondary);" data-i18n="ocr.localHint">※ Ollama のモデル（LightOnOCR-3 など）でローカル実行</span>
+                <button id="ocr-reload-models-btn" class="btn small secondary" data-i18n="ocr.reloadModels">モデル一覧を再読込</button>
+              </div>
+            </div>
+            <div class="comfyui-editor-layout">
+              <div class="comfyui-left-col ocr-image-col">
+                <div class="comfyui-field-group">
+                  <div class="comfyui-group-title" data-i18n="ocr.imageTitle">画像（bbox・文字の検出対象）</div>
+                  <div class="ocr-toolbar">
+                    <button id="ocr-open-btn" class="btn small secondary" data-i18n="ocr.openImage">画像を開く</button>
+                    <input type="file" id="ocr-file" accept="image/*" style="display:none" />
+                    <span style="font-size:12px;" data-i18n="ocr.drawType">描画種別:</span>
+                    <select id="ocr-draw-class" class="comfyui-select" style="width:auto"></select>
+                    <button id="ocr-box-del-btn" class="btn small danger" disabled data-i18n="common.delete">削除</button>
+                    <button id="ocr-box-clear-btn" class="btn small danger" data-i18n="ocr.clearBoxes">全クリア</button>
+                  </div>
+                  <div style="font-size:11px; color:#888; margin-bottom:6px;" data-i18n="ocr.imageHint">画像をドロップ / 貼り付け(Ctrl+V)でも読み込めます。空いている所をドラッグで枠を追加、枠をドラッグで移動・角で拡縮</div>
+                  <div id="ocr-stage-wrap" style="width:100%; display:flex; justify-content:center;">
+                    <div id="ocr-stage" class="ocr-stage"><div class="ocr-empty" data-i18n="ocr.empty">ここに画像をドロップ</div></div>
+                  </div>
+                </div>
+              </div>
+              <div class="moss-settings-col ocr-settings-col">
+                <div class="comfyui-field-group">
+                  <div class="comfyui-group-title" data-i18n="ocr.modelsTitle">モデル（Ollama）</div>
+                  <div class="comfyui-field"><label class="comfyui-label">URL:</label><input type="text" id="ocr-url" class="comfyui-input" style="flex:1" /></div>
+                  <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.ocrModel">OCRモデル:</label><select id="ocr-model" class="comfyui-select"></select></div>
+                  <div class="comfyui-field">
+                    <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-layout" checked> <span data-i18n="ocr.useLayout">レイアウト検出も行う（別のVLM）</span></label>
+                  </div>
+                  <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.layoutModel">検出モデル:</label><select id="ocr-layout-model" class="comfyui-select"></select></div>
+                  <div style="font-size:11px; color:#888;" data-i18n="ocr.layoutHint">OCRモデルは文字の位置と本文だけを返します。コマ・キャラ・フキダシ等は、画像対応の汎用VLM（gemma4 など）で検出します。</div>
+                </div>
+                <div class="comfyui-field-group" style="margin-top:10px">
+                  <div class="comfyui-group-title" data-i18n="ocr.classesTitle">検出するクラス</div>
+                  <div class="ocr-class-row">
+                    <label class="ocr-class-chk" style="--ocr-c:var(--ocr-text)"><input type="checkbox" checked disabled> <span data-i18n="ocr.cls.text">text</span></label>
+                    <label class="ocr-class-chk" style="--ocr-c:var(--ocr-balloon)"><input type="checkbox" data-ocr-class="balloon" checked> <span data-i18n="ocr.cls.balloon">balloon</span></label>
+                    <label class="ocr-class-chk" style="--ocr-c:var(--ocr-sfx)"><input type="checkbox" data-ocr-class="sfx"> <span data-i18n="ocr.cls.sfx">sfx</span></label>
+                    <label class="ocr-class-chk" style="--ocr-c:var(--ocr-caption)"><input type="checkbox" data-ocr-class="caption"> <span data-i18n="ocr.cls.caption">caption</span></label>
+                    <label class="ocr-class-chk" style="--ocr-c:var(--ocr-panel)"><input type="checkbox" data-ocr-class="panel" checked> <span data-i18n="ocr.cls.panel">panel</span></label>
+                    <label class="ocr-class-chk" style="--ocr-c:var(--ocr-character)"><input type="checkbox" data-ocr-class="character" checked> <span data-i18n="ocr.cls.character">character</span></label>
+                    <label class="ocr-class-chk" style="--ocr-c:var(--ocr-face)"><input type="checkbox" data-ocr-class="face"> <span data-i18n="ocr.cls.face">face</span></label>
+                    <label class="ocr-class-chk" style="--ocr-c:var(--ocr-object)"><input type="checkbox" data-ocr-class="object" checked> <span data-i18n="ocr.cls.object">object</span></label>
+                  </div>
+                  <div style="font-size:11px; color:#888; margin-top:4px;" data-i18n="ocr.classesHint">文字(text)はOCRモデル、他はレイアウト検出が対象です。</div>
+                </div>
+                <button id="ocr-run-btn" class="btn primary" style="width:100%" disabled data-i18n="ocr.run">検出を実行</button>
+                <div id="ocr-progress" style="font-size:12px; min-height:16px;"></div>
+                <div class="comfyui-field-group">
+                  <div class="comfyui-group-title"><span data-i18n="ocr.resultTitle">検出結果</span> <span id="ocr-count" style="font-weight:400"></span></div>
+                  <div id="ocr-list" class="ocr-list"></div>
+                  <div class="ocr-actions">
+                    <button id="ocr-copy-text-btn" class="btn small secondary" data-i18n="ocr.copyText">全文をコピー</button>
+                    <button id="ocr-copy-json-btn" class="btn small secondary" data-i18n="ocr.copyJson">JSONをコピー</button>
+                  </div>
+                </div>
+                <div class="comfyui-field-group">
+                  <div class="comfyui-group-title" data-i18n="ocr.mossTitle">MOSS-Imageへ送る</div>
+                  <label class="comfyui-checkbox-label" style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" id="ocr-merge-containers" checked> <span data-i18n="ocr.mergeContainers">フキダシ/擬音/キャプションの枠に文字をまとめる</span></label>
+                  <button id="ocr-send-moss-btn" class="btn primary" style="width:100%; margin-top:6px;" disabled data-i18n="ocr.sendMoss">レイアウトとして送る</button>
+                  <div style="font-size:11px; color:#888; margin-top:4px;" data-i18n="ocr.mossHint">物体・コマ・キャラ・文字のbboxとして取り込み、MOSS-Imageタブへ移動します（前回のOCR取り込み分は入れ替え）。</div>
                 </div>
               </div>
             </div>

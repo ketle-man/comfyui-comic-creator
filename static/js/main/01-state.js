@@ -44,6 +44,7 @@ import { initSplitPanelTool } from './24a-panel-split.js';
 import { initDeformPanelTool } from './24b-panel-deform.js';
 import { initNanobananaTab } from '../nanobanana.js';
 import { initMossTab } from '../moss.js';
+import { initOcrTab } from './29-ocr-tab.js';
 import { initImageTab } from '../image-tab.js';
 
 // ==============================
@@ -365,7 +366,7 @@ async function switchTab(tabId) {
     updateTemplateSidePanel(tabId === 'layout');
 
     // アセットパネル（左サイドバー）を非表示にするタブ
-    const _hideAssetPanelTabs = ['output', 'wfmgallery', 'nanobanana', 'moss', 'auto', 'settings', 'fontmgr', 'help'];
+    const _hideAssetPanelTabs = ['output', 'wfmgallery', 'nanobanana', 'moss', 'ocr', 'auto', 'settings', 'fontmgr', 'help'];
     const assetPanel = document.getElementById('asset-panel');
     if (assetPanel) assetPanel.style.display = _hideAssetPanelTabs.includes(tabId) ? 'none' : '';
 
@@ -444,6 +445,8 @@ async function switchTab(tabId) {
         initVramSettings();
     } else if (tabId === 'moss') {
         initMossTab();
+    } else if (tabId === 'ocr') {
+        initOcrTab();
     } else if (tabId === 'fontmgr') {
         await initFontMgrTab();
     } else if (tabId === 'project') {

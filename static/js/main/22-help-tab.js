@@ -109,6 +109,19 @@ const _HELP_DATA = [
         ],
     },
     {
+        id: 'ocr',
+        label: 'OCR',
+        tab: 'ocr',
+        kana: 'おーしーあーる',
+        sections: [
+            { heading: '概要', body: '画像から文字（本文と位置）を読み取り、コマ・キャラ・フキダシ・物体などの位置（bbox）も検出して、MOSS-Imageタブのレイアウトへ送るタブです。すべてローカルのOllamaで動きます。' },
+            { heading: '準備', body: '<ul><li>OCRモデル: Ollamaで <code>maternion/LightOnOCR-3:4b</code> を用意します（文字の位置と本文を返します）。</li><li>レイアウト検出モデル（任意）: 画像対応の汎用VLM（例: <code>gemma4:e4b</code>）。OCRモデルはコマ・キャラなどのラベル検出ができないため、これらは別のVLMで検出します。</li></ul>' },
+            { heading: '使い方', body: '<ol><li>画像を開く（ボタン・ドロップ・Ctrl+V貼り付け）。</li><li>検出するクラス（フキダシ・擬音・キャプション・コマ・キャラ・顔・物体）を選び「検出を実行」。文字（text）は常にOCRモデルが検出します。</li><li>キャンバスの枠をドラッグで移動、角で拡縮。空きをドラッグで枠を追加、Deleteで削除。右の一覧でクラス・本文・説明を直せます。</li><li>「全文をコピー」「JSONをコピー」で結果を取り出せます。</li></ol>' },
+            { heading: 'MOSS-Imageへ送る', body: '<ul><li>「レイアウトとして送る」で、物体・コマ・キャラ・文字のbboxとしてMOSS-Imageのレイアウトに取り込み、MOSS-Imageタブへ移動します。キャンバスは元画像の縦横比に合わせられます。</li><li>顔はキャラ、フキダシ・擬音・キャプションは文字として送られます。「枠に文字をまとめる」がONのとき、フキダシ等の枠に入っているOCR文字は1つの文字枠（枠はフキダシの輪郭）になります。文字の入っていないフキダシ等は送られません。</li><li>再送すると、前回OCRから取り込んだ枠だけが入れ替わります（手で足した枠は残ります。「取り込み全クリア」で消せます）。</li></ul>' },
+            { heading: '注意', body: '<ul><li>VLMの検出枠は大まかです。必要に応じて枠を直してから送ってください。</li><li>小さなOCRモデルのため、文字を読み違えることがあります。送る前に本文を確認してください。</li></ul>' },
+        ],
+    },
+    {
         id: 'auto',
         label: 'Auto',
         tab: 'auto',
@@ -1054,7 +1067,7 @@ const _HELP_ORDER = [
     'about',
     'page-work', 'page-template', 'page-export',
     'layout', 'image-tab', 'assetpanel',
-    'font', 'wfmgallery', 'nanobanana', 'moss', 'auto', 'project', 'settings',
+    'font', 'wfmgallery', 'nanobanana', 'moss', 'ocr', 'auto', 'project', 'settings',
     'appendix-svg-template', 'appendix-balloon', 'appendix-inkscape-template', 'appendix-inkscape-balloon',
 ];
 
