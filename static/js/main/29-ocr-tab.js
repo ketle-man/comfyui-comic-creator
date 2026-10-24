@@ -258,12 +258,24 @@ function initStageInteraction() {
     stage.addEventListener('pointercancel', end);
 
     // 画像の読み込み: ドロップ・貼り付け
-    stage.addEventListener('dragover', (e) => { e.preventDefault(); stage.classList.add('dragover'); });
-    stage.addEventListener('dragleave', () => stage.classList.remove('dragover'));
-    stage.addEventListener('drop', (e) => {
+    // ドロップはタブ全体で受ける（枠の外に落とすとブラウザが画像を別タブで開いてしまうため）
+    const tab = $('ocr-tab');
+    tab.addEventListener('dragover', (e) => { e.preventDefault(); stage.classList.add('dragover'); });
+    tab.addEventListener('dragleave', (e) => { if (!tab.contains(e.relatedTarget)) stage.classList.remove('dragover'); });
+    tab.addEventListener('drop', async (e) => {
         e.preventDefault(); stage.classList.remove('dragover');
-        const f = [...(e.dataTransfer?.files || [])].find(x => x.type.startsWith('image/'));
-        if (f) loadImageFile(f).catch(err => alert(err.message));
+        try {
+            const dt = e.dataTransfer;
+            let f = [...(dt?.files || [])].find(x => x.type.startsWith('image/'));
+            if (!f) {   // 別タブの画像などはファイルではなくURLで渡ってくる
+                const url = (dt?.getData('text/uri-list') || dt?.getData('text/plain') || '').split('\n')[0].trim();
+                if (/^(https?:|data:image\/|blob:)/.test(url)) {
+                    const blob = await (await fetch(url)).blob();
+                    if (blob.type.startsWith('image/')) f = new File([blob], 'dropped', { type: blob.type });
+                }
+            }
+            if (f) await loadImageFile(f);
+        } catch (err) { $('ocr-progress').textContent = t('ocr.errDrop', err.message || String(err)); }
     });
     document.addEventListener('paste', (e) => {
         if (!$('ocr-tab')?.classList.contains('active')) return;
