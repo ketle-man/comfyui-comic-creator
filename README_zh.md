@@ -354,4 +354,5 @@ MIT License — 详见 [LICENSE](LICENSE)。
 - **[ComfyUI-Workflow-Studio](https://github.com/ketle-man/ComfyUI-Workflow-Studio)** — 提供I2I联动和嵌入式图库功能的配套节点
 - **[comfyUI-particle-pixijs](https://github.com/ketle-man/comfyUI-particle-pixijs)** — 提供PixiJS FX（粒子・滤镜效果）功能的配套节点
 - **[comfyui-mask-editor-one](https://github.com/ketle-man/comfyui-mask-editor-one)** — 实现Image标签Mask工具及图层机制时参考的节点
+- **[PaddleOCR-VL-For-Manga](https://huggingface.co/jzhang533/PaddleOCR-VL-For-Manga)**（jzhang533，Apache 2.0）— OCR 标签页"裁剪重新识别"中推荐用于读取竖排・装饰文字的漫画专用 OCR 模型。基于 [PaddleOCR-VL](https://huggingface.co/PaddlePaddle/PaddleOCR-VL)（PaddlePaddle，Apache 2.0），Ollama 用 GGUF 版本为 [LunarOilRig/PaddleOCR-VL-manga-GGUF](https://huggingface.co/LunarOilRig/PaddleOCR-VL-manga-GGUF)。应用不内置该模型，需用户通过 Ollama 自行获取
 - [G'MIC](https://gmic.eu/) — 滤镜编辑功能（通过G'MIC Qt GUI外部可执行文件联动）

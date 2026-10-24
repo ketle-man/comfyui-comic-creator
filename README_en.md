@@ -358,4 +358,5 @@ MIT License — see [LICENSE](LICENSE) for details.
 - **[ComfyUI-Workflow-Studio](https://github.com/ketle-man/ComfyUI-Workflow-Studio)** — Companion node providing I2I integration and the embedded gallery
 - **[comfyUI-particle-pixijs](https://github.com/ketle-man/comfyUI-particle-pixijs)** — Companion node providing the PixiJS FX (particle/filter effects) feature
 - **[comfyui-mask-editor-one](https://github.com/ketle-man/comfyui-mask-editor-one)** — Node referenced when implementing the Image tab's Mask tool and layer mechanism
+- **[PaddleOCR-VL-For-Manga](https://huggingface.co/jzhang533/PaddleOCR-VL-For-Manga)** (jzhang533, Apache 2.0) — the manga-tuned OCR model recommended for reading vertical and stylized text in the OCR tab's "Re-reading crops". Based on [PaddleOCR-VL](https://huggingface.co/PaddlePaddle/PaddleOCR-VL) (PaddlePaddle, Apache 2.0); the GGUF build for Ollama is [LunarOilRig/PaddleOCR-VL-manga-GGUF](https://huggingface.co/LunarOilRig/PaddleOCR-VL-manga-GGUF). It is not bundled with the app; users pull it with Ollama
 - [G'MIC](https://gmic.eu/) — Filter editing (via the G'MIC Qt GUI, an external executable)
