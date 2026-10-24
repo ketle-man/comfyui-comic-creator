@@ -358,5 +358,12 @@ MIT License — 詳細は [LICENSE](LICENSE) を参照。
 - **[ComfyUI-Workflow-Studio](https://github.com/ketle-man/ComfyUI-Workflow-Studio)** — I2I 連携・ギャラリー埋め込み機能を提供するコンパニオンノード
 - **[comfyUI-particle-pixijs](https://github.com/ketle-man/comfyUI-particle-pixijs)** — PixiJS FX（パーティクル・フィルタ効果）機能を提供するコンパニオンノード
 - **[comfyui-mask-editor-one](https://github.com/ketle-man/comfyui-mask-editor-one)** — Image タブの Mask ツール・レイヤー機構の実装時に参考にしたノード
+- **[ComfyUI-LiveChatStream](https://github.com/ketle-man/ComfyUI-LiveChatStream)** — VRAM 調整（画像生成の前に Ollama のモデルをアンロードして空き VRAM を作る機能）の実装元となったノード
 - **[PaddleOCR-VL-For-Manga](https://huggingface.co/jzhang533/PaddleOCR-VL-For-Manga)**（jzhang533、Apache 2.0）— OCR タブの「切り抜きの読み直し」で、縦書き・装飾文字の読み取りに推奨しているマンガ特化の OCR モデル。元モデルは [PaddleOCR-VL](https://huggingface.co/PaddlePaddle/PaddleOCR-VL)（PaddlePaddle、Apache 2.0）、Ollama 用 GGUF は [LunarOilRig/PaddleOCR-VL-manga-GGUF](https://huggingface.co/LunarOilRig/PaddleOCR-VL-manga-GGUF)。アプリには同梱せず、利用者が Ollama で取得して使う
+- **[LightOnOCR-3](https://huggingface.co/lightonai/LightOnOCR-3-4B)**（LightOn、Apache 2.0）— OCR タブの文字検出（本文と位置）に使うモデル。Ollama 版は [maternion/LightOnOCR-3:4b](https://ollama.com/maternion/LightOnOCR-3:4b)。アプリには同梱せず、利用者が Ollama で取得して使う
+- **[Gemma 4](https://ollama.com/library/gemma4)**（Google）— OCR タブのレイアウト検出（コマ・キャラ・フキダシ等）の既定モデル（`gemma4:e4b`）。同梱せず、Ollama で取得して使う
+- **[MOSS-Image](https://github.com/OpenMOSS/MOSS-Image)**（OpenMOSS、Apache 2.0）— MOSS-Image タブが使う画像生成モデル。ComfyUI 本体のネイティブ対応を利用し、モデルは同梱しない
+- **[Ollama](https://ollama.com/)**（MIT）— OCR タブ・Auto タブ・VRAM 調整が利用するローカル LLM/VLM の実行環境
+- 同梱ライブラリ（`static/js/vendor/`、各ライセンスは同フォルダの README を参照）: [jsPDF](https://github.com/parallax/jsPDF)（MIT、PDF 出力）、[JSZip](https://github.com/Stuk/jszip)（MIT / GPLv3 デュアル、zip 保存）、[opentype.js](https://github.com/opentypejs/opentype.js)（MIT、3D テキストのフォント読込）
+- [psd-tools](https://github.com/psd-tools/psd-tools)（MIT）— Image タブの PSD 読み書き（`requirements.txt` で導入）
 - [G&#39;MIC](https://gmic.eu/) — フィルタ編集機能（G'MIC Qt GUI、外部実行ファイル連携）
