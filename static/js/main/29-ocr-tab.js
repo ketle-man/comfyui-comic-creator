@@ -18,6 +18,7 @@ import {
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'ccc_ocr_v1';
+const COLLAPSE_KEY = 'ccc_ocr_models_open';
 const SEND_MAX_SIDE = 1600;     // モデルへ送る画像の長辺（座標は正規化なので元解像度に影響しない）
 const MIN_BOX = 0.01;           // 正規化座標でこれ未満のドラッグは追加しない
 const TEXTY = new Set(['text', 'balloon', 'sfx', 'caption']);   // 本文を持つクラス（他は説明文 caption）
@@ -370,6 +371,10 @@ async function initOcrTabOnce() {
     }
     if (saved.useLayout === false) $('ocr-use-layout').checked = false;
     if (saved.merge === false) $('ocr-merge-containers').checked = false;
+
+    const md = $('ocr-models-details');   // モデル欄の開閉状態を保存
+    try { if (localStorage.getItem(COLLAPSE_KEY) === '0') md.open = false; } catch (_) { /* ignore */ }
+    md.addEventListener('toggle', () => { try { localStorage.setItem(COLLAPSE_KEY, md.open ? '1' : '0'); } catch (_) { /* ignore */ } });
 
     initStageInteraction();
     $('ocr-open-btn').addEventListener('click', () => $('ocr-file').click());

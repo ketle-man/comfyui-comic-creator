@@ -2321,8 +2321,9 @@
                 </div>
               </div>
               <div class="moss-settings-col ocr-settings-col">
+                <details id="ocr-models-details" class="moss-collapse" open>
+                  <summary data-i18n="ocr.modelsTitle">モデル（Ollama）</summary>
                 <div class="comfyui-field-group">
-                  <div class="comfyui-group-title" data-i18n="ocr.modelsTitle">モデル（Ollama）</div>
                   <div class="comfyui-field"><label class="comfyui-label">URL:</label><input type="text" id="ocr-url" class="comfyui-input" style="flex:1" /></div>
                   <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.ocrModel">OCRモデル:</label><select id="ocr-model" class="comfyui-select"></select></div>
                   <div class="comfyui-field">
@@ -2331,6 +2332,7 @@
                   <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.layoutModel">検出モデル:</label><select id="ocr-layout-model" class="comfyui-select"></select></div>
                   <div style="font-size:11px; color:#888;" data-i18n="ocr.layoutHint">OCRモデルは文字の位置と本文だけを返します。コマ・キャラ・フキダシ等は、画像対応の汎用VLM（gemma4 など）で検出します。</div>
                 </div>
+                </details>
                 <div class="comfyui-field-group" style="margin-top:10px">
                   <div class="comfyui-group-title" data-i18n="ocr.classesTitle">検出するクラス</div>
                   <div class="ocr-class-row">
