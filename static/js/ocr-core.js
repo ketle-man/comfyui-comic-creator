@@ -226,3 +226,46 @@ export function collectText(boxes) {
     return sortReading(boxes.filter(b => b.cls === 'text' || (OCR_CLASSES[b.cls]?.container && b.text)))
         .map(b => b.text).filter(Boolean).join('\n');
 }
+
+// ── 切り抜き再OCR ──
+// OCRモデルで取った文字枠を元画像から切り抜き、別モデルで読み直す（日本語の縦書き・装飾文字の精度を上げる）。
+// 実測（DEVLOG 2026-10-24）: マンガ特化のPaddleOCR-VLは縦書きの装飾文字に強く等倍が最良、LightOnOCRは極小の切り抜きだけ2倍で改善する。
+
+/** 再OCRに向くモデルを一覧から選ぶ（マンガ特化 → PaddleOCR-VL → GLM-OCR の順）。無ければ '' */
+export function pickRereadModel(names) {
+    for (const re of [/paddleocr.*manga/i, /paddleocr/i, /glm-ocr/i]) {
+        const hit = names.find(n => re.test(n));
+        if (hit) return hit;
+    }
+    return '';
+}
+
+/** モデルごとのOCR指示文（PaddleOCR-VLは "OCR:"、GLM-OCRは "Text Recognition:"） */
+export function rereadPrompt(model) {
+    const m = String(model || '');
+    if (/paddle/i.test(m)) return 'OCR:';
+    if (/glm-ocr/i.test(m)) return 'Text Recognition:';
+    return 'Extract all text from this image.';
+}
+
+export const UPSCALE_SHORT_SIDE = 96;   // LightOnOCRに渡す切り抜きの短辺がこれ未満なら2倍に拡大
+/** 切り抜き(px)の拡大率。LightOnOCR系だけ極小のとき2倍、それ以外は等倍（マンガ特化版は拡大で悪化した） */
+export function rereadScale(model, w, h) {
+    return /lighton/i.test(String(model || '')) && Math.min(w, h) < UPSCALE_SHORT_SIDE ? 2 : 1;
+}
+
+/** 正規化bbox → 元画像の切り抜き矩形(px)。短辺の6%+4pxの余白を足す */
+export function cropRect(box, imgW, imgH) {
+    const bw = (box.x2 - box.x1) * imgW, bh = (box.y2 - box.y1) * imgH;
+    const pad = Math.round(Math.min(bw, bh) * 0.06) + 4;
+    const sx = Math.max(0, Math.floor(box.x1 * imgW - pad)), sy = Math.max(0, Math.floor(box.y1 * imgH - pad));
+    const ex = Math.min(imgW, Math.ceil(box.x2 * imgW + pad)), ey = Math.min(imgH, Math.ceil(box.y2 * imgH + pad));
+    return { sx, sy, sw: Math.max(1, ex - sx), sh: Math.max(1, ey - sy) };
+}
+
+/** PaddleOCR-VL系は「…」「！」「？」を半角（...・!・?）で返すので、日本語を含む文字列だけ全角に戻す */
+export function normalizeJaPunct(text) {
+    const s = String(text || '').trim();
+    if (!isCjk(s)) return s;
+    return s.replace(/\.{2,}/g, '…').replace(/!/g, '！').replace(/\?/g, '？');
+}

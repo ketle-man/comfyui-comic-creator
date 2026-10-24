@@ -111,6 +111,7 @@
 - 检测到的框可在画布上拖动移动、拖角缩放、添加和删除；右侧列表中可编辑类别、文字和说明。可用"复制全文""复制 JSON"导出
 - **MOSS-Image 联动** — 点击"作为布局发送"，将结果作为物体・分镜・角色・文字的 bbox 导入 MOSS-Image 布局。气泡等框内的文字会合并为一个文字框。再次发送时仅替换上次 OCR 导入的框
 - 模型设置区可折叠（会记住展开/折叠状态）
+- **裁剪重新识别** — 将检测到的文字框从原图中裁剪出来，用另一个模型（默认为面向漫画的 PaddleOCR-VL，`ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M`）重新读取文字，可提升竖排・装饰文字的精度。"…""!""?"会自动转为全角。也可只重新识别所选的框
 
 </details>
 
@@ -353,4 +354,12 @@ MIT License — 详见 [LICENSE](LICENSE)。
 - **[ComfyUI-Workflow-Studio](https://github.com/ketle-man/ComfyUI-Workflow-Studio)** — 提供I2I联动和嵌入式图库功能的配套节点
 - **[comfyUI-particle-pixijs](https://github.com/ketle-man/comfyUI-particle-pixijs)** — 提供PixiJS FX（粒子・滤镜效果）功能的配套节点
 - **[comfyui-mask-editor-one](https://github.com/ketle-man/comfyui-mask-editor-one)** — 实现Image标签Mask工具及图层机制时参考的节点
+- **[ComfyUI-LiveChatStream](https://github.com/ketle-man/ComfyUI-LiveChatStream)** — VRAM 调整功能（生成图像前卸载 Ollama 模型以腾出显存）的移植来源节点
+- **[PaddleOCR-VL-For-Manga](https://huggingface.co/jzhang533/PaddleOCR-VL-For-Manga)**（jzhang533，Apache 2.0）— OCR 标签页"裁剪重新识别"中推荐用于读取竖排・装饰文字的漫画专用 OCR 模型。基于 [PaddleOCR-VL](https://huggingface.co/PaddlePaddle/PaddleOCR-VL)（PaddlePaddle，Apache 2.0），Ollama 用 GGUF 版本为 [LunarOilRig/PaddleOCR-VL-manga-GGUF](https://huggingface.co/LunarOilRig/PaddleOCR-VL-manga-GGUF)。应用不内置该模型，需用户通过 Ollama 自行获取
+- **[LightOnOCR-3](https://huggingface.co/lightonai/LightOnOCR-3-4B)**（LightOn，Apache 2.0）— OCR 标签页用于文字检测（内容和位置）的模型。Ollama 版本为 [maternion/LightOnOCR-3:4b](https://ollama.com/maternion/LightOnOCR-3:4b)。应用不内置，需用户通过 Ollama 自行获取
+- **[Gemma 4](https://ollama.com/library/gemma4)**（Google）— OCR 标签页布局检测（分镜・角色・气泡等）的默认模型（`gemma4:e4b`）。不内置，通过 Ollama 获取
+- **[MOSS-Image](https://github.com/OpenMOSS/MOSS-Image)**（OpenMOSS，Apache 2.0）— MOSS-Image 标签页使用的图像生成模型。依赖 ComfyUI 本体的原生支持，模型不内置
+- **[Ollama](https://ollama.com/)**（MIT）— OCR 标签页、Auto 标签页和 VRAM 调整使用的本地 LLM/VLM 运行环境
+- 内置库（`static/js/vendor/`，各自的许可证见该文件夹内的 README）：[jsPDF](https://github.com/parallax/jsPDF)（MIT，PDF 导出）、[JSZip](https://github.com/Stuk/jszip)（MIT / GPLv3 双许可，zip 保存）、[opentype.js](https://github.com/opentypejs/opentype.js)（MIT，3D 文字的字体加载）
+- [psd-tools](https://github.com/psd-tools/psd-tools)（MIT）— Image 标签页的 PSD 读写（通过 `requirements.txt` 安装）
 - [G'MIC](https://gmic.eu/) — 滤镜编辑功能（通过G'MIC Qt GUI外部可执行文件联动）

@@ -2311,6 +2311,7 @@
                     <input type="file" id="ocr-file" accept="image/*" style="display:none" />
                     <span style="font-size:12px;" data-i18n="ocr.drawType">描画種別:</span>
                     <select id="ocr-draw-class" class="comfyui-select" style="width:auto"></select>
+                    <button id="ocr-box-reread-btn" class="btn small secondary" disabled data-i18n="ocr.rereadBox" data-i18n-title="ocr.rereadBoxTitle">選択枠を読み直す</button>
                     <button id="ocr-box-del-btn" class="btn small danger" disabled data-i18n="common.delete">削除</button>
                     <button id="ocr-box-clear-btn" class="btn small danger" data-i18n="ocr.clearBoxes">全クリア</button>
                   </div>
@@ -2331,6 +2332,11 @@
                   </div>
                   <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.layoutModel">検出モデル:</label><select id="ocr-layout-model" class="comfyui-select"></select></div>
                   <div style="font-size:11px; color:#888;" data-i18n="ocr.layoutHint">OCRモデルは文字の位置と本文だけを返します。コマ・キャラ・フキダシ等は、画像対応の汎用VLM（gemma4 など）で検出します。</div>
+                  <div class="comfyui-field" style="margin-top:8px;">
+                    <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-reread" checked> <span data-i18n="ocr.useReread">文字枠を切り抜いて別モデルで読み直す</span></label>
+                  </div>
+                  <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.rereadModel">読み直しモデル:</label><select id="ocr-reread-model" class="comfyui-select"></select></div>
+                  <div style="font-size:11px; color:#888;" data-i18n="ocr.rereadHint">縦書き・装飾文字はマンガ特化のPaddleOCR-VLが強い傾向です（ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M）。枠の数だけ時間が掛かります。</div>
                 </div>
                 </details>
                 <div class="comfyui-field-group" style="margin-top:10px">
