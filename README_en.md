@@ -111,6 +111,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - Detected boxes can be moved by dragging, resized by the corners, added and deleted on the canvas; class, text and description can be edited in the list on the right. "Copy all text" and "Copy JSON" export the result
 - **MOSS-Image handoff** — "Send as layout" imports the result into the MOSS-Image layout as object / panel / character / text bboxes. Text inside a balloon etc. is merged into one text box. Sending again replaces only the boxes imported from the previous OCR
 - The model settings section is collapsible (the open/closed state is remembered)
+- **Re-reading crops** — each detected text box is cropped from the original image and read again by another model (default: manga-tuned PaddleOCR-VL, `ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M`), which improves vertical and stylized text. "…", "!" and "?" are converted to full-width automatically. A single selected box can also be re-read
 
 </details>
 

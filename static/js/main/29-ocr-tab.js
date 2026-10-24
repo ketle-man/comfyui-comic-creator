@@ -14,6 +14,7 @@ import { switchTab } from './01-state.js';
 import {
     OCR_MODEL_DEFAULT, LAYOUT_MODEL_DEFAULT, OCR_CLASSES, OCR_CLASS_KEYS, VLM_CLASS_KEYS, OCR_PROMPT,
     buildLayoutPrompt, parseOcrOutput, parseLayoutOutput, mergeDetections, toMossItems, collectText, sortReading,
+    pickRereadModel, rereadPrompt, rereadScale, cropRect, normalizeJaPunct,
 } from '../ocr-core.js';
 
 const $ = (id) => document.getElementById(id);
@@ -42,6 +43,7 @@ function saveSettings() {
         localStorage.setItem(STORE_KEY, JSON.stringify({
             url: $('ocr-url').value, ocrModel: $('ocr-model').value, layoutModel: $('ocr-layout-model').value,
             useLayout: $('ocr-use-layout').checked, classes, merge: $('ocr-merge-containers').checked,
+            useReread: $('ocr-use-reread').checked, rereadModel: $('ocr-reread-model').value,
         }));
     } catch (_) { /* ignore */ }
 }
@@ -49,7 +51,7 @@ function saveSettings() {
 // ─── Ollama ───
 const baseUrl = () => ($('ocr-url').value.trim() || getBackendDefaultUrl('ollama')).replace(/\/+$/, '');
 
-async function ollamaChat(model, prompt, b64, numPredict) {
+async function ollamaChat(model, prompt, b64, numPredict, retry = true) {
     const res = await fetch(`${baseUrl()}/api/chat`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -58,6 +60,10 @@ async function ollamaChat(model, prompt, b64, numPredict) {
             options: { temperature: 0, num_predict: numPredict },
         }),
     });
+    if (res.status === 500 && retry) {   // モデルの入れ替え直後などでランナーが一時的に落ちることがある。1回だけやり直す
+        await new Promise(r => setTimeout(r, 800));
+        return ollamaChat(model, prompt, b64, numPredict, false);
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
     return (await res.json()).message?.content || '';
 }
@@ -78,6 +84,9 @@ async function loadModels(saved) {
         const names = ((await res.json()).models || []).map(m => m.name);
         fillModelSelect($('ocr-model'), names, saved?.ocrModel || OCR_MODEL_DEFAULT, [/lighton/i, /ocr/i]);
         fillModelSelect($('ocr-layout-model'), names, saved?.layoutModel || LAYOUT_MODEL_DEFAULT,[/gemma|qwen.*vl|vl/i]);   // 既定は LAYOUT_MODEL_DEFAULT（gemma4:e4b）。保存値が無ければ名前から推定
+        const rereadDefault = pickRereadModel(names);
+        fillModelSelect($('ocr-reread-model'), names, saved?.rereadModel || rereadDefault, []);
+        if (!rereadDefault && saved?.useReread === undefined) $('ocr-use-reread').checked = false;   // 向いたモデルが無いときは既定オフ
         const ok = names.includes(OCR_MODEL_DEFAULT) || names.some(n => /ocr/i.test(n));
         label.textContent = ok ? t('ocr.statusReady') : t('ocr.statusNoModel');
         label.className = 'comfyui-status ' + (ok ? 'connected' : 'disconnected');
@@ -111,7 +120,7 @@ async function loadImageFile(file) {
     cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
     cx.drawImage(im, 0, 0, cv.width, cv.height);
     const b64 = cv.toDataURL('image/jpeg', 0.92).split(',')[1];
-    O.img = { url, w: im.naturalWidth, h: im.naturalHeight, b64 };
+    O.img = { url, w: im.naturalWidth, h: im.naturalHeight, b64, el: im };
     O.boxes = []; O.selId = null; O.nextId = 1;
     $('ocr-run-btn').disabled = false;
     $('ocr-progress').textContent = '';
@@ -123,6 +132,7 @@ function renderAll() { renderStage(); renderList(); updateButtons(); }
 
 function updateButtons() {
     $('ocr-box-del-btn').disabled = !selBox();
+    $('ocr-box-reread-btn').disabled = !selBox() || !TEXTY.has(selBox().cls) || O.busy;
     $('ocr-send-moss-btn').disabled = !O.boxes.length || !O.img;
     $('ocr-count').textContent = O.boxes.length ? `(${O.boxes.length})` : '';
 }
@@ -302,6 +312,59 @@ function selectedLayoutClasses() {
     return VLM_CLASS_KEYS.filter(c => document.querySelector(`[data-ocr-class="${c}"]`)?.checked);
 }
 
+// ─── 切り抜き再OCR ───
+// 文字枠を元画像から切り抜き、別モデルで読み直す。LightOnOCR系だけ、極小の切り抜きを2倍にする（ocr-core.js の rereadScale）
+function cropForModel(box, model) {
+    const r = cropRect(box, O.img.w, O.img.h);
+    const k = rereadScale(model, r.sw, r.sh);
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(r.sw * k); cv.height = Math.round(r.sh * k);
+    const cx = cv.getContext('2d');
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+    cx.imageSmoothingQuality = 'high';
+    cx.drawImage(O.img.el, r.sx, r.sy, r.sw, r.sh, 0, 0, cv.width, cv.height);
+    return cv.toDataURL('image/png').split(',')[1];
+}
+
+/** 1枠を読み直す。空の結果は null（元の文字を残す） */
+async function rereadBox(box, model) {
+    const out = normalizeJaPunct(await ollamaChat(model, rereadPrompt(model), cropForModel(box, model), 512));
+    return out || null;
+}
+
+async function rereadAll(prog) {
+    const model = $('ocr-reread-model').value;
+    const targets = O.boxes.filter(b => b.cls === 'text');
+    let done = 0, failed = 0;
+    for (const b of targets) {
+        prog.textContent = t('ocr.progressReread', ++done, targets.length);
+        try {
+            const text = await rereadBox(b, model);
+            if (text) { b.textOrig = b.text; b.text = text; }
+        } catch (e) {
+            console.warn('[ocr] reread failed', e);
+            if (++failed >= 2) throw new Error(t('ocr.errReread', e.message || String(e)));   // モデル未導入などで全滅するときは打ち切る
+        }
+    }
+}
+
+async function onRereadSelected() {
+    const b = selBox();
+    if (!b || O.busy || !O.img) return;
+    O.busy = true; updateButtons();
+    const prog = $('ocr-progress');
+    try {
+        prog.textContent = t('ocr.progressReread', 1, 1);
+        const text = await rereadBox(b, $('ocr-reread-model').value);
+        if (text) { b.textOrig = b.text; b.text = text; renderList(); }
+        prog.textContent = t('ocr.rereadDone');
+    } catch (e) {
+        prog.textContent = t('ocr.errRun', e.message || String(e));
+    } finally {
+        O.busy = false; updateButtons();
+    }
+}
+
 async function onRun() {
     if (O.busy || !O.img) return;
     if (O.boxes.length && !confirm(t('ocr.confirmReplace'))) return;
@@ -322,12 +385,17 @@ async function onRun() {
         O.boxes = mergeDetections(ocrBoxes, vlmBoxes).map(b => ({ ...b, id: O.nextId++ }));
         O.selId = null;
         renderAll();
-        prog.textContent = t('ocr.done', O.boxes.length, ((Date.now() - started) / 1000).toFixed(1));
+        let rereadError = '';
+        if ($('ocr-use-reread').checked && $('ocr-reread-model').value) {
+            try { await rereadAll(prog); } catch (e) { rereadError = e.message || String(e); }   // 検出結果は残し、元のOCR文字のまま
+            renderAll();
+        }
+        prog.textContent = rereadError || t('ocr.done', O.boxes.length, ((Date.now() - started) / 1000).toFixed(1));
     } catch (e) {
         console.warn('[ocr] run failed', e);
         prog.textContent = t('ocr.errRun', e.message || String(e));
     } finally {
-        O.busy = false; $('ocr-run-btn').disabled = !O.img;
+        O.busy = false; $('ocr-run-btn').disabled = !O.img; updateButtons();
     }
 }
 
@@ -370,6 +438,7 @@ async function initOcrTabOnce() {
         document.querySelectorAll('[data-ocr-class]').forEach(el => { el.checked = saved.classes.includes(el.dataset.ocrClass); });
     }
     if (saved.useLayout === false) $('ocr-use-layout').checked = false;
+    if (saved.useReread !== undefined) $('ocr-use-reread').checked = !!saved.useReread;
     if (saved.merge === false) $('ocr-merge-containers').checked = false;
 
     const md = $('ocr-models-details');   // モデル欄の開閉状態を保存
@@ -383,6 +452,7 @@ async function initOcrTabOnce() {
         if (f) loadImageFile(f).catch(err => alert(err.message));
     });
     $('ocr-box-del-btn').addEventListener('click', deleteSelected);
+    $('ocr-box-reread-btn').addEventListener('click', onRereadSelected);
     $('ocr-box-clear-btn').addEventListener('click', () => {
         if (!O.boxes.length || !confirm(t('ocr.confirmClear'))) return;
         O.boxes = []; O.selId = null; renderAll();
@@ -392,7 +462,7 @@ async function initOcrTabOnce() {
     $('ocr-copy-text-btn').addEventListener('click', () => copyText(collectText(O.boxes), 'ocr.copied'));
     $('ocr-copy-json-btn').addEventListener('click', () => copyText(boxesAsJson(), 'ocr.copied'));
     $('ocr-send-moss-btn').addEventListener('click', onSendMoss);
-    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers']) $(id).addEventListener('change', saveSettings);
+    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers', 'ocr-use-reread', 'ocr-reread-model']) $(id).addEventListener('change', saveSettings);
     document.querySelectorAll('[data-ocr-class]').forEach(el => el.addEventListener('change', saveSettings));
     $('ocr-url').addEventListener('change', () => loadModels(loadSettings()));
     window.addEventListener('resize', () => { if ($('ocr-tab')?.classList.contains('active')) renderStage(); });

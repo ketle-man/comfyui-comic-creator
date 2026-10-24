@@ -2,6 +2,34 @@
 
 ---
 
+## 2026-10-24（OCRタブ: 切り抜きの読み直し、PaddleOCR-VL系の検証）
+
+ブランチ: `feature/ocr-reread`（未マージ・未リリース）
+
+**1. 他OCRモデルの実測（Ollama、漫画ページ1枚＋合成7件）**
+- **glm-ocr**: bboxなし・プロンプト無視。本文は正確だが、縦書きで文字を落とす（合成 4/7）。
+- **unlimited-ocr**: `label [x1,y1,x2,y2]本文`（0〜999）を返し、`image` 枠がコマ枠とほぼ一致。縦書き文字は取りこぼす。
+- **deepseek-ocr**: `/api/generate` の `<|grounding|>Locate <|ref|>X<|/ref|>` だけがbbox。1問い合わせ=1枠で精度は低く、`/api/chat` では壊れる。日本語も弱い。
+- **PaddleOCR-VL（マンガ特化 `hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M`、1.6 `hf.co/PaddlePaddle/PaddleOCR-VL-1.6-GGUF`）**: mmprojが別ファイルでも `ollama pull hf.co/…` だけでvision対応で動く。プロンプトは `OCR:`。`Spotting:` はOllama経由だと本文のみでbboxは出ない。実画像の縦書き装飾文字（正解「アノワタクシハ」）はマンガ特化版だけが正解（LightOn「アノマリー」、glm「ルール」、1.6「ンッうやつーっ」）。合成7件は manga 7/7（「…」「！」「？」を半角化）、1.6 6/7、LightOn 5/7。
+- どのモデルも複数クラス（コマ・キャラ・フキダシ）の一括検出はできず、gemma4のJSON検出は引き続き必要。
+
+**2. アップスケール実験（Lanczos、1〜4倍）**
+- 実画像の切り抜き（49×215px・101×31px）は倍率で結果が変わらない。誤読はモデル要因。
+- 合成の極小文字（16px）では LightOnOCR だけ 1倍 1/7 → 2倍以上 5/7（1倍は極小画像でHTTP 500も出た）。マンガ特化版は1倍が最良で、拡大すると「ドドドドッ」の文字数が増える。
+- 方針: 基本は等倍、読み直しモデルがLightOnOCR系のときだけ短辺96px未満を2倍。AI超解像は未検証。
+
+**3. 実装**
+- `ocr-core.js` に `pickRereadModel` / `rereadPrompt` / `rereadScale` / `cropRect` / `normalizeJaPunct`（日本語を含む文字列の `...`→`…`、`!`→`！`、`?`→`？`）を追加。
+- OCRタブのモデル欄に「文字枠を切り抜いて別モデルで読み直す」と「読み直しモデル」（既定は manga → PaddleOCR-VL → glm-ocr の順に選ぶ。無ければ既定オフ）。実行時は文字枠を順に読み直し、失敗が2回続いたら打ち切って元のOCR文字を残す。ツールバーに「選択枠を読み直す」を追加。
+- Ollamaが一時的に500を返す（モデル入れ替え直後にランナーが落ちる）ことがあるため、1回だけ自動で再試行する。
+- 実機（Kapture）: 縦書き「アノワタクシハ」が LightOnOCR単体の「アークタクシー」から正解に変わる（全体2秒）。未導入モデルは404で打ち切り、元の文字が残る。
+
+**4. 保留**
+- 読み直しの並列実行・進捗の取り消し。枠の数だけ時間が掛かる。
+- Ollama経由でPaddleOCR-VLのbbox（Spotting）を取る方法。ロケーショントークンが落ちている可能性があるが原因は未調査。
+
+---
+
 ## 2026-10-24（OCRタブ新規: Ollama LightOnOCR-3でbbox・文字検出、MOSS-Imageレイアウト連携、v1.61.0）
 
 **1. 構成**
