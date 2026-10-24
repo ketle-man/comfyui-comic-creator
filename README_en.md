@@ -104,6 +104,17 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 </details>
 
 <details>
+<summary><strong>OCR (detect bboxes and text from an image, then hand off to MOSS-Image)</strong></summary>
+
+- A dedicated tab that detects text (content and position) and the positions (bbox) of panels, characters, balloons, etc. from an image (drop, paste, or file picker). Runs entirely locally with Ollama
+- Text is read by an OCR model (`maternion/LightOnOCR-3:4b`); panels, characters, faces, objects, balloons, sound effects and captions are detected by a general vision LLM (default `gemma4:e4b`). The classes to detect are chosen with checkboxes
+- Detected boxes can be moved by dragging, resized by the corners, added and deleted on the canvas; class, text and description can be edited in the list on the right. "Copy all text" and "Copy JSON" export the result
+- **MOSS-Image handoff** — "Send as layout" imports the result into the MOSS-Image layout as object / panel / character / text bboxes. Text inside a balloon etc. is merged into one text box. Sending again replaces only the boxes imported from the previous OCR
+- The model settings section is collapsible (the open/closed state is remembered)
+
+</details>
+
+<details>
 <summary><strong>Auto (AI manga auto-creation)</strong></summary>
 
 - Creates a **story and then a script** with AI from a theme and page count (assumes a person edits and finishes the result; independent of the Script tab as a new work)
@@ -210,6 +221,10 @@ Your ComfyUI must support MOSS-Image (update ComfyUI to the latest version). Pla
 
 You are set when the status at the top of the MOSS-Image tab shows "ready". Restart ComfyUI after updating `py/ccc.py`.
 
+### To use the OCR tab
+
+Prepare an OCR model in [Ollama](https://ollama.com/) (`ollama pull maternion/LightOnOCR-3:4b`). To also detect panels, characters, balloons, etc., prepare a general vision LLM too (e.g. `ollama pull gemma4:e4b`). You are set when the status at the top of the OCR tab shows "ready".
+
 ### To use G'MIC
 
 In the Settings tab's "G'MIC Settings", specify the full path to the G'MIC Qt executable (`gmic_qt.exe`). It takes effect immediately after saving — no ComfyUI restart required.
@@ -298,6 +313,7 @@ comfyui-comic-creator/
 │   │   ├── i18n.js              # Multilingual dictionary (ja/en/zh) + t()
 │   │   ├── nanobanana.js        # Nanobanana (Gemini API) integration
 │   │   ├── moss.js              # MOSS-Image (local generation, layout editor)
+│   │   ├── ocr-core.js       # OCR tab logic (detection parsing, MOSS conversion; DOM-free)
 │   │   ├── auto-ai-client.js    # Auto tab LLM client (local LLM / Gemini)
 │   │   ├── auto-story-core.js   # Auto tab script prompts and parsing (DOM-free)
 │   │   ├── auto-decision.js     # Auto tab balloon shape / panel importance estimation with a decision model

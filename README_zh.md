@@ -104,6 +104,17 @@
 </details>
 
 <details>
+<summary><strong>OCR（从图像检测 bbox・文字，并联动 MOSS-Image）</strong></summary>
+
+- 专用标签页，从图像（拖放、粘贴或选择文件）中检测文字（内容和位置）以及分镜・角色・气泡等的位置（bbox）。全部通过本地 Ollama 运行
+- 文字由 OCR 模型（`maternion/LightOnOCR-3:4b`）读取；分镜・角色・脸部・物体・气泡・拟声词・旁白框由支持图像的通用 VLM（默认 `gemma4:e4b`）检测。检测的类别通过勾选选择
+- 检测到的框可在画布上拖动移动、拖角缩放、添加和删除；右侧列表中可编辑类别、文字和说明。可用"复制全文""复制 JSON"导出
+- **MOSS-Image 联动** — 点击"作为布局发送"，将结果作为物体・分镜・角色・文字的 bbox 导入 MOSS-Image 布局。气泡等框内的文字会合并为一个文字框。再次发送时仅替换上次 OCR 导入的框
+- 模型设置区可折叠（会记住展开/折叠状态）
+
+</details>
+
+<details>
 <summary><strong>Auto（AI漫画自动创作）</strong></summary>
 
 - 根据主题和页数，用AI分两步自动创作**故事 → 脚本**（以创作后由人编辑完成为前提；与脚本标签页无关联，作为新作品独立管理）
@@ -210,6 +221,10 @@ ComfyUI 本体需要支持 MOSS-Image（请将 ComfyUI 更新到最新版）。�
 
 MOSS-Image 标签页顶部的状态显示"可用"即准备完毕。更新 `py/ccc.py` 后需要重启 ComfyUI。
 
+### 使用 OCR 标签页
+
+请在 [Ollama](https://ollama.com/) 中准备 OCR 模型（`ollama pull maternion/LightOnOCR-3:4b`）。若还需检测分镜・角色・气泡等，请同时准备支持图像的通用 VLM（例如 `ollama pull gemma4:e4b`）。OCR 标签页顶部的状态显示"可用"即准备完毕。
+
 ### 使用 G'MIC
 
 在设置标签的"G'MIC设置"中指定 G'MIC Qt 可执行文件（`gmic_qt.exe`）的完整路径。保存后立即生效，无需重启 ComfyUI。
@@ -294,6 +309,7 @@ comfyui-comic-creator/
 │   │   ├── i18n.js              # 多语言词典（ja/en/zh）+ t()
 │   │   ├── nanobanana.js        # Nanobanana（Gemini API）联动
 │   │   ├── moss.js              # MOSS-Image（本地生成・布局编辑器）
+│   │   ├── ocr-core.js       # OCR 标签页逻辑（检测输出解析、MOSS 转换，不依赖 DOM）
 │   │   ├── auto-ai-client.js    # Auto标签页 LLM客户端（本地LLM / Gemini）
 │   │   ├── auto-story-core.js   # Auto标签页 脚本提示词与解析（不依赖DOM）
 │   │   ├── auto-decision.js     # Auto标签页 用决策模型推断对话框形状・分格重要度
