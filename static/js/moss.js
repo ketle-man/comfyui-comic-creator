@@ -622,7 +622,7 @@ function initItemProps() {
     });
     // 取り込み全クリア: 「コマ／フキダシ・セリフを取り込む」で入れた枠だけ削除（手で描いた枠は残す）
     $('moss-layout-clear-btn').addEventListener('click', () => {
-        const imported = (i) => i.src === 'panel' || i.src === 'balloon' || i.src === 'text';
+        const imported = (i) => i.src === 'panel' || i.src === 'balloon' || i.src === 'text' || i.src === 'ocr';
         if (!S.items.some(imported)) return;
         if (!confirm(t('moss.confirmClearImported'))) return;
         S.items = S.items.filter(i => !imported(i));
@@ -1206,7 +1206,37 @@ async function initMossTabOnce() {
 function initMossTab() {
     if (S.inited) return;
     S.inited = true;
-    initMossTabOnce();
+    S.initPromise = initMossTabOnce();
 }
 
-export { initMossTab, extractBalloons, extractFreeTexts };
+// ─── OCRタブからの取り込み ───
+// items: ocr-core.js の toMossItems の結果（座標は0〜1）。aspect: 元画像の縦横比。
+// 前回OCRから取り込んだ枠（src:'ocr'）だけ入れ替え、手で足した枠・コマ/フキダシ取り込みの枠は残す。
+// キャンバスの縦横比が違えば元画像に合わせる（既存の枠も同じ比率で拡縮）。取り込み後のタブ切替は呼び出し側で行う
+async function importOcrItems(items, { aspect = 1 } = {}) {
+    initMossTab();
+    await S.initPromise;   // 保存済みレイアウトの復元が終わってから足す（先に足すと復元で消える）
+    if (Math.abs((S.W / S.H) / aspect - 1) > 0.02) {
+        const { w, h } = sizeForAspect(aspect, PAGE_TARGET_PIXELS);
+        const kx = w / S.W, ky = h / S.H;
+        for (const it of S.items) {
+            it.x *= kx; it.w *= kx; it.y *= ky; it.h *= ky;
+            if (it.fontSize > 0) it.fontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, Math.round(it.fontSize * ky)));
+        }
+        setSize(w, h);
+    }
+    S.items = S.items.filter(i => i.src !== 'ocr');
+    if (S.selId && !S.items.some(i => i.id === S.selId)) S.selId = null;
+    for (const o of items) {
+        const x = clamp(o.x1 * S.W, 0, S.W - MIN_BOX_PX), y = clamp(o.y1 * S.H, 0, S.H - MIN_BOX_PX);
+        const it = addItem({
+            type: o.type, src: 'ocr', caption: o.caption || '', text: o.text || '', vertical: !!o.vertical, fitBox: false,
+            x, y, w: Math.min((o.x2 - o.x1) * S.W, S.W - x), h: Math.min((o.y2 - o.y1) * S.H, S.H - y),
+        });
+        if (it.type === 'text') it.fontSize = fitFontToBox(it);
+    }
+    renderCanvas(); schedulePreview(); scheduleSave();
+    return items.length;
+}
+
+export { initMossTab, extractBalloons, extractFreeTexts, importOcrItems };

@@ -109,6 +109,19 @@ const _HELP_DATA = [
         ],
     },
     {
+        id: 'ocr',
+        label: 'OCR',
+        tab: 'ocr',
+        kana: 'おーしーあーる',
+        sections: [
+            { heading: '概要', body: '画像から文字（本文と位置）を読み取り、コマ・キャラ・フキダシ・物体などの位置（bbox）も検出して、MOSS-Imageタブのレイアウトへ送るタブです。すべてローカルのOllamaで動きます。' },
+            { heading: '準備', body: '<ul><li>OCRモデル: Ollamaで <code>maternion/LightOnOCR-3:4b</code> を用意します（文字の位置と本文を返します）。</li><li>レイアウト検出モデル（任意）: 画像対応の汎用VLM（例: <code>gemma4:e4b</code>）。OCRモデルはコマ・キャラなどのラベル検出ができないため、これらは別のVLMで検出します。</li></ul>' },
+            { heading: '使い方', body: '<ol><li>画像を開く（ボタン・ドロップ・Ctrl+V貼り付け）。</li><li>検出するクラス（フキダシ・擬音・キャプション・コマ・キャラ・顔・物体）を選び「検出を実行」。文字（text）は常にOCRモデルが検出します。</li><li>キャンバスの枠をドラッグで移動、角で拡縮。空きをドラッグで枠を追加、Deleteで削除。右の一覧でクラス・本文・説明を直せます。</li><li>「全文をコピー」「JSONをコピー」で結果を取り出せます。</li></ol>' },
+            { heading: 'MOSS-Imageへ送る', body: '<ul><li>「レイアウトとして送る」で、物体・コマ・キャラ・文字のbboxとしてMOSS-Imageのレイアウトに取り込み、MOSS-Imageタブへ移動します。キャンバスは元画像の縦横比に合わせられます。</li><li>顔はキャラ、フキダシ・擬音・キャプションは文字として送られます。「枠に文字をまとめる」がONのとき、フキダシ等の枠に入っているOCR文字は1つの文字枠（枠はフキダシの輪郭）になります。文字の入っていないフキダシ等は送られません。</li><li>再送すると、前回OCRから取り込んだ枠だけが入れ替わります（手で足した枠は残ります。「取り込み全クリア」で消せます）。</li></ul>' },
+            { heading: '注意', body: '<ul><li>VLMの検出枠は大まかです。必要に応じて枠を直してから送ってください。</li><li>小さなOCRモデルのため、文字を読み違えることがあります。送る前に本文を確認してください。</li></ul>' },
+        ],
+    },
+    {
         id: 'auto',
         label: 'Auto',
         tab: 'auto',
@@ -526,6 +539,16 @@ const _HELP_I18N = {
                 { heading: 'Save Location and Notes', body: '<ul><li>Generated images are saved to the <code>output/cc_moss</code> folder under ComfyUI.</li><li>Settings and the layout are saved in the browser and restored after a reload.</li><li><b>Text boxes with empty text are not sent</b> (they are shown faint with a dashed outline on the canvas), because sending one makes the model draw something like a sheet of paper in that area.</li><li>Japanese is outside the officially supported languages (English and Chinese), so check the rendering quality as you go. Image editing (I2I) is not supported.</li><li>Before generating, "VRAM adjustment" (unloading Ollama models) in the Settings tab runs automatically when enabled.</li></ul>' },
             ],
         },
+        ocr: {
+            label: 'OCR',
+            sections: [
+                { heading: 'Overview', body: 'A tab that reads text (content and position) from an image, also detects the positions (bbox) of panels, characters, balloons and objects, and sends them to the MOSS-Image layout. Everything runs locally with Ollama.' },
+                { heading: 'Setup', body: '<ul><li>OCR model: prepare <code>maternion/LightOnOCR-3:4b</code> in Ollama (it returns text positions and content).</li><li>Layout detection model (optional): a general vision LLM such as <code>gemma4:e4b</code>. The OCR model cannot detect labels such as panels or characters, so a separate VLM detects them.</li></ul>' },
+                { heading: 'How to use', body: '<ol><li>Open an image (button, drop, or Ctrl+V paste).</li><li>Choose the classes to detect (balloon, sound effect, caption, panel, character, face, object) and press "Run detection". Text is always detected by the OCR model.</li><li>Drag a box on the canvas to move it, drag a corner to resize it, drag on empty space to add one, and press Delete to remove it. Class, text and description can be edited in the list on the right.</li><li>"Copy all text" and "Copy JSON" export the result.</li></ol>' },
+                { heading: 'Send to MOSS-Image', body: '<ul><li>"Send as layout" imports the result into the MOSS-Image layout as object / panel / character / text bboxes and switches to the MOSS-Image tab. The canvas is fitted to the aspect ratio of the source image.</li><li>Faces are sent as characters; balloons, sound effects and captions are sent as text. With "Merge text into frames" on, OCR text inside a balloon etc. becomes one text box (the frame is the balloon outline). Balloons without text are not sent.</li><li>Sending again replaces only the boxes imported from the previous OCR (hand-drawn boxes stay; "Clear Imported" removes them).</li></ul>' },
+                { heading: 'Notes', body: '<ul><li>Boxes found by the VLM are approximate. Adjust them before sending if needed.</li><li>The OCR model is small and can misread text. Check the text before sending.</li></ul>' },
+            ],
+        },
         auto: {
             label: 'Auto',
             sections: [
@@ -830,6 +853,16 @@ const _HELP_I18N = {
                 { heading: '保存位置与注意事项', body: '<ul><li>生成的图像保存到 ComfyUI 本体的 <code>output/cc_moss</code> 文件夹。</li><li>设置和布局保存在浏览器中，刷新后会恢复。</li><li><b>文字为空的文字框不会被发送</b>（在画布上以虚线淡色显示），因为发送后模型会在该区域画出类似纸张的东西。</li><li>日文不在官方支持的语言（英语和中文）之内，请边使用边确认渲染效果。不支持图像编辑（I2I）。</li><li>生成前，若已启用设置标签页的"VRAM 调整"（卸载 Ollama 模型），会自动执行。</li></ul>' },
             ],
         },
+        ocr: {
+            label: 'OCR',
+            sections: [
+                { heading: '概述', body: '从图像中读取文字（内容和位置），并检测分镜・角色・气泡・物体的位置（bbox），然后发送到 MOSS-Image 布局的标签页。全部通过本地 Ollama 运行。' },
+                { heading: '准备', body: '<ul><li>OCR模型: 在 Ollama 中准备 <code>maternion/LightOnOCR-3:4b</code>（返回文字的位置和内容）。</li><li>布局检测模型（可选）: 支持图像的通用VLM（例如 <code>gemma4:e4b</code>）。OCR模型无法检测分镜、角色等标签，因此由另一个VLM检测。</li></ul>' },
+                { heading: '使用方法', body: '<ol><li>打开图像（按钮、拖放或 Ctrl+V 粘贴）。</li><li>选择要检测的类别（气泡・拟声词・旁白框・分镜・角色・脸部・物体），点击"执行检测"。文字始终由OCR模型检测。</li><li>在画布上拖动框可移动，拖动角可缩放，在空白处拖动可添加，按 Delete 删除。右侧列表中可修改类别、文字和说明。</li><li>可用"复制全文""复制JSON"导出结果。</li></ol>' },
+                { heading: '发送到 MOSS-Image', body: '<ul><li>"作为布局发送"会将结果作为物体・分镜・角色・文字的bbox导入 MOSS-Image 布局，并切换到 MOSS-Image 标签页。画布会调整为与原图相同的长宽比。</li><li>脸部作为角色发送；气泡・拟声词・旁白框作为文字发送。开启"将文字合并到框"时，气泡等框内的OCR文字会合并为一个文字框（框为气泡轮廓）。不含文字的气泡等不会发送。</li><li>再次发送时，只替换上次OCR导入的框（手绘的框会保留，可用"清除导入"删除）。</li></ul>' },
+                { heading: '注意', body: '<ul><li>VLM检测到的框比较粗略，发送前请根据需要调整。</li><li>OCR模型较小，可能会读错文字，发送前请确认文字。</li></ul>' },
+            ],
+        },
         auto: {
             label: 'Auto',
             sections: [
@@ -1054,7 +1087,7 @@ const _HELP_ORDER = [
     'about',
     'page-work', 'page-template', 'page-export',
     'layout', 'image-tab', 'assetpanel',
-    'font', 'wfmgallery', 'nanobanana', 'moss', 'auto', 'project', 'settings',
+    'font', 'wfmgallery', 'nanobanana', 'moss', 'ocr', 'auto', 'project', 'settings',
     'appendix-svg-template', 'appendix-balloon', 'appendix-inkscape-template', 'appendix-inkscape-balloon',
 ];
 

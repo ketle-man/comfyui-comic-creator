@@ -2,6 +2,26 @@
 
 ---
 
+## 2026-10-24（OCRタブ新規: Ollama LightOnOCR-3でbbox・文字検出、MOSS-Imageレイアウト連携、v1.61.0）
+
+**1. 構成**
+- `static/js/ocr-core.js`（DOM非依存: プロンプト・パース・MOSS変換）、`static/js/main/29-ocr-tab.js`（UI）。Ollamaへはブラウザから直接 `/api/chat`（Autoタブと同じ方式。サーバー側の変更なし）。
+- `moss.js` に `importOcrItems` を追加。取り込み枠は `src: 'ocr'`（再送で入れ替え、「取り込み全クリア」の対象）。MOSSの初期化（保存済みレイアウトの復元）完了を待ってから足す。
+
+**2. モデルの実測**
+- LightOnOCR-3:4b（`maternion/`、実体はqwen35系）は `![text](x1,y1,x2,y2) 本文`（0〜1000正規化）を返す。**ラベル（panel/character等）を指示しても無視される**。出るのは text / title / image のみ。
+- そのため文字はOCRモデル、コマ・キャラ・フキダシ・擬音・キャプション・顔・物体は別の汎用VLM（既定 `gemma4:e4b`）のJSON検出（`box_2d` は **[y1,x1,y2,x2]**）で担う。VLMの枠は大まかで、枠の編集UIを付けた。
+
+**3. UIの調整**
+- ドロップは画像枠だけでなくタブ全体で受ける（枠外に落とすとブラウザが画像を別タブで開いていた）。別タブの画像はファイルでなくURLで渡るためURLからの取得にも対応。
+- モデル設定欄は `<details class="moss-collapse">` の折りたたみ（開閉は `ccc_ocr_models_open` に保存）。
+
+**4. 保留**
+- 現在のページ/Imageタブ/MOSS生成結果を直接OCRの入力にする経路は未実装（画像ファイルのドロップ・貼り付けのみ）。
+- 縦書きの列数（改行）はOCR出力から取れないため、縦書きの文字は1列として扱う。
+
+---
+
 ## 2026-10-23（MOSS-Image タブ: プロンプト拡張、レイアウトの新規作成/取り込み全クリア、v1.60.0）
 
 **1. プロンプト拡張（enable_prompt_enhancer）のON/OFF（新機能）**

@@ -104,6 +104,17 @@ ComfyUI 上で動作するマンガページ作成 SPA（シングルページ�
 </details>
 
 <details>
+<summary><strong>OCR（画像から bbox・文字を検出 → MOSS-Image へ連携）</strong></summary>
+
+- 画像（ドロップ・貼り付け・ファイル選択）から、文字（本文と位置）とコマ・キャラ・フキダシ等の位置（bbox）を検出する専用タブ。すべてローカルの Ollama で動作
+- 文字は OCR モデル（`maternion/LightOnOCR-3:4b`）、コマ・キャラ・顔・物体・フキダシ・擬音・キャプションは画像対応の汎用 VLM（既定 `gemma4:e4b`）で検出。検出するクラスはチェックで選択
+- 検出枠はキャンバス上でドラッグ移動・角で拡縮・追加・削除でき、右の一覧でクラスと本文・説明を編集可能。「全文をコピー」「JSON をコピー」で出力
+- **MOSS-Image 連携** — 「レイアウトとして送る」で物体・コマ・キャラ・文字の bbox として MOSS-Image のレイアウトへ取り込む。フキダシ等の枠に入った文字は 1 つの文字枠にまとめる。再送時は前回の OCR 取り込み分だけ入れ替え
+- モデル設定欄は折りたたみ式（開閉状態を保存）
+
+</details>
+
+<details>
 <summary><strong>Auto（AI マンガ自動作成）</strong></summary>
 
 - お題とページ数から、AI で**ストーリー → 脚本**の 2 段階で自動作成（作成後に人が編集して仕上げる前提。既存のスクリプトタブとは独立した新規作品）
@@ -210,6 +221,10 @@ ComfyUI 本体が MOSS-Image に対応している必要があります（ComfyU
 
 MOSS-Image タブ上部のステータスが「利用可能」になれば準備完了です。`py/ccc.py` を更新した場合は ComfyUI の再起動が必要です。
 
+### OCR タブを使う場合
+
+[Ollama](https://ollama.com/) に OCR モデルを用意します（`ollama pull maternion/LightOnOCR-3:4b`）。コマ・キャラ・フキダシ等も検出するときは、画像対応の汎用 VLM（例: `ollama pull gemma4:e4b`）も用意してください。OCR タブ上部のステータスが「利用可能」になれば準備完了です。
+
 ### G'MIC を使う場合
 
 設定タブの「G'MIC設定」で、G'MIC Qt 実行ファイル（`gmic_qt.exe`）のフルパスを指定してください。保存後すぐに反映され、ComfyUI の再起動は不要です。
@@ -298,6 +313,7 @@ comfyui-comic-creator/
 │   │   ├── i18n.js            # 多言語辞書（ja/en/zh）+ t()
 │   │   ├── nanobanana.js      # Nanobanana（Gemini API）連携
 │   │   ├── moss.js            # MOSS-Image（ローカル生成・レイアウトエディタ）
+│   │   ├── ocr-core.js       # OCRタブ ロジック（検出出力のパース・MOSS 変換、DOM 非依存）
 │   │   ├── auto-ai-client.js  # Autoタブ LLM クライアント（ローカル LLM / Gemini）
 │   │   ├── auto-story-core.js # Autoタブ 脚本のプロンプト生成・パース（DOM 非依存）
 │   │   ├── auto-decision.js   # Autoタブ 意思決定モデルでフキダシの形・コマの重要度を推定
