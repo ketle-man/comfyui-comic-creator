@@ -30,7 +30,7 @@ const MIN_BOX_PX = 24;                   // これ未満のドラッグは追加
 
 const S = {
     inited: false, busy: false,
-    items: [], selId: null, nextId: 1,
+    items: [], selId: null, multi: new Set(), nextId: 1,
     W: 1024, H: 1024, scale: 1,
     panels: [],          // コマ単位モード: [{ id, caption, use, bbox }]
     results: [], resultIdx: 0,
@@ -170,6 +170,16 @@ async function getActivePageSvgSize() {
 
 // ─── レイアウトエディタ ───
 const selItem = () => S.items.find(i => i.id === S.selId) || null;
+// Shift+クリックで追加した選択（selId以外）。移動・削除はselId+multi全体が対象
+const isSel = (id) => id === S.selId || S.multi.has(id);
+function toggleMulti(id) {
+    if (isSel(id)) {
+        if (id === S.selId) S.selId = S.multi.size ? S.multi.values().next().value : null;
+        if (S.selId !== null) S.multi.delete(S.selId);
+        S.multi.delete(id);
+    } else if (S.selId === null) S.selId = id;
+    else S.multi.add(id);
+}
 const drawType = () => document.querySelector('#moss-draw-type .moss-type-btn.active')?.dataset.type || 'object';
 
 // 「生成対象」の折りたたみ状態を保存する（既定は開く）
@@ -232,7 +242,7 @@ function renderCanvas() {
     S.items.forEach((it, idx) => {
         const el = document.createElement('div');
         // 文字が空（空白のみ）の文字枠は送信されない（JSONから除外される）ので、破線で薄く表示する
-        el.className = 'moss-box' + (it.id === S.selId ? ' selected' : '');
+        el.className = 'moss-box' + (isSel(it.id) ? ' selected' : '');
         updateSkipped(el, it);
         el.dataset.id = it.id;
         el.dataset.type = it.type;
@@ -396,7 +406,7 @@ function addItem(partial) {
 }
 
 function selectItem(id) {
-    S.selId = id;
+    S.selId = id; S.multi.clear();
     renderCanvas();
 }
 
@@ -441,9 +451,12 @@ function initCanvasInteraction() {
         if (hit && !e.shiftKey) {
             const r = boxEl.getBoundingClientRect();
             const edge = Math.min(e.clientX - r.left, r.right - e.clientX, e.clientY - r.top, r.bottom - e.clientY) < EDGE_PX;
-            grab = !!e.target.dataset.h || edge || e.target.classList.contains('moss-badge') || S.selId === hit.id;
+            grab = !!e.target.dataset.h || edge || e.target.classList.contains('moss-badge') || isSel(hit.id);
         }
-        if (hit && !e.shiftKey && !grab) {
+        if (hit && e.shiftKey) {
+            // Shift+クリックは選択の追加/解除、Shift+ドラッグは従来どおりその上に描画
+            drag = { mode: 'pending', item: hit, start: p, orig: null, cx: e.clientX, cy: e.clientY, shift: true };
+        } else if (hit && !e.shiftKey && !grab) {
             drag = { mode: 'pending', item: hit, start: p, orig: null, cx: e.clientX, cy: e.clientY };
         } else if (hit && grab) {
             const it = hit;
@@ -455,17 +468,20 @@ function initCanvasInteraction() {
             if (dbl) {
                 S.lastDown = null;
                 e.preventDefault();
-                if (S.selId !== it.id) selectItem(it.id);
+                if (S.selId !== it.id || S.multi.size) selectItem(it.id);
                 openInlineEdit(it);
                 return;
             }
-            if (S.selId !== it.id) selectItem(it.id);
+            // 複数選択中の枠の移動はグループ全体を動かす。それ以外は単独選択に切り替える
+            const group = mode === 'move' && S.multi.size && isSel(it.id);
+            if (!group && (S.selId !== it.id || S.multi.size)) selectItem(it.id);
             showPromptTab();
             drag = { mode, item: it, start: p, orig: { x: it.x, y: it.y, w: it.w, h: it.h } };
+            if (group) drag.group = S.items.filter(i => isSel(i.id)).map(i => ({ it: i, x: i.x, y: i.y, w: i.w, h: i.h }));
         } else {
             const x = clamp(p.x, 0, S.W), y = clamp(p.y, 0, S.H);
             const it = addItem({ type: drawType(), x, y, w: 0, h: 0, caption: '', text: '' });
-            S.selId = it.id;
+            S.selId = it.id; S.multi.clear();
             showPromptTab();
             drag = { mode: 'draw', item: it, start: { x, y }, orig: null };
             renderCanvas();
@@ -480,7 +496,7 @@ function initCanvasInteraction() {
             if (Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) < 4) return;   // まだクリックの範囲
             const x = clamp(drag.start.x, 0, S.W), y = clamp(drag.start.y, 0, S.H);
             const created = addItem({ type: drawType(), x, y, w: 0, h: 0, caption: '', text: '' });
-            S.selId = created.id;
+            S.selId = created.id; S.multi.clear();
             showPromptTab();
             drag = { mode: 'draw', item: created, start: { x, y }, orig: null };
             renderCanvas();
@@ -490,6 +506,17 @@ function initCanvasInteraction() {
             const x = clamp(p.x, 0, S.W), y = clamp(p.y, 0, S.H);
             it.x = Math.min(drag.start.x, x); it.y = Math.min(drag.start.y, y);
             it.w = Math.abs(x - drag.start.x); it.h = Math.abs(y - drag.start.y);
+        } else if (drag.mode === 'move' && drag.group) {
+            // グループ全体の外接矩形が画像内に収まるよう移動量を制限
+            const g = drag.group;
+            const minX = Math.min(...g.map(m => m.x)), maxX = Math.max(...g.map(m => m.x + m.w));
+            const minY = Math.min(...g.map(m => m.y)), maxY = Math.max(...g.map(m => m.y + m.h));
+            const dx = clamp(p.x - drag.start.x, -minX, S.W - maxX), dy = clamp(p.y - drag.start.y, -minY, S.H - maxY);
+            for (const m of g) {
+                m.it.x = m.x + dx; m.it.y = m.y + dy;
+                const gel = cv.querySelector(`.moss-box[data-id="${m.it.id}"]`);
+                if (gel) placeBox(gel, m.it);
+            }
         } else if (drag.mode === 'move') {
             it.x = clamp(o.x + (p.x - drag.start.x), 0, S.W - o.w);
             it.y = clamp(o.y + (p.y - drag.start.y), 0, S.H - o.h);
@@ -509,8 +536,10 @@ function initCanvasInteraction() {
         if (!drag) return;
         const it = drag.item;
         if (drag.mode === 'pending') {   // 動かさずに離した = 枠のクリック（選択）
+            const drag_shift = drag.shift;
             drag = null;
             try { cv.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+            if (drag_shift) { toggleMulti(it.id); renderCanvas(); return; }
             S.lastDown = { id: it.id, t: performance.now() };
             selectItem(it.id);
             showPromptTab();
@@ -556,8 +585,8 @@ function initCanvasInteraction() {
 
 function deleteSelected() {
     if (!S.selId) return;
-    S.items = S.items.filter(i => i.id !== S.selId);
-    S.selId = null;
+    S.items = S.items.filter(i => !isSel(i.id));
+    S.selId = null; S.multi.clear();
     renderCanvas(); schedulePreview(); scheduleSave();
 }
 
@@ -1212,8 +1241,9 @@ function initMossTab() {
 // ─── OCRタブからの取り込み ───
 // items: ocr-core.js の toMossItems の結果（座標は0〜1）。aspect: 元画像の縦横比。
 // 前回OCRから取り込んだ枠（src:'ocr'）だけ入れ替え、手で足した枠・コマ/フキダシ取り込みの枠は残す。
+// prompt が空でなければ MOSS の全体プロンプトを置き換える。
 // キャンバスの縦横比が違えば元画像に合わせる（既存の枠も同じ比率で拡縮）。取り込み後のタブ切替は呼び出し側で行う
-async function importOcrItems(items, { aspect = 1 } = {}) {
+async function importOcrItems(items, { aspect = 1, prompt = '' } = {}) {
     initMossTab();
     await S.initPromise;   // 保存済みレイアウトの復元が終わってから足す（先に足すと復元で消える）
     if (Math.abs((S.W / S.H) / aspect - 1) > 0.02) {
@@ -1235,6 +1265,7 @@ async function importOcrItems(items, { aspect = 1 } = {}) {
         });
         if (it.type === 'text') it.fontSize = fitFontToBox(it);
     }
+    if (prompt) $('moss-prompt').value = prompt;   // 全体プロンプト（レイアウト使用時はsummary）を置き換える
     renderCanvas(); schedulePreview(); scheduleSave();
     return items.length;
 }

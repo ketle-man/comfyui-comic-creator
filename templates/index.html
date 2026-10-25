@@ -2322,23 +2322,59 @@
                 </div>
               </div>
               <div class="moss-settings-col ocr-settings-col">
+                <details id="ocr-mode-details" class="moss-collapse" open>
+                  <summary data-i18n="ocr.modeTitle">モード</summary>
+                  <div class="comfyui-field-group">
+                    <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.mode">モード:</label>
+                      <select id="ocr-mode" class="comfyui-select">
+                        <option value="auto" data-i18n="ocr.mode.auto">自動（おすすめ）</option>
+                        <option value="manga" data-i18n="ocr.mode.manga">マンガページ</option>
+                        <option value="cover" data-i18n="ocr.mode.cover">雑誌表紙・ポスター</option>
+                        <option value="text" data-i18n="ocr.mode.text">文字のみ（文書・看板）</option>
+                        <option value="illustration" data-i18n="ocr.mode.illustration">イラスト（文字なし）</option>
+                        <option value="tall" data-i18n="ocr.mode.tall">縦長ページ（分割して読む）</option>
+                        <option value="custom" data-i18n="ocr.mode.custom">カスタム</option>
+                      </select></div>
+                    <div id="ocr-mode-hint" style="font-size:11px; color:#888;"></div>
+                  </div>
+                </details>
                 <details id="ocr-models-details" class="moss-collapse" open>
                   <summary data-i18n="ocr.modelsTitle">モデル（Ollama）</summary>
                 <div class="comfyui-field-group">
                   <div class="comfyui-field"><label class="comfyui-label">URL:</label><input type="text" id="ocr-url" class="comfyui-input" style="flex:1" /></div>
                   <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.ocrModel">OCRモデル:</label><select id="ocr-model" class="comfyui-select"></select></div>
                   <div class="comfyui-field">
+                    <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-ocr" checked> <span data-i18n="ocr.useOcr">文字検出（OCR）を行う</span></label>
+                  </div>
+                  <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.preprocess">OCRの前処理:</label>
+                    <select id="ocr-preprocess" class="comfyui-select"><option value="none" data-i18n="ocr.preNone">そのまま</option><option value="gray" data-i18n="ocr.preGray">グレースケール</option></select></div>
+                  <div style="font-size:11px; color:#888;" data-i18n="ocr.preHint">雑誌の表紙など密な画像で、OCRが空・同じ語の繰り返しになったときは、自動でグレースケールにして1回やり直します。</div>
+                  <div class="comfyui-field">
                     <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-layout" checked> <span data-i18n="ocr.useLayout">レイアウト検出も行う（別のVLM）</span></label>
                   </div>
                   <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.layoutModel">検出モデル:</label><select id="ocr-layout-model" class="comfyui-select"></select></div>
+                  <div style="font-size:11px; color:#888;" data-i18n="ocr.vramHint">設定タブの「VRAM調整」が有効なら、検出の実行前と、意思決定モデルでの判定前にOllamaのモデルを退避して空きVRAMを作ります。</div>
                   <div style="font-size:11px; color:#888;" data-i18n="ocr.layoutHint">OCRモデルは文字の位置と本文だけを返します。コマ・キャラ・フキダシ等は、画像対応の汎用VLM（gemma4 など）で検出します。</div>
                   <div class="comfyui-field" style="margin-top:8px;">
                     <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-reread" checked> <span data-i18n="ocr.useReread">文字枠を切り抜いて別モデルで読み直す</span></label>
                   </div>
                   <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.rereadModel">読み直しモデル:</label><select id="ocr-reread-model" class="comfyui-select"></select></div>
                   <div style="font-size:11px; color:#888;" data-i18n="ocr.rereadHint">縦書き・装飾文字はマンガ特化のPaddleOCR-VLが強い傾向です（ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M）。枠の数だけ時間が掛かります。</div>
+                  <div class="comfyui-field" style="margin-top:8px;">
+                    <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-decide"> <span data-i18n="ocr.useDecide">検出後に切り抜きを意思決定モデルで判定する（任意）</span></label>
+                  </div>
+                  <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.decideModel">判定モデル:</label><select id="ocr-decide-model" class="comfyui-select"></select></div>
+                  <div style="font-size:11px; color:#888;" data-i18n="ocr.decideHint">画像対応の意思決定モデル（clef-flash / d3 など）で、文字枠の種類（ふきだし・キャプション・効果音・文字）を判定し、文字の無いVLM検出枠を除きます。枠の数だけ時間が掛かります。</div>
                 </div>
                 </details>
+                <div class="comfyui-field-group" style="margin-top:10px">
+                  <div class="comfyui-field">
+                    <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-overall"> <span data-i18n="ocr.useOverall">全体プロンプトも作成し、MOSS-Imageへ送るときに置き換える</span></label>
+                    <button id="ocr-overall-btn" class="btn small secondary" data-i18n="ocr.overallBtn" data-i18n-title="ocr.overallBtnTitle">全体プロンプトを作成</button>
+                  </div>
+                  <textarea id="ocr-overall" rows="3" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                  <div style="font-size:11px; color:#888;" data-i18n="ocr.overallHint">検出モデル（VLM）が画像全体を英語で説明します。ONのとき、MOSS-Imageタブへ送ると全体プロンプトがこの文章に置き換わります（レイアウト使用時はsummary）。手で直せます。</div>
+                </div>
                 <div class="comfyui-field-group" style="margin-top:10px">
                   <div class="comfyui-group-title" data-i18n="ocr.classesTitle">検出するクラス</div>
                   <div class="ocr-class-row">

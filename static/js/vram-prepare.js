@@ -7,7 +7,8 @@
 // ・設定（設定タブ「VRAM調整」）: mode = 'off' | 'auto' | 'all'、targetGb（auto の目標空き GB）
 // ・対象の Ollama: 既定の 127.0.0.1:11434（サーバー側で常に追加）＋ Auto タブのローカル LLM（Ollama のとき）
 //   ＋意思決定モデル（Workflow Studio と共有の設定が Ollama のとき）。ローカルホストのみ
-// ・Workflow Studio 経由の生成（T2I / I2I / Inpaint / Outpaint）の直前に prepareVramForGeneration() を呼ぶ。
+// ・Workflow Studio 経由の生成（T2I / I2I / Inpaint / Outpaint）と、OCRタブの検出（実行前・意思決定モデルの判定前）の直前に
+//   prepareVramForGeneration() を呼ぶ。
 //   失敗しても生成は止めない
 
 import { t } from './i18n.js';
@@ -148,11 +149,11 @@ let _lastShortNote = '';
  * 画像生成の直前に呼ぶ。設定が off なら何もしない。失敗しても throw しない（生成は続ける）。
  * 何かアンロードしたとき・目標に届かないとき・失敗したときだけ通知する（連続生成で同じ警告は繰り返さない）。
  */
-export async function prepareVramForGeneration() {
+export async function prepareVramForGeneration(extraUrls = []) {
     const settings = getVramSettings();
     if (settings.mode === 'off') return null;
     try {
-        const d = await requestVramPrepare(settings.mode, settings.targetGb);
+        const d = await requestVramPrepare(settings.mode, settings.targetGb, extraUrls);
         const short = d.mode === 'auto' && !d.reached;
         if (d.unloaded.length || d.failed.length) {
             showNotice('🧹 ' + describeVramResult(d), d.failed.length > 0 || short);

@@ -263,6 +263,148 @@ export function cropRect(box, imgW, imgH) {
     return { sx, sy, sw: Math.max(1, ex - sx), sh: Math.max(1, ey - sy) };
 }
 
+// ── モード（用途別プリセット） ──
+// ラジオ/ドロップダウンで選ぶと、個別設定（OCR・レイアウト検出・読み直し・判定・全体プロンプト・前処理）を一括で切り替える。
+// null は「変更しない」。tile は縦長画像を分割して読む（モード専用の動作で個別設定は無い）。
+export const OCR_MODES = ['auto', 'manga', 'cover', 'text', 'illustration', 'tall', 'custom'];
+export const OCR_MODE_PRESETS = {
+    manga:        { ocr: true,  layout: true,  classes: ['balloon', 'sfx', 'caption', 'panel', 'character', 'face'], merge: true, reread: true,  decide: true,  overall: true,  preprocess: 'none', tile: false },
+    cover:        { ocr: true,  layout: false, classes: null, merge: null, reread: false, decide: false, overall: true,  preprocess: 'none', tile: false },
+    text:         { ocr: true,  layout: false, classes: null, merge: null, reread: false, decide: false, overall: false, preprocess: 'none', tile: false },
+    illustration: { ocr: false, layout: true,  classes: ['panel', 'character', 'face', 'object'], merge: null, reread: false, decide: false, overall: true,  preprocess: 'none', tile: false },
+    tall:         { ocr: true,  layout: false, classes: null, merge: null, reread: false, decide: false, overall: false, preprocess: 'none', tile: true },
+};
+
+// 自動モード: 縦横比が極端なら縦長、それ以外は意思決定モデル（画像対応）に縮小画像を見せて種類を選ばせる
+export const TALL_ASPECT = 2.5;       // 高さ/幅 がこれ以上なら縦長ページ
+export const MODE_MIN_PROB = 0.4;     // 判定の確率がこれ未満なら manga にする
+export const MODE_QUESTIONS = {
+    page_type: { type: 'choice', instructions: 'What kind of image is this?',
+        criteria: {
+            manga: 'A manga or comic page with panels and speech balloons.',
+            cover: 'A magazine cover, poster or flyer with large decorative titles and many text blocks over a photo or illustration.',
+            text: 'A document, book page, sign or screenshot where text is the main content.',
+            illustration: 'An illustration or photo with little or no text.',
+        } },
+};
+
+/** 画像サイズからモードを決められるなら返す（縦長）。決められなければ null */
+export function modeByAspect(w, h) {
+    return w > 0 && h / w >= TALL_ASPECT ? 'tall' : null;
+}
+
+/** /v1/systemone の answers → { mode, p }。無効なら null */
+export function parseModeAnswer(answers) {
+    const c = answers?.page_type;
+    if (!c?.choice || !OCR_MODE_PRESETS[c.choice]) return null;
+    return { mode: c.choice, p: c.probabilities?.[c.choice] ?? 0 };
+}
+
+// ── 縦長画像の分割読み ──
+export const TILE_RATIO = 1.4;       // タイルの高さ/幅（ページに近い縦横比）
+export const TILE_OVERLAP = 0.12;    // タイル同士の重なり（文字が境界で切れるのを避ける）
+
+/** 縦長画像を縦に分割する矩形（全幅、y0〜y1 px）。短ければ1枚 */
+export function tileRects(w, h, ratio = TILE_RATIO, overlap = TILE_OVERLAP) {
+    const tileH = Math.round(w * ratio);
+    if (h <= tileH * 1.15) return [{ y0: 0, y1: h }];
+    const step = Math.max(1, Math.round(tileH * (1 - overlap)));
+    const out = [];
+    for (let y0 = 0; ; y0 += step) {
+        if (y0 + tileH >= h) { out.push({ y0: Math.max(0, h - tileH), y1: h }); break; }   // 最後は下端に合わせる
+        out.push({ y0, y1: y0 + tileH });
+    }
+    return out;
+}
+
+/** タイル内の正規化座標 → 元画像全体の正規化座標（y のみ変わる） */
+export function mapTileBoxes(boxes, y0, y1, H) {
+    return boxes.map(b => ({ ...b, y1: (y0 + b.y1 * (y1 - y0)) / H, y2: (y0 + b.y2 * (y1 - y0)) / H }));
+}
+
+const sameText = (a, b) => !a || !b || a === b || a.includes(b) || b.includes(a);
+/** 重なり部分で二重に読まれた枠を除く（面積の大きい＝境界で切れていないほうを残す） */
+export function dedupeTileBoxes(boxes) {
+    const kept = [];
+    for (const b of [...boxes].sort((p, q) => area(q) - area(p))) {
+        if (kept.some(k => k.cls === b.cls && ((iou(k, b) > 0.4 && sameText(k.text, b.text)) || iou(k, b) > 0.7))) continue;
+        kept.push(b);
+    }
+    return kept;
+}
+
+// ── OCRの失敗検出（グレースケールでの再試行用） ──
+// LightOnOCR は密な画像（雑誌の表紙など）でときどき何も返さない・同じ語を延々と繰り返す。実測（DEVLOG 2026-10-25）では、
+// 失敗したカラー画像でもグレースケールにすると返ってくることがあった。コントラスト補正・repeat_penaltyは逆効果だったので使わない。
+export const OCR_LOOP_MIN_BOXES = 30;    // 枠がこれ以上あり、かつ重複が多ければ繰り返しとみなす
+export const OCR_LOOP_MAX_UNIQUE = 0.5;  // 文字の種類数 / 枠数 がこれ未満なら繰り返し
+
+/** OCR結果（parseOcrOutput の戻り値）が失敗（空・繰り返し）に見えるか */
+export function ocrLooksFailed(boxes) {
+    const texts = (boxes || []).filter(b => b.cls === 'text').map(b => b.text);
+    if (!texts.length) return true;
+    return texts.length >= OCR_LOOP_MIN_BOXES && new Set(texts).size / texts.length < OCR_LOOP_MAX_UNIQUE;
+}
+
+// ── 全体プロンプト（VLM） ──
+// 画像全体の説明を英語で作らせ、MOSS-Imageのプロンプト（レイアウト使用時はsummary）として送る
+export const OVERALL_PROMPT = 'Describe this entire image in 2-3 English sentences as a summary for an image-generation prompt: '
+    + 'the overall scene, art style (e.g. manga page, black-and-white or color), composition and mood. '
+    + 'Do not transcribe any text or quote dialogue. Reply with the description only, no preface.';
+
+/** VLMの返答を整える（コードフェンス・前置き・外側の引用符を除く） */
+export function cleanOverall(raw) {
+    let s = String(raw || '').replace(/```[a-z]*/gi, '').trim();
+    s = s.replace(/^(?:here(?:'s| is)[^:\n]*:|summary:|description:)\s*/i, '').trim();
+    s = s.replace(/^["'“「]+|["'”」]+$/g, '').trim();
+    return s.replace(/\s*\n+\s*/g, ' ').slice(0, 1200);
+}
+
+// ── 意思決定モデルによる切り抜き判定（任意機能） ──
+// 切り抜き画像に /v1/systemone で「文字があるか」「どの種類の文字枠か」を聞く（確率つき）。
+// 実測（合成ページ、DEVLOG参照）: 文字の有無・クラス分類は d3:4b / clef-flash とも高精度。枠のずれ・切れの検出は弱いので使わない。
+export const DECIDE_MIN_HAS = 0.3;   // VLMの容器枠で「文字がある」確率がこれ未満なら的外れな枠として除く
+export const DECIDE_MIN_CLS = 0.6;   // クラスを書き換える最低確率（未満は元のクラスのまま）
+export const DECIDE_QUESTIONS = {
+    has_text: { type: 'noul', instructions: 'Does this image contain Japanese text characters?',
+        criteria: { true: 'Japanese characters are visible.', false: 'No text, only background or artwork.' } },
+    cls: { type: 'choice', instructions: 'What kind of text element is this?',
+        criteria: {
+            balloon: 'Text inside a speech bubble (white ellipse).',
+            caption: 'Text inside a rectangular narration box.',
+            sfx: 'Large stylized sound-effect lettering.',
+            text: 'Plain text directly on the artwork with no frame.',
+        } },
+};
+
+/** 意思決定モデルを一覧から選ぶ（clef-flash → d3 → 先頭）。無ければ '' */
+export function pickDecisionModel(names) {
+    for (const re of [/clef-flash/i, /^d3/i]) {
+        const hit = names.find(n => re.test(n));
+        if (hit) return hit;
+    }
+    return names[0] || '';
+}
+
+/** /v1/systemone の answers → { pHas, cls, pCls }。欠けていれば null */
+export function parseDecision(answers) {
+    const h = answers?.has_text, c = answers?.cls;
+    if (!h || !c || typeof h.noul !== 'number' || !c.choice) return null;
+    return { pHas: h.noul, cls: c.choice, pCls: c.probabilities?.[c.choice] ?? c.confidence ?? 0 };
+}
+
+/** 判定結果を枠へ反映する。戻り値: 'drop'（除く）| 'changed' | 'keep' */
+export function applyDecision(box, d) {
+    if (!d) return 'keep';
+    const isContainer = !!OCR_CLASSES[box.cls]?.container;
+    if (box.src === 'vlm' && isContainer && d.pHas < DECIDE_MIN_HAS) return 'drop';
+    if (box.src === 'ocr' && box.cls === 'text' && d.cls !== box.cls && d.pCls >= DECIDE_MIN_CLS && OCR_CLASSES[d.cls]) {
+        box.cls = d.cls;
+        return 'changed';
+    }
+    return 'keep';
+}
+
 /** PaddleOCR-VL系は「…」「！」「？」を半角（...・!・?）で返すので、日本語を含む文字列だけ全角に戻す */
 export function normalizeJaPunct(text) {
     const s = String(text || '').trim();
