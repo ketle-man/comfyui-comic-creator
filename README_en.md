@@ -112,6 +112,11 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **MOSS-Image handoff** — "Send as layout" imports the result into the MOSS-Image layout as object / panel / character / text bboxes. Text inside a balloon etc. is merged into one text box. Sending again replaces only the boxes imported from the previous OCR
 - The model settings section is collapsible (the open/closed state is remembered)
 - **Re-reading crops** — each detected text box is cropped from the original image and read again by another model (default: manga-tuned PaddleOCR-VL, `ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M`), which improves vertical and stylized text. "…", "!" and "?" are converted to full-width automatically. A single selected box can also be re-read
+- **Modes** — the collapsible Mode at the top of the settings switches all individual settings at once: Auto (recommended, experimental) / Manga page / Magazine cover or poster / Text only / Illustration (no text) / Tall page (read in tiles) / Custom. Changing an individual setting switches to Custom automatically
+- **Multi-select and move** — Shift+click boxes to add or remove them from the selection, then move or delete them together (OCR and MOSS-Image tabs)
+- **Judging with a decision model (optional)** — after detection, crops are shown to a vision-capable decision model (`clef-flash`, `d3`, etc.; Ollama 0.40 or later) to re-classify text boxes (balloon / caption / sfx / text) and drop VLM boxes that contain no text
+- **Overall prompt** — the detection model (VLM) describes the whole image in English, and Send as layout replaces the MOSS-Image overall prompt (the summary when a layout is used) with it (optional)
+- **Preprocessing and retry** — if OCR returns nothing or repeats the same words, it is retried once automatically in grayscale. The Settings tab VRAM adjustment also runs before OCR and before judging
 
 </details>
 
