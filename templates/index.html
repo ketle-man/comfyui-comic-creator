@@ -2345,6 +2345,14 @@
                 </div>
                 </details>
                 <div class="comfyui-field-group" style="margin-top:10px">
+                  <div class="comfyui-field">
+                    <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-overall"> <span data-i18n="ocr.useOverall">全体プロンプトも作成し、MOSS-Imageへ送るときに置き換える</span></label>
+                    <button id="ocr-overall-btn" class="btn small secondary" data-i18n="ocr.overallBtn" data-i18n-title="ocr.overallBtnTitle">全体プロンプトを作成</button>
+                  </div>
+                  <textarea id="ocr-overall" rows="3" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                  <div style="font-size:11px; color:#888;" data-i18n="ocr.overallHint">検出モデル（VLM）が画像全体を英語で説明します。ONのとき、MOSS-Imageタブへ送ると全体プロンプトがこの文章に置き換わります（レイアウト使用時はsummary）。手で直せます。</div>
+                </div>
+                <div class="comfyui-field-group" style="margin-top:10px">
                   <div class="comfyui-group-title" data-i18n="ocr.classesTitle">検出するクラス</div>
                   <div class="ocr-class-row">
                     <label class="ocr-class-chk" style="--ocr-c:var(--ocr-text)"><input type="checkbox" checked disabled> <span data-i18n="ocr.cls.text">text</span></label>

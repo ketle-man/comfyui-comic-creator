@@ -263,6 +263,20 @@ export function cropRect(box, imgW, imgH) {
     return { sx, sy, sw: Math.max(1, ex - sx), sh: Math.max(1, ey - sy) };
 }
 
+// ── 全体プロンプト（VLM） ──
+// 画像全体の説明を英語で作らせ、MOSS-Imageのプロンプト（レイアウト使用時はsummary）として送る
+export const OVERALL_PROMPT = 'Describe this entire image in 2-3 English sentences as a summary for an image-generation prompt: '
+    + 'the overall scene, art style (e.g. manga page, black-and-white or color), composition and mood. '
+    + 'Do not transcribe any text or quote dialogue. Reply with the description only, no preface.';
+
+/** VLMの返答を整える（コードフェンス・前置き・外側の引用符を除く） */
+export function cleanOverall(raw) {
+    let s = String(raw || '').replace(/```[a-z]*/gi, '').trim();
+    s = s.replace(/^(?:here(?:'s| is)[^:\n]*:|summary:|description:)\s*/i, '').trim();
+    s = s.replace(/^["'“「]+|["'”」]+$/g, '').trim();
+    return s.replace(/\s*\n+\s*/g, ' ').slice(0, 1200);
+}
+
 // ── 意思決定モデルによる切り抜き判定（任意機能） ──
 // 切り抜き画像に /v1/systemone で「文字があるか」「どの種類の文字枠か」を聞く（確率つき）。
 // 実測（合成ページ、DEVLOG参照）: 文字の有無・クラス分類は d3:4b / clef-flash とも高精度。枠のずれ・切れの検出は弱いので使わない。

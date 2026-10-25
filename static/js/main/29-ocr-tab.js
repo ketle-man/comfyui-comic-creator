@@ -15,7 +15,7 @@ import {
     OCR_MODEL_DEFAULT, LAYOUT_MODEL_DEFAULT, OCR_CLASSES, OCR_CLASS_KEYS, VLM_CLASS_KEYS, OCR_PROMPT,
     buildLayoutPrompt, parseOcrOutput, parseLayoutOutput, mergeDetections, toMossItems, collectText, sortReading,
     pickRereadModel, rereadPrompt, rereadScale, cropRect, normalizeJaPunct,
-    DECIDE_QUESTIONS, pickDecisionModel, parseDecision, applyDecision,
+    DECIDE_QUESTIONS, pickDecisionModel, parseDecision, applyDecision, OVERALL_PROMPT, cleanOverall,
 } from '../ocr-core.js';
 
 const $ = (id) => document.getElementById(id);
@@ -48,7 +48,7 @@ function saveSettings() {
             url: $('ocr-url').value, ocrModel: $('ocr-model').value, layoutModel: $('ocr-layout-model').value,
             useLayout: $('ocr-use-layout').checked, classes, merge: $('ocr-merge-containers').checked,
             useReread: $('ocr-use-reread').checked, rereadModel: $('ocr-reread-model').value,
-            useDecide: $('ocr-use-decide').checked, decideModel: $('ocr-decide-model').value,
+            useOverall: $('ocr-use-overall').checked, useDecide: $('ocr-use-decide').checked, decideModel: $('ocr-decide-model').value,
         }));
     } catch (_) { /* ignore */ }
 }
@@ -131,6 +131,7 @@ async function loadImageFile(file) {
     const b64 = cv.toDataURL('image/jpeg', 0.92).split(',')[1];
     O.img = { url, w: im.naturalWidth, h: im.naturalHeight, b64, el: im };
     O.boxes = []; O.selId = null; O.multi.clear(); O.nextId = 1;
+    $('ocr-overall').value = '';
     $('ocr-run-btn').disabled = false;
     $('ocr-progress').textContent = '';
     renderAll();
@@ -419,6 +420,23 @@ async function decideAll(prog) {
     return { changed, dropped: drop.size };
 }
 
+// ─── 全体プロンプト（VLM） ───
+async function makeOverall(prog) {
+    prog.textContent = t('ocr.progressOverall');
+    const text = cleanOverall(await ollamaChat($('ocr-layout-model').value, OVERALL_PROMPT, O.img.b64, 512));
+    if (!text) throw new Error(t('ocr.errOverallEmpty'));
+    $('ocr-overall').value = text;
+}
+
+async function onOverallBtn() {
+    if (O.busy || !O.img) return;
+    O.busy = true; updateButtons();
+    const prog = $('ocr-progress');
+    try { await makeOverall(prog); prog.textContent = t('ocr.overallDone'); }
+    catch (e) { prog.textContent = t('ocr.errOverall', e.message || String(e)); }
+    finally { O.busy = false; updateButtons(); }
+}
+
 async function onRereadSelected() {
     const b = selBox();
     if (!b || O.busy || !O.img) return;
@@ -461,6 +479,9 @@ async function onRun() {
             try { await rereadAll(prog); } catch (e) { rereadError = e.message || String(e); }   // 検出結果は残し、元のOCR文字のまま
             renderAll();
         }
+        if ($('ocr-use-overall').checked && $('ocr-layout-model').value) {
+            try { await makeOverall(prog); } catch (e) { rereadError = rereadError || t('ocr.errOverall', e.message || String(e)); }   // 検出結果は残す
+        }
         let decideMsg = '';
         if ($('ocr-use-decide').checked && $('ocr-decide-model').value) {
             try { const r = await decideAll(prog); decideMsg = t('ocr.decideDone', r.changed, r.dropped); } catch (e) { rereadError = rereadError || e.message || String(e); }
@@ -499,7 +520,8 @@ async function onSendMoss() {
     const items = toMossItems(O.boxes, { aspect, useContainers: $('ocr-merge-containers').checked });
     if (!items.length) { alert(t('ocr.noItems')); return; }
     await switchTab('moss');                       // MOSS側の初期化（保存済みレイアウトの復元）を先に済ませる
-    const n = await importOcrItems(items, { aspect });
+    const overall = $('ocr-use-overall').checked ? $('ocr-overall').value.trim() : '';   // ONで文章があるときだけMOSSのプロンプトを置き換える
+    const n = await importOcrItems(items, { aspect, prompt: overall });
     const msg = document.getElementById('moss-progress-text');
     if (msg) msg.textContent = t('ocr.sent', n);
 }
@@ -515,6 +537,7 @@ async function initOcrTabOnce() {
     }
     if (saved.useLayout === false) $('ocr-use-layout').checked = false;
     if (saved.useReread !== undefined) $('ocr-use-reread').checked = !!saved.useReread;
+    if (saved.useOverall !== undefined) $('ocr-use-overall').checked = !!saved.useOverall;
     if (saved.useDecide !== undefined) $('ocr-use-decide').checked = !!saved.useDecide;
     if (saved.merge === false) $('ocr-merge-containers').checked = false;
 
@@ -535,11 +558,12 @@ async function initOcrTabOnce() {
         O.boxes = []; O.selId = null; O.multi.clear(); renderAll();
     });
     $('ocr-run-btn').addEventListener('click', onRun);
+    $('ocr-overall-btn').addEventListener('click', onOverallBtn);
     $('ocr-reload-models-btn').addEventListener('click', () => loadModels(loadSettings()));
     $('ocr-copy-text-btn').addEventListener('click', () => copyText(collectText(O.boxes), 'ocr.copied'));
     $('ocr-copy-json-btn').addEventListener('click', () => copyText(boxesAsJson(), 'ocr.copied'));
     $('ocr-send-moss-btn').addEventListener('click', onSendMoss);
-    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers', 'ocr-use-reread', 'ocr-reread-model', 'ocr-use-decide', 'ocr-decide-model']) $(id).addEventListener('change', saveSettings);
+    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers', 'ocr-use-reread', 'ocr-reread-model', 'ocr-use-decide', 'ocr-decide-model', 'ocr-use-overall']) $(id).addEventListener('change', saveSettings);
     document.querySelectorAll('[data-ocr-class]').forEach(el => el.addEventListener('change', saveSettings));
     $('ocr-url').addEventListener('change', () => loadModels(loadSettings()));
     window.addEventListener('resize', () => { if ($('ocr-tab')?.classList.contains('active')) renderStage(); });
