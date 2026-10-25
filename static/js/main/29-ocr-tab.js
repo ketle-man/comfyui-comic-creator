@@ -11,11 +11,12 @@ import { t } from '../i18n.js';
 import { getBackendDefaultUrl } from '../auto-ai-client.js';
 import { importOcrItems } from '../moss.js';
 import { switchTab } from './01-state.js';
+import { prepareVramForGeneration, getVramSettings } from '../vram-prepare.js';
 import {
     OCR_MODEL_DEFAULT, LAYOUT_MODEL_DEFAULT, OCR_CLASSES, OCR_CLASS_KEYS, VLM_CLASS_KEYS, OCR_PROMPT,
     buildLayoutPrompt, parseOcrOutput, parseLayoutOutput, mergeDetections, toMossItems, collectText, sortReading,
     pickRereadModel, rereadPrompt, rereadScale, cropRect, normalizeJaPunct,
-    DECIDE_QUESTIONS, pickDecisionModel, parseDecision, applyDecision, OVERALL_PROMPT, cleanOverall,
+    DECIDE_QUESTIONS, pickDecisionModel, parseDecision, applyDecision, OVERALL_PROMPT, cleanOverall, ocrLooksFailed,
 } from '../ocr-core.js';
 
 const $ = (id) => document.getElementById(id);
@@ -48,7 +49,7 @@ function saveSettings() {
             url: $('ocr-url').value, ocrModel: $('ocr-model').value, layoutModel: $('ocr-layout-model').value,
             useLayout: $('ocr-use-layout').checked, classes, merge: $('ocr-merge-containers').checked,
             useReread: $('ocr-use-reread').checked, rereadModel: $('ocr-reread-model').value,
-            useOverall: $('ocr-use-overall').checked, useDecide: $('ocr-use-decide').checked, decideModel: $('ocr-decide-model').value,
+            preprocess: $('ocr-preprocess').value, useOverall: $('ocr-use-overall').checked, useDecide: $('ocr-use-decide').checked, decideModel: $('ocr-decide-model').value,
         }));
     } catch (_) { /* ignore */ }
 }
@@ -107,6 +108,27 @@ async function loadModels(saved) {
 }
 
 // ─── 画像 ───
+/** モデルへ送る画像のグレースケール版（base64 JPEG）。必要になったときだけ作って O.img に保存する */
+function grayB64() {
+    if (O.img.b64Gray) return O.img.b64Gray;
+    const src = new Image();
+    return new Promise((resolve, reject) => {
+        src.onload = () => {
+            const cv = document.createElement('canvas');
+            cv.width = src.naturalWidth; cv.height = src.naturalHeight;
+            const cx = cv.getContext('2d');
+            cx.drawImage(src, 0, 0);
+            const d = cx.getImageData(0, 0, cv.width, cv.height), p = d.data;
+            for (let i = 0; i < p.length; i += 4) { const y = (p[i] * 299 + p[i + 1] * 587 + p[i + 2] * 114) / 1000; p[i] = p[i + 1] = p[i + 2] = y; }
+            cx.putImageData(d, 0, 0);
+            O.img.b64Gray = cv.toDataURL('image/jpeg', 0.92).split(',')[1];
+            resolve(O.img.b64Gray);
+        };
+        src.onerror = () => reject(new Error('gray image failed'));
+        src.src = `data:image/jpeg;base64,${O.img.b64}`;
+    });
+}
+
 function fileToDataUrl(file) {
     return new Promise((resolve, reject) => {
         const r = new FileReader();
@@ -454,6 +476,13 @@ async function onRereadSelected() {
     }
 }
 
+/** 設定タブ「VRAM調整」を実行する（off なら何もしない）。OCRタブで使うOllama（画面上のURL）も対象に含める。失敗しても検出は続ける */
+async function prepareVram(prog) {
+    if (getVramSettings().mode === 'off') return;
+    prog.textContent = t('ocr.progressVram');
+    await prepareVramForGeneration([baseUrl()]);
+}
+
 async function onRun() {
     if (O.busy || !O.img) return;
     if (O.boxes.length && !confirm(t('ocr.confirmReplace'))) return;
@@ -461,9 +490,16 @@ async function onRun() {
     O.busy = true; $('ocr-run-btn').disabled = true;
     const started = Date.now();
     try {
+        await prepareVram(prog);   // 他のOllamaモデルがVRAMを占有していると、OCR・VLMのロードが遅い／失敗する
         prog.textContent = t('ocr.progressOcr');
-        const ocrRaw = await ollamaChat($('ocr-model').value, OCR_PROMPT, O.img.b64, 4096);
-        const ocrBoxes = parseOcrOutput(ocrRaw);
+        const gray = $('ocr-preprocess').value === 'gray';
+        let ocrBoxes = parseOcrOutput(await ollamaChat($('ocr-model').value, OCR_PROMPT, gray ? await grayB64() : O.img.b64, 4096));
+        let grayRetry = '';
+        if (!gray && ocrLooksFailed(ocrBoxes)) {   // 空・繰り返しのときだけ、グレースケールで1回やり直す
+            prog.textContent = t('ocr.progressOcrGray');
+            const retry = parseOcrOutput(await ollamaChat($('ocr-model').value, OCR_PROMPT, await grayB64(), 4096));
+            if (!ocrLooksFailed(retry) || retry.length > ocrBoxes.length) { ocrBoxes = retry; grayRetry = t('ocr.grayRetried'); }
+        }
         let vlmBoxes = [];
         const classes = selectedLayoutClasses();
         if ($('ocr-use-layout').checked && classes.length) {
@@ -484,10 +520,11 @@ async function onRun() {
         }
         let decideMsg = '';
         if ($('ocr-use-decide').checked && $('ocr-decide-model').value) {
+            await prepareVram(prog);   // 判定モデルは大きい（clef-flash 約10GB）。直前までのOCR・VLMを退避させて空きを作る
             try { const r = await decideAll(prog); decideMsg = t('ocr.decideDone', r.changed, r.dropped); } catch (e) { rereadError = rereadError || e.message || String(e); }
             renderAll();
         }
-        prog.textContent = rereadError || (t('ocr.done', O.boxes.length, ((Date.now() - started) / 1000).toFixed(1)) + (decideMsg ? ` ${decideMsg}` : ''));
+        prog.textContent = rereadError || (t('ocr.done', O.boxes.length, ((Date.now() - started) / 1000).toFixed(1)) + (decideMsg ? ` ${decideMsg}` : '') + (grayRetry ? ` ${grayRetry}` : ''));
     } catch (e) {
         console.warn('[ocr] run failed', e);
         prog.textContent = t('ocr.errRun', e.message || String(e));
@@ -537,6 +574,7 @@ async function initOcrTabOnce() {
     }
     if (saved.useLayout === false) $('ocr-use-layout').checked = false;
     if (saved.useReread !== undefined) $('ocr-use-reread').checked = !!saved.useReread;
+    if (saved.preprocess) $('ocr-preprocess').value = saved.preprocess;
     if (saved.useOverall !== undefined) $('ocr-use-overall').checked = !!saved.useOverall;
     if (saved.useDecide !== undefined) $('ocr-use-decide').checked = !!saved.useDecide;
     if (saved.merge === false) $('ocr-merge-containers').checked = false;
@@ -563,7 +601,7 @@ async function initOcrTabOnce() {
     $('ocr-copy-text-btn').addEventListener('click', () => copyText(collectText(O.boxes), 'ocr.copied'));
     $('ocr-copy-json-btn').addEventListener('click', () => copyText(boxesAsJson(), 'ocr.copied'));
     $('ocr-send-moss-btn').addEventListener('click', onSendMoss);
-    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers', 'ocr-use-reread', 'ocr-reread-model', 'ocr-use-decide', 'ocr-decide-model', 'ocr-use-overall']) $(id).addEventListener('change', saveSettings);
+    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers', 'ocr-use-reread', 'ocr-reread-model', 'ocr-use-decide', 'ocr-decide-model', 'ocr-use-overall', 'ocr-preprocess']) $(id).addEventListener('change', saveSettings);
     document.querySelectorAll('[data-ocr-class]').forEach(el => el.addEventListener('change', saveSettings));
     $('ocr-url').addEventListener('change', () => loadModels(loadSettings()));
     window.addEventListener('resize', () => { if ($('ocr-tab')?.classList.contains('active')) renderStage(); });

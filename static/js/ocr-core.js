@@ -263,6 +263,19 @@ export function cropRect(box, imgW, imgH) {
     return { sx, sy, sw: Math.max(1, ex - sx), sh: Math.max(1, ey - sy) };
 }
 
+// ── OCRの失敗検出（グレースケールでの再試行用） ──
+// LightOnOCR は密な画像（雑誌の表紙など）でときどき何も返さない・同じ語を延々と繰り返す。実測（DEVLOG 2026-10-25）では、
+// 失敗したカラー画像でもグレースケールにすると返ってくることがあった。コントラスト補正・repeat_penaltyは逆効果だったので使わない。
+export const OCR_LOOP_MIN_BOXES = 30;    // 枠がこれ以上あり、かつ重複が多ければ繰り返しとみなす
+export const OCR_LOOP_MAX_UNIQUE = 0.5;  // 文字の種類数 / 枠数 がこれ未満なら繰り返し
+
+/** OCR結果（parseOcrOutput の戻り値）が失敗（空・繰り返し）に見えるか */
+export function ocrLooksFailed(boxes) {
+    const texts = (boxes || []).filter(b => b.cls === 'text').map(b => b.text);
+    if (!texts.length) return true;
+    return texts.length >= OCR_LOOP_MIN_BOXES && new Set(texts).size / texts.length < OCR_LOOP_MAX_UNIQUE;
+}
+
 // ── 全体プロンプト（VLM） ──
 // 画像全体の説明を英語で作らせ、MOSS-Imageのプロンプト（レイアウト使用時はsummary）として送る
 export const OVERALL_PROMPT = 'Describe this entire image in 2-3 English sentences as a summary for an image-generation prompt: '
