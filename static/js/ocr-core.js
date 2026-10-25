@@ -263,6 +263,76 @@ export function cropRect(box, imgW, imgH) {
     return { sx, sy, sw: Math.max(1, ex - sx), sh: Math.max(1, ey - sy) };
 }
 
+// ── モード（用途別プリセット） ──
+// ラジオ/ドロップダウンで選ぶと、個別設定（OCR・レイアウト検出・読み直し・判定・全体プロンプト・前処理）を一括で切り替える。
+// null は「変更しない」。tile は縦長画像を分割して読む（モード専用の動作で個別設定は無い）。
+export const OCR_MODES = ['auto', 'manga', 'cover', 'text', 'illustration', 'tall', 'custom'];
+export const OCR_MODE_PRESETS = {
+    manga:        { ocr: true,  layout: true,  classes: ['balloon', 'sfx', 'caption', 'panel', 'character', 'face'], merge: true, reread: true,  decide: true,  overall: true,  preprocess: 'none', tile: false },
+    cover:        { ocr: true,  layout: false, classes: null, merge: null, reread: false, decide: false, overall: true,  preprocess: 'none', tile: false },
+    text:         { ocr: true,  layout: false, classes: null, merge: null, reread: false, decide: false, overall: false, preprocess: 'none', tile: false },
+    illustration: { ocr: false, layout: true,  classes: ['panel', 'character', 'face', 'object'], merge: null, reread: false, decide: false, overall: true,  preprocess: 'none', tile: false },
+    tall:         { ocr: true,  layout: false, classes: null, merge: null, reread: false, decide: false, overall: false, preprocess: 'none', tile: true },
+};
+
+// 自動モード: 縦横比が極端なら縦長、それ以外は意思決定モデル（画像対応）に縮小画像を見せて種類を選ばせる
+export const TALL_ASPECT = 2.5;       // 高さ/幅 がこれ以上なら縦長ページ
+export const MODE_MIN_PROB = 0.4;     // 判定の確率がこれ未満なら manga にする
+export const MODE_QUESTIONS = {
+    page_type: { type: 'choice', instructions: 'What kind of image is this?',
+        criteria: {
+            manga: 'A manga or comic page with panels and speech balloons.',
+            cover: 'A magazine cover, poster or flyer with large decorative titles and many text blocks over a photo or illustration.',
+            text: 'A document, book page, sign or screenshot where text is the main content.',
+            illustration: 'An illustration or photo with little or no text.',
+        } },
+};
+
+/** 画像サイズからモードを決められるなら返す（縦長）。決められなければ null */
+export function modeByAspect(w, h) {
+    return w > 0 && h / w >= TALL_ASPECT ? 'tall' : null;
+}
+
+/** /v1/systemone の answers → { mode, p }。無効なら null */
+export function parseModeAnswer(answers) {
+    const c = answers?.page_type;
+    if (!c?.choice || !OCR_MODE_PRESETS[c.choice]) return null;
+    return { mode: c.choice, p: c.probabilities?.[c.choice] ?? 0 };
+}
+
+// ── 縦長画像の分割読み ──
+export const TILE_RATIO = 1.4;       // タイルの高さ/幅（ページに近い縦横比）
+export const TILE_OVERLAP = 0.12;    // タイル同士の重なり（文字が境界で切れるのを避ける）
+
+/** 縦長画像を縦に分割する矩形（全幅、y0〜y1 px）。短ければ1枚 */
+export function tileRects(w, h, ratio = TILE_RATIO, overlap = TILE_OVERLAP) {
+    const tileH = Math.round(w * ratio);
+    if (h <= tileH * 1.15) return [{ y0: 0, y1: h }];
+    const step = Math.max(1, Math.round(tileH * (1 - overlap)));
+    const out = [];
+    for (let y0 = 0; ; y0 += step) {
+        if (y0 + tileH >= h) { out.push({ y0: Math.max(0, h - tileH), y1: h }); break; }   // 最後は下端に合わせる
+        out.push({ y0, y1: y0 + tileH });
+    }
+    return out;
+}
+
+/** タイル内の正規化座標 → 元画像全体の正規化座標（y のみ変わる） */
+export function mapTileBoxes(boxes, y0, y1, H) {
+    return boxes.map(b => ({ ...b, y1: (y0 + b.y1 * (y1 - y0)) / H, y2: (y0 + b.y2 * (y1 - y0)) / H }));
+}
+
+const sameText = (a, b) => !a || !b || a === b || a.includes(b) || b.includes(a);
+/** 重なり部分で二重に読まれた枠を除く（面積の大きい＝境界で切れていないほうを残す） */
+export function dedupeTileBoxes(boxes) {
+    const kept = [];
+    for (const b of [...boxes].sort((p, q) => area(q) - area(p))) {
+        if (kept.some(k => k.cls === b.cls && ((iou(k, b) > 0.4 && sameText(k.text, b.text)) || iou(k, b) > 0.7))) continue;
+        kept.push(b);
+    }
+    return kept;
+}
+
 // ── OCRの失敗検出（グレースケールでの再試行用） ──
 // LightOnOCR は密な画像（雑誌の表紙など）でときどき何も返さない・同じ語を延々と繰り返す。実測（DEVLOG 2026-10-25）では、
 // 失敗したカラー画像でもグレースケールにすると返ってくることがあった。コントラスト補正・repeat_penaltyは逆効果だったので使わない。

@@ -2322,11 +2322,30 @@
                 </div>
               </div>
               <div class="moss-settings-col ocr-settings-col">
+                <details id="ocr-mode-details" class="moss-collapse" open>
+                  <summary data-i18n="ocr.modeTitle">モード</summary>
+                  <div class="comfyui-field-group">
+                    <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.mode">モード:</label>
+                      <select id="ocr-mode" class="comfyui-select">
+                        <option value="auto" data-i18n="ocr.mode.auto">自動（おすすめ）</option>
+                        <option value="manga" data-i18n="ocr.mode.manga">マンガページ</option>
+                        <option value="cover" data-i18n="ocr.mode.cover">雑誌表紙・ポスター</option>
+                        <option value="text" data-i18n="ocr.mode.text">文字のみ（文書・看板）</option>
+                        <option value="illustration" data-i18n="ocr.mode.illustration">イラスト（文字なし）</option>
+                        <option value="tall" data-i18n="ocr.mode.tall">縦長ページ（分割して読む）</option>
+                        <option value="custom" data-i18n="ocr.mode.custom">カスタム</option>
+                      </select></div>
+                    <div id="ocr-mode-hint" style="font-size:11px; color:#888;"></div>
+                  </div>
+                </details>
                 <details id="ocr-models-details" class="moss-collapse" open>
                   <summary data-i18n="ocr.modelsTitle">モデル（Ollama）</summary>
                 <div class="comfyui-field-group">
                   <div class="comfyui-field"><label class="comfyui-label">URL:</label><input type="text" id="ocr-url" class="comfyui-input" style="flex:1" /></div>
                   <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.ocrModel">OCRモデル:</label><select id="ocr-model" class="comfyui-select"></select></div>
+                  <div class="comfyui-field">
+                    <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-ocr" checked> <span data-i18n="ocr.useOcr">文字検出（OCR）を行う</span></label>
+                  </div>
                   <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.preprocess">OCRの前処理:</label>
                     <select id="ocr-preprocess" class="comfyui-select"><option value="none" data-i18n="ocr.preNone">そのまま</option><option value="gray" data-i18n="ocr.preGray">グレースケール</option></select></div>
                   <div style="font-size:11px; color:#888;" data-i18n="ocr.preHint">雑誌の表紙など密な画像で、OCRが空・同じ語の繰り返しになったときは、自動でグレースケールにして1回やり直します。</div>
