@@ -263,6 +263,51 @@ export function cropRect(box, imgW, imgH) {
     return { sx, sy, sw: Math.max(1, ex - sx), sh: Math.max(1, ey - sy) };
 }
 
+// ── 意思決定モデルによる切り抜き判定（任意機能） ──
+// 切り抜き画像に /v1/systemone で「文字があるか」「どの種類の文字枠か」を聞く（確率つき）。
+// 実測（合成ページ、DEVLOG参照）: 文字の有無・クラス分類は d3:4b / clef-flash とも高精度。枠のずれ・切れの検出は弱いので使わない。
+export const DECIDE_MIN_HAS = 0.3;   // VLMの容器枠で「文字がある」確率がこれ未満なら的外れな枠として除く
+export const DECIDE_MIN_CLS = 0.6;   // クラスを書き換える最低確率（未満は元のクラスのまま）
+export const DECIDE_QUESTIONS = {
+    has_text: { type: 'noul', instructions: 'Does this image contain Japanese text characters?',
+        criteria: { true: 'Japanese characters are visible.', false: 'No text, only background or artwork.' } },
+    cls: { type: 'choice', instructions: 'What kind of text element is this?',
+        criteria: {
+            balloon: 'Text inside a speech bubble (white ellipse).',
+            caption: 'Text inside a rectangular narration box.',
+            sfx: 'Large stylized sound-effect lettering.',
+            text: 'Plain text directly on the artwork with no frame.',
+        } },
+};
+
+/** 意思決定モデルを一覧から選ぶ（clef-flash → d3 → 先頭）。無ければ '' */
+export function pickDecisionModel(names) {
+    for (const re of [/clef-flash/i, /^d3/i]) {
+        const hit = names.find(n => re.test(n));
+        if (hit) return hit;
+    }
+    return names[0] || '';
+}
+
+/** /v1/systemone の answers → { pHas, cls, pCls }。欠けていれば null */
+export function parseDecision(answers) {
+    const h = answers?.has_text, c = answers?.cls;
+    if (!h || !c || typeof h.noul !== 'number' || !c.choice) return null;
+    return { pHas: h.noul, cls: c.choice, pCls: c.probabilities?.[c.choice] ?? c.confidence ?? 0 };
+}
+
+/** 判定結果を枠へ反映する。戻り値: 'drop'（除く）| 'changed' | 'keep' */
+export function applyDecision(box, d) {
+    if (!d) return 'keep';
+    const isContainer = !!OCR_CLASSES[box.cls]?.container;
+    if (box.src === 'vlm' && isContainer && d.pHas < DECIDE_MIN_HAS) return 'drop';
+    if (box.src === 'ocr' && box.cls === 'text' && d.cls !== box.cls && d.pCls >= DECIDE_MIN_CLS && OCR_CLASSES[d.cls]) {
+        box.cls = d.cls;
+        return 'changed';
+    }
+    return 'keep';
+}
+
 /** PaddleOCR-VL系は「…」「！」「？」を半角（...・!・?）で返すので、日本語を含む文字列だけ全角に戻す */
 export function normalizeJaPunct(text) {
     const s = String(text || '').trim();

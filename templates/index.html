@@ -2337,6 +2337,11 @@
                   </div>
                   <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.rereadModel">読み直しモデル:</label><select id="ocr-reread-model" class="comfyui-select"></select></div>
                   <div style="font-size:11px; color:#888;" data-i18n="ocr.rereadHint">縦書き・装飾文字はマンガ特化のPaddleOCR-VLが強い傾向です（ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M）。枠の数だけ時間が掛かります。</div>
+                  <div class="comfyui-field" style="margin-top:8px;">
+                    <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-decide"> <span data-i18n="ocr.useDecide">検出後に切り抜きを意思決定モデルで判定する（任意）</span></label>
+                  </div>
+                  <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.decideModel">判定モデル:</label><select id="ocr-decide-model" class="comfyui-select"></select></div>
+                  <div style="font-size:11px; color:#888;" data-i18n="ocr.decideHint">画像対応の意思決定モデル（clef-flash / d3 など）で、文字枠の種類（ふきだし・キャプション・効果音・文字）を判定し、文字の無いVLM検出枠を除きます。枠の数だけ時間が掛かります。</div>
                 </div>
                 </details>
                 <div class="comfyui-field-group" style="margin-top:10px">

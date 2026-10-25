@@ -15,6 +15,7 @@ import {
     OCR_MODEL_DEFAULT, LAYOUT_MODEL_DEFAULT, OCR_CLASSES, OCR_CLASS_KEYS, VLM_CLASS_KEYS, OCR_PROMPT,
     buildLayoutPrompt, parseOcrOutput, parseLayoutOutput, mergeDetections, toMossItems, collectText, sortReading,
     pickRereadModel, rereadPrompt, rereadScale, cropRect, normalizeJaPunct,
+    DECIDE_QUESTIONS, pickDecisionModel, parseDecision, applyDecision,
 } from '../ocr-core.js';
 
 const $ = (id) => document.getElementById(id);
@@ -28,7 +29,10 @@ const O = {
     inited: false, busy: false,
     img: null,              // { url, w, h, b64 }
     boxes: [], selId: null, nextId: 1, scale: 1,
+    multi: new Set(),       // Shift+クリックで追加した選択（selId以外）。移動・削除はselId+multi全体が対象
 };
+const isSel = (id) => id === O.selId || O.multi.has(id);
+const selIds = () => O.boxes.map(b => b.id).filter(isSel);
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 const classLabel = (c) => t(`ocr.cls.${c}`);
@@ -44,6 +48,7 @@ function saveSettings() {
             url: $('ocr-url').value, ocrModel: $('ocr-model').value, layoutModel: $('ocr-layout-model').value,
             useLayout: $('ocr-use-layout').checked, classes, merge: $('ocr-merge-containers').checked,
             useReread: $('ocr-use-reread').checked, rereadModel: $('ocr-reread-model').value,
+            useDecide: $('ocr-use-decide').checked, decideModel: $('ocr-decide-model').value,
         }));
     } catch (_) { /* ignore */ }
 }
@@ -81,12 +86,16 @@ async function loadModels(saved) {
     try {
         const res = await fetch(`${baseUrl()}/api/tags`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const names = ((await res.json()).models || []).map(m => m.name);
+        const tagsJson = res.json();
+        const names = ((await tagsJson).models || []).map(m => m.name);
         fillModelSelect($('ocr-model'), names, saved?.ocrModel || OCR_MODEL_DEFAULT, [/lighton/i, /ocr/i]);
         fillModelSelect($('ocr-layout-model'), names, saved?.layoutModel || LAYOUT_MODEL_DEFAULT,[/gemma|qwen.*vl|vl/i]);   // 既定は LAYOUT_MODEL_DEFAULT（gemma4:e4b）。保存値が無ければ名前から推定
         const rereadDefault = pickRereadModel(names);
         fillModelSelect($('ocr-reread-model'), names, saved?.rereadModel || rereadDefault, []);
         if (!rereadDefault && saved?.useReread === undefined) $('ocr-use-reread').checked = false;   // 向いたモデルが無いときは既定オフ
+        const decNames = ((await tagsJson).models || []).filter(m => (m.capabilities || []).includes('decision') && (m.capabilities || []).includes('vision')).map(m => m.name);
+        fillModelSelect($('ocr-decide-model'), decNames, saved?.decideModel || pickDecisionModel(decNames), []);
+        if (!decNames.length) $('ocr-use-decide').checked = false;
         const ok = names.includes(OCR_MODEL_DEFAULT) || names.some(n => /ocr/i.test(n));
         label.textContent = ok ? t('ocr.statusReady') : t('ocr.statusNoModel');
         label.className = 'comfyui-status ' + (ok ? 'connected' : 'disconnected');
@@ -121,7 +130,7 @@ async function loadImageFile(file) {
     cx.drawImage(im, 0, 0, cv.width, cv.height);
     const b64 = cv.toDataURL('image/jpeg', 0.92).split(',')[1];
     O.img = { url, w: im.naturalWidth, h: im.naturalHeight, b64, el: im };
-    O.boxes = []; O.selId = null; O.nextId = 1;
+    O.boxes = []; O.selId = null; O.multi.clear(); O.nextId = 1;
     $('ocr-run-btn').disabled = false;
     $('ocr-progress').textContent = '';
     renderAll();
@@ -154,7 +163,7 @@ function renderStage() {
     const img = document.createElement('img'); img.src = O.img.url; img.draggable = false; stage.appendChild(img);
     O.boxes.forEach((b, i) => {
         const el = document.createElement('div');
-        el.className = 'ocr-box' + (b.id === O.selId ? ' selected' : '');
+        el.className = 'ocr-box' + (isSel(b.id) ? ' selected' : '');
         el.dataset.id = b.id;
         el.style.setProperty('--ocr-c', OCR_CLASSES[b.cls]?.color || '#4caf50');
         el.title = `${classLabel(b.cls)}${b.text ? `: ${b.text}` : b.caption ? `: ${b.caption}` : ''}`;
@@ -176,32 +185,47 @@ function renderList() {
     list.innerHTML = '';
     O.boxes.forEach((b, i) => {
         const row = document.createElement('div');
-        row.className = 'ocr-row' + (b.id === O.selId ? ' selected' : '');
+        row.className = 'ocr-row' + (isSel(b.id) ? ' selected' : '');
         row.style.setProperty('--ocr-c', OCR_CLASSES[b.cls]?.color || '#4caf50');
         row.dataset.id = b.id;
         const no = document.createElement('span'); no.className = 'ocr-no'; no.textContent = String(i + 1);
         const sel = document.createElement('select');
         for (const c of OCR_CLASS_KEYS) { const o = document.createElement('option'); o.value = c; o.textContent = classLabel(c); sel.appendChild(o); }
         sel.value = b.cls;
-        sel.addEventListener('change', () => { b.cls = sel.value; O.selId = b.id; renderAll(); });
+        sel.addEventListener('change', () => { b.cls = sel.value; O.selId = b.id; O.multi.clear(); renderAll(); });
         const ta = document.createElement('textarea');
         ta.rows = 2;
         const field = () => (TEXTY.has(b.cls) ? 'text' : 'caption');
         ta.value = b[field()] || '';
         ta.placeholder = TEXTY.has(b.cls) ? t('ocr.textPlaceholder') : t('ocr.captionPlaceholder');
         ta.addEventListener('input', () => { b[field()] = ta.value; saveSettings(); });
-        ta.addEventListener('focus', () => { if (O.selId !== b.id) { O.selId = b.id; markSelected(); } });
+        ta.addEventListener('focus', () => { if (O.selId !== b.id || O.multi.size) { O.selId = b.id; O.multi.clear(); markSelected(); } });
         row.append(no, sel, ta);
-        row.addEventListener('pointerdown', (e) => { if (e.target === row || e.target === no) { O.selId = b.id; markSelected(); } });
+        row.addEventListener('pointerdown', (e) => {
+            if (e.target !== row && e.target !== no) return;
+            if (e.shiftKey) toggleMulti(b.id); else { O.selId = b.id; O.multi.clear(); }
+            markSelected();
+        });
         list.appendChild(row);
     });
 }
 
 // 全体を作り直さずに選択表示だけ更新する（入力中のテキスト欄のフォーカスを保つ）
 function markSelected() {
-    document.querySelectorAll('#ocr-stage .ocr-box').forEach(el => el.classList.toggle('selected', Number(el.dataset.id) === O.selId));
-    document.querySelectorAll('#ocr-list .ocr-row').forEach(el => el.classList.toggle('selected', Number(el.dataset.id) === O.selId));
+    document.querySelectorAll('#ocr-stage .ocr-box').forEach(el => el.classList.toggle('selected', isSel(Number(el.dataset.id))));
+    document.querySelectorAll('#ocr-list .ocr-row').forEach(el => el.classList.toggle('selected', isSel(Number(el.dataset.id))));
     updateButtons();
+}
+
+// Shift+クリック: 選択集合への追加／除外
+function toggleMulti(id) {
+    if (isSel(id)) {
+        if (id === O.selId) O.selId = O.multi.size ? O.multi.values().next().value : null;
+        if (O.selId !== null) O.multi.delete(O.selId);
+        O.multi.delete(id);
+    } else {
+        if (O.selId === null) O.selId = id; else O.multi.add(id);
+    }
 }
 
 // ─── ステージ操作（描画・移動・拡縮） ───
@@ -222,9 +246,17 @@ function initStageInteraction() {
         stage.setPointerCapture(e.pointerId);
         if (b && handle) {
             drag = { mode: 'resize', h: handle.dataset.h, b, el: boxEl };
+        } else if (b && e.shiftKey) {
+            toggleMulti(b.id); markSelected();
+            drag = null;
         } else if (b) {
-            O.selId = b.id; markSelected();
-            drag = { mode: 'move', b, el: boxEl, dx: p.x - b.x1, dy: p.y - b.y1 };
+            if (!isSel(b.id) || !O.multi.size) { O.selId = b.id; O.multi.clear(); }
+            markSelected();
+            const items = selIds().map(id => {
+                const sb = O.boxes.find(x => x.id === id);
+                return { b: sb, el: stage.querySelector(`.ocr-box[data-id="${id}"]`), x1: sb.x1, y1: sb.y1, x2: sb.x2, y2: sb.y2 };
+            });
+            drag = { mode: 'move', items, x0: p.x, y0: p.y };
         } else {
             drag = { mode: 'draw', x0: p.x, y0: p.y, cls: $('ocr-draw-class').value, ghost: null };
         }
@@ -234,10 +266,15 @@ function initStageInteraction() {
         if (!drag) return;
         const p = stagePoint(e);
         if (drag.mode === 'move') {
-            const b = drag.b, w = b.x2 - b.x1, h = b.y2 - b.y1;
-            b.x1 = Math.min(1 - w, Math.max(0, p.x - drag.dx)); b.y1 = Math.min(1 - h, Math.max(0, p.y - drag.dy));
-            b.x2 = b.x1 + w; b.y2 = b.y1 + h;
-            placeBox(drag.el, b);
+            // グループ全体の外接矩形が画像内に収まるよう移動量を制限
+            const it = drag.items;
+            const minX = Math.min(...it.map(i => i.x1)), maxX = Math.max(...it.map(i => i.x2));
+            const minY = Math.min(...it.map(i => i.y1)), maxY = Math.max(...it.map(i => i.y2));
+            const dx = Math.min(1 - maxX, Math.max(-minX, p.x - drag.x0)), dy = Math.min(1 - maxY, Math.max(-minY, p.y - drag.y0));
+            for (const i of it) {
+                i.b.x1 = i.x1 + dx; i.b.x2 = i.x2 + dx; i.b.y1 = i.y1 + dy; i.b.y2 = i.y2 + dy;
+                if (i.el) placeBox(i.el, i.b);
+            }
         } else if (drag.mode === 'resize') {
             const b = drag.b;
             if (drag.h.includes('w')) b.x1 = Math.min(p.x, b.x2 - MIN_BOX); else b.x2 = Math.max(p.x, b.x1 + MIN_BOX);
@@ -257,9 +294,9 @@ function initStageInteraction() {
             const x1 = Math.min(d.x0, p.x), x2 = Math.max(d.x0, p.x), y1 = Math.min(d.y0, p.y), y2 = Math.max(d.y0, p.y);
             if (x2 - x1 >= MIN_BOX && y2 - y1 >= MIN_BOX) {
                 const b = { id: O.nextId++, cls: d.cls, x1, y1, x2, y2, text: '', caption: '', src: 'manual' };
-                O.boxes.push(b); O.selId = b.id;
+                O.boxes.push(b); O.selId = b.id; O.multi.clear();
                 renderAll();
-            } else if (O.selId) { O.selId = null; markSelected(); }
+            } else if (O.selId !== null && !e.shiftKey) { O.selId = null; O.multi.clear(); markSelected(); }
         } else if (d.mode === 'resize') {
             renderAll();
         }
@@ -302,8 +339,8 @@ function initStageInteraction() {
 
 function deleteSelected() {
     if (!selBox()) return;
-    O.boxes = O.boxes.filter(b => b.id !== O.selId);
-    O.selId = null;
+    O.boxes = O.boxes.filter(b => !isSel(b.id));
+    O.selId = null; O.multi.clear();
     renderAll();
 }
 
@@ -348,6 +385,40 @@ async function rereadAll(prog) {
     }
 }
 
+// ─── 意思決定モデルによる判定（任意） ───
+async function decideCrop(b64, model, retry = true) {
+    const res = await fetch(`${baseUrl()}/v1/systemone`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, state: 'The image to judge.', questions: DECIDE_QUESTIONS, images: [b64] }),
+    });
+    if (!res.ok && retry && res.status >= 500) {   // VRAMの入れ替え直後などで落ちることがある。少し待って1回だけやり直す
+        await new Promise(r => setTimeout(r, 4000));
+        return decideCrop(b64, model, false);
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
+    return parseDecision((await res.json()).answers);
+}
+
+/** OCRの文字枠のクラス判定と、VLM容器枠のうち文字が無いものの除去。戻り値: { changed, dropped } */
+async function decideAll(prog) {
+    const model = $('ocr-decide-model').value;
+    const targets = O.boxes.filter(b => (b.src === 'ocr' && b.cls === 'text') || (b.src === 'vlm' && OCR_CLASSES[b.cls]?.container));
+    const drop = new Set();
+    let done = 0, failed = 0, changed = 0;
+    for (const b of targets) {
+        prog.textContent = t('ocr.progressDecide', ++done, targets.length);
+        try {
+            const r = applyDecision(b, await decideCrop(cropForModel(b, model), model));
+            if (r === 'drop') drop.add(b.id); else if (r === 'changed') changed++;
+        } catch (e) {
+            console.warn('[ocr] decide failed', e);
+            if (++failed >= 2) throw new Error(t('ocr.errDecide', e.message || String(e)));   // モデル未導入などで全滅するときは打ち切る
+        }
+    }
+    if (drop.size) O.boxes = O.boxes.filter(b => !drop.has(b.id));
+    return { changed, dropped: drop.size };
+}
+
 async function onRereadSelected() {
     const b = selBox();
     if (!b || O.busy || !O.img) return;
@@ -383,14 +454,19 @@ async function onRun() {
             vlmBoxes = parseLayoutOutput(raw, O.img.w, O.img.h).filter(b => classes.includes(b.cls));
         }
         O.boxes = mergeDetections(ocrBoxes, vlmBoxes).map(b => ({ ...b, id: O.nextId++ }));
-        O.selId = null;
+        O.selId = null; O.multi.clear();
         renderAll();
         let rereadError = '';
         if ($('ocr-use-reread').checked && $('ocr-reread-model').value) {
             try { await rereadAll(prog); } catch (e) { rereadError = e.message || String(e); }   // 検出結果は残し、元のOCR文字のまま
             renderAll();
         }
-        prog.textContent = rereadError || t('ocr.done', O.boxes.length, ((Date.now() - started) / 1000).toFixed(1));
+        let decideMsg = '';
+        if ($('ocr-use-decide').checked && $('ocr-decide-model').value) {
+            try { const r = await decideAll(prog); decideMsg = t('ocr.decideDone', r.changed, r.dropped); } catch (e) { rereadError = rereadError || e.message || String(e); }
+            renderAll();
+        }
+        prog.textContent = rereadError || (t('ocr.done', O.boxes.length, ((Date.now() - started) / 1000).toFixed(1)) + (decideMsg ? ` ${decideMsg}` : ''));
     } catch (e) {
         console.warn('[ocr] run failed', e);
         prog.textContent = t('ocr.errRun', e.message || String(e));
@@ -439,6 +515,7 @@ async function initOcrTabOnce() {
     }
     if (saved.useLayout === false) $('ocr-use-layout').checked = false;
     if (saved.useReread !== undefined) $('ocr-use-reread').checked = !!saved.useReread;
+    if (saved.useDecide !== undefined) $('ocr-use-decide').checked = !!saved.useDecide;
     if (saved.merge === false) $('ocr-merge-containers').checked = false;
 
     const md = $('ocr-models-details');   // モデル欄の開閉状態を保存
@@ -455,14 +532,14 @@ async function initOcrTabOnce() {
     $('ocr-box-reread-btn').addEventListener('click', onRereadSelected);
     $('ocr-box-clear-btn').addEventListener('click', () => {
         if (!O.boxes.length || !confirm(t('ocr.confirmClear'))) return;
-        O.boxes = []; O.selId = null; renderAll();
+        O.boxes = []; O.selId = null; O.multi.clear(); renderAll();
     });
     $('ocr-run-btn').addEventListener('click', onRun);
     $('ocr-reload-models-btn').addEventListener('click', () => loadModels(loadSettings()));
     $('ocr-copy-text-btn').addEventListener('click', () => copyText(collectText(O.boxes), 'ocr.copied'));
     $('ocr-copy-json-btn').addEventListener('click', () => copyText(boxesAsJson(), 'ocr.copied'));
     $('ocr-send-moss-btn').addEventListener('click', onSendMoss);
-    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers', 'ocr-use-reread', 'ocr-reread-model']) $(id).addEventListener('change', saveSettings);
+    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers', 'ocr-use-reread', 'ocr-reread-model', 'ocr-use-decide', 'ocr-decide-model']) $(id).addEventListener('change', saveSettings);
     document.querySelectorAll('[data-ocr-class]').forEach(el => el.addEventListener('change', saveSettings));
     $('ocr-url').addEventListener('change', () => loadModels(loadSettings()));
     window.addEventListener('resize', () => { if ($('ocr-tab')?.classList.contains('active')) renderStage(); });
