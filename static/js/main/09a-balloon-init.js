@@ -29,10 +29,12 @@ import {
 } from './09d-balloon-tools.js';
 import {
     _setTextElVertical, _fontMgrExtractStyleFromTextEl, _fontMgrApplyStyleAttrsToTextEl,
-    applyStyleToSelectedText, insertStylePlaceholderText, insertScriptDialogueText, applyTextInput,
+    applyStyleToSelectedText, insertStylePlaceholderText, insertScriptDialogueText, insertOcrTexts, applyTextInput,
 } from './09e-text-tool.js';
 import { _bubbleTextCanHoldText } from './09f-bubble-text.js';
 import { convertTextToPng } from './12-text-png-export.js';
+import { openTextInsertModal } from '../text-insert-modal.js';
+import { getOcrTextItems } from './29-ocr-tab.js';
 import { state } from './01-state.js';
 import { _fontMgrLoad } from './19-font-manager.js';
 import { renderLayoutTab, undo } from './07-pages.js';
@@ -384,7 +386,11 @@ function initBalloonManager() {
     // スクリプトセリフ挿入ボタン
     const scriptInsertBtn = document.getElementById('script-dialogue-insert-btn');
     if (scriptInsertBtn) {
-        scriptInsertBtn.addEventListener('click', () => insertScriptDialogueText());
+        scriptInsertBtn.addEventListener('click', () => openTextInsertModal({
+            ocrCount: getOcrTextItems().length, sizeUnit: 'pt', defaultSize: state.balloon.fontSize,
+            onScript: () => insertScriptDialogueText(),
+            onOcr: async (o) => { const n = await insertOcrTexts(o); if (n) { const st = document.getElementById('text-to-png-status'); if (st) st.textContent = t('insert.done', n); } },
+        }));
     }
 
 

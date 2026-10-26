@@ -4,7 +4,7 @@
 // （ComfyUIの「Create Bounding Boxes」ノード相当をCCのコマ割りと連携させたもの）。
 // 生成モードは「1頁まるごと」「コマ単位」「自由サイズ」の3つ。
 import { t } from './i18n.js';
-import { state } from './main/01-state.js';
+import { state, switchTab } from './main/01-state.js';
 import { dbGet } from './main/00-db.js';
 import { insertImage, insertImageFromUrl, getBoundingBoxFromPoints } from './main/08-panels-images.js';
 import { prepareVramForGeneration } from './vram-prepare.js';
@@ -12,7 +12,7 @@ import { prepareVramForGeneration } from './vram-prepare.js';
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'ccc_moss_v1';
 const SUBTAB_KEY = 'ccc_moss_subtab';
-const FIELD_IDS = ['moss-prompt', 'moss-negative', 'moss-mode', 'moss-size-preset', 'moss-width', 'moss-height', 'moss-batch',
+const FIELD_IDS = ['moss-no-text', 'moss-prompt', 'moss-negative', 'moss-mode', 'moss-size-preset', 'moss-width', 'moss-height', 'moss-batch',
     'moss-unet', 'moss-clip', 'moss-vae', 'moss-lora', 'moss-lora-strength', 'moss-steps', 'moss-cfg', 'moss-sampler',
     'moss-scheduler', 'moss-slg', 'moss-seed', 'moss-seed-mode', 'moss-preset', 'moss-json-manual', 'moss-import-texts', 'moss-import-panel-label', 'moss-enhance'];
 
@@ -228,7 +228,9 @@ function showPromptTab() {
 }
 
 function layoutPayload() {
-    return { items: S.items.map(i => ({ type: i.type, caption: i.caption, text: i.text, vertical: !!i.vertical, x: i.x, y: i.y, w: i.w, h: i.h })) };
+    // 「テキストを無効で生成」: 文字枠は削除せず、送信（生成・JSONプレビュー）からだけ除く
+    const noText = $('moss-no-text')?.checked;
+    return { items: S.items.filter(i => !(noText && i.type === 'text')).map(i => ({ type: i.type, caption: i.caption, text: i.text, vertical: !!i.vertical, x: i.x, y: i.y, w: i.w, h: i.h })) };
 }
 
 function renderCanvas() {
@@ -1125,6 +1127,7 @@ function renderResult() {
     const cur = S.results[S.resultIdx];
     $('moss-result-img').src = cur ? cur.url : '';
     $('moss-insert-btn').disabled = !cur;
+    $('moss-open-image-btn').disabled = !cur;
     const thumbs = $('moss-result-thumbs');
     thumbs.innerHTML = '';
     if (S.results.length < 2) { thumbs.style.display = 'none'; return; }
@@ -1155,6 +1158,19 @@ async function onInsert() {
         }
     } catch (e) {
         console.error('[moss] insert failed', e);
+        alert(e.message);
+    }
+}
+
+// 選択中の画像をImageタブの新規キャンバスとして開く
+async function onOpenInImage() {
+    const cur = S.results[S.resultIdx];
+    if (!cur) return;
+    try {
+        await switchTab('image');
+        await window._ccImageTab?.loadFromUrl(cur.url, cur.im?.filename?.replace(/\.[^.]+$/, '') || 'moss-image');
+    } catch (e) {
+        console.error('[moss] open in image tab failed', e);
         alert(e.message);
     }
 }
@@ -1223,6 +1239,8 @@ async function initMossTabOnce() {
     $('moss-reload-models-btn').addEventListener('click', () => loadModelLists(loadSettings()));
     $('moss-generate-btn').addEventListener('click', onGenerate);
     $('moss-insert-btn').addEventListener('click', onInsert);
+    $('moss-no-text').addEventListener('change', refreshPreview);
+    $('moss-open-image-btn').addEventListener('click', onOpenInImage);
     for (const id of FIELD_IDS) $(id)?.addEventListener('change', scheduleSave);
     for (const id of ['moss-prompt', 'moss-negative']) $(id)?.addEventListener('input', scheduleSave);
     window.addEventListener('resize', () => { if ($('moss-tab')?.classList.contains('active')) renderCanvas(); });

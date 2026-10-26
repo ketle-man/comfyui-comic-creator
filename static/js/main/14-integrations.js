@@ -806,6 +806,17 @@ export {
 // まだESM化されていない main/以下の classic <script> から呼べるようにするブリッジ
 // （ESモジュール化移行中の一時措置。全分割ファイルのESM化が完了したら、
 //  各呼び出し元をimport文に置き換えてこのブロックごと削除する）。
+// Workflow Studio（iframe埋め込み）のGalleryタブ「Send CC（Image）」からの呼び出し用。
+// Imageタブへ切り替えてから画像を読み込む（作業中のレイヤーがあれば新規レイヤー、無ければ新規キャンバス）。
+// I2I送信元の記録（_ccI2ITargetMode）には依存しない。戻り値: 成功したか
+async function sendImageToImageTab(url, name) {
+    await switchTab('image');
+    const tab = window._ccImageTab;
+    if (!tab || typeof tab.loadFromUrl !== 'function') return false;
+    await tab.loadFromUrl(url, name);
+    return true;
+}
+window.sendImageToImageTab = sendImageToImageTab;
 window.initEagleSettings = initEagleSettings;
 window.initGmicSettings = initGmicSettings;
 window.initInpaintSettings = initInpaintSettings;

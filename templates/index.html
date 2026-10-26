@@ -560,7 +560,7 @@
                     <button type="button" id="text-undo-btn" class="btn small" style="margin-left:8px;" data-i18n="common.undo">取消</button>
                     <button type="button" id="text-save-btn" class="btn secondary small" data-i18n="common.save">保存</button>
                     <button type="button" id="text-to-png-btn" class="btn small" style="margin-left:8px;" data-i18n="layout.textToPng" data-i18n-title="layout.textToPngTitle" title="選択中のテキストを透過PNGに変換してコマに挿入します">テキスト→PNG</button>
-                    <button type="button" id="script-dialogue-insert-btn" class="btn small" style="margin-left:8px;" data-i18n-title="layout.scriptInsertTitle" title="スクリプトタブのプロットで選択中のセル（シーン／人物／セリフ）を、選択中のコマにテキストとして挿入します">Insert</button>
+                    <button type="button" id="script-dialogue-insert-btn" class="btn small" style="margin-left:8px;" data-i18n-title="layout.textInsertTitle" title="スクリプトタブの選択セル、またはOCRタブの検出テキストを挿入します">Insert</button>
                     <span id="text-to-png-status" style="font-size:11px; color:var(--text-secondary); margin-left:4px;"></span>
                   </div>
                 </div>
@@ -2263,6 +2263,7 @@
               <div class="comfyui-right-col">
                 <div class="comfyui-generate-panel">
                   <button id="moss-generate-btn" class="btn primary" style="width:100%" data-i18n="nb.generate">画像を生成</button>
+                  <label class="comfyui-checkbox-label" style="display:flex; align-items:center; gap:4px; margin-top:6px; font-size:12px; cursor:pointer;" data-i18n-title="moss.noTextHint"><input type="checkbox" id="moss-no-text"> <span data-i18n="moss.noText">テキストを無効で生成</span></label>
                   <div class="comfyui-seed-panel" style="margin-top:0">
                     <div><label data-i18n="layout.seedLabel" style="font-weight:bold;">シード:</label></div>
                     <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
@@ -2286,8 +2287,9 @@
                   <img id="moss-result-img" alt="" style="max-width:100%; border-radius:4px;" />
                 </div>
                 <div id="moss-result-thumbs" class="comfyui-result-thumbs" style="display:none; margin-top:8px;"></div>
-                <div class="control-row" style="margin-top:10px">
-                  <button id="moss-insert-btn" class="btn secondary" style="width:100%" disabled data-i18n="moss.insertBtn">選択中の画像をページへ配置</button>
+                <div class="control-row" style="margin-top:10px; gap:6px;">
+                  <button id="moss-insert-btn" class="btn secondary" style="flex:1" disabled data-i18n="moss.insertBtn">選択中の画像をページへ配置</button>
+                  <button id="moss-open-image-btn" class="btn secondary" style="flex:1" disabled data-i18n="moss.openImageBtn">Imageタブで開く</button>
                 </div>
               </div>
             </div>
@@ -2402,7 +2404,7 @@
                 <div class="comfyui-field-group">
                   <div class="comfyui-group-title" data-i18n="ocr.mossTitle">MOSS-Imageへ送る</div>
                   <label class="comfyui-checkbox-label" style="display:flex; align-items:center; gap:4px; font-size:12px;"><input type="checkbox" id="ocr-merge-containers" checked> <span data-i18n="ocr.mergeContainers">フキダシ/擬音/キャプションの枠に文字をまとめる</span></label>
-                  <button id="ocr-send-moss-btn" class="btn primary" style="width:100%; margin-top:6px;" disabled data-i18n="ocr.sendMoss">レイアウトとして送る</button>
+                  <button id="ocr-send-moss-btn" class="btn primary" style="width:100%; margin-top:6px;" disabled data-i18n="ocr.sendMoss">MOSS-Imageタブへ送る</button>
                   <div style="font-size:11px; color:#888; margin-top:4px;" data-i18n="ocr.mossHint">物体・コマ・キャラ・文字のbboxとして取り込み、MOSS-Imageタブへ移動します（前回のOCR取り込み分は入れ替え）。</div>
                 </div>
               </div>

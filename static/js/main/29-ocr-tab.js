@@ -17,7 +17,7 @@ import {
     buildLayoutPrompt, parseOcrOutput, parseLayoutOutput, mergeDetections, toMossItems, collectText, sortReading,
     pickRereadModel, rereadPrompt, rereadScale, cropRect, normalizeJaPunct,
     DECIDE_QUESTIONS, pickDecisionModel, parseDecision, applyDecision, OVERALL_PROMPT, cleanOverall, ocrLooksFailed,
-    OCR_MODE_PRESETS, MODE_QUESTIONS, MODE_MIN_PROB, modeByAspect, parseModeAnswer, tileRects, mapTileBoxes, dedupeTileBoxes,
+    toTextInsertItems, OCR_MODE_PRESETS, MODE_QUESTIONS, MODE_MIN_PROB, modeByAspect, parseModeAnswer, tileRects, mapTileBoxes, dedupeTileBoxes,
 } from '../ocr-core.js';
 
 const $ = (id) => document.getElementById(id);
@@ -721,6 +721,12 @@ async function initOcrTabOnce() {
     renderAll();
     await loadModels(saved);
     if (firstUse && OCR_MODE_PRESETS[$('ocr-mode').value]) applyPreset($('ocr-mode').value);   // モデル一覧が揃ってから（読み直し・判定の可否が決まる）
+}
+
+/** レイアウト／Imageタブの取り込み用。OCRタブの現在の検出結果から本文を持つ枠を読み順で返す（座標は 0〜1）。画像が無い／文字が無ければ空配列 */
+export function getOcrTextItems() {
+    if (!O.img) return [];
+    return toTextInsertItems(O.boxes, O.img.w / O.img.h);
 }
 
 export function initOcrTab() {
