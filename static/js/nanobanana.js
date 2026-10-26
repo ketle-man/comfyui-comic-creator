@@ -5,7 +5,7 @@
 
 import { t, resolveBackendError } from './i18n.js';
 import { insertImage } from './main/08-panels-images.js';
-import { saveToEagle, _eagleSettings } from './main/14-integrations.js';
+import { saveToEagle, _eagleSettings, sendMultiImageI2IToWorkflowStudio } from './main/14-integrations.js';
 import { state } from './main/01-state.js';
 
 const HISTORY_AUTO_KEY = 'ccc_nanobanana_history_auto';
@@ -22,6 +22,35 @@ function setNanobananaEngine(engine) {
     window.dispatchEvent(new CustomEvent(ENGINE_EVENT, { detail: v }));
 }
 
+// Nanobanana+タブの「ローカル」モード設定（Workflow Studioの保存済みワークフローを表示名つきで複数登録）。
+// ブラウザのlocalStorageに保存: { mode: 'cloud'|'local', selected: id, entries: [{ id, label, file }] }
+const LOCAL_KEY = 'ccc_nanobanana_local';
+function loadLocalConfig() {
+    try {
+        const c = JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}');
+        return {
+            mode: c.mode === 'local' ? 'local' : 'cloud',
+            selected: c.selected || '',
+            entries: Array.isArray(c.entries) ? c.entries.filter(e => e && e.id && e.label && e.file) : [],
+            seedMode: ['random', 'fixed', 'increment'].includes(c.seedMode) ? c.seedMode : 'random',
+            seed: Number.isFinite(c.seed) ? c.seed : -1,
+        };
+    } catch { return { mode: 'cloud', selected: '', entries: [], seedMode: 'random', seed: -1 }; }
+}
+function saveLocalConfig(cfg) {
+    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(cfg)); } catch { /* 無視 */ }
+}
+
+// Workflow Studioの保存済みワークフロー名一覧（WFS未導入・未接続なら空配列）
+async function fetchWorkflowFilenames() {
+    try {
+        const res = await fetch('/api/wfm/workflows');
+        if (!res.ok) return [];
+        const list = await res.json();
+        return (list || []).map(w => w.filename).filter(name => name && !name.startsWith('.'));
+    } catch { return []; }
+}
+
 class NanobananaManager {
     constructor() {
         this.engine = 'gemini';
@@ -32,6 +61,7 @@ class NanobananaManager {
         this.selectedResultIndex = 0; // 結果表示・「コマに挿入」の対象（サムネイルで選択）
         this.apiUrl = '/api/ccc/nanobanana/generate';
         this.lastGenerationMeta = null;   // 直近の生成パラメータ（履歴の手動記録用）
+        this.local = loadLocalConfig();   // ローカルモード設定
 
         this.init();
     }
@@ -39,6 +69,7 @@ class NanobananaManager {
     async init() {
         console.log('NanobananaManager Initializing...');
         this.restoreEngineSetting();
+        this.restoreModeSetting();
         await this.refreshApiKey();
         this.bindEvents();
         this.renderI2IGrid();
@@ -63,6 +94,224 @@ class NanobananaManager {
         });
     }
 
+    // 上部メニューの「Nanobanana / ローカル」ラジオと、ローカル用ドロップダウン・⚙設定ボタン
+    restoreModeSetting() {
+        document.querySelectorAll('input[name="nanobanana-mode"]').forEach(r => {
+            r.checked = r.value === this.local.mode;
+            r.addEventListener('change', () => {
+                if (!r.checked) return;
+                this.local.mode = r.value;
+                saveLocalConfig(this.local);
+                this.applyModeUi();
+                this.refreshApiKey();
+            });
+        });
+        document.getElementById('nanobanana-local-select')?.addEventListener('change', (e) => {
+            this.local.selected = e.target.value;
+            saveLocalConfig(this.local);
+            this.refreshApiKey();
+        });
+        document.getElementById('nanobanana-local-settings-btn')?.addEventListener('click', () => this.openLocalSettings());
+        const sizeSel = document.getElementById('nanobanana-local-size');
+        sizeSel?.addEventListener('change', () => {
+            const c = document.getElementById('nanobanana-local-size-custom');
+            if (c) c.style.display = sizeSel.value === 'custom' ? 'inline' : 'none';
+        });
+        this.renderLocalSelect();
+        this.applyModeUi();
+        this.loadSamplerOptions();
+        this.initSeedControls();
+    }
+
+    // シード設定（ローカル専用。MOSS-Imageタブと同じ ランダム/固定/生成ごとに+1 ＋「このシードを固定」）
+    initSeedControls() {
+        const modeEl = document.getElementById('nanobanana-seed-mode');
+        const seedEl = document.getElementById('nanobanana-seed');
+        if (!modeEl || !seedEl) return;
+        this.lastSeed = null;
+        modeEl.value = this.local.seedMode;
+        seedEl.value = this.local.seed;
+        const persist = () => {
+            this.local.seedMode = modeEl.value;
+            const v = parseInt(seedEl.value);
+            this.local.seed = Number.isFinite(v) ? v : -1;
+            saveLocalConfig(this.local);
+        };
+        modeEl.addEventListener('change', () => { this.updateSeedUi(); persist(); });
+        seedEl.addEventListener('change', persist);
+        document.getElementById('nanobanana-seed-keep')?.addEventListener('click', () => {
+            if (this.lastSeed == null) return;
+            modeEl.value = 'fixed';
+            seedEl.value = this.lastSeed;
+            this.updateSeedUi();
+            persist();
+        });
+        this.updateSeedUi();
+    }
+
+    updateSeedUi() {
+        const modeEl = document.getElementById('nanobanana-seed-mode');
+        const seedEl = document.getElementById('nanobanana-seed');
+        if (!modeEl || !seedEl) return;
+        seedEl.disabled = modeEl.value === 'random';
+        const keep = document.getElementById('nanobanana-seed-keep');
+        if (keep) keep.disabled = this.lastSeed == null;
+        const last = document.getElementById('nanobanana-seed-last');
+        if (last) last.textContent = this.lastSeed == null ? '' : t('moss.seedLast', this.lastSeed);
+    }
+
+    // サンプラー/スケジューラの選択肢をComfyUIのKSamplerノード定義から取得（取得できなければ「既定」のみ）
+    async loadSamplerOptions() {
+        try {
+            const info = (await (await fetch('/object_info/KSampler')).json())?.KSampler?.input?.required;
+            const fill = (id, list) => {
+                const sel = document.getElementById(id);
+                if (!sel || !Array.isArray(list)) return;
+                list.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+            };
+            fill('nanobanana-local-sampler', info?.sampler_name?.[0]);
+            fill('nanobanana-local-scheduler', info?.scheduler?.[0]);
+        } catch (e) {
+            console.warn('[Nanobanana+] sampler list unavailable:', e);
+        }
+    }
+
+    isLocal() { return this.local.mode === 'local'; }
+
+    getSelectedLocal() {
+        return this.local.entries.find(e => e.id === this.local.selected) || this.local.entries[0] || null;
+    }
+
+    applyModeUi() {
+        const tab = document.getElementById('nanobanana-tab');
+        if (tab) tab.dataset.mode = this.local.mode;
+        const ctl = document.getElementById('nanobanana-local-controls');
+        if (ctl) ctl.style.display = this.isLocal() ? 'inline-flex' : 'none';
+    }
+
+    renderLocalSelect() {
+        const sel = document.getElementById('nanobanana-local-select');
+        if (!sel) return;
+        sel.innerHTML = '';
+        if (!this.local.entries.length) {
+            const o = document.createElement('option');
+            o.value = '';
+            o.textContent = t('nb.localNone');
+            sel.appendChild(o);
+            return;
+        }
+        this.local.entries.forEach(e => {
+            const o = document.createElement('option');
+            o.value = e.id;
+            o.textContent = e.label;
+            o.title = e.file;
+            sel.appendChild(o);
+        });
+        const cur = this.getSelectedLocal();
+        this.local.selected = cur.id;
+        sel.value = cur.id;
+    }
+
+    // ⚙ ローカルワークフローの登録・削除ダイアログ
+    async openLocalSettings() {
+        if (document.getElementById('nanobanana-local-dialog')) return;
+        const overlay = document.createElement('div');
+        overlay.id = 'nanobanana-local-dialog';
+        overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:10000; display:flex; align-items:center; justify-content:center;';
+        const box = document.createElement('div');
+        box.style.cssText = 'background:#222; color:#eee; border:1px solid #555; border-radius:6px; padding:16px; width:min(560px, 92vw); max-height:80vh; overflow:auto; box-sizing:border-box;';
+        overlay.appendChild(box);
+
+        const close = () => { overlay.remove(); this.renderLocalSelect(); this.refreshApiKey(); };
+        overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close(); });
+
+        const files = await fetchWorkflowFilenames();
+
+        const render = () => {
+            box.innerHTML = '';
+            const h = document.createElement('div');
+            h.textContent = t('nb.localSettingsHeading');
+            h.style.cssText = 'font-weight:bold; font-size:14px; margin-bottom:6px;';
+            box.appendChild(h);
+            const desc = document.createElement('div');
+            desc.textContent = t('nb.localSettingsDesc');
+            desc.style.cssText = 'font-size:12px; color:#aaa; margin-bottom:10px;';
+            box.appendChild(desc);
+
+            // 登録済み一覧
+            this.local.entries.forEach(e => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; align-items:center; gap:6px; margin-bottom:4px; padding:4px 6px; background:#2c2c2c; border-radius:3px;';
+                const name = document.createElement('span');
+                name.textContent = e.label;
+                name.style.cssText = 'font-weight:bold; min-width:130px;';
+                const file = document.createElement('span');
+                file.textContent = e.file;
+                file.style.cssText = 'flex:1; font-size:11px; color:#999; word-break:break-all;';
+                const del = document.createElement('button');
+                del.className = 'btn small danger';
+                del.textContent = t('nb.localDelete');
+                del.addEventListener('click', () => {
+                    this.local.entries = this.local.entries.filter(x => x.id !== e.id);
+                    if (this.local.selected === e.id) this.local.selected = this.local.entries[0]?.id || '';
+                    saveLocalConfig(this.local);
+                    render();
+                });
+                row.append(name, file, del);
+                box.appendChild(row);
+            });
+
+            // 追加フォーム
+            const form = document.createElement('div');
+            form.style.cssText = 'display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;';
+            const label = document.createElement('input');
+            label.type = 'text';
+            label.className = 'comfyui-input';
+            label.placeholder = t('nb.localLabelPlaceholder');
+            label.style.cssText = 'flex:1; min-width:140px;';
+            const wf = document.createElement('select');
+            wf.className = 'comfyui-select';
+            wf.style.cssText = 'flex:2; min-width:200px;';
+            if (!files.length) {
+                const o = document.createElement('option');
+                o.value = '';
+                o.textContent = t('nb.localNoWfList');
+                wf.appendChild(o);
+            }
+            files.forEach(f => {
+                const o = document.createElement('option');
+                o.value = f;
+                o.textContent = f;
+                wf.appendChild(o);
+            });
+            const add = document.createElement('button');
+            add.className = 'btn small primary';
+            add.textContent = t('nb.localAdd');
+            add.addEventListener('click', () => {
+                const lb = label.value.trim();
+                if (!lb || !wf.value) { alert(t('nb.localNeedLabel')); return; }
+                const id = `l${Date.now().toString(36)}`;
+                this.local.entries.push({ id, label: lb, file: wf.value });
+                if (!this.local.selected) this.local.selected = id;
+                saveLocalConfig(this.local);
+                render();
+            });
+            form.append(label, wf, add);
+            box.appendChild(form);
+
+            const foot = document.createElement('div');
+            foot.style.cssText = 'text-align:right; margin-top:12px;';
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'btn small secondary';
+            closeBtn.textContent = t('nb.localClose');
+            closeBtn.addEventListener('click', close);
+            foot.appendChild(closeBtn);
+            box.appendChild(foot);
+        };
+        render();
+        document.body.appendChild(overlay);
+    }
+
     // ネイティブ方式では出力PNGに設定が埋め込まれるため、履歴記録のUIは不要
     applyEngineUi() {
         const native = this.engine === 'comfyui';
@@ -83,7 +332,13 @@ class NanobananaManager {
     }
 
     async refreshApiKey() {
+        if (this.isLocal()) {
+            const cur = this.getSelectedLocal();
+            this.updateStatus(cur ? 'connected' : 'disconnected', cur ? t('nb.localStatus', cur.label) : t('nb.localNoWorkflow'));
+            return;
+        }
         const { connected, text } = await checkNanobananaKeyStatus();
+        if (this.isLocal()) return;   // 確認中にローカルへ切り替えられた場合は古い結果で上書きしない
         this.updateStatus(connected ? 'connected' : 'disconnected', text);
     }
 
@@ -247,6 +502,7 @@ class NanobananaManager {
     }
 
     async generate() {
+        if (this.isLocal()) return this.generateLocal();
         if (this.status !== 'connected') {
             alert(t('nb.apiKeyMissing'));
             return;
@@ -265,7 +521,7 @@ class NanobananaManager {
         const [width, height] = resolution.split('x').map(Number);
         const imageSize = document.getElementById('nanobanana-image-size')?.value;
         const batchSize = parseInt(document.getElementById('nanobanana-batch-size').value) || 1;
-        const seed = parseInt(document.getElementById('nanobanana-seed').value);
+        const seed = -1;   // シード設定はローカル専用（Gemini APIにはシードが送られず、ネイティブ経路でもキャッシュキーにしか使われない）
 
         const btn = document.getElementById('nanobanana-generate-btn');
         const progress = document.getElementById('nanobanana-progress-text');
@@ -329,6 +585,85 @@ class NanobananaManager {
         }
     }
 
+    // ローカル（Workflow Studio経由のImage Editワークフロー）での生成。I2I入力画像はワークフロー内の
+    // LoadImageノードへ1枚目から順に割り当てられる。結果はNanobananaと同じcc_nanobananaフォルダへ保存する。
+    async generateLocal() {
+        const cur = this.getSelectedLocal();
+        if (!cur) {
+            alert(t('nb.localNoWorkflow'));
+            return;
+        }
+        const prompt = document.getElementById('nanobanana-prompt').value;
+        if (!prompt) {
+            alert(t('nb.promptRequired'));
+            return;
+        }
+        const negative = document.getElementById('nanobanana-negative').value;
+        const batchSize = Math.max(1, Math.min(4, parseInt(document.getElementById('nanobanana-batch-size').value) || 1));
+
+        // 共通の基本設定（空欄/既定=ワークフローの値のまま）
+        const numOrUndef = (id) => { const v = parseFloat(document.getElementById(id)?.value); return Number.isFinite(v) ? v : undefined; };
+        const sizeSel = document.getElementById('nanobanana-local-size')?.value || '';
+        let width, height;
+        if (sizeSel === 'custom') {
+            width = numOrUndef('nanobanana-local-width');
+            height = numOrUndef('nanobanana-local-height');
+        } else if (sizeSel) {
+            [width, height] = sizeSel.split('x').map(Number);
+        }
+        const steps = numOrUndef('nanobanana-local-steps');
+        const cfg = numOrUndef('nanobanana-local-cfg');
+        const denoise = numOrUndef('nanobanana-local-denoise');
+        const sampler_name = document.getElementById('nanobanana-local-sampler')?.value || undefined;
+        const scheduler = document.getElementById('nanobanana-local-scheduler')?.value || undefined;
+        // シード: ランダムはこちらで乱数を決めて固定値として渡す（直前のシードを表示・固定できるように）
+        const seedMode = document.getElementById('nanobanana-seed-mode')?.value || 'random';
+        const seedInput = parseInt(document.getElementById('nanobanana-seed')?.value);
+        const baseSeed = (seedMode !== 'random' && Number.isFinite(seedInput) && seedInput >= 0)
+            ? seedInput : Math.floor(Math.random() * 2 ** 32);
+
+        const btn = document.getElementById('nanobanana-generate-btn');
+        const progress = document.getElementById('nanobanana-progress-text');
+        btn.disabled = true;
+
+        try {
+            const blobs = [];
+            for (const img of this.i2iImages) blobs.push(await (await fetch(img.b64)).blob());
+
+            this.generatedImages = [];
+            for (let i = 0; i < batchSize; i++) {
+                progress.textContent = batchSize > 1 ? `${t('nb.generating')} (${i + 1}/${batchSize})` : t('nb.generating');
+                const seed = baseSeed + i;   // 枚数ごとに+1して同一画像を避ける
+                const result = await sendMultiImageI2IToWorkflowStudio(blobs, { positive: prompt, negative, width, height, steps, cfg, denoise, sampler_name, scheduler, seed }, cur.file);
+                if (!result?.ok || !result.url) throw new Error(result?.message || t('nb.generateFailed'));
+                if (i === 0 && result.slotCount != null && blobs.length > result.slotCount) {
+                    alert(t('nb.localTruncated', result.usedImages, blobs.length, result.slotCount));
+                }
+                const dataUrl = await this.urlToBase64(result.url);   // WFSのblob: URLは一時参照のためdata URLへ変換して保存する
+                const saved = await saveNanobananaImageAndMaybeEagle(dataUrl, `nanobanana_local_${i}`, ['comfyui-comic-creator', 'nanobanana', 'local']);
+                this.generatedImages.push({ url: saved.url, b64: saved.dataUrl });
+            }
+
+            this.lastGenerationMeta = null;
+            this.lastSeed = baseSeed;
+            if (seedMode === 'increment') {
+                document.getElementById('nanobanana-seed').value = baseSeed + batchSize;
+                this.local.seed = baseSeed + batchSize;
+                saveLocalConfig(this.local);
+            }
+            this.updateSeedUi();
+            this.showResult(0);
+            progress.textContent = t('common.done');
+            if (typeof loadGalleryImages === 'function') loadGalleryImages();
+        } catch (e) {
+            console.error('Local generation error:', e);
+            alert(t('common.errorPrefix', e.message));
+            progress.textContent = t('nb.generationErrorStatus');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
     // ComfyUIネイティブノード（Nano Banana 2.1）経由の生成。結果はComfyUIのoutput/cc_nanobanana_native/へ
     // プロンプト・設定入りのPNGとして保存される（SaveImageの埋め込み）ため、history.jsonlへの記録は行わない。
     async generateNative(prompt) {
@@ -337,7 +672,7 @@ class NanobananaManager {
         const [width, height] = document.getElementById('nanobanana-resolution').value.split('x').map(Number);
         const imageSize = document.getElementById('nanobanana-image-size')?.value || '1K';
         const batchSize = parseInt(document.getElementById('nanobanana-batch-size').value) || 1;
-        const seed = parseInt(document.getElementById('nanobanana-seed').value);
+        const seed = -1;   // シード設定はローカル専用（Gemini APIにはシードが送られず、ネイティブ経路でもキャッシュキーにしか使われない）
 
         const btn = document.getElementById('nanobanana-generate-btn');
         const progress = document.getElementById('nanobanana-progress-text');

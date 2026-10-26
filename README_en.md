@@ -78,12 +78,13 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 </details>
 
 <details>
-<summary><strong>Nanobanana (AI image generation)</strong></summary>
+<summary><strong>Nanobanana+ (AI image generation)</strong></summary>
 
 - Generate images via the Gemini API (Positive/Negative prompts, model, and resolution). Model choices: `gemini-3.1-flash-lite-image` / `gemini-3.1-flash-image` / `gemini-3-pro-image` / `gemini-nano-banana-2.1`
 - Output size can be set to 1K (default)/2K/4K (supported models only); I2I accepts up to 14 reference images
 - Generated images are automatically saved to ComfyUI's own `output/cc_nanobanana` folder
 - Generation history is logged to a JSON Lines file (`output/cc_nanobanana/history.jsonl`, one JSON object per line: date/time, model, resolution, prompt, etc.), via an auto-record checkbox or a per-result manual button (edit/delete by opening the file directly)
+- **Local mode (Nanobanana+)** — the tab is now called "Nanobanana+". A radio at the top switches between "Nanobanana / Local"; in Local you can register several saved Workflow Studio workflows (Image Edit types such as Flux.3 Image Klein or Qwen Image 2.1) with display names via the ⚙ button and generate with them. I2I reference images are assigned to LoadImage nodes in order. Image size, Steps, CFG, sampler, scheduler, Denoise and seed (Random / Fixed / Increment) are common basic settings. Generation settings and I2I input share one screen (left = prompts + basic settings, right = Image-to-Image)
 - **Engine selector** — choose "ComfyUI native node (Comfy credits)" under Nanobanana Settings in the Settings tab (or in the Nanobanana tab); it applies to the Nanobanana tab, the semi-automatic manga feature and the Auto tab (when its image engine is Gemini) alike. It runs ComfyUI's own Nano Banana 2.1 node (Gemini Nano Banana 2.1 / Nano Banana 2 / Nano Banana 2 Lite) through ComfyUI's `/prompt` (usable alongside the direct Gemini API route). Images are saved to `output/cc_nanobanana_native/` as PNGs with the prompt and settings embedded, so no history record is needed (also viewable in Workflow Studio's Metadata tab / Gallery). Authentication uses `COMFY_API_KEY` in `.env`; usage is billed as Comfy credits. Nano Banana Pro (`gemini-3-pro-image`) is not supported by the native route
 
 </details>

@@ -78,12 +78,13 @@ ComfyUI 上で動作するマンガページ作成 SPA（シングルページ�
 </details>
 
 <details>
-<summary><strong>Nanobanana（AI 画像生成）</strong></summary>
+<summary><strong>Nanobanana+（AI 画像生成）</strong></summary>
 
 - Gemini API を使った画像生成（Positive/Negative プロンプト・モデル・解像度指定）。モデルは `gemini-3.1-flash-lite-image` / `gemini-3.1-flash-image` / `gemini-3-pro-image` / `gemini-nano-banana-2.1` から選択
 - 出力解像度は 1K（既定）/2K/4K を指定可能（対応モデルのみ）、I2I は参照画像を最大 14 枚まで追加可能
 - 生成画像は ComfyUI 本体の `output/cc_nanobanana` フォルダへ自動保存
 - 生成履歴をJSON Lines形式のファイル（`output/cc_nanobanana/history.jsonl`、1行1件のJSON）に記録（日時・モデル・解像度・プロンプト等）。自動記録チェックボックス、または結果ごとの手動記録ボタンから利用（編集・削除はファイルを直接操作）
+- **ローカルモード（Nanobanana+）** — タブ名は「Nanobanana+」。上部のラジオで「Nanobanana / ローカル」を切り替え、ローカルでは Workflow Studio の保存済みワークフロー（Flux.3 Image Klein・Qwen Image 2.1 などの Image Edit 系）を表示名つきで複数登録（⚙ボタン）して生成できる。I2I 参照画像は LoadImage ノードへ順に割り当て。画像サイズ・Steps・CFG・サンプラー・スケジューラ・Denoise・シード（ランダム/固定/生成ごとに+1）を共通の基本設定として指定可能。生成設定とI2I入力は1画面（左=プロンプト+基本設定、右=Image-to-Image）
 - **生成方式の選択** — 設定タブの「Nanobanana 設定」（または Nanobanana タブ）で「ComfyUIネイティブノード（Comfyクレジット）」を選ぶと、Nanobanana タブ・半自動マンガ・Auto タブ（画像生成エンジンが Gemini のとき）の生成に共通で適用される。ComfyUI 本体の Nano Banana 2.1 ノード（Gemini Nano Banana 2.1 / Nano Banana 2 / Nano Banana 2 Lite）を ComfyUI の `/prompt` 経由で実行できる（Gemini API 直叩きと併用可）。画像は `output/cc_nanobanana_native/` にプロンプト・設定を埋め込んだ PNG として保存されるため履歴の記録は不要（Workflow Studio のメタデータ／ギャラリーでも確認可能）。認証は `.env` の `COMFY_API_KEY`、課金は Comfy クレジット。Nano Banana Pro（`gemini-3-pro-image`）はネイティブ方式では未対応
 
 </details>

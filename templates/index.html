@@ -1932,10 +1932,18 @@
           </section>
 
           <!-- Nanobanana Tab -->
-          <section id="nanobanana-tab" class="tab-content">
-            <div class="comfyui-header-row">
+          <section id="nanobanana-tab" class="tab-content" data-mode="cloud">
+            <div class="comfyui-header-row" style="gap:12px; flex-wrap:wrap;">
+              <div id="nanobanana-mode-bar" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <label style="cursor:pointer; display:inline-flex; align-items:center; gap:4px;"><input type="radio" name="nanobanana-mode" value="cloud" checked /> <span data-i18n="nb.modeCloud">Nanobanana</span></label>
+                <label style="cursor:pointer; display:inline-flex; align-items:center; gap:4px;"><input type="radio" name="nanobanana-mode" value="local" /> <span data-i18n="nb.modeLocal">ローカル</span></label>
+                <span id="nanobanana-local-controls" style="display:none; align-items:center; gap:4px;">
+                  <select id="nanobanana-local-select" class="comfyui-select" style="min-width:180px;"></select>
+                  <button id="nanobanana-local-settings-btn" class="btn small secondary" type="button" data-i18n-title="nb.localSettingsTitle" title="ローカルワークフローの登録">⚙</button>
+                </span>
+              </div>
               <span id="nanobanana-status-label" class="comfyui-status disconnected" data-i18n="nb.disconnected">Nanobanana: 未接続</span>
-              <div class="comfyui-url-group">
+              <div class="comfyui-url-group nb-cloud-only">
                 <span style="font-size:12px; color:var(--text-secondary);" data-i18n="nb.apiKeyHint">※ APIキーは .env で設定してください</span>
                 <button id="nanobanana-refresh-key-btn" class="btn small secondary" data-i18n="nb.refreshKey">APIキーを再読込</button>
               </div>
@@ -1945,11 +1953,13 @@
               <div class="comfyui-left-col">
                 <div class="comfyui-subtab-nav">
                   <button class="comfyui-subtab-btn active" data-nanobanana-subtab="prompt" data-i18n="nb.subtabPrompt">生成設定</button>
-                  <button class="comfyui-subtab-btn" data-nanobanana-subtab="i2i" data-i18n="nb.subtabI2i">I2I 入力</button>
                   <button class="comfyui-subtab-btn" data-nanobanana-subtab="history" data-i18n="nb.subtabHistory">履歴</button>
                 </div>
 
                 <div id="nanobanana-subtab-prompt" class="comfyui-subtab-content">
+                 <!-- 左右2分割: 左=プロンプト+基本設定 / 右=Image-to-Image -->
+                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:start;">
+                  <div style="min-width:0;">
                   <div class="comfyui-field-group">
                     <div class="comfyui-field">
                       <label class="comfyui-label">Positive Prompt:</label>
@@ -1963,14 +1973,14 @@
 
                   <div class="comfyui-field-group" style="margin-top:12px">
                     <div class="comfyui-group-title" data-i18n="nb.basicSettings">基本設定</div>
-                    <div class="comfyui-field">
+                    <div class="comfyui-field nb-cloud-only">
                       <label class="comfyui-label" data-i18n="nb.engineLabel">生成方式:</label>
                       <select id="nanobanana-engine" class="comfyui-select" title="" data-i18n-title="nb.engineHint">
                         <option value="gemini" data-i18n="nb.engineGemini">Gemini API（自分のAPIキー）</option>
                         <option value="comfyui" data-i18n="nb.engineComfyui">ComfyUIネイティブノード（Comfyクレジット）</option>
                       </select>
                     </div>
-                    <div class="comfyui-field">
+                    <div class="comfyui-field nb-cloud-only">
                       <label class="comfyui-label" data-i18n="nb.modelLabel">モデル:</label>
                       <select id="nanobanana-model" class="comfyui-select">
                         <option value="gemini-3.1-flash-lite-image">gemini-3.1-flash-lite-image</option>
@@ -1984,7 +1994,7 @@
                         <option value="Nano Banana 2 Lite">Nano Banana 2 Lite (1K)</option>
                       </select>
                     </div>
-                    <div class="comfyui-field">
+                    <div class="comfyui-field nb-cloud-only">
                       <label class="comfyui-label" data-i18n="nb.resolutionLabel">解像度:</label>
                       <select id="nanobanana-resolution" class="comfyui-select">
                         <option value="1024x1024">1024 x 1024 (1:1)</option>
@@ -2004,30 +2014,63 @@
                       <label class="comfyui-label" data-i18n="nb.batchLabel">生成枚数:</label>
                       <input type="number" id="nanobanana-batch-size" value="1" min="1" max="4" class="comfyui-input" />
                     </div>
-                    <div class="comfyui-field" id="nanobanana-history-auto-field">
+                    <div class="comfyui-field nb-local-only">
+                      <label class="comfyui-label" data-i18n="nb.localSizeLabel">画像サイズ:</label>
+                      <select id="nanobanana-local-size" class="comfyui-select">
+                        <option value="" data-i18n="nb.localSizeDefault">ワークフロー既定</option>
+                        <option value="1024x1024">1024 x 1024 (1:1)</option>
+                        <option value="832x1216">832 x 1216 (2:3)</option>
+                        <option value="1216x832">1216 x 832 (3:2)</option>
+                        <option value="768x1344">768 x 1344 (9:16)</option>
+                        <option value="1344x768">1344 x 768 (16:9)</option>
+                        <option value="custom" data-i18n="nb.localSizeCustom">カスタム</option>
+                      </select>
+                      <span id="nanobanana-local-size-custom" style="display:none; margin-left:6px;">
+                        <input type="number" id="nanobanana-local-width" min="64" max="4096" step="16" value="1024" class="comfyui-input" style="width:80px" /> x
+                        <input type="number" id="nanobanana-local-height" min="64" max="4096" step="16" value="1024" class="comfyui-input" style="width:80px" />
+                      </span>
+                    </div>
+                    <div class="comfyui-field nb-local-only">
+                      <label class="comfyui-label">Steps:</label>
+                      <input type="number" id="nanobanana-local-steps" min="1" max="200" class="comfyui-input" style="width:80px" data-i18n-placeholder="nb.localDefaultPh" placeholder="既定" />
+                      <label class="comfyui-label" style="margin-left:8px;">CFG:</label>
+                      <input type="number" id="nanobanana-local-cfg" min="0" max="30" step="0.1" class="comfyui-input" style="width:80px" data-i18n-placeholder="nb.localDefaultPh" placeholder="既定" />
+                    </div>
+                    <div class="comfyui-field nb-local-only">
+                      <label class="comfyui-label" data-i18n="nb.localSamplerLabel">サンプラー:</label>
+                      <select id="nanobanana-local-sampler" class="comfyui-select"><option value="" data-i18n="nb.localDefaultOpt">既定</option></select>
+                    </div>
+                    <div class="comfyui-field nb-local-only">
+                      <label class="comfyui-label" data-i18n="nb.localSchedulerLabel">スケジューラ:</label>
+                      <select id="nanobanana-local-scheduler" class="comfyui-select"><option value="" data-i18n="nb.localDefaultOpt">既定</option></select>
+                      <label class="comfyui-label" style="margin-left:8px;">Denoise:</label>
+                      <input type="number" id="nanobanana-local-denoise" min="0" max="1" step="0.05" class="comfyui-input" style="width:80px" data-i18n-placeholder="nb.localDefaultPh" placeholder="既定" />
+                    </div>
+                    <div class="comfyui-field nb-cloud-only" id="nanobanana-history-auto-field">
                       <label class="comfyui-checkbox-label" style="cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
                         <input type="checkbox" id="nanobanana-history-auto"> <span data-i18n="nb.historyAutoLabel">生成時に自動で履歴に記録</span>
                       </label>
                     </div>
                   </div>
-                </div>
-
-                <div id="nanobanana-subtab-i2i" class="comfyui-subtab-content" style="display:none">
-                  <div class="comfyui-field-group">
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-                      <div class="comfyui-group-title" style="margin-bottom:0;">Image-to-Image <span id="nb-i2i-count" style="font-size:11px; color:#888; font-weight:normal;">(0/14)</span></div>
-                      <div style="display:flex; gap:4px;">
-                        <label class="btn small secondary" style="cursor:pointer; margin:0;">
-                          <span data-i18n="nb.addImage">画像追加</span>
-                          <input type="file" id="nanobanana-i2i-file" accept="image/*" multiple class="hidden" />
-                        </label>
-                        <button id="nanobanana-i2i-clear-all-btn" class="btn small danger" data-i18n="nb.clearAll">全クリア</button>
-                      </div>
-                    </div>
-                    <!-- 4列×3行 12スロットグリッド -->
-                    <div id="nanobanana-i2i-grid" style="display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(3,1fr); gap:4px; height:590px; overflow:hidden;">
+                  </div>
+                  <div style="min-width:0;">
+                <div class="comfyui-field-group">
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                    <div class="comfyui-group-title" style="margin-bottom:0;">Image-to-Image <span id="nb-i2i-count" style="font-size:11px; color:#888; font-weight:normal;">(0/14)</span></div>
+                    <div style="display:flex; gap:4px;">
+                      <label class="btn small secondary" style="cursor:pointer; margin:0;">
+                        <span data-i18n="nb.addImage">画像追加</span>
+                        <input type="file" id="nanobanana-i2i-file" accept="image/*" multiple class="hidden" />
+                      </label>
+                      <button id="nanobanana-i2i-clear-all-btn" class="btn small danger" data-i18n="nb.clearAll">全クリア</button>
                     </div>
                   </div>
+                  <!-- 4列×3行 12スロットグリッド -->
+                  <div id="nanobanana-i2i-grid" style="display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(4,1fr); gap:4px; height:560px; overflow:hidden;">
+                  </div>
+                </div>
+                  </div>
+                 </div>
                 </div>
 
                 <div id="nanobanana-subtab-history" class="comfyui-subtab-content" style="display:none">
@@ -2049,10 +2092,20 @@
                   <div class="comfyui-progress-container">
                     <div id="nanobanana-progress-text" style="font-size:12px; margin-top:4px; text-align:center; min-height:1.2em;"></div>
                   </div>
-                  <div class="comfyui-seed-panel" style="margin-top:10px">
-                    <div class="comfyui-field-inline">
-                      <label data-i18n="layout.seedLabel">シード:</label>
-                      <input type="number" id="nanobanana-seed" value="-1" style="width:120px" />
+                  <!-- シード設定はローカル専用（MOSS-Imageタブと同じ構成）。Nanobanana側はシードが効かないため非表示 -->
+                  <div class="comfyui-seed-panel nb-local-only" style="margin-top:10px">
+                    <div><label data-i18n="layout.seedLabel" style="font-weight:bold;">シード:</label></div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+                      <select id="nanobanana-seed-mode" class="comfyui-select" style="width:auto">
+                        <option value="random" data-i18n="moss.seedRandom">ランダム</option>
+                        <option value="fixed" data-i18n="moss.seedFixed">固定</option>
+                        <option value="increment" data-i18n="moss.seedIncrement">生成ごとに+1</option>
+                      </select>
+                      <input type="number" id="nanobanana-seed" value="-1" style="flex:1; min-width:0;" />
+                    </div>
+                    <div style="font-size:11px; color:#888; margin-top:8px; display:flex; gap:6px; align-items:center; justify-content:space-between;">
+                      <span id="nanobanana-seed-last"></span>
+                      <button id="nanobanana-seed-keep" class="btn small secondary" disabled data-i18n="moss.seedKeep">このシードを固定</button>
                     </div>
                   </div>
                 </div>
@@ -2063,7 +2116,7 @@
                 <div class="control-row" style="margin-top:10px">
                   <button id="nanobanana-insert-btn" class="btn secondary" style="width:100%" disabled data-i18n="asset.insertToPanel">コマに挿入</button>
                 </div>
-                <div class="control-row" style="margin-top:6px">
+                <div class="control-row nb-cloud-only" style="margin-top:6px">
                   <button id="nanobanana-history-record-btn" class="btn secondary" style="width:100%" disabled data-i18n="nb.historyRecordBtn">履歴に記録</button>
                 </div>
               </div>

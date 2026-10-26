@@ -2,6 +2,38 @@
 
 ---
 
+## 2026-10-27（v1.65.0: Nanobanana+タブ — ローカルImage Editワークフロー対応、生成設定/I2Iの1画面化）
+
+**背景**: Nanobananaタブ（Gemini API / ComfyUIネイティブ専用）を、ローカルのImage Edit系ワークフロー（Flux.3 Image Klein、Qwen Image 2.1等）でも使えるようにしたい、という要望。計画は `PLAN_nanobanana_local_image_edit.md`。
+
+**1. タブ名とモード切替**
+- タブ名を「Nanobanana+」に変更（i18n 3言語、ヘルプ・README）。上部に「Nanobanana / ローカル」ラジオ。ローカル時のみワークフローのドロップダウンと⚙ボタンを表示。モードの出し分けは `#nanobanana-tab[data-mode]` と CSS クラス `nb-cloud-only` / `nb-local-only`（`comfyui.css`）で行う（個別に `display` を操作しない）。
+- ⚙ダイアログ（`nanobanana.js` の `openLocalSettings`）: 表示名＋WFS保存済みワークフロー（`/api/wfm/workflows` の一覧）の組を複数登録・削除。`localStorage` の `ccc_nanobanana_local`（`mode` / `selected` / `entries` / `seedMode` / `seed`）。初期登録なし。
+
+**2. ローカル生成の経路（複数画像対応）**
+- `14-integrations.js` に `sendMultiImageI2IToWorkflowStudio(imageBlobs, params, workflowFile)` を追加（`/api/wfm/workflows/raw` でJSON取得→WFSのiframeブリッジ `_wfmReceiveMultiImageI2IRunRequest` へ）。`prepareVramForGeneration()` も踏襲。
+- 結果のURLはWFSの `blob:` URLなので、必ずdata URLへ変換してから `saveNanobananaImageAndMaybeEagle` で `cc_nanobanana` へ保存（過去の「blob URLの永続化」事故の再発防止）。履歴（history.jsonl）への記録はNanobananaモードのみ。
+- **WFS側が必要**（v0.8.12）: 画像 i 枚目をワークフロー内 i 番目のLoadImageへ割り当て、超過分は無視して `usedImages`/`slotCount` を返す。CC側は超過時に警告。
+
+**3. 共通の基本設定（ローカル）**
+- 生成枚数・画像サイズ（既定/プリセット/カスタム）・Steps・CFG・サンプラー・スケジューラ・Denoise。サンプラー/スケジューラの選択肢は `/object_info/KSampler` から取得。未指定（既定/空欄）はワークフローの値のまま。WFSの既存 `setGenerationParams` を再利用。
+- **限界（仕様）**: KSampler系以外の構成、および出力サイズを入力画像から決める構成には効かない。実機で確認: Flux.3 Image Klein（`ReferenceMultiLatent` 使用）は `EmptyFlux2LatentImage` が解析対象外になり画像サイズが反映されない（プロンプト・画像・Steps・CFG・シードは反映）。
+
+**4. シード（MOSS-Imageタブを参考）**
+- ローカル専用に「ランダム/固定/生成ごとに+1」＋「直前のシード」＋「このシードを固定」。ランダムはCC側で乱数を決めて固定値としてWFSへ渡す（直前のシードを表示・再現できるようにするため）。複数枚は枚数ごとに+1。
+- **Nanobananaモードではシード欄を非表示**: Gemini直叩きはシードをAPIへ送らず（履歴に記録されるだけ）、ネイティブ経路でもComfyUIのキャッシュキーにしか使われないため。cloud/nativeは常にランダム扱い。ネガティブ・サイズ・枚数はバックエンドで使われているので残している。
+
+**5. レイアウト**
+- サブタブ「生成設定」と「I2I入力」を1つに統合し、左右2分割（左=プロンプト＋基本設定、右=Image-to-Image 3列×4行）。履歴サブタブは「Nanobanana履歴」に改名。
+- ステータス表示の競合を修正: モード切替直後に、クラウド側の非同期のAPIキー確認が後から返ってローカルのステータスを上書きしていた（`refreshApiKey` で返却後にモードを再確認）。
+
+**実機検証（ComfyUI_5 / 8189）**: ラジオ切替・⚙登録・生成（Qwen2.1 1枚/2枚入力、Flux.3 Klein）・共通設定（サイズ/Steps/CFG/サンプラー/スケジューラ/Denoise/シード）の実行ワークフローへの反映・シード3モード・結果保存を確認。Kaptureのファイル選択ダイアログは使えないため、`DataTransfer` で `<input type=file>` に画像を流し込んで検証。
+- **How to apply**: ファイル選択直後（`FileReader` の読込完了前）に生成ボタンを押すと画像0枚で生成される（既存Nanobananaと同じ制約）。テストで自動化するときは読込を待つ。
+
+**未対応・申し送り**: Flux.3 Klein以外のワークフロー（SD_3等）の個別検証、ローカル結果の履歴記録、ヘルプの「画像サイズが効かないワークフローがある」注記は上記ヘルプ本文に反映済み。
+
+---
+
 ## 2026-10-26（v1.64.0: テキスト挿入モーダル（スクリプト/OCR）、MOSS-Image操作の改善、WFS Send CC（Image）受け口）
 
 **1. 「Insert」ボタンのモーダル化（レイアウト／Imageタブ共通）**

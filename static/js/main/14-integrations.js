@@ -552,6 +552,44 @@ async function sendI2IRunToWorkflowStudio(imageBlob, params, wfOverride) {
     }
 }
 
+/**
+ * 複数画像版のI2I実行（Nanobanana+タブ「Local」用）。imageBlobs[i] がワークフロー内 i 番目の
+ * LoadImageノードへ割り当てられる。ワークフローは保存済みワークフローのファイル名で指定する。
+ * @param {Blob[]} imageBlobs
+ * @param {{positive:string, negative?:string, denoise?:number}} params
+ * @param {string} workflowFile - Workflow Studioの保存済みワークフローのファイル名
+ * @returns {Promise<{ok:boolean, url?:string, slotCount?:number, usedImages?:number, message?:string}>}
+ */
+async function sendMultiImageI2IToWorkflowStudio(imageBlobs, params, workflowFile) {
+    const loaded = await loadWfmGalleryTab();
+    if (!loaded) {
+        return { ok: false, message: t('settings.wfmNotFound') };
+    }
+
+    const iframe = document.getElementById('wfmgallery-iframe');
+    const fn = iframe?.contentWindow?._wfmReceiveMultiImageI2IRunRequest;
+    if (typeof fn !== 'function') {
+        return { ok: false, message: 'Workflow Studio multi-image I2I bridge is not ready (update Workflow Studio)' };
+    }
+    await prepareVramForGeneration();   // 設定タブ「VRAM調整」: Ollamaのモデルをアンロードして空きを作る（off なら何もしない）
+
+    let workflowData = null;
+    try {
+        const wfRes = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(workflowFile)}`);
+        if (!wfRes.ok) return { ok: false, message: `workflow fetch failed: ${workflowFile} (${wfRes.status})` };
+        workflowData = await wfRes.json();
+    } catch (e) {
+        return { ok: false, message: `workflow fetch error: ${e.message}` };
+    }
+
+    try {
+        return await fn(imageBlobs, params, workflowData, workflowFile);
+    } catch (e) {
+        console.error('[Nanobanana+ Local] sendMultiImageI2IToWorkflowStudio error:', e);
+        return { ok: false, message: e.message };
+    }
+}
+
 // ==============================
 // 半自動マンガ作成連携（Workflow Studio、Phase 3）
 // ==============================
@@ -798,7 +836,7 @@ export {
     getI2ISettingsState, saveI2ISettingsState, initInpaintSettings, initOutpaintSettings,
     getT2ISettingsState, saveT2ISettingsState,
     initWfmGalleryTab, loadWfmGalleryTab,
-    sendImageToWorkflowStudioI2I, sendInpaintToWorkflowStudio, sendOutpaintToWorkflowStudio, sendI2IRunToWorkflowStudio,
+    sendImageToWorkflowStudioI2I, sendInpaintToWorkflowStudio, sendOutpaintToWorkflowStudio, sendI2IRunToWorkflowStudio, sendMultiImageI2IToWorkflowStudio,
     requestLLMPromptFromWorkflowStudio, requestPanelImageFromWorkflowStudio,
     initGmicTab,
 };

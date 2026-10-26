@@ -265,3 +265,7 @@
 .ocr-row textarea { flex: 1; min-width: 0; background: #111; color: #fff; font-size: 12px; box-sizing: border-box; resize: vertical; }
 .ocr-actions { display: flex; gap: 6px; margin-top: 6px; }
 #ocr-tab .ocr-image-col { flex: 1; min-width: 0; }
+
+/* Nanobanana+タブ: ローカルモードではクラウド専用項目（Gemini/ネイティブ設定・履歴・シード）を隠す */
+#nanobanana-tab[data-mode="local"] .nb-cloud-only { display: none !important; }
+#nanobanana-tab:not([data-mode="local"]) .nb-local-only { display: none !important; }
