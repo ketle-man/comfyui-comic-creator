@@ -43,6 +43,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **PixiJS FX** — Apply particle/filter effects to the selected image from the "Image" sub-tab. Supports stacking and reordering multiple filters, with combinations saveable/loadable/deletable as presets (via [comfyUI-particle-pixijs](#optional-dependencies))
 - **Video tool** (experimental) — The "Video" sub-tab lets you place an MP4 video in a panel and play/pause it, adjust volume/mute, and capture a still image from any frame. Place a video by dragging and dropping an MP4 file onto a panel, or by sending it from Workflow Studio's Gallery tab via "Send CC" (via [ComfyUI-Workflow-Studio](#optional-dependencies)). The video file itself is stored on the ComfyUI server (not duplicated into the browser database), and the original video object is left unchanged after capturing a still image, so it can be reused in other panels The ✥ Move mode suspends the preview so you can drag and resize the video object.
 - **Manga tool** — "Halftone" (an "Convert image" mode that halftones the selected image, plus a "Create pattern" mode that generates a halftone dot pattern sized to the panel/overlay), "Manga effects" (generate and insert vignette, screentone noise, and speed lines — radial / uni flash / uni ring / linear — as transparent objects sized to the panel), and "Background Pattern" (generate stripes, dots, checks, Japanese traditional motifs — asanoha/ichimatsu/shippou/uroko — or a custom SVG as a transparent object sized to the panel; adjustable color, opacity, size, and rotation angle, with independent width/height for custom SVGs). All three modals let you switch the preview background between the selected image, a checkerboard, and white while adjusting
+- **Inserting text (Insert)** — the Insert button in the Text sub-tab opens a modal: insert the cell selected in the Script tab, or the text detected in the OCR tab. OCR text goes into the overlay as one text per box position; choose the font size from "auto from the region size" or a fixed size, and the direction from auto / horizontal / vertical
 
 </details>
 
@@ -63,6 +64,7 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - **PixiJS FX** — Apply particle/filter effects to the active layer from a toolbar button. Supports stacking and reordering multiple filters, with combinations saveable/loadable/deletable as presets (via [comfyUI-particle-pixijs](#optional-dependencies))
 - **Layer panel** — Add, duplicate, delete, reorder, adjust opacity, and 12 kinds of adjustment layers (brightness, contrast, saturation, etc.). Multi-select layers and click **Merge** to combine only the selected ones (merging mask layers together keeps the result as a mask layer). The **📁 Group** button on the toolbar's second row folds multi-selected layers into a collapsible group folder (with bulk show/hide and ungroup, undoable)
 - **Project saving** — Save the entire layer composition and resume editing at any time. Saved projects live in the asset panel's "I" tab, browsable from **both the Layout tab and the Image tab**. In the Image tab, selecting a project and clicking "Open" resumes editing; in the Layout tab, the same "Open" instead inserts the saved thumbnail as a regular image into the currently selected panel
+- **Text tool Insert** — inserts the Script tab's selected cell, or the text detected in the OCR tab, as text layers (OCR texts are placed at their box positions and grouped under an "OCR" group; size and direction options are the same as in the Layout tab)
 
 </details>
 
@@ -100,6 +102,8 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - The sent prompt (MOSS-Image layout JSON) can be checked in the "JSON" tab and also edited and sent directly. Presets (standard 50 steps / light 25 steps / fast DMD 8-step and Turbo 4-step), Skip Layer Guidance, and LoRA are supported
 - "Enhance the prompt" lets the text encoder (LLM) rewrite a short idea into a detailed caption before generating (the same enable_prompt_enhancer as the official template; not applied when a layout is used). In the layout, "New" deletes everything and "Clear Imported" deletes only imported boxes
 - Generated images are saved to ComfyUI's own `output/cc_moss` folder
+- **Place / hand-off buttons** — "Layout overlay" (whole page) / "Place in panel", and "Open in Image tab" (opens the selected image as a new canvas / new layer in the Image tab)
+- **Generate with text disabled** — a checkbox under the Generate button that excludes the layout editor's text boxes from generation (and the JSON tab) only, without deleting them
 
 </details>
 
@@ -109,13 +113,13 @@ A manga page creation SPA (single-page application) that runs on top of ComfyUI.
 - A dedicated tab that detects text (content and position) and the positions (bbox) of panels, characters, balloons, etc. from an image (drop, paste, or file picker). Runs entirely locally with Ollama
 - Text is read by an OCR model (`maternion/LightOnOCR-3:4b`); panels, characters, faces, objects, balloons, sound effects and captions are detected by a general vision LLM (default `gemma4:e4b`). The classes to detect are chosen with checkboxes
 - Detected boxes can be moved by dragging, resized by the corners, added and deleted on the canvas; class, text and description can be edited in the list on the right. "Copy all text" and "Copy JSON" export the result
-- **MOSS-Image handoff** — "Send as layout" imports the result into the MOSS-Image layout as object / panel / character / text bboxes. Text inside a balloon etc. is merged into one text box. Sending again replaces only the boxes imported from the previous OCR
+- **MOSS-Image handoff** — "Send to MOSS-Image tab" imports the result into the MOSS-Image layout as object / panel / character / text bboxes. Text inside a balloon etc. is merged into one text box. Sending again replaces only the boxes imported from the previous OCR
 - The model settings section is collapsible (the open/closed state is remembered)
 - **Re-reading crops** — each detected text box is cropped from the original image and read again by another model (default: manga-tuned PaddleOCR-VL, `ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M`), which improves vertical and stylized text. "…", "!" and "?" are converted to full-width automatically. A single selected box can also be re-read
 - **Modes** — the collapsible Mode at the top of the settings switches all individual settings at once: Auto (recommended, experimental) / Manga page / Magazine cover or poster / Text only / Illustration (no text) / Tall page (read in tiles) / Custom. Changing an individual setting switches to Custom automatically
 - **Multi-select and move** — Shift+click boxes to add or remove them from the selection, then move or delete them together (OCR and MOSS-Image tabs)
 - **Judging with a decision model (optional)** — after detection, crops are shown to a vision-capable decision model (`clef-flash`, `d3`, etc.; Ollama 0.40 or later) to re-classify text boxes (balloon / caption / sfx / text) and drop VLM boxes that contain no text
-- **Overall prompt** — the detection model (VLM) describes the whole image in English, and Send as layout replaces the MOSS-Image overall prompt (the summary when a layout is used) with it (optional)
+- **Overall prompt** — the detection model (VLM) describes the whole image in English, and "Send to MOSS-Image tab" replaces the MOSS-Image overall prompt (the summary when a layout is used) with it (optional)
 - **Preprocessing and retry** — if OCR returns nothing or repeats the same words, it is retried once automatically in grayscale. The Settings tab VRAM adjustment also runs before OCR and before judging
 
 </details>

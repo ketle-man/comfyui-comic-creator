@@ -26,6 +26,10 @@ import { loadAssets } from './main/02-assets.js';
 import { pushHistory, savePanelSvg } from './main/07-pages.js';
 import { saveOverlaySvg } from './main/09b-balloon-shapes.js';
 import { insertImage, selectPanel } from './main/08-panels-images.js';
+import { getOcrTextItems } from './main/29-ocr-tab.js';
+import { _scriptMangaGetSelectedDialogue } from './main/21a-script-manga.js';
+import { openTextInsertModal } from './text-insert-modal.js';
+import { fitFontSize } from './ocr-core.js';
 import { resolveBackendError } from './i18n.js';
 
 const TOOL_DEFS = [
@@ -945,8 +949,10 @@ class ImageTab {
                 </div>
                 <div class="ie-opt-group">
                     <button class="it-btn it-btn-sm" id="ie-text-style-btn" title="${t("image.textStyleBtnTitle")}">${t("layout.styleBtn")}</button>
+                    <button class="it-btn it-btn-sm" id="ie-text-insert-btn" title="${t("layout.textInsertTitle")}">Insert</button>
                 </div>
             `;
+            document.getElementById("ie-text-insert-btn")?.addEventListener("click", () => this._openTextInsertModal());
             document.getElementById("ie-text-color")?.addEventListener("input", e => {
                 this._textTool.color = e.target.value;
                 this._applyTextToolChangeToSelection({ color: e.target.value });
@@ -5699,6 +5705,73 @@ class ImageTab {
         this._refreshLayerList();
         this._toast(t("image.textInserted"), "success");
         return true;
+    }
+
+    /** 「Insert」ボタン: スクリプトタブのセル / OCRタブの検出テキストをテキストレイヤーとして挿入するモーダルを開く */
+    _openTextInsertModal() {
+        if (!this._layerMgr) { this._toast(t("image.newOrLoadFirst"), "error"); return; }
+        openTextInsertModal({
+            ocrCount: getOcrTextItems().length, sizeUnit: "px", defaultSize: this._textTool.fontSize,
+            onScript: () => {
+                const text = _scriptMangaGetSelectedDialogue();
+                if (text == null) { this._toast(t("textTool.selectScriptCell"), "error"); return; }
+                if (!text.trim()) { this._toast(t("textTool.emptyCell"), "error"); return; }
+                this._insertTextEntries([{ text, fontSize: this._textTool.fontSize, vertical: this._textTool.vertical, cx: this._canvasW / 2, cy: this._canvasH / 2 }]);
+            },
+            onOcr: (o) => this._insertOcrTexts(o),
+        });
+    }
+
+    /** OCRタブの検出テキストを、キャンバス上の枠位置へテキストレイヤーとして挿入し「OCR」グループにまとめる */
+    _insertOcrTexts(o) {
+        const items = getOcrTextItems();
+        if (!items.length) { this._toast(t("insert.ocrNone"), "error"); return; }
+        const W = this._canvasW, H = this._canvasH;
+        const entries = items.map(it => {
+            const vertical = o.dir === "v" ? true : o.dir === "h" ? false : it.vertical;
+            const fontSize = o.sizeMode === "fixed"
+                ? o.fixedSize
+                : fitFontSize(it.text, (it.x2 - it.x1) * W, (it.y2 - it.y1) * H, vertical);
+            return { text: it.text, fontSize: Math.max(6, Math.round(fontSize)), vertical, cx: (it.x1 + it.x2) / 2 * W, cy: (it.y1 + it.y2) / 2 * H };
+        });
+        this._insertTextEntries(entries, "OCR");
+    }
+
+    /**
+     * 中心座標(cx,cy)に各テキストレイヤーを作る（フォント・色はテキストツールの現在値）。
+     * groupName を渡すと、2件以上のときその名前のレイヤーグループにまとめる
+     */
+    _insertTextEntries(entries, groupName) {
+        this._saveUndo();
+        const ids = [];
+        let last = null;
+        for (const e of entries) {
+            const props = {
+                text: e.text, fontFamily: this._textTool.fontFamily, fontSize: e.fontSize,
+                bold: false, italic: false, align: "left", vertical: !!e.vertical, color: this._textTool.color,
+            };
+            const { tw, th } = this._measureTextBox(props);
+            props.nativeW = tw;
+            props.nativeH = th;
+            const label = (e.text.slice(0, 20).replace(/\n/g, " ").trim()) || "Text";
+            const layer = this._layerMgr.addLayer("text", label, {
+                contentW: tw, contentH: th, displayW: tw, displayH: th,
+                x: Math.round(e.cx - tw / 2), y: Math.round(e.cy - th / 2),
+            });
+            layer.textProps = props;
+            this._rerenderTextLayer(layer);
+            ids.push(layer.id);
+            last = layer;
+        }
+        if (groupName && ids.length >= 2) this._layerMgr.createGroup(ids, groupName);
+        if (last) {
+            this._layerMgr.setActive(last.id);
+            this._setActiveTool("select");
+            this._selectTool?.setLayer(last);
+        }
+        this._updateCompositeView();
+        this._refreshLayerList();
+        this._toast(t("insert.done", entries.length), "success");
     }
 
     /** フォントタブの「スタイル」を新規プレースホルダテキストとして挿入する（フォント・サイズは現在のデフォルトのまま） */

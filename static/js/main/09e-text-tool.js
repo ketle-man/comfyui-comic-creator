@@ -19,6 +19,8 @@ import { syncFontFamilyUI, renderTextHandles, clearTextHandles, _textBuildTransf
 import { state } from './01-state.js';
 import { _clearObjectSelection } from './08-panels-images.js';
 import { _scriptMangaGetSelectedDialogue } from './21a-script-manga.js';
+import { getOcrTextItems } from './29-ocr-tab.js';
+import { fitFontSize } from '../ocr-core.js';
 import { _fontMgrGroupOpen, _fontMgrLoadStyles, _fontMgrRenderTextStylePreview, _fontMgrToggleGroup } from './19-font-manager.js';
 import { _fontMgrLoadPresets } from './20-font-presets.js';
 
@@ -611,6 +613,60 @@ async function insertScriptDialogueText() {
     const input = document.getElementById('text-input-field');
     if (input) input.value = text;
     await applyTextInput();
+}
+
+// OCRタブの検出テキストを、オーバーレイに1件ずつテキスト要素として挿入する。
+// OCR画像の正規化座標（0〜1）をページのviewBoxへ対応させ、各枠の中心にテキストブロックの中心を合わせる。
+// opts: { sizeMode: 'auto'(領域サイズから換算) | 'fixed'(指定pt), fixedSize, dir: 'auto' | 'h' | 'v' }
+// フォント・色は現在のテキストツール設定（state.balloon）を使う。戻り値: 挿入した件数
+async function insertOcrTexts(opts) {
+    const items = getOcrTextItems();
+    if (!items.length) { alert(t('insert.ocrNone')); return 0; }
+    const overlaySvgEl = document.querySelector('#layout-preview #image-layer svg');
+    if (!overlaySvgEl) { alert(t('textTool.showPageFirst')); return 0; }
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const vb = overlaySvgEl.viewBox?.baseVal;
+    const vx = vb ? vb.x : 0, vy = vb ? vb.y : 0, vw = vb ? vb.width : 21000, vh = vb ? vb.height : 29700;
+    const PT_TO_SVG = 3.528;
+
+    pushHistory();
+    const parent = getOrCreateOverlayGroup(overlaySvgEl);
+    for (const it of items) {
+        const vertical = opts.dir === 'v' ? true : opts.dir === 'h' ? false : it.vertical;
+        const fontSize = opts.sizeMode === 'fixed'
+            ? Math.round(opts.fixedSize * PT_TO_SVG)
+            : Math.round(fitFontSize(it.text, (it.x2 - it.x1) * vw, (it.y2 - it.y1) * vh, vertical));
+        const cx = vx + (it.x1 + it.x2) / 2 * vw, cy = vy + (it.y1 + it.y2) / 2 * vh;
+
+        const textEl = document.createElementNS(ns, 'text');
+        textEl.setAttribute('x', cx);
+        textEl.setAttribute('y', cy);
+        textEl.setAttribute('fill', state.balloon.textColor);
+        textEl.setAttribute('font-family', state.balloon.fontFamily);
+        textEl.setAttribute('font-size', fontSize);
+        textEl.style.whiteSpace = 'pre';
+        textEl.style.pointerEvents = 'auto';
+        it.text.split('\n').forEach(line => {
+            const tspan = document.createElementNS(ns, 'tspan');
+            tspan.textContent = line;
+            textEl.appendChild(tspan);
+        });
+        _setTextElVertical(textEl, vertical);
+        parent.appendChild(textEl);
+
+        // ブロックのBBox中心を枠の中心へ合わせる（_setTextElVertical の keepCenter と同じシフト方法）
+        try {
+            const bb = textEl.getBBox();
+            const dx = cx - (bb.x + bb.width / 2), dy = cy - (bb.y + bb.height / 2);
+            textEl.setAttribute('x', parseFloat(textEl.getAttribute('x')) + dx);
+            textEl.setAttribute('y', parseFloat(textEl.getAttribute('y')) + dy);
+            textEl.querySelectorAll('tspan[x]').forEach(ts => ts.setAttribute('x', parseFloat(ts.getAttribute('x')) + dx));
+            textEl.querySelectorAll('tspan[y]').forEach(ts => ts.setAttribute('y', parseFloat(ts.getAttribute('y')) + dy));
+        } catch { /* 計測できないときは枠中心に置いたまま */ }
+    }
+    await saveOverlaySvg(overlaySvgEl);
+    return items.length;
 }
 
 // 塗りペイント定義（グラデーション/テクスチャパターン）をdefsに生成してfill=url(#id)を設定する。
@@ -1239,7 +1295,7 @@ export {
     _fontMgrApplyStyleAttrsToTextEl, _fontMgrExtractStyleFromTextEl, _fontMgrRenderMiniPreview,
     _getSelectedPanelCenter, _setTextElVertical, _textSyncTexturePatternScale,
     _textSyncTexturePatternTransform, applyPresetToSelectedText, applyStyleToSelectedText,
-    applyTextInput, initTextTools, insertPresetPlaceholderText, insertScriptDialogueText,
+    applyTextInput, initTextTools, insertOcrTexts, insertPresetPlaceholderText, insertScriptDialogueText,
     insertStylePlaceholderText, openTextInputDialog, renderAssetFontGrid, updateBalloonPanelSelect,
 };
 

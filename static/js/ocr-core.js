@@ -148,6 +148,33 @@ export function sortReading(list) {
 }
 
 const isCjk = (s) => /[぀-ヿ㐀-鿿ｦ-ﾟ]/.test(s);
+// ── レイアウト／Imageタブのテキストへの取り込み ──
+const TEXT_INSERT_CLASSES = new Set(['text', 'balloon', 'sfx', 'caption']);
+
+/** 検出結果のうち本文を持つ枠を、読み順のテキスト取り込み用アイテムにする。座標は 0〜1 のまま。vertical は枠の形と文字から推定 */
+export function toTextInsertItems(boxes, aspect = 1) {
+    return sortReading(boxes.filter(b => TEXT_INSERT_CLASSES.has(b.cls) && String(b.text || '').trim()))
+        .map(b => {
+            const text = String(b.text).trim();
+            return { text, x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, vertical: guessVertical(b, text, aspect) };
+        });
+}
+
+/** 文字の並び方向の長さ（em）。全角=1、半角=0.55 */
+function lineEm(line) {
+    let em = 0;
+    for (const ch of line) em += /[ -~｡-ﾟ]/.test(ch) ? 0.55 : 1;
+    return em;
+}
+
+/** 領域（w×h）に文章が収まるフォントサイズを返す（行間 1.2em。縦書きは行=列）。w,h と戻り値は同じ単位 */
+export function fitFontSize(text, w, h, vertical) {
+    const lines = String(text).split('\n');
+    const n = lines.length, len = Math.max(0.5, ...lines.map(lineEm));
+    const fs = vertical ? Math.min(w / (n * 1.2), h / len) : Math.min(w / len, h / (n * 1.2));
+    return Math.max(1, fs);
+}
+
 /** 縦長で日本語ならば縦書きとみなす */
 export function guessVertical(box, text, aspect) {
     const t = String(text || '').replace(/\s/g, '');

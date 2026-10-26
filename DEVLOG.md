@@ -2,6 +2,30 @@
 
 ---
 
+## 2026-10-26（v1.64.0: テキスト挿入モーダル（スクリプト/OCR）、MOSS-Image操作の改善、WFS Send CC（Image）受け口）
+
+**1. 「Insert」ボタンのモーダル化（レイアウト／Imageタブ共通）**
+- `static/js/text-insert-modal.js` を新設。挿入元（スクリプトのセル / OCRタブの検出テキスト）を選び、OCRのときは「フォントサイズを領域サイズから自動換算」か「指定サイズ」、書字方向（枠の形から自動／横／縦）を選ぶ。選択は `ccc_text_insert_v1`（localStorage）に保存。
+- 純粋ロジックは `ocr-core.js` に追加: `toTextInsertItems`（本文のある text/balloon/sfx/caption 枠を読み順で、`guessVertical` で縦横推定）、`fitFontSize`（行数・文字数・全角=1/半角=0.55em から枠に収まるサイズ。縦書きは行=列、行間1.2em）。OCRタブからは `getOcrTextItems()`（`29-ocr-tab.js`）で現在の検出結果を渡す。
+- レイアウトタブ（`insertOcrTexts`、`09e-text-tool.js`）: OCR画像の正規化座標をページのviewBoxへ対応させ、各枠の中心にテキストブロックの中心を合わせて（`getBBox` でシフト）**オーバーレイ**へ1件ずつ挿入。指定サイズはpt（×3.528でSVG単位）。履歴は1回分。
+- Imageタブ: テキストツールのオプションバーに Insert ボタンを新設（従来Imageタブには無かった）。OCRは枠位置にテキストレイヤーを作り「OCR」グループ（2件以上のとき）へ。スクリプトはキャンバス中央に1レイヤー。指定サイズはpx。
+- 実機（8189）でモーダル表示とコンソールエラー無しまで確認。実際の挿入位置・縦書き配置・グループ表示は未検証。
+
+**2. MOSS-Imageタブ**
+- 「選択中の画像をページ全面へ配置」を「レイアウト オーバーレイ」に改名。「Imageタブで開く」ボタンを追加（`onOpenInImage`: `switchTab('image')` → `_ccImageTab.loadFromUrl`）。
+- 「テキストを無効で生成」チェック（`moss-no-text`）を「画像を生成」の下に追加。`layoutPayload()` から type='text' の枠を除くだけで枠は削除しない（生成とJSONプレビューの両方、設定は保存）。ユーザー検証: 全体プロンプトに表紙・雑誌・タイポグラフィなどの語が含まれると文字が描かれるため、それらを取り除けば画像のみで生成できた。
+- OCRタブの「レイアウトとして送る」を「MOSS-Imageタブへ送る」に改名（ヘルプ・README反映）。
+
+**3. WFS Send CC（Image）の受け口**
+- `window.sendImageToImageTab(url, name)`（`14-integrations.js`）: Imageタブへ切り替えてから `loadFromUrl`（作業中のレイヤーがあれば新規レイヤー、無ければ新規キャンバス）。成功なら true。WFSのGalleryタブの「Send CC Image」（Workflow Studio v0.8.11）が `window.parent` 経由で呼ぶ。I2I送信元の記録（`_ccI2ITargetMode`）には依存しない。
+- 実機でImageタブ未初期化の状態からの連続2回呼び出し（新規キャンバス→新規レイヤー）と、WFS側ボタンからの読み込みを確認。
+
+**How to apply**: Python経由でJS文字列を書き換えるとき、`
+` や `'` は引用符・heredocの扱いで意図せず実改行／生の引用符になる（今回 `split('
+')` と英語ヘルプ中の `'` で2度構文エラーになった）。書き込み後は必ず `node --check`（.mjsコピー）で確認する。
+
+---
+
 ## 2026-10-25（OCR/MOSS: Shift+クリック複数選択、bboxずれの原因調査、意思決定モデルによる切り抜き判定、全体プロンプト、グレースケール、用途別モード、v1.63.0）
 
 **1. Shift+クリックの複数選択・一括移動（OCRタブ・MOSS-Imageタブ）**
