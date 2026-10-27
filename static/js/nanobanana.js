@@ -7,6 +7,7 @@ import { t, resolveBackendError } from './i18n.js';
 import { insertImage } from './main/08-panels-images.js';
 import { saveToEagle, _eagleSettings, sendMultiImageI2IToWorkflowStudio } from './main/14-integrations.js';
 import { state } from './main/01-state.js';
+import { maxImageSlots } from './nb-image-slots.js';
 
 const HISTORY_AUTO_KEY = 'ccc_nanobanana_history_auto';
 const ENGINE_KEY = 'ccc_nanobanana_engine';   // 'gemini'（Gemini API直叩き） | 'comfyui'（ComfyUIネイティブノード）
@@ -57,6 +58,8 @@ class NanobananaManager {
         this.status = 'disconnected';
         this.i2iImages = [];   // { b64: 'data:...', mime: 'image/png' }[]  最大14枚
         this.MAX_I2I = 14;
+        this.localMax = null;           // ローカルのワークフローが持つ画像入力の上限（Qwen Image 2.1 は10。不明なら null=既定）
+        this.localMaxCache = new Map();  // ワークフローのファイル名 → 上限
         this.generatedImages = [];
         this.selectedResultIndex = 0; // 結果表示・「コマに挿入」の対象（サムネイルで選択）
         this.apiUrl = '/api/ccc/nanobanana/generate';
@@ -110,6 +113,7 @@ class NanobananaManager {
             this.local.selected = e.target.value;
             saveLocalConfig(this.local);
             this.refreshApiKey();
+            this.refreshLocalMax();
         });
         document.getElementById('nanobanana-local-settings-btn')?.addEventListener('click', () => this.openLocalSettings());
         const sizeSel = document.getElementById('nanobanana-local-size');
@@ -178,6 +182,23 @@ class NanobananaManager {
 
     isLocal() { return this.local.mode === 'local'; }
 
+    /** I2I入力の上限。ローカルで画像入力が複数あるワークフロー（Qwen Image 2.1 など）はその数、それ以外は既定の14 */
+    maxI2I() { return this.isLocal() && this.localMax ? this.localMax : this.MAX_I2I; }
+
+    /** 選択中のローカルワークフローの画像入力の上限を調べて、画像グリッドに反映する（取得できなければ既定のまま） */
+    async refreshLocalMax() {
+        const cur = this.isLocal() ? this.getSelectedLocal() : null;
+        if (cur && !this.localMaxCache.has(cur.file)) {
+            try {
+                const r = await fetch(`/api/wfm/workflows/raw?filename=${encodeURIComponent(cur.file)}`);
+                if (r.ok) this.localMaxCache.set(cur.file, maxImageSlots(await r.json()));
+            } catch { /* 無視 */ }
+        }
+        if (cur && (!this.isLocal() || this.getSelectedLocal()?.file !== cur.file)) return;   // 調べている間に切り替わった
+        this.localMax = cur ? (this.localMaxCache.get(cur.file) ?? null) : null;
+        this.renderI2IGrid();
+    }
+
     getSelectedLocal() {
         return this.local.entries.find(e => e.id === this.local.selected) || this.local.entries[0] || null;
     }
@@ -185,6 +206,7 @@ class NanobananaManager {
     applyModeUi() {
         const tab = document.getElementById('nanobanana-tab');
         if (tab) tab.dataset.mode = this.local.mode;
+        this.refreshLocalMax();
         const ctl = document.getElementById('nanobanana-local-controls');
         if (ctl) ctl.style.display = this.isLocal() ? 'inline-flex' : 'none';
     }
@@ -222,7 +244,7 @@ class NanobananaManager {
         box.style.cssText = 'background:#222; color:#eee; border:1px solid #555; border-radius:6px; padding:16px; width:min(560px, 92vw); max-height:80vh; overflow:auto; box-sizing:border-box;';
         overlay.appendChild(box);
 
-        const close = () => { overlay.remove(); this.renderLocalSelect(); this.refreshApiKey(); };
+        const close = () => { overlay.remove(); this.renderLocalSelect(); this.refreshApiKey(); this.localMaxCache.clear(); this.refreshLocalMax(); };
         overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close(); });
 
         const files = await fetchWorkflowFilenames();
@@ -418,14 +440,14 @@ class NanobananaManager {
     addI2IFiles(files) {
         if (!files.length) return;
 
-        const remaining = this.MAX_I2I - this.i2iImages.length;
+        const remaining = this.maxI2I() - this.i2iImages.length;
         if (remaining <= 0) {
-            alert(t('nb.maxImagesReached', this.MAX_I2I));
+            alert(t('nb.maxImagesReached', this.maxI2I()));
             return;
         }
         const toLoad = files.slice(0, remaining);
         if (files.length > remaining) {
-            alert(t('nb.maxImagesTruncated', this.MAX_I2I, remaining));
+            alert(t('nb.maxImagesTruncated', this.maxI2I(), remaining));
         }
 
         let loaded = 0;
@@ -464,7 +486,7 @@ class NanobananaManager {
 
         grid.innerHTML = '';
         const count = this.i2iImages.length;
-        if (countEl) countEl.textContent = `(${count}/${this.MAX_I2I})`;
+        if (countEl) countEl.textContent = `(${count}/${this.maxI2I()})`;
 
         this.i2iImages.forEach((img, idx) => {
             const cell = document.createElement('div');
@@ -494,7 +516,7 @@ class NanobananaManager {
         });
 
         // 空スロットを12個まで表示
-        for (let i = count; i < this.MAX_I2I; i++) {
+        for (let i = count; i < this.maxI2I(); i++) {
             const empty = document.createElement('div');
             empty.style.cssText = 'width:100%; height:100%; background:#1a1a1a; border:1px dashed #333; border-radius:3px;';
             grid.appendChild(empty);

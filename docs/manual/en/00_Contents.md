@@ -2,7 +2,7 @@
 
 Author: ketle-man
 
-Target version: v1.59.0 (`pyproject.toml`)
+Target version: v1.66.0 (`pyproject.toml`)
 
 ## Editions
 
@@ -88,13 +88,15 @@ One source manuscript is maintained; at build time `[Image: ...]` lines are remo
 
 > Chapters 10–12 walk through the flow while building one sample work.
 
-### Chapter 10 Making Pictures with AI: Nanobanana and Workflow Studio (10)
+### Chapter 10 Making Pictures with AI: Nanobanana+, Workflow Studio, MOSS-Image, and OCR (10)
 - 10-1 The Sample Work
 - 10-2 Two Methods Compared
 - 10-3 Preparing Nanobanana
 - 10-4 Making Backgrounds and Characters with Nanobanana
 - 10-5 Working with Workflow Studio
 - 10-6 Making a Whole Page in the MOSS-Image Tab
+- 10-7 Local Mode in Nanobanana+
+- 10-8 Reading Text and Positions from an Image in the OCR Tab
 
 ### Chapter 11 Starting from a Script: Script Tab and Auto (11)
 - 11-1 Two Methods

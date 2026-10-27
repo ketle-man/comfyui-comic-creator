@@ -2,6 +2,61 @@
 
 ---
 
+## 2026-10-27（v1.66.0: MOSS-Imageの最前面/最背面、単独テキストのcaption、OCR→MOSSの変換）
+
+**1. MOSS-Imageのレイアウトエディタ: 「最前面」「最背面」を追加**
+- 既存の「前面へ」「背面へ」（1つずつ入れ替え）の両端に追加。`moss.js` の `moveSelectedToEdge(toFront)` が選択中の枠を配列の末尾／先頭へ移す（すでに端なら何もしない）。ボタンは `moss-item-top-btn` / `moss-item-bottom-btn`、i18n `moss.itemTop` / `moss.itemBottom`（日英中）、ヘルプ・マニュアルに追記。
+
+**2. 単独テキストのcaptionを常に `Narration text.` に**
+- 従来は、フキダシ等の枠に入らない単独の文字枠を、空白を除いて6文字以下なら `Sound effect.`、それ以外は `Narration text.` としていた。名前・見出しが擬音になる誤りがあるため、文字数による判定を廃止（`ocr-core.js` の `toMossItems` と `moss.js` の `textCaptionOf`）。擬音は `sfx` クラス（レイアウト検出・意思決定モデル）だけが `Sound effect lettering.` になる。
+
+---
+
+## 2026-10-27（マニュアルをv1.66.0対応に更新: 日本語・英語、同梱版 `docs/manual/` を含む）
+
+v1.59.0対応から、v1.60.0〜v1.65.0と今回のv1.66.0（OCRのChat TE全体読み・MOSS-Image最前面/最背面・Nanobanana+のQwen Image 2.1画像枚数対応）を反映した。**Kindle版（EPUB・スクリーンショット）は後日**。
+
+- 第10章を中心に改訂: 章タイトルを「Nanobanana+・Workflow Studio・MOSS-Image・OCR」に変更。10-3/10-4を「Nanobanana+（Nanobananaモード）」・1画面統合（左=プロンプトと基本設定、右=Image-to-Image）・サブタブ「Nanobanana履歴」に合わせて修正。10-5のSend CC（Image）。10-6にMOSS-Imageの変更（レイアウト オーバーレイ・Imageタブで開く・テキストを無効で生成・Shift+クリック複数選択・最前面/最背面・新規作成/取り込み全クリア・プロンプト拡張・単独テキストのcaptionは常にナレーション）。**10-7 Nanobanana+のローカルモード**と**10-8 OCRタブ**を章末に追加（既存の節番号は振り直していない）。
+- そのほか: 第1・3章（タブ12個、Nanobanana+とOCRの行）、第7・9章（Insertの「テキストを挿入」モーダル）、第13章（VRAM調整がOCRにも働く）、第14章（トラブル表にOCR・ローカルモード・MOSS-Imageの文字）、付録（用語集、Shift+クリック）、はじめに・目次のバージョン表記、撮影リスト（008・040撮り直し、051・052追加、049撮り直し推奨）。日英で見出し数・画像プレースホルダー数が一致することを確認した。
+- 同梱版 `docs/manual/{ja,en}` は、前回と同じ方法（原稿から `［画像：〇〇］` / `[Image: ...]` 行を取り除き、日本語目次の出版方針メモ行を除く）で再生成した。v1.59.0の原稿から同じ手順で現行の同梱版が完全に再現できることを先に確認してから出力した。READMEのマニュアル節（日・英）を「v1.66.0対応」に更新。
+- 原稿（`eagle_comic_creator_spa/manual/`）はリポジトリ外のため、コミットには含まれない。Kindle版は原稿と撮影リストを元に、スクリーンショット撮影（新規051・052、撮り直し008・040・049）とあわせて後日行う。
+
+---
+
+## 2026-10-27（v1.66.0: Nanobanana+ — Qwen Image 2.1 の画像入力をドロップ枚数に合わせる）
+
+**背景**: Qwen Image 2.1 の Image Edit サブグラフ（`TextEncodeQwenImage21`）は `images.image_1`〜`image_10` の最大10入力を持ち、未接続の入力は使われない。一方ワークフロー内のLoadImageは固定数（登録の「Qwen2.1 (2枚)」なら2個）で、3枚目以降は切り捨てられていた（WFSは i 枚目→ノードID順の i 番目のLoadImage）。
+
+**実装（CC側のみ。WFSの変更なし）**
+- 新規 `static/js/nb-image-slots.js`（DOM非依存）: `findImageSlots`（`images.image_N` を2つ以上持つノードを探す）/ `maxImageSlots`（上限、最大10）/ `fitImageSlots(wf, n)`（litegraph形式のワークフローJSONで、既存のLoadImageを取り除き、枚数ぶんのLoadImageをID昇順に作って `images.image_1..n` へ接続。元のオブジェクトは変えない）。
+- 安全側で何もしない条件: 画像入力の元がLoadImage以外／そのLoadImageが他（例: ImageCompare）にもつながっている／画像入力と無関係なLoadImageが別にある（スロット順がずれるため）。例: `qwen_image21turbo_i2i.json` は変更されず従来どおり。
+- `14-integrations.js` `sendMultiImageI2IToWorkflowStudio`: ワークフロー取得後に `fitImageSlots` を通してWFSへ渡す。
+- `nanobanana.js`: `maxI2I()`（ローカルで画像入力が複数あるワークフローはその数、それ以外は14）と `refreshLocalMax()`（選択中のワークフローを取得して上限を調べ、画像グリッドの「(n/上限)」と空きスロット数に反映。モード切替・ワークフロー切替・⚙設定を閉じたときに更新）。
+
+**検証**: ユーザーのワークフロー4種・Klein でN=1/3/10/12を単体確認（リンク整合・10枚で打ち止め）。実機（Kapture、ComfyUI :8189）で「Qwen2.1 (2枚)」を選ぶと上限が (0/10)、Klein は (0/14)。4枚ドロップして生成すると、キューのプロンプトに LoadImage が4つ・`TextEncodeQwenImage21` に `image_1..4` が接続され、4枚を使った結果が返った。
+
+**未了**: 上限を超えて入れた場合の挙動（既存の切り捨て警告）。ヘルプ・READMEは同日追記済み（Nanobanana+のローカルモード欄）。
+
+---
+
+## 2026-10-27（v1.66.0: OCRタブ — Chat TE（Qwen3-VL）による全体読み）
+
+**背景**: 縦書きの多い雑誌表紙で、LightOnOCRは0語・manga版は17語と読めない。ComfyUIのChat TEノード（テキストエンコーダーをそのままチャットに使う）で比較した。
+
+**比較（雑誌表紙4枚・目視の正解キーワード52語、同一プロンプト）**
+- Chat TE Qwen3-VL-8B 44語（thinking OFF）／ Qwen3-VL-4B 38（thinking ON。OFFだと全画像でほぼ空=2語）／ Qwen3.5-9B 35 ／ Qwen2.5-VL-7B 34。
+- Ollama: glm-ocr 35 ／ qwen3.5:9b 34 ／ gemma4:e4b 24 ／ PaddleOCR-VL-1.6 24 ／ PaddleOCR-VL-manga 17 ／ LightOnOCR-3 0（4枚目は900秒でタイムアウト）。
+- Qwen3-VLにbbox_2dを出させる試みは、座標がずれ、途中で同じ記号の繰り返しに陥るため不採用。位置はOCRの枠から取り、文字だけ全体読みで置き換える設計にした。
+
+**実装**
+- `ocr-core.js`: `CHATTE_PROMPT` / `pickChatTeModel`（8B→4B→Qwen3.5）/ `chatTeThinking`（4Bだけthinking ON）/ `parseChatTeLines`（思考ブロック・連続同一行の除去）/ `textSimilarity`（バイグラムDice）/ `applyChatTeLines`（類似度0.4以上かつ極端に長くない行だけで枠の文字を置換、合わない行は返す）。プリセット `cover`・`text` で全体読みオン、`illustration` でオフ。
+- `29-ocr-tab.js` + `index.html` + i18n(日英中): 「全体読み（Chat TE / ComfyUI）」欄（有効・URL既定=location.origin・モデル・「全体読みだけ実行」・合わなかった行の欄）。実行前にVRAM調整でOllamaを退避。モデルが未ロード・別モデルなら `/chat_te/load` で読み込む。
+- 実機検証（Kapture、ComfyUI :8189、声優アニメディア表紙）: 単独実行で68行、雑誌表紙モードの通し実行で59枠中10件を置換・23行が未対応。
+
+**注意**: 8Bの再ロードはOllamaにモデルが残っているとVRAM不足で接続が切れる（`WinError 10054`）ことがあった。VRAM調整をオンにしておく。他のOCR入力・4枚すべての通し検証は未了。README・ヘルプ（OCR節の「全体読み（Chat TE）」）は追記済み。
+
+---
+
 ## 2026-10-27（v1.65.0: Nanobanana+タブ — ローカルImage Editワークフロー対応、生成設定/I2Iの1画面化）
 
 **背景**: Nanobananaタブ（Gemini API / ComfyUIネイティブ専用）を、ローカルのImage Edit系ワークフロー（Flux.3 Image Klein、Qwen Image 2.1等）でも使えるようにしたい、という要望。計画は `PLAN_nanobanana_local_image_edit.md`。
@@ -199,7 +254,7 @@
 **1. 吹き出しなしの単独テキストの取り込み（新機能）**
 - 「フキダシ・セリフを取り込む」に、チェックボックス「吹き出しなしの文字も取り込む」（既定オン）を追加。テキストツールで置いた `<text>` を文字枠として取り込む。フキダシ内のテキスト（`g.balloon-shape` の子）と `defs` / `clipPath` / `mask` / `pattern` 内のテキストは対象外。
 - 回転・拡縮・せん断・縦書きを含む実際の見た目の範囲が要るため、文字だけの新しいSVGを画面外（`position:fixed; left:-100000px`）へ描画し、`getBoundingClientRect()` で実測する（`extractFreeTexts`）。`document.fonts.ready` を待ってから測る。枠は実測範囲＋フォントサイズの0.15倍の余白で、`fitBox=false`（文字を編集しても枠が縮まない）。フォントサイズは `font-size` × `data-scale-x/y` の幾何平均 × キャンバス倍率。縦書きは `style` の `writing-mode`。
-- caption は文字数による簡易な推定（6文字以下＝`Sound effect.`、それ以外＝`Narration text.`）。回転した文字は外接矩形になる（MOSS-Imageの枠は回転を表せない）。
+- caption は常に `Narration text.`（当初は文字数による推定で6文字以下＝`Sound effect.` としていたが、名前などを擬音と誤るため2026-10-27に廃止。擬音は `sfx` クラスで扱う。ページ自由テキストの取り込み `moss.js` の `textCaptionOf` も同様）。回転した文字は外接矩形になる（MOSS-Imageの枠は回転を表せない）。
 - 再取込は、取り込み済みの枠（`src: 'balloon'` / `'text'`）だけを入れ替える。チェックを外して取り込むと、前回の単独テキストの枠は残る。
 
 **2. セキュリティ修正（取込の途中で発見・修正）**

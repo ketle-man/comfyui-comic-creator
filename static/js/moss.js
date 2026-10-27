@@ -415,7 +415,7 @@ function selectItem(id) {
 function syncProps() {
     const it = selItem();
     $('moss-item-props').style.display = it ? '' : 'none';
-    for (const id of ['moss-item-up-btn', 'moss-item-down-btn', 'moss-item-del-btn']) $(id).disabled = !it;
+    for (const id of ['moss-item-top-btn', 'moss-item-up-btn', 'moss-item-down-btn', 'moss-item-bottom-btn', 'moss-item-del-btn']) $(id).disabled = !it;
     if (!it) return;
     $('moss-item-no').textContent = `#${S.items.indexOf(it) + 1}`;
     $('moss-item-type').value = it.type;
@@ -600,6 +600,15 @@ function moveSelected(delta) {
     renderCanvas(); schedulePreview(); scheduleSave();
 }
 
+/** 選択中の枠を最前面（配列の末尾）／最背面（先頭）へ移す。すでに端なら何もしない */
+function moveSelectedToEdge(toFront) {
+    const i = S.items.findIndex(x => x.id === S.selId);
+    if (i < 0 || (toFront ? i === S.items.length - 1 : i === 0)) return;
+    const [it] = S.items.splice(i, 1);
+    if (toFront) S.items.push(it); else S.items.unshift(it);
+    renderCanvas(); schedulePreview(); scheduleSave();
+}
+
 function initItemProps() {
     $('moss-item-type').addEventListener('change', () => {
         const it = selItem(); if (!it) return;
@@ -645,6 +654,8 @@ function initItemProps() {
     $('moss-item-del-btn').addEventListener('click', deleteSelected);
     $('moss-item-up-btn').addEventListener('click', () => moveSelected(1));
     $('moss-item-down-btn').addEventListener('click', () => moveSelected(-1));
+    $('moss-item-top-btn').addEventListener('click', () => moveSelectedToEdge(true));
+    $('moss-item-bottom-btn').addEventListener('click', () => moveSelectedToEdge(false));
     // 新規作成: すべてのbboxを削除してレイアウトを空にする
     $('moss-layout-new-btn').addEventListener('click', () => {
         if (S.items.length && !confirm(t('moss.confirmClear'))) return;
@@ -857,8 +868,8 @@ async function extractFreeTexts(rec, svg) {
     return sortReadingOrder(out);
 }
 
-// 単独テキストの用途の推定: 短い（6文字以下）なら擬音、それ以外はナレーション文として caption に英文で入れる
-const textCaptionOf = (text) => ([...text.replace(/\s/g, '')].length <= 6 ? 'Sound effect.' : 'Narration text.');
+// 単独テキストの caption は常にナレーション文。短い文字（名前など）を擬音と誤るため、文字数では擬音と判定しない
+const textCaptionOf = () => 'Narration text.';
 
 async function importBalloons() {
     const rec = await getActivePageRecord();

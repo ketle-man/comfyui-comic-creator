@@ -18,6 +18,7 @@ import {
     pickRereadModel, rereadPrompt, rereadScale, cropRect, normalizeJaPunct,
     DECIDE_QUESTIONS, pickDecisionModel, parseDecision, applyDecision, OVERALL_PROMPT, cleanOverall, ocrLooksFailed,
     toTextInsertItems, OCR_MODE_PRESETS, MODE_QUESTIONS, MODE_MIN_PROB, modeByAspect, parseModeAnswer, tileRects, mapTileBoxes, dedupeTileBoxes,
+    CHATTE_PROMPT, pickChatTeModel, chatTeThinking, parseChatTeLines, applyChatTeLines,
 } from '../ocr-core.js';
 
 const $ = (id) => document.getElementById(id);
@@ -51,6 +52,7 @@ function saveSettings() {
             url: $('ocr-url').value, ocrModel: $('ocr-model').value, layoutModel: $('ocr-layout-model').value,
             useLayout: $('ocr-use-layout').checked, classes, merge: $('ocr-merge-containers').checked,
             useReread: $('ocr-use-reread').checked, rereadModel: $('ocr-reread-model').value,
+            useChatte: $('ocr-use-chatte').checked, chatteUrl: $('ocr-chatte-url').value, chatteModel: $('ocr-chatte-model').value,
             mode: $('ocr-mode').value, useOcr: $('ocr-use-ocr').checked, preprocess: $('ocr-preprocess').value, useOverall: $('ocr-use-overall').checked, useDecide: $('ocr-use-decide').checked, decideModel: $('ocr-decide-model').value,
         }));
     } catch (_) { /* ignore */ }
@@ -167,6 +169,7 @@ function renderAll() { renderStage(); renderList(); updateButtons(); }
 function updateButtons() {
     $('ocr-box-del-btn').disabled = !selBox();
     $('ocr-box-reread-btn').disabled = !selBox() || !TEXTY.has(selBox().cls) || O.busy;
+    $('ocr-chatte-btn').disabled = !O.img || O.busy || !$('ocr-chatte-model').value;
     $('ocr-send-moss-btn').disabled = !O.boxes.length || !O.img;
     $('ocr-count').textContent = O.boxes.length ? `(${O.boxes.length})` : '';
 }
@@ -446,6 +449,69 @@ async function decideAll(prog) {
     return { changed, dropped: drop.size };
 }
 
+// ─── 全体読み（Chat TE / ComfyUI） ───
+// ComfyUI の Chat TE ノード（OpenAI互換API）で Qwen3-VL に画像全体を読ませる。位置は出ないので、OCRの枠へ文字だけ突き合わせる。
+const chatteBase = () => ($('ocr-chatte-url').value.trim() || location.origin).replace(/\/+$/, '');
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+async function loadChatteModels(saved) {
+    const sel = $('ocr-chatte-model');
+    try {
+        const res = await fetch(`${chatteBase()}/chat_te/text_encoders`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const names = (await res.json()).text_encoders || [];
+        fillModelSelect(sel, names, saved?.chatteModel || pickChatTeModel(names), []);
+    } catch (e) {
+        sel.innerHTML = '';   // Chat TE が入っていない ComfyUI など。全体読みは使えない
+        console.warn('[ocr] chat te models failed', e);
+    }
+    if (!sel.value) $('ocr-use-chatte').checked = false;
+    updateButtons();
+}
+
+/** 画像全体を読んで行の配列を返す。モデルが未ロード・別モデルなら先にロードする */
+async function chatteRead(prog) {
+    const base = chatteBase(), model = $('ocr-chatte-model').value;
+    const st = await (await fetch(`${base}/chat_te/status`)).json();
+    if (!st.loaded || st.model_name !== model) {
+        prog.textContent = t('ocr.progressChatteLoad', model);
+        const r = await fetch(`${base}/chat_te/load`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ model_name: model }) });
+        if (!r.ok) throw new Error(`HTTP ${r.status} ${((await r.json().catch(() => ({}))).error || '').slice(0, 200)}`);
+    }
+    prog.textContent = t('ocr.progressChatte');
+    const res = await fetch(`${base}/v1/chat/completions`, {
+        method: 'POST', headers: JSON_HEADERS,
+        body: JSON.stringify({
+            model, max_tokens: 2048, temperature: 0.1, enable_thinking: chatTeThinking(model),
+            messages: [{ role: 'user', content: [
+                { type: 'text', text: CHATTE_PROMPT },
+                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${O.img.b64}` } },
+            ] }],
+        }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
+    const lines = parseChatTeLines((await res.json()).choices?.[0]?.message?.content);
+    if (!lines.length) throw new Error(t('ocr.errChatteEmpty'));
+    return lines;
+}
+
+/** 全体読み → 枠の文字を置き換え、合わなかった行を欄に残す。戻り値は結果メッセージ */
+async function chatteRun(prog) {
+    await prepareVram(prog);   // ComfyUI側で8B級を読むので、Ollamaのモデルを先に退避してVRAMを空ける
+    const r = applyChatTeLines(O.boxes, await chatteRead(prog));
+    $('ocr-chatte-text').value = r.unmatched.join('\n');
+    return t('ocr.chatteDone', r.replaced, r.unmatched.length);
+}
+
+async function onChatteBtn() {
+    if (O.busy || !O.img) return;
+    O.busy = true; updateButtons();
+    const prog = $('ocr-progress');
+    try { prog.textContent = await chatteRun(prog); renderAll(); }
+    catch (e) { prog.textContent = t('ocr.errChatte', e.message || String(e)); }
+    finally { O.busy = false; updateButtons(); }
+}
+
 // ─── 全体プロンプト（VLM） ───
 async function makeOverall(prog) {
     prog.textContent = t('ocr.progressOverall');
@@ -488,7 +554,7 @@ async function prepareVram(prog) {
 }
 
 // ─── モード（用途別プリセット） ───
-const MODE_CHECKS = { ocr: 'ocr-use-ocr', layout: 'ocr-use-layout', merge: 'ocr-merge-containers', reread: 'ocr-use-reread', decide: 'ocr-use-decide', overall: 'ocr-use-overall' };
+const MODE_CHECKS = { ocr: 'ocr-use-ocr', layout: 'ocr-use-layout', merge: 'ocr-merge-containers', reread: 'ocr-use-reread', decide: 'ocr-use-decide', overall: 'ocr-use-overall', chatte: 'ocr-use-chatte' };
 
 function updateModeHint() { $('ocr-mode-hint').textContent = t(`ocr.modeHint.${$('ocr-mode').value}`); }
 
@@ -503,6 +569,7 @@ function applyPreset(mode) {
             let v = !!p[k];
             if (k === 'reread' && !$('ocr-reread-model').value) v = false;
             if (k === 'decide' && !$('ocr-decide-model').value) v = false;
+            if (k === 'chatte' && !$('ocr-chatte-model').value) v = false;
             $(id).checked = v;
         }
         if (p.classes) document.querySelectorAll('[data-ocr-class]').forEach(el => { el.checked = p.classes.includes(el.dataset.ocrClass); });
@@ -615,6 +682,11 @@ async function onRun() {
             try { await rereadAll(prog); } catch (e) { rereadError = e.message || String(e); }   // 検出結果は残し、元のOCR文字のまま
             renderAll();
         }
+        let chatteMsg = '';
+        if ($('ocr-use-chatte').checked && $('ocr-chatte-model').value) {
+            try { chatteMsg = await chatteRun(prog); } catch (e) { rereadError = rereadError || t('ocr.errChatte', e.message || String(e)); }   // 検出結果は残す
+            renderAll();
+        }
         if ($('ocr-use-overall').checked && $('ocr-layout-model').value) {
             try { await makeOverall(prog); } catch (e) { rereadError = rereadError || t('ocr.errOverall', e.message || String(e)); }   // 検出結果は残す
         }
@@ -624,7 +696,7 @@ async function onRun() {
             try { const r = await decideAll(prog); decideMsg = t('ocr.decideDone', r.changed, r.dropped); } catch (e) { rereadError = rereadError || e.message || String(e); }
             renderAll();
         }
-        prog.textContent = rereadError || (t('ocr.done', O.boxes.length, ((Date.now() - started) / 1000).toFixed(1)) + (decideMsg ? ` ${decideMsg}` : '') + (grayRetry ? ` ${grayRetry}` : '') + (autoMsg ? ` ${autoMsg}` : ''));
+        prog.textContent = rereadError || (t('ocr.done', O.boxes.length, ((Date.now() - started) / 1000).toFixed(1)) + (decideMsg ? ` ${decideMsg}` : '') + (chatteMsg ? ` ${chatteMsg}` : '') + (grayRetry ? ` ${grayRetry}` : '') + (autoMsg ? ` ${autoMsg}` : ''));
     } catch (e) {
         console.warn('[ocr] run failed', e);
         prog.textContent = t('ocr.errRun', e.message || String(e));
@@ -677,6 +749,8 @@ async function initOcrTabOnce() {
     if (saved.preprocess) $('ocr-preprocess').value = saved.preprocess;
     if (saved.useOverall !== undefined) $('ocr-use-overall').checked = !!saved.useOverall;
     if (saved.useDecide !== undefined) $('ocr-use-decide').checked = !!saved.useDecide;
+    $('ocr-chatte-url').value = saved.chatteUrl || location.origin;
+    if (saved.useChatte !== undefined) $('ocr-use-chatte').checked = !!saved.useChatte;
     if (saved.merge === false) $('ocr-merge-containers').checked = false;
     if (saved.useOcr === false) $('ocr-use-ocr').checked = false;
     const firstUse = !Object.keys(saved).length;   // 保存が無い初回だけ manga。既存の保存設定がある人は custom（今の設定を維持）
@@ -704,11 +778,13 @@ async function initOcrTabOnce() {
     });
     $('ocr-run-btn').addEventListener('click', onRun);
     $('ocr-overall-btn').addEventListener('click', onOverallBtn);
-    $('ocr-reload-models-btn').addEventListener('click', () => loadModels(loadSettings()));
+    $('ocr-chatte-btn').addEventListener('click', onChatteBtn);
+    $('ocr-reload-models-btn').addEventListener('click', () => { loadModels(loadSettings()); loadChatteModels(loadSettings()); });
     $('ocr-copy-text-btn').addEventListener('click', () => copyText(collectText(O.boxes), 'ocr.copied'));
     $('ocr-copy-json-btn').addEventListener('click', () => copyText(boxesAsJson(), 'ocr.copied'));
     $('ocr-send-moss-btn').addEventListener('click', onSendMoss);
-    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers', 'ocr-use-reread', 'ocr-reread-model', 'ocr-use-decide', 'ocr-decide-model', 'ocr-use-overall', 'ocr-preprocess', 'ocr-use-ocr', 'ocr-mode']) $(id).addEventListener('change', saveSettings);
+    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers', 'ocr-use-reread', 'ocr-reread-model', 'ocr-use-decide', 'ocr-decide-model', 'ocr-use-overall', 'ocr-preprocess', 'ocr-use-ocr', 'ocr-mode', 'ocr-use-chatte', 'ocr-chatte-url', 'ocr-chatte-model']) $(id).addEventListener('change', saveSettings);
+    $('ocr-chatte-url').addEventListener('change', () => loadChatteModels(loadSettings()));
     // 個別設定を手で変えたらモードは「カスタム」へ（プリセット適用中は除く）
     const toCustom = () => { if (!O.applyingPreset && $('ocr-mode').value !== 'custom') { $('ocr-mode').value = 'custom'; updateModeHint(); saveSettings(); } };
     for (const id of Object.values(MODE_CHECKS).concat(['ocr-preprocess'])) $(id).addEventListener('change', toCustom);
@@ -719,7 +795,7 @@ async function initOcrTabOnce() {
     window.addEventListener('resize', () => { if ($('ocr-tab')?.classList.contains('active')) renderStage(); });
 
     renderAll();
-    await loadModels(saved);
+    await Promise.all([loadModels(saved), loadChatteModels(saved)]);
     if (firstUse && OCR_MODE_PRESETS[$('ocr-mode').value]) applyPreset($('ocr-mode').value);   // モデル一覧が揃ってから（読み直し・判定の可否が決まる）
 }
 

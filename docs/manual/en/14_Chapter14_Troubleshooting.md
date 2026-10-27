@@ -68,6 +68,12 @@ When something does not work, try these three things first. They solve most prob
 | MOSS-Image says "ComfyUI is too old (please update)" | ComfyUI is too old to support MOSS-Image | Update ComfyUI and restart |
 | MOSS-Image says "model not found" | The diffusion model, text encoder, or VAE is not in the expected folder | Place them as in the table in 10-6 (Chapter 10), then press "Reload model lists" |
 | Nothing is drawn where an empty Text box was | Boxes with no text are not sent | Type text into the box |
+| MOSS-Image draws text or frames in the picture | The prompt contains words such as "cover" or "magazine", or there are text boxes | Check "Generate with text disabled", or remove those words from the prompt (Chapter 10, 10-6) |
+| Nanobanana+ in "Local" says no local workflow is registered | No workflow has been registered | Register a Workflow Studio workflow with "⚙" (Chapter 10, 10-7) |
+| Nanobanana+ in "Local" uses only some of the images | The workflow has too few image inputs (fixed except for Qwen Image 2.1) | Keep the image count within the "(count/limit)" shown |
+| The OCR tab says "cannot reach Ollama" or "no OCR model found" | Ollama is not running, or the model is not installed | Start Ollama, install the model with `ollama pull`, and press "Reload models" (Chapter 10, 10-8) |
+| OCR cannot read vertical text, or returns nothing or the same word repeatedly | A weak spot of the OCR model | Use "Whole-image read (Chat TE)" or "Re-read text boxes from crops with another model" (Chapter 10, 10-8). On repetition it retries in grayscale automatically |
+| The OCR "Whole-image read" fails | Chat TE is not installed in ComfyUI, or VRAM is short | Install Chat TE and restart ComfyUI; turn on "VRAM Management (Ollama)" |
 | The "workflow studio" tab says "was not found" | ComfyUI-Workflow-Studio is not installed | Install it and restart ComfyUI (or ignore it if you do not use it) |
 | After Generate, the original image is still there | Generated images are layered on top | Delete unneeded originals in the layer panel |
 | Auto shows "Failed to fetch" | The local LLM URL and the address you opened do not match | Match the host name (`http://127.0.0.1:11434` if you opened `127.0.0.1`) |

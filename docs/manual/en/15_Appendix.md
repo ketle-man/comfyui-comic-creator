@@ -29,7 +29,10 @@
 | Denoise | In I2I, how much to change from the original | Chapter 10 |
 | API key | Your personal key for using services such as Gemini | Chapter 10 |
 | Local LLM | A text-generating AI running on your own PC (Ollama, etc.) | Chapter 11 |
-| Decision model | An AI that answers questions with probabilities instead of writing text | Chapter 11 |
+| Decision model | An AI that answers questions with probabilities instead of writing text | Chapters 11 and 10 |
+| OCR | Reading the text in an image. In the OCR tab, it also finds each text's position (box) | Chapter 10 |
+| bbox (box) | A rectangle within an image. Used in the MOSS-Image layout and in OCR results | Chapter 10 |
+| Chat TE | A ComfyUI custom node that lets you chat with a text encoder (such as Qwen3-VL). Used for OCR's whole-image read | Chapter 10 |
 | VRAM | GPU memory | Chapter 13 |
 | dpi | Dots per inch. How fine a print is | Chapter 5 |
 
@@ -56,6 +59,7 @@ In the Layout tab, use the "Undo" button in the control bar to undo.
 | Operation | Effect |
 | --- | --- |
 | Shift + drag | Always draw a new box |
+| Shift + click (without dragging) | Add a box to (or remove it from) the selection; selected boxes move together |
 | Delete | Delete the selected box |
 | Esc / Ctrl + Enter | Finish typing in a text box |
 | Press a text box twice quickly | Edit its text again |

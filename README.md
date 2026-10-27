@@ -84,7 +84,7 @@ ComfyUI 上で動作するマンガページ作成 SPA（シングルページ�
 - 出力解像度は 1K（既定）/2K/4K を指定可能（対応モデルのみ）、I2I は参照画像を最大 14 枚まで追加可能
 - 生成画像は ComfyUI 本体の `output/cc_nanobanana` フォルダへ自動保存
 - 生成履歴をJSON Lines形式のファイル（`output/cc_nanobanana/history.jsonl`、1行1件のJSON）に記録（日時・モデル・解像度・プロンプト等）。自動記録チェックボックス、または結果ごとの手動記録ボタンから利用（編集・削除はファイルを直接操作）
-- **ローカルモード（Nanobanana+）** — タブ名は「Nanobanana+」。上部のラジオで「Nanobanana / ローカル」を切り替え、ローカルでは Workflow Studio の保存済みワークフロー（Flux.3 Image Klein・Qwen Image 2.1 などの Image Edit 系）を表示名つきで複数登録（⚙ボタン）して生成できる。I2I 参照画像は LoadImage ノードへ順に割り当て。画像サイズ・Steps・CFG・サンプラー・スケジューラ・Denoise・シード（ランダム/固定/生成ごとに+1）を共通の基本設定として指定可能。生成設定とI2I入力は1画面（左=プロンプト+基本設定、右=Image-to-Image）
+- **ローカルモード（Nanobanana+）** — タブ名は「Nanobanana+」。上部のラジオで「Nanobanana / ローカル」を切り替え、ローカルでは Workflow Studio の保存済みワークフロー（Flux.3 Image Klein・Qwen Image 2.1 などの Image Edit 系）を表示名つきで複数登録（⚙ボタン）して生成できる。I2I 参照画像は LoadImage ノードへ順に割り当て（Qwen Image 2.1 のように画像入力が最大10個のワークフローは、ドロップした枚数に合わせて LoadImage を自動で増減）。画像サイズ・Steps・CFG・サンプラー・スケジューラ・Denoise・シード（ランダム/固定/生成ごとに+1）を共通の基本設定として指定可能。生成設定とI2I入力は1画面（左=プロンプト+基本設定、右=Image-to-Image）
 - **生成方式の選択** — 設定タブの「Nanobanana 設定」（または Nanobanana タブ）で「ComfyUIネイティブノード（Comfyクレジット）」を選ぶと、Nanobanana タブ・半自動マンガ・Auto タブ（画像生成エンジンが Gemini のとき）の生成に共通で適用される。ComfyUI 本体の Nano Banana 2.1 ノード（Gemini Nano Banana 2.1 / Nano Banana 2 / Nano Banana 2 Lite）を ComfyUI の `/prompt` 経由で実行できる（Gemini API 直叩きと併用可）。画像は `output/cc_nanobanana_native/` にプロンプト・設定を埋め込んだ PNG として保存されるため履歴の記録は不要（Workflow Studio のメタデータ／ギャラリーでも確認可能）。認証は `.env` の `COMFY_API_KEY`、課金は Comfy クレジット。Nano Banana Pro（`gemini-3-pro-image`）はネイティブ方式では未対応
 
 </details>
@@ -116,6 +116,7 @@ ComfyUI 上で動作するマンガページ作成 SPA（シングルページ�
 - 検出枠はキャンバス上でドラッグ移動・角で拡縮・追加・削除でき、右の一覧でクラスと本文・説明を編集可能。「全文をコピー」「JSON をコピー」で出力
 - **MOSS-Image 連携** — 「MOSS-Imageタブへ送る」で物体・コマ・キャラ・文字の bbox として MOSS-Image のレイアウトへ取り込む。フキダシ等の枠に入った文字は 1 つの文字枠にまとめる。再送時は前回の OCR 取り込み分だけ入れ替え
 - モデル設定欄は折りたたみ式（開閉状態を保存）
+- **全体読み（Chat TE）** — 縦書きの大きな見出しが多い雑誌表紙などは、ComfyUI のカスタムノード [Chat TE](https://github.com/ketle-man/comfyui-chat-te)（Qwen3-VL-8B）で画像全体を読ませて、OCR の枠の文字を置き換える（位置は出せないため文字だけを突き合わせる。雑誌表紙・文字のみモードで自動オン）。雑誌表紙 4 枚の実測では、LightOnOCR より多くの縦書き文字を読めた
 - **切り抜きの読み直し** — 検出した文字枠を元画像から切り抜き、別モデル（既定はマンガ特化の PaddleOCR-VL、`ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M`）で本文を取り直す。縦書き・装飾文字の精度が上がる。「…」「！」「？」は自動で全角化。選択した枠だけの読み直しも可能
 - **モード** — 設定欄の最上部（折りたたみ式）で、自動（おすすめ・実験的）／マンガページ／雑誌表紙・ポスター／文字のみ／イラスト（文字なし）／縦長ページ（分割して読む）／カスタムを選ぶと、個別設定が一括で切り替わる。個別設定を手で変えると自動でカスタムになる
 - **複数選択・一括移動** — 枠を Shift+クリックで選択に追加／解除し、まとめて移動・削除（OCR タブ・MOSS-Image タブ）
@@ -304,7 +305,7 @@ MOSS-Image タブ上部のステータスが「利用可能」になれば準備
 
 ## マニュアル
 
-画像なしの入門マニュアル（v1.59.0対応）を同梱しています。日本語は [docs/manual/ja/](docs/manual/ja/)、英語は [docs/manual/en/](docs/manual/en/) です。目次は各フォルダの `00_目次.md`（英語は `00_Contents.md`）から。
+画像なしの入門マニュアル（v1.66.0対応）を同梱しています。日本語は [docs/manual/ja/](docs/manual/ja/)、英語は [docs/manual/en/](docs/manual/en/) です。目次は各フォルダの `00_目次.md`（英語は `00_Contents.md`）から。
 
 ## アーキテクチャ
 

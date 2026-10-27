@@ -39,6 +39,9 @@ First, let's go through the most common task: adding text to an image and saving
 > In the text input box, **Enter starts a new line** and **Ctrl+Enter (⌘+Enter on Mac) confirms**. This is the same as the Layout tab's text input window. Esc cancels.
 
 > **Tip**
+> "Insert" in the text tool's option bar opens the "Insert text" screen, where you can insert a Script tab cell or text read in the OCR tab (10-8). OCR text goes in as text layers at the positions of the detected boxes (two or more are grouped into an "OCR" group).
+
+> **Tip**
 > Double-click text you placed to retype it. Styles saved in the Font tab can be applied by clicking them in the asset panel's "F" tab.
 
 ## 9-3 Opening and Creating Images

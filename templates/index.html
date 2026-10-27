@@ -2150,8 +2150,10 @@
                         <button type="button" class="moss-type-btn active" data-vertical="0" data-i18n="moss.writingH">横書き</button>
                         <button type="button" class="moss-type-btn" data-vertical="1" data-i18n="moss.writingV">縦書き</button>
                       </div>
+                      <button id="moss-item-top-btn" class="btn small secondary" disabled data-i18n="moss.itemTop">最前面</button>
                       <button id="moss-item-up-btn" class="btn small secondary" disabled data-i18n="moss.itemFront">前面へ</button>
                       <button id="moss-item-down-btn" class="btn small secondary" disabled data-i18n="moss.itemBack">背面へ</button>
+                      <button id="moss-item-bottom-btn" class="btn small secondary" disabled data-i18n="moss.itemBottom">最背面</button>
                       <button id="moss-item-del-btn" class="btn small danger" disabled data-i18n="common.delete">削除</button>
                     </div>
                       <div style="font-size:11px; color:#888; margin-bottom:6px;" data-i18n="moss.drawHint">キャンバスをドラッグで追加 / 枠をドラッグで移動・角で拡縮</div>
@@ -2421,6 +2423,21 @@
                   <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.decideModel">判定モデル:</label><select id="ocr-decide-model" class="comfyui-select"></select></div>
                   <div style="font-size:11px; color:#888;" data-i18n="ocr.decideHint">画像対応の意思決定モデル（clef-flash / d3 など）で、文字枠の種類（ふきだし・キャプション・効果音・文字）を判定し、文字の無いVLM検出枠を除きます。枠の数だけ時間が掛かります。</div>
                 </div>
+                </details>
+                <details id="ocr-chatte-details" class="moss-collapse" open>
+                  <summary data-i18n="ocr.chatteTitle">全体読み（Chat TE / ComfyUI）</summary>
+                  <div class="comfyui-field-group">
+                    <div class="comfyui-field">
+                      <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-chatte"> <span data-i18n="ocr.useChatte">画像全体をChat TEで読み、枠の文字を置き換える</span></label>
+                    </div>
+                    <div class="comfyui-field"><label class="comfyui-label">URL:</label><input type="text" id="ocr-chatte-url" class="comfyui-input" style="flex:1" /></div>
+                    <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.chatteModel">モデル:</label><select id="ocr-chatte-model" class="comfyui-select"></select></div>
+                    <div class="comfyui-field">
+                      <button id="ocr-chatte-btn" class="btn small secondary" disabled data-i18n="ocr.chatteBtn" data-i18n-title="ocr.chatteBtnTitle">全体読みだけ実行</button>
+                    </div>
+                    <textarea id="ocr-chatte-text" rows="5" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;"></textarea>
+                    <div style="font-size:11px; color:#888;" data-i18n="ocr.chatteHint">ComfyUIのChat TEノードでQwen3-VLを読み込み、画像全体の文字を1回で読みます（縦書き・装飾文字に強い）。位置は出せないため、OCRの枠に文字だけ突き合わせて置き換えます。どの枠にも合わない行は、この欄に残ります。</div>
+                  </div>
                 </details>
                 <div class="comfyui-field-group" style="margin-top:10px">
                   <div class="comfyui-field">

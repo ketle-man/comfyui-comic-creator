@@ -11,6 +11,7 @@ import { t, resolveBackendError } from '../i18n.js';
 import { insertImage } from './08-panels-images.js';
 import { state, switchTab } from './01-state.js';
 import { prepareVramForGeneration } from '../vram-prepare.js';
+import { fitImageSlots } from '../nb-image-slots.js';
 
 // ==============================
 // Eagle 連携
@@ -581,6 +582,7 @@ async function sendMultiImageI2IToWorkflowStudio(imageBlobs, params, workflowFil
     } catch (e) {
         return { ok: false, message: `workflow fetch error: ${e.message}` };
     }
+    workflowData = fitImageSlots(workflowData, imageBlobs.length).workflow;   // Qwen Image 2.1: 画像の枚数ぶんLoadImageを作る（最大10）
 
     try {
         return await fn(imageBlobs, params, workflowData, workflowFile);

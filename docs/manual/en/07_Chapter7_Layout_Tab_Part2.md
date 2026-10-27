@@ -161,7 +161,7 @@ Adjust while watching the preview. If text is selected, the change applies to it
 | Button | Description |
 | --- | --- |
 | Text→PNG | Convert the selected text into a transparent PNG image |
-| Insert | Insert the dialogue (or other cell) selected in the Script tab as text (Chapter 11) |
+| Insert | Opens the "Insert text" screen. Choose the source, "Script (cell selected in the plot)" or "OCR (text detected in the OCR tab)", to insert it as text (see the Tip below, 10-8, and Chapter 11) |
 
 ## 7-3 Drawing Shapes and Painting (Draw)
 

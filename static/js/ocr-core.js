@@ -188,8 +188,6 @@ function positionPhrase(cx, cy) {
     return v === 'Middle' && h === 'center' ? 'Center' : `${v}-${h}`;
 }
 
-const sfxLike = (text) => [...String(text || '').replace(/\s/g, '')].length <= 6;
-
 /**
  * 検出結果 → MOSS-Imageのレイアウト要素。座標は 0〜1 のまま返す（取り込み側がキャンバスサイズを掛ける）。
  * 要素: { type, caption, text, vertical, x1,y1,x2,y2 }
@@ -230,7 +228,7 @@ export function toMossItems(boxes, { aspect = 1, useContainers = true } = {}) {
             if (used.has(b.id) || !b.text) continue;
             out.push({
                 type: 'text', text: b.text, vertical: guessVertical(b, b.text, aspect), x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2,
-                caption: sfxLike(b.text) ? 'Sound effect.' : 'Narration text.',
+                caption: 'Narration text.',   // 短い文字（名前など）を擬音と誤るので文字数では判定しない。擬音は sfx クラスで扱う
             });
             continue;
         }
@@ -296,9 +294,9 @@ export function cropRect(box, imgW, imgH) {
 export const OCR_MODES = ['auto', 'manga', 'cover', 'text', 'illustration', 'tall', 'custom'];
 export const OCR_MODE_PRESETS = {
     manga:        { ocr: true,  layout: true,  classes: ['balloon', 'sfx', 'caption', 'panel', 'character', 'face'], merge: true, reread: true,  decide: true,  overall: true,  preprocess: 'none', tile: false },
-    cover:        { ocr: true,  layout: false, classes: null, merge: null, reread: false, decide: false, overall: true,  preprocess: 'none', tile: false },
-    text:         { ocr: true,  layout: false, classes: null, merge: null, reread: false, decide: false, overall: false, preprocess: 'none', tile: false },
-    illustration: { ocr: false, layout: true,  classes: ['panel', 'character', 'face', 'object'], merge: null, reread: false, decide: false, overall: true,  preprocess: 'none', tile: false },
+    cover:        { ocr: true,  layout: false, classes: null, merge: null, reread: false, decide: false, overall: true,  chatte: true,  preprocess: 'none', tile: false },
+    text:         { ocr: true,  layout: false, classes: null, merge: null, reread: false, decide: false, overall: false, chatte: true,  preprocess: 'none', tile: false },
+    illustration: { ocr: false, layout: true,  classes: ['panel', 'character', 'face', 'object'], merge: null, reread: false, decide: false, overall: true,  chatte: false, preprocess: 'none', tile: false },
     tall:         { ocr: true,  layout: false, classes: null, merge: null, reread: false, decide: false, overall: false, preprocess: 'none', tile: true },
 };
 
@@ -437,4 +435,83 @@ export function normalizeJaPunct(text) {
     const s = String(text || '').trim();
     if (!isCjk(s)) return s;
     return s.replace(/\.{2,}/g, '…').replace(/!/g, '！').replace(/\?/g, '？');
+}
+
+// ── Chat TE（Qwen3-VL）による全体読み ──
+// 画像全体を1回で読む。位置は出せない（bboxは実測でずれ・繰り返しが出た）ので、OCRの枠に文字だけ突き合わせて置き換える。
+// 実測（雑誌表紙4枚・正解52語、DEVLOG 2026-10-27）: Qwen3-VL-8B 44語 > Qwen3-VL-4B 38 > glm-ocr/Qwen2.5-VL-7B 約35 > LightOnOCR 0。
+export const CHATTE_PROMPT = 'この画像に写っている日本語の文字をすべて書き起こしてください。縦書きの文字も忘れずに、見出し・小さな文字も含めて、'
+    + '読み取れたテキストのみを1行ずつ出力してください。説明は不要です。';
+export const CHATTE_MATCH_MIN = 0.4;     // 枠の文字と全体読みの1行の類似度（バイグラムDice）がこれ未満なら置き換えない
+export const CHATTE_MAX_LEN_RATIO = 1.8; // 枠の文字より極端に長い行（複数枠をまとめて返した行）には置き換えない
+
+/** Chat TE のテキストエンコーダー一覧からOCR向きを選ぶ（Qwen3-VL-8B → 4B → Qwen3.5 → 先頭）。無ければ '' */
+export function pickChatTeModel(names) {
+    for (const re of [/qwen3[-_]?vl.*8b/i, /qwen3[-_]?vl.*4b/i, /qwen3[-_.]?5/i]) {
+        const hit = names.find(n => re.test(n));
+        if (hit) return hit;
+    }
+    return names[0] || '';
+}
+
+/** Qwen3-VL-4B（tied embeddings）は thinking を切ると出力が崩れる。8B 等は切るほうが速く正確だった */
+export function chatTeThinking(model) {
+    return /4b/i.test(String(model || ''));
+}
+
+/** 返答 → 行の配列。思考ブロック・コードフェンスを除き、連続する同一行（繰り返し暴走）は1つにまとめる */
+export function parseChatTeLines(raw) {
+    const s = String(raw || '').replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/```[a-z]*/gi, '');
+    const lines = [];
+    for (const l of s.split(/\r?\n/)) {
+        const t = l.trim();
+        if (!t) continue;
+        if (lines[lines.length - 1] === t) continue;
+        lines.push(t);
+    }
+    return lines.slice(0, 400);
+}
+
+const ctNorm = (s) => String(s || '').replace(/[\s\u3000「」『』（）()\[\]【】、。,.・･!！?？…~〜\-ー―]/g, '').toLowerCase();
+function bigrams(s) {
+    const m = new Map();
+    if (s.length === 1) { m.set(s, 1); return m; }
+    for (let i = 0; i < s.length - 1; i++) { const g = s.slice(i, i + 2); m.set(g, (m.get(g) || 0) + 1); }
+    return m;
+}
+/** 文字列の類似度 0〜1（バイグラムDice）。縦書きは枠の文字と行で改行位置が違っても比べられるよう、空白・記号を無視する */
+export function textSimilarity(a, b) {
+    const x = ctNorm(a), y = ctNorm(b);
+    if (!x || !y) return 0;
+    if (x === y) return 1;
+    const gx = bigrams(x), gy = bigrams(y);
+    let inter = 0, nx = 0, ny = 0;
+    for (const v of gx.values()) nx += v;
+    for (const v of gy.values()) ny += v;
+    for (const [g, v] of gx) inter += Math.min(v, gy.get(g) || 0);
+    return (2 * inter) / (nx + ny);
+}
+
+/**
+ * 全体読みの行を、OCRで取った文字枠（cls==='text'）へ突き合わせて文字だけ置き換える（枠の位置・種類は変えない）。
+ * 戻り値: { replaced: 置き換えた枠の数, unmatched: どの枠にも対応しなかった行 }
+ */
+export function applyChatTeLines(boxes, lines) {
+    const used = new Set();
+    let replaced = 0;
+    for (const b of boxes) {
+        if (b.cls !== 'text' || !b.text) continue;
+        let best = -1, bestScore = 0;
+        const bl = ctNorm(b.text).length;
+        lines.forEach((l, i) => {
+            const len = ctNorm(l).length;
+            if (!len || len > Math.max(bl, 2) * CHATTE_MAX_LEN_RATIO) return;
+            const sc = textSimilarity(b.text, l);
+            if (sc > bestScore) { bestScore = sc; best = i; }
+        });
+        if (best < 0 || bestScore < CHATTE_MATCH_MIN) continue;
+        used.add(best);
+        if (lines[best] !== b.text) { b.textOrig = b.textOrig ?? b.text; b.text = lines[best]; replaced++; }
+    }
+    return { replaced, unmatched: lines.filter((_, i) => !used.has(i)) };
 }

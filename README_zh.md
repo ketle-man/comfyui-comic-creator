@@ -84,7 +84,7 @@
 - 输出分辨率可指定为 1K（默认）/2K/4K（仅部分模型支持），I2I 最多可添加 14 张参考图像
 - 生成的图像会自动保存到 ComfyUI 本体的 `output/cc_nanobanana` 文件夹
 - 生成历史会记录到JSON Lines格式的文件（`output/cc_nanobanana/history.jsonl`，1行1条JSON：日期时间・模型・分辨率・提示词等），可通过自动记录复选框或针对单次结果的手动按钮记录（编辑・删除请直接打开该文件）
-- **本地模式（Nanobanana+）** — 标签名改为“Nanobanana+”。通过顶部单选按钮切换“Nanobanana / 本地”；在本地模式下，可通过⚙按钮将Workflow Studio中已保存的工作流（Flux.3 Image Klein、Qwen Image 2.1等图像编辑类）连同显示名注册多个并用于生成。I2I参考图像依次分配给LoadImage节点。图像尺寸・Steps・CFG・采样器・调度器・Denoise・种子（随机/固定/每次+1）为通用基本设置。生成设置与I2I输入合并在同一画面（左=提示词+基本设置，右=Image-to-Image）
+- **本地模式（Nanobanana+）** — 标签名改为“Nanobanana+”。通过顶部单选按钮切换“Nanobanana / 本地”；在本地模式下，可通过⚙按钮将Workflow Studio中已保存的工作流（Flux.3 Image Klein、Qwen Image 2.1等图像编辑类）连同显示名注册多个并用于生成。I2I参考图像依次分配给LoadImage节点（对于像Qwen Image 2.1这样最多有10个图像输入的工作流，LoadImage节点会根据拖入的图像张数自动增减）。图像尺寸・Steps・CFG・采样器・调度器・Denoise・种子（随机/固定/每次+1）为通用基本设置。生成设置与I2I输入合并在同一画面（左=提示词+基本设置，右=Image-to-Image）
 - **生成方式选择** — 在设置标签的“Nanobanana 设置”（或Nanobanana标签）中选择“ComfyUI原生节点（Comfy积分）”后，该设置同样适用于Nanobanana标签、半自动漫画和Auto标签（图像生成引擎为Gemini时）。可通过ComfyUI的 `/prompt` 运行ComfyUI自带的Nano Banana 2.1节点（Gemini Nano Banana 2.1 / Nano Banana 2 / Nano Banana 2 Lite），可与直接调用Gemini API的方式并用。图片会作为嵌入了提示词和设置的PNG保存到 `output/cc_nanobanana_native/`，因此无需记录历史（也可在Workflow Studio的元数据标签/图库中查看）。认证使用 `.env` 中的 `COMFY_API_KEY`，费用按Comfy积分计算。原生方式不支持Nano Banana Pro（`gemini-3-pro-image`）
 
 </details>
@@ -116,6 +116,7 @@
 - 检测到的框可在画布上拖动移动、拖角缩放、添加和删除；右侧列表中可编辑类别、文字和说明。可用"复制全文""复制 JSON"导出
 - **MOSS-Image 联动** — 点击"作为布局发送"，将结果作为物体・分镜・角色・文字的 bbox 导入 MOSS-Image 布局。气泡等框内的文字会合并为一个文字框。再次发送时仅替换上次 OCR 导入的框
 - 模型设置区可折叠（会记住展开/折叠状态）
+- **整图识读（Chat TE）** — 对于竖排大标题很多的杂志封面等，用 ComfyUI 自定义节点 [Chat TE](https://github.com/ketle-man/comfyui-chat-te)（Qwen3-VL-8B）读取整张图像并替换 OCR 文字框中的文字（无法给出位置，因此只将文字与文字框匹配；在杂志封面・仅文字模式下自动开启）。在 4 张杂志封面上的实测中，比 LightOnOCR 读到更多的竖排文字
 - **裁剪重新识别** — 将检测到的文字框从原图中裁剪出来，用另一个模型（默认为面向漫画的 PaddleOCR-VL，`ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M`）重新读取文字，可提升竖排・装饰文字的精度。"…""!""?"会自动转为全角。也可只重新识别所选的框
 - **模式** — 设置栏最上方可折叠的“模式”可一次性切换各项设置：自动（推荐，实验性）/ 漫画页面 / 杂志封面・海报 / 仅文字 / 插画（无文字）/ 长页面（分块读取）/ 自定义。手动修改某项设置会自动切换为自定义
 - **多选与批量移动** — Shift+点击框可添加/取消选择，并一起移动或删除（OCR 与 MOSS-Image 标签页）

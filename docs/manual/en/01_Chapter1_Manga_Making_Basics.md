@@ -39,7 +39,8 @@ Combine the basic flow with the following tasks as needed:
 | --- | --- | --- |
 | Edit images in detail with layers, or add text to an image | "Image" tab | Chapter 9 |
 | Choose fonts and save text styles (outline, shadow, etc.) | "Font" tab | Chapter 8 |
-| Create images with AI | "Nanobanana" tab, "MOSS-Image" tab, Workflow Studio integration | Chapter 10 |
+| Create images with AI | "Nanobanana+" tab, "MOSS-Image" tab, Workflow Studio integration | Chapter 10 |
+| Read text from an image, or use that text in a layout | "OCR" tab | Chapter 10 |
 | Write a script before making pages, or have AI create the script and panel layout | "Script" tab, "Auto" tab | Chapter 11 |
 
 ## 1-3 Common Stumbling Points

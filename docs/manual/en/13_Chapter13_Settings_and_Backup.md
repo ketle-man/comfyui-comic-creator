@@ -11,7 +11,7 @@ The "Settings" tab has the following items, from top to bottom.
 | Language | Display language (日本語 / English / 中文). The screen reloads when you switch | Chapter 2 |
 | Backup & Restore | Save all data to a zip / restore from a zip | 13-2 in this chapter |
 | VRAM Management (Ollama) | Unload Ollama's models before image generation to free GPU memory | Table below |
-| Nanobanana | Nanobanana engine (Gemini API / ComfyUI native node), shared by the Nanobanana tab, Semi-Auto Manga, and Auto | Chapter 10 |
+| Nanobanana | Nanobanana engine (Gemini API / ComfyUI native node), shared by the Nanobanana+ tab (Nanobanana mode), Semi-Auto Manga, and Auto | Chapter 10 |
 | Eagle Settings | Eagle connection and auto-save | Chapter 12 |
 | G'MIC Settings | Location of the G'MIC Qt executable | Chapter 12 |
 | Inpaint Settings | Workflow used by Inpaint in the Image tab | Chapter 10 |
@@ -19,7 +19,7 @@ The "Settings" tab has the following items, from top to bottom.
 
 ### VRAM Management (Ollama)
 
-Using a local AI (Ollama) and image generation with Workflow Studio on the same PC can run GPU memory (VRAM) short. This setting makes Comic Creator unload Ollama's models right before generating images.
+Using a local AI (Ollama) and image generation with Workflow Studio, MOSS-Image, or Nanobanana+ (Local) on the same PC can run GPU memory (VRAM) short. This setting makes Comic Creator unload Ollama's models right before generating images.
 
 | Item | Description |
 | --- | --- |
@@ -28,6 +28,8 @@ Using a local AI (Ollama) and image generation with Workflow Studio on the same 
 | Unload all now | Unload the Ollama models currently loaded, right away |
 
 Unloaded models are reloaded the next time they are used. Only Ollama on your own PC is affected (not LM Studio and others, nor ComfyUI's own models).
+
+This setting also works in the OCR tab: before detection, before judging with a decision model, and before a whole-image read with ComfyUI's Chat TE (Chapter 10, 10-8).
 
 ### Inpaint Settings and Outpaint Settings
 
