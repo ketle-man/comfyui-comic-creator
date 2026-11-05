@@ -10,6 +10,7 @@
 
 import { LayerManager, Layer } from "./image-tab/LayerManager.js";
 import { DrawTool }            from "./image-tab/DrawTool.js";
+import { DrawPalette }         from "./image-tab/DrawPalette.js";
 import { TextTool, layoutVerticalText, drawVerticalCells } from "./image-tab/TextTool.js";
 import { Text3DTool }          from "./image-tab/Text3DTool.js";
 import { SelectTool }          from "./image-tab/SelectTool.js";
@@ -371,6 +372,10 @@ class ImageTab {
         this._activeTool    = "select";
         this._drawTool      = new DrawTool(null);
         this._eyedropperActive = false; // Drawツールのスポイト（色抽出）モード
+        this._drawPalette   = new DrawPalette({
+            onColorChange: hex => this._setDrawColor(hex),
+            toast: (msg, type) => this._toast(msg, type),
+        });
         this._textTool      = new TextTool(null);
         // Textツールのフォント選択（レイアウトタブと同様のGoogle/システム/カテゴリ切替）
         this._textFontSource  = "google";  // 'google' | 'system' | 'favorites'
@@ -654,6 +659,7 @@ class ImageTab {
     _updateBrushCursor(e) {
         const el = this._brushCursorEl;
         if (!el) return;
+        this._lastBrushCursorEvent = e; // キー操作でサイズを変えたときに再描画するため保持
         const tool = this._activeTool;
         const size = tool === "draw" ? this._drawTool?.brushSize
             : (tool === "mask" && this._maskSubtool === "paint") ? this._maskTool?.brushSize : null;
@@ -706,14 +712,53 @@ class ImageTab {
         try {
             const [r, g, b] = canvas.getContext("2d").getImageData(px, py, 1, 1).data;
             const hex = "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
-            this._drawTool.color     = hex;
-            this._drawTool._stamp    = null;
-            this._drawTool._imgStamp = null;
+            this._setDrawColor(hex);
+            this._drawPalette.syncColor(hex);
         } catch {
             this._toast(window.t("image.msg.pixelColorFail"), "error");
         }
         this._setEyedropperActive(false);
         if (this._activeTool === "draw") this._renderDrawProps();
+    }
+
+    _setDrawMode(mode) {
+        this._drawTool.mode   = mode;
+        this._drawTool._stamp = null;
+        this._renderDrawProps();
+    }
+
+    _setDrawBrushSize(size) {
+        this._drawTool.brushSize = size;
+        this._drawTool._stamp    = null;
+        const slider = document.getElementById("ie-draw-size");
+        if (slider) slider.value = size;
+        const label = document.getElementById("ie-draw-size-lbl");
+        if (label) label.textContent = size + "px";
+        if (this._lastBrushCursorEvent && !this._eyedropperActive) {
+            this._updateBrushCursor(this._lastBrushCursorEvent);
+        }
+    }
+
+    /** [ / ] キー: サイズが大きいほど刻みを粗くする */
+    _stepDrawBrushSize(direction) {
+        const size = this._drawTool.brushSize;
+        const base = direction < 0 ? size - 1 : size;
+        const step = base < 10 ? 1 : base < 50 ? 5 : 10;
+        this._setDrawBrushSize(Math.min(200, Math.max(1, size + direction * step)));
+    }
+
+    /** Drawツール中のBキー: ブラシ選択モーダルを開閉する */
+    _toggleDrawBrushPicker() {
+        if (this._abrAvailable) this._openAbrBrushPickerForDraw();
+        else this._toast(window.t("image.msg.noAbrBrushes"), "info");
+    }
+
+    _setDrawColor(hex) {
+        this._drawTool.color     = hex;
+        this._drawTool._stamp    = null;
+        this._drawTool._imgStamp = null;
+        const input = document.getElementById("ie-draw-color");
+        if (input) input.value = hex;
     }
 
     // ── ツールボタン ──────────────────────────────
@@ -912,6 +957,9 @@ class ImageTab {
 
         } else if (toolId === "draw" && this._drawTool) {
             el.innerHTML = "";
+            // 新規ドキュメントでDrawToolが作り直されても、選択中の色を引き継ぐ
+            this._setDrawColor(this._drawPalette.currentColor);
+            this._drawPalette.render(el);
             this._renderDrawProps();
 
         } else if (toolId === "text" && this._textTool) {
@@ -2224,8 +2272,8 @@ class ImageTab {
             <div class="ie-props-row">
                 <label>Mode</label>
                 <div style="display:flex;gap:4px;">
-                    <button class="it-btn it-btn-sm${t.mode === "draw"  ? " ie-opt-active" : ""}" id="ie-draw-mode-draw"  style="flex:1;">Draw</button>
-                    <button class="it-btn it-btn-sm${t.mode === "erase" ? " ie-opt-active" : ""}" id="ie-draw-mode-erase" style="flex:1;">Erase</button>
+                    <button class="it-btn it-btn-sm${t.mode === "draw"  ? " ie-opt-active" : ""}" id="ie-draw-mode-draw"  title="Draw (D)"  style="flex:1;">Draw</button>
+                    <button class="it-btn it-btn-sm${t.mode === "erase" ? " ie-opt-active" : ""}" id="ie-draw-mode-erase" title="Erase (E)" style="flex:1;">Erase</button>
                 </div>
             </div>
             <div class="ie-props-row">
@@ -2236,8 +2284,8 @@ class ImageTab {
                     title="Eyedropper" style="flex-shrink:0;padding:2px 6px;display:flex;align-items:center;justify-content:center;">${EYEDROPPER_ICON_SVG}</button>
             </div>
             <div class="ie-props-row">
-                <label>Size</label>
-                <input type="range" id="ie-draw-size" min="1" max="200" value="${t.brushSize}">
+                <label title="[ / ]">Size</label>
+                <input type="range" id="ie-draw-size" min="1" max="200" value="${t.brushSize}" title="[ / ]">
                 <span id="ie-draw-size-lbl">${t.brushSize}px</span>
             </div>
             <div class="ie-props-row">
@@ -2258,7 +2306,7 @@ class ImageTab {
                 <label>Brush</label>
                 <span style="font-size:11px;color:var(--it-text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
                     title="${t.brushName ?? "Circle"}">${t.brushName ?? "Circle"}</span>
-                <button class="it-btn it-btn-sm" id="ie-draw-select-brush" style="font-size:10px;padding:1px 6px;flex-shrink:0;" ${this._abrAvailable ? "" : "disabled"}>Select</button>
+                <button class="it-btn it-btn-sm" id="ie-draw-select-brush" title="B" style="font-size:10px;padding:1px 6px;flex-shrink:0;" ${this._abrAvailable ? "" : "disabled"}>Select</button>
                 ${t.brushImage ? `<button class="it-btn it-btn-sm" id="ie-draw-clear-brush" style="font-size:10px;padding:1px 5px;flex-shrink:0;">✕</button>` : ""}
             </div>
             ${t.brushImage ? `
@@ -2285,28 +2333,17 @@ class ImageTab {
             </div>` : ""}
         `;
 
-        document.getElementById("ie-draw-mode-draw")?.addEventListener("click", () => {
-            this._drawTool.mode = "draw";
-            this._drawTool._stamp = null;
-            this._renderDrawProps();
-        });
-        document.getElementById("ie-draw-mode-erase")?.addEventListener("click", () => {
-            this._drawTool.mode = "erase";
-            this._drawTool._stamp = null;
-            this._renderDrawProps();
-        });
+        document.getElementById("ie-draw-mode-draw")?.addEventListener("click", () => this._setDrawMode("draw"));
+        document.getElementById("ie-draw-mode-erase")?.addEventListener("click", () => this._setDrawMode("erase"));
         document.getElementById("ie-draw-color")?.addEventListener("input", e => {
-            this._drawTool.color = e.target.value;
-            this._drawTool._stamp = null;
-            this._drawTool._imgStamp = null;
+            this._setDrawColor(e.target.value);
+            this._drawPalette.syncColor(e.target.value);
         });
         document.getElementById("ie-draw-eyedropper")?.addEventListener("click", () => {
             this._setEyedropperActive(!this._eyedropperActive);
         });
         document.getElementById("ie-draw-size")?.addEventListener("input", e => {
-            this._drawTool.brushSize = parseInt(e.target.value);
-            document.getElementById("ie-draw-size-lbl").textContent = e.target.value + "px";
-            this._drawTool._stamp = null;
+            this._setDrawBrushSize(parseInt(e.target.value));
         });
         document.getElementById("ie-draw-hard")?.addEventListener("input", e => {
             this._drawTool.hardness = parseInt(e.target.value) / 100;
@@ -5200,6 +5237,8 @@ class ImageTab {
                 if (wrap && !this._panning) wrap.style.cursor = "grab";
             }
             if (e.key === "Escape" && this._eyedropperActive) this._setEyedropperActive(false);
+            const brushPicker = document.getElementById("cc-abr-picker-overlay");
+            if (e.key === "Escape") brushPicker?.remove();
             if (e.ctrlKey && e.key === "z") { e.preventDefault(); this._undo(); }
             if (e.ctrlKey && e.key === "y") { e.preventDefault(); this._redo(); }
             if (this._activeTool === "mask" && this._maskSubtool === "vector") {
@@ -5207,10 +5246,20 @@ class ImageTab {
             }
             if (!e.ctrlKey && !e.target.closest("input, textarea, select")) {
                 if (e.key === "v") this._setActiveTool("select");
-                if (e.key === "b") this._setActiveTool("draw");
+                if (e.key === "b") {
+                    if (this._activeTool === "draw") this._toggleDrawBrushPicker();
+                    else this._setActiveTool("draw");
+                }
                 if (e.key === "t") this._setActiveTool("text");
                 if (e.key === "s") this._setActiveTool("shape");
                 if (e.key === "g") this._setActiveTool("fill");
+                if (this._activeTool === "draw" && !brushPicker && !e.altKey && !e.metaKey) {
+                    if (e.key === "d") this._setDrawMode("draw");
+                    if (e.key === "e") this._setDrawMode("erase");
+                    if (e.key === "x") this._drawPalette.toggleWell();
+                    if (e.key === "[") this._stepDrawBrushSize(-1);
+                    if (e.key === "]") this._stepDrawBrushSize(1);
+                }
                 // Delete/Backspaceで選択オブジェクト削除
                 if ((e.key === "Delete" || e.key === "Backspace") && this._activeTool === "select") {
                     const layer = this._selectTool?.getSelectedLayer();
@@ -6629,7 +6678,7 @@ class ImageTab {
             this._drawTool,
             () => this._renderDrawProps(),
             "MASK EDITOR ONE (COLOR)",
-            this._drawTool?.color ?? "#ff0000",
+            this._drawTool?.color ?? "#000000",
         );
     }
 }
