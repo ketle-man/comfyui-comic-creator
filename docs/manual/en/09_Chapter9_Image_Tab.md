@@ -92,6 +92,21 @@ Press Delete to delete the selected layer (nothing is deleted when only one laye
 
 Set the brush color, size, and opacity, then drag to paint. Press the eyedropper next to the color picker and click the canvas to pick that color. Pen pressure is supported.
 
+When the Draw tool is selected, a color palette appears in the row below the tools.
+
+- **Color 1 / Color 2**: the color you paint with (Color 1) and a spare color (Color 2). They start as black and white.
+- **Basic**: 20 common colors. Click one to use it.
+- **Custom**: 20 slots for your own colors. Click an empty slot to register the current color.
+
+Right-click a color for "Register current color", "Edit color...", "Delete" (custom colors), and "Restore default color" (a basic color you changed). Registered colors are saved in the browser, not in the work data.
+
+While using the Draw tool, these keys work (not while typing in a text field):
+
+- **D / E**: switch to Draw / Erase.
+- **X**: swap Color 1 and Color 2.
+- **[ / ]**: make the brush smaller / larger.
+- **B**: open or close the brush picker (from other tools, B switches to Draw).
+
 ### Shape: drawing shapes
 
 Draw rectangles, ellipses, lines, chains, ropes, My Curve, and more. When "Same Layer" at the left of the options bar is on (default), shapes are drawn on the same layer instead of adding a new layer each time. Rectangles and ellipses can be filled with a solid color, gradient, or texture.

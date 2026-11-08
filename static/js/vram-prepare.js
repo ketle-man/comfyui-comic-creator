@@ -171,23 +171,57 @@ export async function freeComfyModels(base) {
     await new Promise(res => setTimeout(res, 1500));
 }
 
-/** Chat TE でモデルを使う直前に呼ぶ。前回の Chat TE 以降に ComfyUI で何か生成していれば、先にモデルを降ろす */
-export async function beforeChatTe(base) {
+// Chat TE の実行中を表す { base, promise, done }。実行中に画像生成が始まると2つが同時に GPU を使ってしまう
+// （2026-11-08 実測: 全体読みの途中で MOSS 生成が始まり、Chat TE が失敗・aimdo の resident_count sync error）ため、
+// 画像生成側はこれが終わるまで待つ
+let _chatTeRunning = null;
+const QUEUE_WAIT_MAX_MS = 15 * 60 * 1000;
+
+/** ComfyUI のキュー（実行中・待機中）が空になるまで待つ。取得できなければ待たない */
+async function waitComfyIdle(base, onWait) {
+    const t0 = Date.now();
+    let notified = false;
+    while (Date.now() - t0 < QUEUE_WAIT_MAX_MS) {
+        let q;
+        try { q = await (await fetch(`${base}/queue`)).json(); } catch (_) { return; }
+        if (!(q.queue_running?.length) && !(q.queue_pending?.length)) return;
+        if (!notified) { notified = true; onWait?.(); }
+        await new Promise(res => setTimeout(res, 1000));
+    }
+}
+
+/**
+ * Chat TE でモデルを使う直前に呼ぶ（必ず afterChatTe と対にする）。
+ * ComfyUI で生成中なら終わるまで待ち、前回の Chat TE 以降に何か生成していれば先にモデルを降ろす。
+ * onWait: 生成の終了待ちに入ったときに一度だけ呼ばれる（進行表示用）
+ */
+export async function beforeChatTe(base, onWait) {
     base = normBase(base);
+    if (_chatTeRunning) await _chatTeRunning.promise;   // 二重実行はしない想定だが念のため
+    let done;
+    _chatTeRunning = { base, promise: new Promise(res => { done = res; }), done: () => done() };
+    await waitComfyIdle(base, onWait);
     const id = await latestPromptId(base);
     if (_chatTe && _chatTe.base === base && id !== null && id === _chatTe.lastPromptId) return false;   // Chat TE のモデルだけが載っている
     try { await freeComfyModels(base); return true; }
     catch (e) { console.warn('[vram] free before Chat TE failed:', e); return false; }
 }
 
-/** Chat TE を使った直後に呼ぶ（次の画像生成の前に降ろす目印） */
+/** Chat TE を使い終わったら（失敗時も）呼ぶ。次の画像生成の前に降ろす目印を付け、待っている画像生成を進める */
 export async function afterChatTe(base) {
     base = normBase(base);
     _chatTe = { base, lastPromptId: await latestPromptId(base) };
+    const r = _chatTeRunning;
+    _chatTeRunning = null;
+    r?.done();
 }
 
-/** ComfyUI で画像を生成する直前に呼ぶ。同じ ComfyUI で Chat TE を使った後なら、そのモデルを降ろす */
+/** ComfyUI で画像を生成する直前に呼ぶ。Chat TE の実行中なら終わるまで待ち、同じ ComfyUI で使った後ならそのモデルを降ろす */
 async function freeAfterChatTe() {
+    if (_chatTeRunning && _chatTeRunning.base === normBase(location.origin)) {
+        showNotice('⏳ ' + t('vram.chatteWaiting'), false);
+        await _chatTeRunning.promise;
+    }
     if (!_chatTe || _chatTe.base !== normBase(location.origin)) return;
     const base = _chatTe.base;
     _chatTe = null;

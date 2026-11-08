@@ -308,7 +308,7 @@ MOSS-Image タブ上部のステータスが「利用可能」になれば準備
 
 ## マニュアル
 
-画像なしの入門マニュアル（v1.66.0対応）を同梱しています。日本語は [docs/manual/ja/](docs/manual/ja/)、英語は [docs/manual/en/](docs/manual/en/) です。目次は各フォルダの `00_目次.md`（英語は `00_Contents.md`）から。
+画像なしの入門マニュアル（v1.69.1対応）を同梱しています。日本語は [docs/manual/ja/](docs/manual/ja/)、英語は [docs/manual/en/](docs/manual/en/) です。目次は各フォルダの `00_目次.md`（英語は `00_Contents.md`）から。
 
 ## アーキテクチャ
 

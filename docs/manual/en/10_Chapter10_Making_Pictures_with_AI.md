@@ -288,8 +288,28 @@ Choose what to draw under "Draw as": Object (green), Character (pink), Text (lig
 - **Click inside an unselected box**: select it.
 - **Shift + drag**: always draw a new box.
 - **Delete key**: delete the selected box.
+- **Ctrl + Z (or the "Undo" button)**: bring back deleted boxes.
 
 "Bring to front", "Bring forward", "Send backward", and "Send to back" change the stacking order (the first and last jump straight to the top or bottom). "New", to the left of "Draw as", removes every box and starts a blank layout. When you select a box, "Selected item" appears in the middle where you can edit its type, caption (English recommended), and more.
+
+### Only moving boxes: "Select"
+
+Choose "Select", the leftmost option under "Draw as", and dragging (even Shift + drag) no longer draws new boxes. This prevents drawing a small box by accident when you meant to move one.
+
+- **Drag inside a box**: move it, even if it is not selected.
+- **Drag a box's corner**: resize it.
+- **Click an empty spot**: clear the selection (no box is drawn).
+
+To draw again, choose "Object", "Panel", "Character", or "Text". The choice is saved in the browser and kept the next time you open the tab.
+
+### Undoing a delete
+
+"Undo", to the right of the delete button (or Ctrl + Z), brings deleted boxes back to their original position and stacking order. You can go back up to 30 steps.
+
+- It covers boxes removed with the delete button, the Delete key, "New", and "Clear Imported".
+- Only deletions are undone. If you moved other boxes after deleting, those moves stay.
+- Importing (such as "Import panels from current page") or sending from the OCR tab clears the earlier deletions from the undo history.
+- The undo history is lost when you reload the page.
 
 ### Text boxes
 
@@ -412,6 +432,17 @@ A status line at the top of the tab shows "OCR: ready", "OCR: no OCR model found
 3. Press "Run detection". After a while boxes appear on the image and the text is listed under "Results" on the right.
 4. To fix a wrong reading, edit the text in the list. You can drag a box to move it and drag its corners to resize it.
 
+### Fixing boxes: "Select" / "Draw" and "Undo"
+
+The toolbar above the image has buttons for fixing boxes.
+
+- **Select / Draw**: in "Draw", dragging on an empty spot draws a box of the "Draw type". In "Select", dragging never draws a box and a click only clears the selection (you can move and resize boxes in either mode). Changing the "Draw type" switches back to "Draw".
+- **Delete**: remove the selected boxes (same as the Delete key). Shift + click selects several boxes.
+- **Clear all**: remove every box.
+- **Undo**: bring back boxes removed with Delete or Clear all (same as Ctrl + Z, up to 30 steps). Opening another image or running detection again clears the earlier deletions from the undo history.
+
+Your choice of "Select" or "Draw" is saved in the browser.
+
 > **Caution**
 > The first model you use takes a while to load, and switching models can run GPU memory (VRAM) short. If "VRAM Management (Ollama)" in the "Settings" tab (Chapter 13) is on, other Ollama models are unloaded before detection.
 
@@ -465,6 +496,14 @@ It uses the ComfyUI custom node "Chat TE" ([comfyui-chat-te](https://github.com/
 > **Caution**
 > The whole-image read loads a large model on the ComfyUI side. If Ollama models stay in GPU memory, loading can fail. It is safer to turn on "VRAM Management (Ollama)".
 
+> **Caution**
+> If the whole-image read model (Qwen3-VL-8B, about 10 GB) and an image-generation model such as MOSS-Image are in GPU memory at the same time, ComfyUI can stop with an error on a PC with about 12 GB of GPU memory (once it stops, nothing can be generated until you restart ComfyUI). Since v1.69.0 this is handled automatically, even when "VRAM Management (Ollama)" is off:
+>
+> - Before the whole-image read, the image-generation models loaded in ComfyUI are unloaded. If ComfyUI is generating, it waits until that finishes ("Waiting for ComfyUI to finish generating..." is shown).
+> - When you generate images after a whole-image read, the read model is unloaded before generating. If you start generating during a whole-image read, generation waits until the read finishes.
+>
+> The first run after switching takes a few extra seconds to load models.
+
 ### Using the results
 
 - **Copy all text**: copies the text in reading order (top to bottom, right to left).
@@ -487,3 +526,5 @@ Pressing "Insert" in the Layout tab's "Text" tool, or in the Image tab's text to
 > - In the layout, "New" removes every box and "Clear Imported" removes only imported ones. Stacking order can also be changed with "Bring to front" and "Send to back"
 > - The "Local" mode of Nanobanana+ generates with Workflow Studio workflows. With Qwen Image 2.1, the inputs grow or shrink to match the number of images you add (up to 10)
 > - The OCR tab reads the text and positions in an image with Ollama models. For covers with lots of vertical text, replacing box text with the "Whole-image read (Chat TE)" helps. Results can be sent to MOSS-Image or inserted as text
+> - In MOSS-Image and OCR, choose "Select" so that dragging never draws a box. Deleted boxes come back with "Undo" (Ctrl + Z)
+> - When you use the whole-image read (Chat TE) and image generation one after the other, the models in ComfyUI are swapped automatically (the first run after switching takes a few extra seconds)

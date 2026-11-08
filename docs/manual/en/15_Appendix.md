@@ -61,8 +61,18 @@ In the Layout tab, use the "Undo" button in the control bar to undo.
 | Shift + drag | Always draw a new box |
 | Shift + click (without dragging) | Add a box to (or remove it from) the selection; selected boxes move together |
 | Delete | Delete the selected box |
+| Ctrl + Z | Bring back deleted boxes |
 | Esc / Ctrl + Enter | Finish typing in a text box |
 | Press a text box twice quickly | Edit its text again |
+
+### OCR tab
+
+| Operation | Effect |
+| --- | --- |
+| Shift + click | Add a box to (or remove it from) the selection |
+| Delete | Delete the selected boxes |
+| Ctrl + Z | Bring back deleted boxes |
+| Ctrl + V | Paste and open an image |
 
 ### Page tab
 
@@ -81,6 +91,9 @@ In the Layout tab, use the "Undo" button in the control bar to undo.
 | Delete / Backspace | Delete the selected layer (Select tool) |
 | Enter / Ctrl+Enter | New line / confirm in the text input box |
 | Esc | Cancel the eyedropper |
+| D / E | Switch to Draw / Erase (Draw tool) |
+| X | Swap Color 1 and Color 2 (Draw tool) |
+| [ / ] | Make the brush smaller / larger (Draw tool) |
 
 ### 3D Pose and 3D Text
 

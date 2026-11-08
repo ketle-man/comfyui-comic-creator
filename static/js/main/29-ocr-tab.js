@@ -531,27 +531,32 @@ async function loadChatteModels(saved) {
 /** 画像全体を読んで行の配列を返す。モデルが未ロード・別モデルなら先にロードする */
 async function chatteRead(prog) {
     const base = chatteBase(), model = $('ocr-chatte-model').value;
-    // MOSS 等の画像生成モデルが ComfyUI に残ったまま 8B を読むと、VRAM が足りず GPU エラーで ComfyUI が落ちるため先に降ろす
+    // MOSS 等の画像生成モデルが ComfyUI に残ったまま 8B を読むと、VRAM が足りず GPU エラーで ComfyUI が落ちるため先に降ろす。
+    // ComfyUI で生成中なら終わるまで待つ。実行中に始まった画像生成は、afterChatTe まで待たされる
     prog.textContent = t('ocr.progressChatteFree');
-    await beforeChatTe(base);
-    const st = await (await fetch(`${base}/chat_te/status`)).json();
-    if (!st.loaded || st.model_name !== model) {
-        prog.textContent = t('ocr.progressChatteLoad', model);
-        const r = await fetch(`${base}/chat_te/load`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ model_name: model }) });
-        if (!r.ok) throw new Error(`HTTP ${r.status} ${((await r.json().catch(() => ({}))).error || '').slice(0, 200)}`);
+    let res;
+    try {
+        await beforeChatTe(base, () => { prog.textContent = t('ocr.progressChatteWaitQueue'); });
+        const st = await (await fetch(`${base}/chat_te/status`)).json();
+        if (!st.loaded || st.model_name !== model) {
+            prog.textContent = t('ocr.progressChatteLoad', model);
+            const r = await fetch(`${base}/chat_te/load`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ model_name: model }) });
+            if (!r.ok) throw new Error(`HTTP ${r.status} ${((await r.json().catch(() => ({}))).error || '').slice(0, 200)}`);
+        }
+        prog.textContent = t('ocr.progressChatte');
+        res = await fetch(`${base}/v1/chat/completions`, {
+            method: 'POST', headers: JSON_HEADERS,
+            body: JSON.stringify({
+                model, max_tokens: 2048, temperature: 0.1, enable_thinking: chatTeThinking(model),
+                messages: [{ role: 'user', content: [
+                    { type: 'text', text: CHATTE_PROMPT },
+                    { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${O.img.b64}` } },
+                ] }],
+            }),
+        });
+    } finally {
+        await afterChatTe(base);   // 失敗時も8Bが載っている可能性があるため必ず印を付け、待っている画像生成を進める
     }
-    prog.textContent = t('ocr.progressChatte');
-    const res = await fetch(`${base}/v1/chat/completions`, {
-        method: 'POST', headers: JSON_HEADERS,
-        body: JSON.stringify({
-            model, max_tokens: 2048, temperature: 0.1, enable_thinking: chatTeThinking(model),
-            messages: [{ role: 'user', content: [
-                { type: 'text', text: CHATTE_PROMPT },
-                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${O.img.b64}` } },
-            ] }],
-        }),
-    });
-    await afterChatTe(base);   // 失敗時も8Bが載っている可能性があるため、結果を見る前に印を付ける
     if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
     const lines = parseChatTeLines((await res.json()).choices?.[0]?.message?.content);
     if (!lines.length) throw new Error(t('ocr.errChatteEmpty'));

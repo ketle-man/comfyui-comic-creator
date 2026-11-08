@@ -2,6 +2,29 @@
 
 ---
 
+## 2026-11-08（v1.69.1: Chat TE と画像生成が同時に動かないように待つ、マニュアル v1.69.1 対応）
+
+### Chat TE の実行中に画像生成が始まる問題
+
+**症状（Kapture 確認時のログ）**: v1.69.0 の `/free` は Chat TE の前に動いていた（17:06:42 `Using RAM pressure cache.`）が、17:06:44 に Qwen3-VL-8B を読んで全体読みをしている最中の 17:06:52 に MOSS 生成が始まり、2つが同時に GPU を使った。17:07:00 に `Chat TE: generation failed`（HTTP 500）。MOSS は完了したが、comfy-aimdo の `resident_count sync error` 警告が続いた。
+
+**原因**: v1.69.0 は「Chat TE が終わった後」の生成と「生成の後」の Chat TE しか想定していなかった。目印（`afterChatTe`）は応答後に付くため、実行中に始まった生成は何も待たずに進んでいた。Chat TE 側も、ComfyUI のキューで生成中かどうかを見ていなかった。
+
+**修正**（`vram-prepare.js`・`29-ocr-tab.js`）
+- `beforeChatTe(base, onWait)` で `_chatTeRunning`（Promise）を立て、`/queue` の実行中・待機中が空になるまで 1 秒ごとに待つ（最大 15 分、待ちに入ったら進行表示「ComfyUIの生成が終わるのを待っています…」）。その後、従来どおり必要なら `/free`。
+- `afterChatTe` で目印を付けてから `_chatTeRunning` を解除する。`chatteRead` は status/load/chat を try/finally で囲み、失敗時も必ず呼ぶ。
+- 画像生成前の `freeAfterChatTe` は、同じオリジンで Chat TE が実行中なら通知（「OCRのChat TE（全体読み）が終わるまで生成を待ちます」）を出して終わるまで待ち、その後 `/free`。
+- i18n（日英中）`ocr.progressChatteWaitQueue`・`vram.chatteWaiting`、ヘルプ（全体読み）に追記。
+
+**検証**: ページを再読み込みせず、Kapture で `vram-prepare.js` をクエリ付きで別インスタンスとして import して確認。`beforeChatTe` 後に呼んだ `prepareVramForGeneration` は 2 秒後も未完了で、`afterChatTe` の後に `/free` して完了した。ComfyUI で生成中に Chat TE を始めたときの待ちは未確認。
+
+### マニュアル v1.69.1 対応
+
+- 原稿（リポジトリ外 `manual/{ja,en}`）と同梱版（`docs/manual/{ja,en}`）を v1.69.1 に更新。第9章 Draw にカラーパレットとショートカット（v1.67.0 で未反映だった）、第10章 MOSS-Image に「選択」と削除の取り消し、OCR に「枠を直す」節と Chat TE の VRAM 対策の注意、第14章に ComfyUI が止まる症状と枠を誤って描く症状、付録に OCR タブ・Draw ツールのキー操作を追加。
+- 同梱版は原稿から `［画像：〇〇］`／`[Image: ...]` 行と隣の空行、日本語目次の版の説明行を除いて生成（改訂前の原稿から現在の同梱版を完全に再現できることを確認してから実行）。README のマニュアル節を「v1.69.1対応」に。Kindle 版は対象外（追加の画像プレースホルダーはなし）。
+
+---
+
 ## 2026-11-08（v1.69.0: OCR・MOSS-Image の bbox に選択モードと削除の取り消し、Chat TE と画像生成の VRAM 重なりで ComfyUI が落ちる問題の対策）
 
 ### 選択モード（不意の描画を防ぐ）
