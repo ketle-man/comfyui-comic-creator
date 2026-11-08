@@ -11,7 +11,7 @@ import { t } from '../i18n.js';
 import { getBackendDefaultUrl } from '../auto-ai-client.js';
 import { importOcrItems } from '../moss.js';
 import { switchTab } from './01-state.js';
-import { prepareVramForGeneration, getVramSettings } from '../vram-prepare.js';
+import { prepareVramForGeneration, getVramSettings, beforeChatTe, afterChatTe } from '../vram-prepare.js';
 import {
     OCR_MODEL_DEFAULT, LAYOUT_MODEL_DEFAULT, OCR_CLASSES, OCR_CLASS_KEYS, VLM_CLASS_KEYS, OCR_PROMPT,
     buildLayoutPrompt, parseOcrOutput, parseLayoutOutput, mergeDetections, toMossItems, collectText, sortReading,
@@ -157,6 +157,7 @@ async function loadImageFile(file) {
     const b64 = cv.toDataURL('image/jpeg', 0.92).split(',')[1];
     O.img = { url, w: im.naturalWidth, h: im.naturalHeight, b64, el: im };
     O.boxes = []; O.selId = null; O.multi.clear(); O.nextId = 1;
+    clearUndo();   // 別の画像の枠を戻さないように（idも1から振り直すため衝突する）
     $('ocr-overall').value = '';
     $('ocr-run-btn').disabled = false;
     $('ocr-progress').textContent = '';
@@ -262,9 +263,25 @@ function stagePoint(e) {
     return { x: clamp01((e.clientX - r.left) / r.width), y: clamp01((e.clientY - r.top) / r.height) };
 }
 
+// 「選択」モード: 空き領域をドラッグしても枠を描かない（不意の描画を防ぐ）。描画種別を変えると描画モードに戻る
+const STAGE_MODE_KEY = 'ccc_ocr_stage_mode';
+const isSelectMode = () => document.querySelector('#ocr-stage-mode .moss-type-btn.active')?.dataset.mode === 'select';
+function setStageMode(mode) {
+    document.querySelectorAll('#ocr-stage-mode .moss-type-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    try { localStorage.setItem(STAGE_MODE_KEY, mode); } catch (_) { /* ignore */ }
+}
+function initStageModeButtons() {
+    let saved = null;
+    try { saved = localStorage.getItem(STAGE_MODE_KEY); } catch (_) { /* ignore */ }
+    if (saved === 'select' || saved === 'draw') setStageMode(saved);
+    document.querySelectorAll('#ocr-stage-mode .moss-type-btn').forEach(b => b.addEventListener('click', () => setStageMode(b.dataset.mode)));
+    $('ocr-draw-class').addEventListener('change', () => setStageMode('draw'));
+}
+
 function initStageInteraction() {
     const stage = $('ocr-stage');
     let drag = null;
+    initStageModeButtons();
     stage.addEventListener('pointerdown', (e) => {
         if (!O.img || e.button !== 0) return;
         const p = stagePoint(e);
@@ -285,6 +302,10 @@ function initStageInteraction() {
                 return { b: sb, el: stage.querySelector(`.ocr-box[data-id="${id}"]`), x1: sb.x1, y1: sb.y1, x2: sb.x2, y2: sb.y2 };
             });
             drag = { mode: 'move', items, x0: p.x, y0: p.y };
+        } else if (isSelectMode()) {
+            // 選択モードで空き領域を押した = 選択解除のみ
+            if (!e.shiftKey && (O.selId !== null || O.multi.size)) { O.selId = null; O.multi.clear(); markSelected(); }
+            drag = null;
         } else {
             drag = { mode: 'draw', x0: p.x, y0: p.y, cls: $('ocr-draw-class').value, ghost: null };
         }
@@ -359,16 +380,54 @@ function initStageInteraction() {
         if (f) { e.preventDefault(); loadImageFile(f).catch(err => alert(err.message)); }
     });
     document.addEventListener('keydown', (e) => {
-        if (!$('ocr-tab')?.classList.contains('active') || e.key !== 'Delete') return;
+        if (!$('ocr-tab')?.classList.contains('active')) return;
         if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
-        deleteSelected();
+        if (e.key === 'Delete') deleteSelected();
+        // Ctrl+Z（Mac は Cmd+Z）で削除を元に戻す
+        else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z' && undoStack.length) {
+            e.preventDefault();
+            undoDelete();
+        }
     });
+}
+
+// ─── 削除の取り消し ───
+// 削除した枠を「元の並び位置」とともに積む。全体のスナップショットではないため、削除後に他の枠を動かしても巻き戻らない
+const UNDO_MAX = 30;
+const undoStack = [];
+function updateUndoBtn() { const b = $('ocr-box-undo-btn'); if (b) b.disabled = !undoStack.length; }
+function clearUndo() { undoStack.length = 0; updateUndoBtn(); }
+
+/** pred に一致する枠を削除し、取り消し用に記録する */
+function removeBoxes(pred) {
+    const entries = [];
+    O.boxes.forEach((b, index) => { if (pred(b)) entries.push({ b: structuredClone(b), index }); });
+    if (!entries.length) return;
+    undoStack.push(entries);
+    if (undoStack.length > UNDO_MAX) undoStack.shift();
+    O.boxes = O.boxes.filter(b => !pred(b));
+    O.selId = null; O.multi.clear();
+    updateUndoBtn();
+}
+
+function undoDelete() {
+    const entries = undoStack.pop();
+    updateUndoBtn();
+    if (!entries) return;
+    const restored = [];
+    for (const { b, index } of entries) {   // 元の位置の昇順で差し込むと、元の並びに戻る
+        if (O.boxes.some(x => x.id === b.id)) continue;
+        O.boxes.splice(Math.min(index, O.boxes.length), 0, b);
+        restored.push(b.id);
+    }
+    O.selId = restored[0] ?? null; O.multi = new Set(restored.slice(1));
+    renderAll();
+    saveSettings();
 }
 
 function deleteSelected() {
     if (!selBox()) return;
-    O.boxes = O.boxes.filter(b => !isSel(b.id));
-    O.selId = null; O.multi.clear();
+    removeBoxes(b => isSel(b.id));
     renderAll();
 }
 
@@ -472,6 +531,9 @@ async function loadChatteModels(saved) {
 /** 画像全体を読んで行の配列を返す。モデルが未ロード・別モデルなら先にロードする */
 async function chatteRead(prog) {
     const base = chatteBase(), model = $('ocr-chatte-model').value;
+    // MOSS 等の画像生成モデルが ComfyUI に残ったまま 8B を読むと、VRAM が足りず GPU エラーで ComfyUI が落ちるため先に降ろす
+    prog.textContent = t('ocr.progressChatteFree');
+    await beforeChatTe(base);
     const st = await (await fetch(`${base}/chat_te/status`)).json();
     if (!st.loaded || st.model_name !== model) {
         prog.textContent = t('ocr.progressChatteLoad', model);
@@ -489,6 +551,7 @@ async function chatteRead(prog) {
             ] }],
         }),
     });
+    await afterChatTe(base);   // 失敗時も8Bが載っている可能性があるため、結果を見る前に印を付ける
     if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
     const lines = parseChatTeLines((await res.json()).choices?.[0]?.message?.content);
     if (!lines.length) throw new Error(t('ocr.errChatteEmpty'));
@@ -550,7 +613,7 @@ async function onRereadSelected() {
 async function prepareVram(prog) {
     if (getVramSettings().mode === 'off') return;
     prog.textContent = t('ocr.progressVram');
-    await prepareVramForGeneration([baseUrl()]);
+    await prepareVramForGeneration([baseUrl()], { comfyGen: false });
 }
 
 // ─── モード（用途別プリセット） ───
@@ -675,6 +738,7 @@ async function onRun() {
             vlmBoxes = parseLayoutOutput(raw, O.img.w, O.img.h).filter(b => classes.includes(b.cls));
         }
         O.boxes = mergeDetections(ocrBoxes, vlmBoxes).map(b => ({ ...b, id: O.nextId++ }));
+        clearUndo();   // 検出し直した後に前回の枠が戻ると混ざるため
         O.selId = null; O.multi.clear();
         renderAll();
         let rereadError = '';
@@ -774,8 +838,9 @@ async function initOcrTabOnce() {
     $('ocr-box-reread-btn').addEventListener('click', onRereadSelected);
     $('ocr-box-clear-btn').addEventListener('click', () => {
         if (!O.boxes.length || !confirm(t('ocr.confirmClear'))) return;
-        O.boxes = []; O.selId = null; O.multi.clear(); renderAll();
+        removeBoxes(() => true); renderAll();
     });
+    $('ocr-box-undo-btn').addEventListener('click', undoDelete);
     $('ocr-run-btn').addEventListener('click', onRun);
     $('ocr-overall-btn').addEventListener('click', onOverallBtn);
     $('ocr-chatte-btn').addEventListener('click', onChatteBtn);

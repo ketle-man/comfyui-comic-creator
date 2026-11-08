@@ -145,11 +145,65 @@ export function initVramSettings() {
 
 let _lastShortNote = '';
 
+// ─── ComfyUI 内のモデルの重なり対策（OCRタブの Chat TE ↔ 画像生成） ───
+// Chat TE（chat_TE ノード）は Qwen3-VL-8B（約10GB）を ComfyUI の同じプロセスに読む。MOSS 等の画像生成モデルが
+// 残ったまま読むと 12GB 級の GPU では CUDA illegal memory access（GPU リセット）になり、ComfyUI が再起動まで
+// 使えなくなる（2026-11-08 実測）。そこで、片方を使う前にもう片方を ComfyUI 標準の /free で降ろす。
+// 「VRAM調整」設定（Ollama 向け）が off でも、落ちるのを防ぐために常に行う。
+const normBase = (b) => String(b || location.origin).replace(/\/+$/, '');
+let _chatTe = null;   // 直近の Chat TE 使用 { base, lastPromptId }。画像生成の前に降ろしたら null に戻す
+
+/** ComfyUI の履歴の最新 prompt_id（取得できなければ null）。Chat TE の API 呼び出しは履歴に残らない */
+async function latestPromptId(base) {
+    try {
+        const h = await (await fetch(`${base}/history?max_items=1`)).json();
+        return Object.keys(h || {})[0] ?? '';
+    } catch (_) { return null; }
+}
+
+/** ComfyUI に読み込まれているモデルをすべて降ろす（標準の POST /free）。実処理はキューの処理スレッドで非同期に行われるので少し待つ */
+export async function freeComfyModels(base) {
+    const r = await fetch(`${normBase(base)}/free`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unload_models: true, free_memory: true }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    await new Promise(res => setTimeout(res, 1500));
+}
+
+/** Chat TE でモデルを使う直前に呼ぶ。前回の Chat TE 以降に ComfyUI で何か生成していれば、先にモデルを降ろす */
+export async function beforeChatTe(base) {
+    base = normBase(base);
+    const id = await latestPromptId(base);
+    if (_chatTe && _chatTe.base === base && id !== null && id === _chatTe.lastPromptId) return false;   // Chat TE のモデルだけが載っている
+    try { await freeComfyModels(base); return true; }
+    catch (e) { console.warn('[vram] free before Chat TE failed:', e); return false; }
+}
+
+/** Chat TE を使った直後に呼ぶ（次の画像生成の前に降ろす目印） */
+export async function afterChatTe(base) {
+    base = normBase(base);
+    _chatTe = { base, lastPromptId: await latestPromptId(base) };
+}
+
+/** ComfyUI で画像を生成する直前に呼ぶ。同じ ComfyUI で Chat TE を使った後なら、そのモデルを降ろす */
+async function freeAfterChatTe() {
+    if (!_chatTe || _chatTe.base !== normBase(location.origin)) return;
+    const base = _chatTe.base;
+    _chatTe = null;
+    try {
+        await freeComfyModels(base);
+        showNotice('🧹 ' + t('vram.chatteFreed'), false);
+    } catch (e) { console.warn('[vram] free after Chat TE failed:', e); }
+}
+
 /**
  * 画像生成の直前に呼ぶ。設定が off なら何もしない。失敗しても throw しない（生成は続ける）。
  * 何かアンロードしたとき・目標に届かないとき・失敗したときだけ通知する（連続生成で同じ警告は繰り返さない）。
+ * comfyGen=false: ComfyUI で画像を生成しない呼び出し（OCRタブの Ollama 検出など）。Chat TE のモデルは降ろさない
  */
-export async function prepareVramForGeneration(extraUrls = []) {
+export async function prepareVramForGeneration(extraUrls = [], { comfyGen = true } = {}) {
+    if (comfyGen) await freeAfterChatTe();
     const settings = getVramSettings();
     if (settings.mode === 'off') return null;
     try {

@@ -2141,6 +2141,7 @@
                       <button id="moss-layout-new-btn" class="btn small danger" data-i18n="moss.newLayout" data-i18n-title="moss.newLayoutTitle">新規作成</button>
                       <span style="font-size:12px;" data-i18n="moss.drawType">描画種別:</span>
                       <div class="moss-type-btns" id="moss-draw-type">
+                        <button type="button" class="moss-type-btn" data-type="select" data-i18n="moss.typeSelect" data-i18n-title="moss.typeSelectTitle">選択</button>
                         <button type="button" class="moss-type-btn active" data-type="object" data-i18n="moss.typeObject">物体</button>
                         <button type="button" class="moss-type-btn" data-type="panel" data-i18n="moss.typePanel">コマ</button>
                         <button type="button" class="moss-type-btn" data-type="character" data-i18n="moss.typeCharacter">キャラ</button>
@@ -2155,6 +2156,7 @@
                       <button id="moss-item-down-btn" class="btn small secondary" disabled data-i18n="moss.itemBack">背面へ</button>
                       <button id="moss-item-bottom-btn" class="btn small secondary" disabled data-i18n="moss.itemBottom">最背面</button>
                       <button id="moss-item-del-btn" class="btn small danger" disabled data-i18n="common.delete">削除</button>
+                      <button id="moss-item-undo-btn" class="btn small secondary" disabled data-i18n="bbox.undoDelete" data-i18n-title="bbox.undoDeleteTitle">元に戻す</button>
                     </div>
                       <div style="font-size:11px; color:#888; margin-bottom:6px;" data-i18n="moss.drawHint">キャンバスをドラッグで追加 / 枠をドラッグで移動・角で拡縮</div>
                     <div id="moss-layout-wrap" style="width:100%; display:flex; justify-content:center;">
@@ -2366,11 +2368,16 @@
                   <div class="ocr-toolbar">
                     <button id="ocr-open-btn" class="btn small secondary" data-i18n="ocr.openImage">画像を開く</button>
                     <input type="file" id="ocr-file" accept="image/*" style="display:none" />
+                    <div class="moss-type-btns" id="ocr-stage-mode">
+                      <button type="button" class="moss-type-btn" data-mode="select" data-i18n="ocr.modeSelect" data-i18n-title="ocr.modeSelectTitle">選択</button>
+                      <button type="button" class="moss-type-btn active" data-mode="draw" data-i18n="ocr.modeDraw" data-i18n-title="ocr.modeDrawTitle">描画</button>
+                    </div>
                     <span style="font-size:12px;" data-i18n="ocr.drawType">描画種別:</span>
                     <select id="ocr-draw-class" class="comfyui-select" style="width:auto"></select>
                     <button id="ocr-box-reread-btn" class="btn small secondary" disabled data-i18n="ocr.rereadBox" data-i18n-title="ocr.rereadBoxTitle">選択枠を読み直す</button>
                     <button id="ocr-box-del-btn" class="btn small danger" disabled data-i18n="common.delete">削除</button>
                     <button id="ocr-box-clear-btn" class="btn small danger" data-i18n="ocr.clearBoxes">全クリア</button>
+                    <button id="ocr-box-undo-btn" class="btn small secondary" disabled data-i18n="bbox.undoDelete" data-i18n-title="bbox.undoDeleteTitle">元に戻す</button>
                   </div>
                   <div style="font-size:11px; color:#888; margin-bottom:6px;" data-i18n="ocr.imageHint">画像をドロップ / 貼り付け(Ctrl+V)でも読み込めます。空いている所をドラッグで枠を追加、枠をドラッグで移動・角で拡縮</div>
                   <div id="ocr-stage-wrap" style="width:100%; display:flex; justify-content:center;">

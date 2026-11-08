@@ -2,6 +2,43 @@
 
 ---
 
+## 2026-11-08（v1.69.0: OCR・MOSS-Image の bbox に選択モードと削除の取り消し、Chat TE と画像生成の VRAM 重なりで ComfyUI が落ちる問題の対策）
+
+### 選択モード（不意の描画を防ぐ）
+
+**背景**: OCR タブ・MOSS-Image タブのキャンバスは、空いている所（MOSS は未選択の枠の内側も）をドラッグすると常に新しい枠を描くため、枠を動かすつもりで小さな枠を描いてしまうことがあった。
+
+**実装**
+- MOSS-Image: 描画種別ボタン群の先頭に「選択」（`data-type="select"`）を追加。`isSelectMode()` のとき、空き領域の押下は選択解除だけ、枠の内側は未選択でも常に移動（`grab = true`）、`pending` からの描画への切り替え（Shift+ドラッグ含む）もしない。選んだ種別は localStorage `ccc_moss_draw_type` に保存。
+- OCR: 「描画種別」の左に「選択｜描画」のトグル（`#ocr-stage-mode`）を追加。選択モードでは空き領域の押下で選択解除だけ。描画種別のプルダウンを変えると描画モードに戻る。localStorage `ccc_ocr_stage_mode`。
+- 既定は従来どおり描画（MOSS は「物体」）。
+
+### 削除の取り消し
+
+**実装**: 「元に戻す」ボタン（MOSS は削除の右、OCR は全クリアの右）と Ctrl+Z（Cmd+Z）。タブ表示中かつ入力欄にフォーカスがないときだけ効く。
+- 全体のスナップショットではなく、削除した枠を `{ 枠のコピー, 元の配列位置 }` で積み（最大 30 回）、戻すときは元の位置の昇順で `splice` して重なり順も戻す。削除後に他の枠を動かしても、その操作は巻き戻らない。戻した枠は選択状態にする。
+- 対象: MOSS は削除ボタン・Delete キー・新規作成・取り込み全クリア（`removeItems(pred)` に集約）、OCR は削除・Delete キー・全クリア（`removeBoxes(pred)`）。
+- 履歴を消すタイミング: MOSS はコマ／フキダシ／OCR の取り込み（座標が拡縮されることがあるため）、OCR は画像の読み込み（id を 1 から振り直すため衝突する）と検出のやり直し。
+
+### Chat TE と画像生成の VRAM 重なりで ComfyUI が落ちる
+
+**症状**: MOSS-Image で生成に失敗し、「ComfyUIに接続できません」になる。
+
+**原因（ログで確認）**: 16:17 と 16:42 の 2 回とも、MOSS の TE（7GB）と本体（5GB）が ComfyUI に staged のまま、OCR タブの Chat TE が `qwen3vl_8b_fp8_scaled`（10GB）を同じプロセスに読み込んだ直後に `Chat TE: generation failed` → `CUDA error: an illegal memory access`。16:18 には comfy-aimdo の `cuMemcpyHtoDAsync failed result=710`、Windows 側の nvlddmkm 153・LiveKernelEvent 141（GPU のタイムアウト／リセット）も出ていた。通常の OOM と違い CUDA エラーが sticky になり、以後のすべての実行（次の MOSS 生成の CLIP encode）が失敗するため、再起動まで使えない。従来の `prepareVramForGeneration()` は Ollama のモデルしか退避せず、ComfyUI 内のモデル同士の重なりは防げなかった。
+
+**修正**（`vram-prepare.js`）
+- `freeComfyModels(base)`: ComfyUI 標準の `POST /free {unload_models, free_memory}`。キューの処理スレッドが非同期に処理するため 1.5 秒待つ。
+- `beforeChatTe(base)`: Chat TE の status/load の前に呼ぶ。前回の Chat TE 以降に ComfyUI で何も生成していなければ（`/history?max_items=1` の最新 prompt_id が前回と同じ）降ろさない。Chat TE の API 呼び出しは履歴に残らないので判定に使える。
+- `afterChatTe(base)`: chat/completions の応答直後（失敗時も 8B が載っている可能性があるので結果を見る前）に目印を付ける。
+- `prepareVramForGeneration(extraUrls, { comfyGen = true })`: 先頭で、同じオリジンの ComfyUI で Chat TE を使った後なら `/free` して通知。「VRAM調整」が off でも行う。OCR タブの Ollama 用の呼び出しは `comfyGen: false`。MOSS・Workflow Studio 経由の生成（T2I/I2I/Inpaint 等）は既存の呼び出しでそのまま対象になる。
+- ComfyUI の `CLIP.generate()` は毎回 `load_model()` で GPU へ読み直すため、`/free` 後も Chat TE はそのまま動く。
+
+**未検証**: 実機での再発防止（Kapture 切断中）。`/free` 後 1.5 秒で足りない場合は待ち時間を延ばす。重なりを避けても再発するなら comfy-aimdo（動的 VRAM）／ドライバー側を疑う。目印はページ内の変数なので、Chat TE 使用後にリロードしてから生成すると降ろさない。
+
+**How to apply**: ComfyUI の同じプロセスに大きなモデルを読む機能（Chat TE のような API 経由のロード）を追加するときは、Ollama の退避だけでなく ComfyUI 内の他のモデルとの重なりも考える。CUDA の illegal memory access は一度出ると再起動まで直らないため、事前に降ろす設計にする。
+
+---
+
 ## 2026-11-08（v1.68.1: PixiJS FX が particle-pixijs をレジストリから入れ直すと開けない不具合を修正）
 
 **症状**: レイアウトタブ「画像」サブタブ・Imageタブの PixiJS FX を開くと「カスタムノード comfyUI-particle-pixijs の読み込みに失敗しました」のアラートが出て使えない。

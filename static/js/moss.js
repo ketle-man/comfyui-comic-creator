@@ -216,9 +216,22 @@ function setItemWriting(it, vertical) {
     renderCanvas(); schedulePreview(); scheduleSave();
 }
 
+// 「選択」: ドラッグしても枠を描かない（枠の選択・移動・拡縮だけ）。不意の描画を防ぐ
+const isSelectMode = () => drawType() === 'select';
+const DRAW_TYPE_KEY = 'ccc_moss_draw_type';
+
 function initDrawTypeButtons() {
     const btns = [...document.querySelectorAll('#moss-draw-type .moss-type-btn')];
-    btns.forEach(b => b.addEventListener('click', () => btns.forEach(x => x.classList.toggle('active', x === b))));
+    const activate = (b) => btns.forEach(x => x.classList.toggle('active', x === b));
+    try {
+        const saved = localStorage.getItem(DRAW_TYPE_KEY);
+        const b = saved && btns.find(x => x.dataset.type === saved);
+        if (b) activate(b);
+    } catch (_) { /* ignore */ }
+    btns.forEach(b => b.addEventListener('click', () => {
+        activate(b);
+        try { localStorage.setItem(DRAW_TYPE_KEY, b.dataset.type); } catch (_) { /* ignore */ }
+    }));
 }
 
 // 要素の編集欄はプロンプトタブにあるため、キャンバスで要素を選んだらそのタブへ切り替える
@@ -449,8 +462,16 @@ function initCanvasInteraction() {
         const hit = boxEl ? S.items.find(i => i.id === Number(boxEl.dataset.id)) : null;
         // 枠の縁・番号・ハンドル、または選択中の枠の中は、その枠の移動/拡縮。
         // 選択されていない枠の中のドラッグは「その上に新しい要素を描く」（クリックのみなら選択）。Shift+ドラッグは常に描画
+        const selMode = isSelectMode();
+        if (selMode && !hit) {   // 選択モードで空き領域を押した = 選択解除のみ（描画しない）
+            if (S.selId !== null || S.multi.size) { S.selId = null; S.multi.clear(); renderCanvas(); }
+            e.preventDefault();
+            return;
+        }
         let grab = false;
-        if (hit && !e.shiftKey) {
+        if (hit && !e.shiftKey && selMode) {
+            grab = true;   // 選択モードでは枠の中のドラッグは常に移動
+        } else if (hit && !e.shiftKey) {
             const r = boxEl.getBoundingClientRect();
             const edge = Math.min(e.clientX - r.left, r.right - e.clientX, e.clientY - r.top, r.bottom - e.clientY) < EDGE_PX;
             grab = !!e.target.dataset.h || edge || e.target.classList.contains('moss-badge') || isSel(hit.id);
@@ -496,6 +517,7 @@ function initCanvasInteraction() {
         if (!drag) return;
         if (drag.mode === 'pending') {
             if (Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) < 4) return;   // まだクリックの範囲
+            if (isSelectMode()) return;   // 選択モードでは描画に切り替えない（離せばクリック扱い）
             const x = clamp(drag.start.x, 0, S.W), y = clamp(drag.start.y, 0, S.H);
             const created = addItem({ type: drawType(), x, y, w: 0, h: 0, caption: '', text: '' });
             S.selId = created.id; S.multi.clear();
@@ -579,15 +601,55 @@ function initCanvasInteraction() {
 
     // Deleteキーで選択中の要素を削除（入力欄にフォーカスがあるときは無視）
     document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Delete' || !$('moss-tab')?.classList.contains('active')) return;
+        if (!$('moss-tab')?.classList.contains('active')) return;
         if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
-        deleteSelected();
+        if (e.key === 'Delete') deleteSelected();
+        // Ctrl+Z（Mac は Cmd+Z）で削除を元に戻す
+        else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z' && undoStack.length) {
+            e.preventDefault();
+            undoDelete();
+        }
     });
+}
+
+// ─── 削除の取り消し ───
+// 削除した枠を「元の並び位置」とともに積む。全体のスナップショットではないため、削除後に他の枠を動かしても巻き戻らない
+const UNDO_MAX = 30;
+const undoStack = [];
+function updateUndoBtn() { const b = $('moss-item-undo-btn'); if (b) b.disabled = !undoStack.length; }
+function clearUndo() { undoStack.length = 0; updateUndoBtn(); }
+
+/** pred に一致する枠を削除し、取り消し用に記録する。削除した件数を返す */
+function removeItems(pred) {
+    const entries = [];
+    S.items.forEach((it, index) => { if (pred(it)) entries.push({ it: structuredClone(it), index }); });
+    if (!entries.length) return 0;
+    undoStack.push(entries);
+    if (undoStack.length > UNDO_MAX) undoStack.shift();
+    S.items = S.items.filter(i => !pred(i));
+    if (S.selId !== null && !S.items.some(i => i.id === S.selId)) S.selId = null;
+    for (const id of [...S.multi]) if (!S.items.some(i => i.id === id)) S.multi.delete(id);
+    updateUndoBtn();
+    return entries.length;
+}
+
+function undoDelete() {
+    const entries = undoStack.pop();
+    updateUndoBtn();
+    if (!entries) return;
+    const restored = [];
+    for (const { it, index } of entries) {   // 元の位置の昇順で差し込むと、元の並びに戻る
+        if (S.items.some(i => i.id === it.id)) continue;
+        S.items.splice(Math.min(index, S.items.length), 0, it);
+        restored.push(it.id);
+    }
+    S.selId = restored[0] ?? null; S.multi = new Set(restored.slice(1));
+    renderCanvas(); schedulePreview(); scheduleSave();
 }
 
 function deleteSelected() {
     if (!S.selId) return;
-    S.items = S.items.filter(i => !isSel(i.id));
+    removeItems(i => isSel(i.id));
     S.selId = null; S.multi.clear();
     renderCanvas(); schedulePreview(); scheduleSave();
 }
@@ -652,6 +714,7 @@ function initItemProps() {
         schedulePreview(); scheduleSave();
     });
     $('moss-item-del-btn').addEventListener('click', deleteSelected);
+    $('moss-item-undo-btn').addEventListener('click', undoDelete);
     $('moss-item-up-btn').addEventListener('click', () => moveSelected(1));
     $('moss-item-down-btn').addEventListener('click', () => moveSelected(-1));
     $('moss-item-top-btn').addEventListener('click', () => moveSelectedToEdge(true));
@@ -659,7 +722,8 @@ function initItemProps() {
     // 新規作成: すべてのbboxを削除してレイアウトを空にする
     $('moss-layout-new-btn').addEventListener('click', () => {
         if (S.items.length && !confirm(t('moss.confirmClear'))) return;
-        S.items = []; S.selId = null;
+        removeItems(() => true);
+        S.selId = null; S.multi.clear();
         renderCanvas(); schedulePreview(); scheduleSave();
     });
     // 取り込み全クリア: 「コマ／フキダシ・セリフを取り込む」で入れた枠だけ削除（手で描いた枠は残す）
@@ -667,8 +731,7 @@ function initItemProps() {
         const imported = (i) => i.src === 'panel' || i.src === 'balloon' || i.src === 'text' || i.src === 'ocr';
         if (!S.items.some(imported)) return;
         if (!confirm(t('moss.confirmClearImported'))) return;
-        S.items = S.items.filter(i => !imported(i));
-        if (S.selId && !S.items.some(i => i.id === S.selId)) S.selId = null;
+        removeItems(imported);
         renderCanvas(); schedulePreview(); scheduleSave();
     });
 }
@@ -695,7 +758,8 @@ async function importPagePanels() {
     if (!list.length) { alert(t('moss.noPanels')); return; }
     if (S.items.length && !confirm(t('moss.confirmReplace'))) return;
     const { w, h } = sizeForAspect(svg.w / svg.h, PAGE_TARGET_PIXELS);
-    S.items = []; S.selId = null;
+    S.items = []; S.selId = null; S.multi.clear();
+    clearUndo();   // キャンバスサイズが変わり、記録した座標が合わなくなるため
     setSize(w, h);
     const sx = S.W / svg.w, sy = S.H / svg.h;
     for (const p of list) {
@@ -892,6 +956,7 @@ async function importBalloons() {
     }
     // 再取込: 前回取り込んだ枠だけ入れ替える（手で足した枠は残す）。単独テキストを含めないときは、前回の単独テキストの枠も残す
     S.items = S.items.filter(i => !(i.src === 'balloon' || (includeTexts && i.src === 'text')));
+    clearUndo();   // 取り込みで枠の座標が拡縮されることがあり、記録した削除が合わなくなるため
     if (S.selId && !S.items.some(i => i.id === S.selId)) S.selId = null;
     const sx = S.W / svg.w, sy = S.H / svg.h;
     const fontPx = (fs) => (fs > 0 ? Math.min(FONT_MAX, Math.max(FONT_MIN, Math.round(fs * sy))) : 0);
@@ -1285,6 +1350,7 @@ async function importOcrItems(items, { aspect = 1, prompt = '' } = {}) {
         setSize(w, h);
     }
     S.items = S.items.filter(i => i.src !== 'ocr');
+    clearUndo();   // 取り込みで枠の座標が拡縮されることがあり、記録した削除が合わなくなるため
     if (S.selId && !S.items.some(i => i.id === S.selId)) S.selId = null;
     for (const o of items) {
         const x = clamp(o.x1 * S.W, 0, S.W - MIN_BOX_PX), y = clamp(o.y1 * S.H, 0, S.H - MIN_BOX_PX);
