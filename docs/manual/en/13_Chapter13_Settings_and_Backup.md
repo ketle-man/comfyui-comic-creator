@@ -12,6 +12,7 @@ The "Settings" tab has the following items, from top to bottom.
 | Backup & Restore | Save all data to a zip / restore from a zip | 13-2 in this chapter |
 | VRAM Management (Ollama) | Unload Ollama's models before image generation to free GPU memory | Table below |
 | Nanobanana | Nanobanana engine (Gemini API / ComfyUI native node), shared by the Nanobanana+ tab (Nanobanana mode), Semi-Auto Manga, and Auto | Chapter 10 |
+| 3D Pose Editor | Editor opened by "🎛 Editor" in the Layout tab's 3D Pose (3D Pose Editor / VRM Pose Studio) | Chapter 12 |
 | Eagle Settings | Eagle connection and auto-save | Chapter 12 |
 | G'MIC Settings | Location of the G'MIC Qt executable | Chapter 12 |
 | Inpaint Settings | Workflow used by Inpaint in the Image tab | Chapter 10 |

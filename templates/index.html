@@ -2671,6 +2671,19 @@
             </div>
 
             <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
+              <h3 data-i18n="settings.pose3dEditorTitle">3Dポーズ エディタ</h3>
+              <div class="control-row" style="margin-bottom: 8px; align-items: center; gap: 8px;">
+                <label for="settings-pose3d-editor" data-i18n="settings.pose3dEditorLabel" style="white-space:nowrap; min-width:160px;">「🎛 Editor」で開くエディタ:</label>
+                <select id="settings-pose3d-editor" class="comfyui-select">
+                  <option value="pose-editor" data-i18n="settings.pose3dEditorPoseEditor">3D Pose Editor（Light &amp; Pose Editor）</option>
+                  <option value="vps" data-i18n="settings.pose3dEditorVps">VRM Pose Studio（別タブ）</option>
+                </select>
+                <span id="settings-pose3d-editor-status" style="font-size:12px; color:#888;"></span>
+              </div>
+              <p data-i18n="settings.pose3dEditorDesc" style="margin: 0; font-size:12px; color:#888;">レイアウトタブ「3Dポーズ」の🎛 Editorボタンで開くエディタを切り替えます。</p>
+            </div>
+
+            <div style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-color);">
               <h3 data-i18n="settings.eagleTitle">Eagle 設定</h3>
               <div class="control-row" style="margin-bottom: 10px; align-items: center; gap: 8px;">
                 <label for="settings-eagle-url" data-i18n="settings.eagleUrlLabel" style="white-space:nowrap; min-width:160px;">Eagle API URL</label>

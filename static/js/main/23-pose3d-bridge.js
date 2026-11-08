@@ -237,7 +237,12 @@ function initPose3DTab() {
     // 切り替えるだけでよく、VRMAのLoad/Load KEY・キーフレームタイムラインの再生バーで
     // 任意のフレームへシークし、📸 Captureボタン(nodeActions.doCapture経由で
     // _pose3dCaptureFrameToPanelを呼ぶ)でその場でコマへ確定できる）。
-    if (editorBtn) editorBtn.addEventListener('click', () => {
+    if (editorBtn) editorBtn.addEventListener('click', (e) => {
+        // 設定で VRM Pose Studio を選んでいる場合は、選択中のコマの枠を付けて VPS を開く
+        if (_pose3dGetEditorEngine() === 'vps') {
+            _pose3dOpenVps(e, statusEl);
+            return;
+        }
         if (typeof window.openLightPoseEditor !== 'function') {
             if (statusEl) statusEl.textContent = t('layout.pose3dEditorNotFound');
             return;
@@ -735,6 +740,194 @@ function _pose3dRebuildMorphSliders(keys, panelEl) {
 }
 
 // ArrayBuffer → Base64 文字列
+// ============================================================
+// VRM Pose Studio 連携（設定タブ「3Dポーズ エディタ」で切替。🎛 Editor ボタンの動作だけが変わる）
+// ------------------------------------------------------------
+// VPS（ComfyUI-VRM-Pose-Studio, /vps）は同じ ComfyUI オリジンで配信される独立SPA。
+// CC から window.open で開くと VPS の window.opener がこのページになるので、関数を直接呼び合う:
+//   VPS → CC: window.ccGetPanelFrame()        起動時に送り先コマの枠を取得
+//             window.ccReceiveVpsImage(payload) 「📤 CCのコマへ送る」で撮影画像を挿入
+//   CC → VPS: vpsWin.vpsApplyCcFrame(frame)    開いたままのVPSへ枠を差し替え
+// 枠 = { width, height, points: [[x,y],…] }（points はコマ外接矩形を基準に 0〜1 へ正規化した多角形）
+// ============================================================
+
+const POSE3D_EDITOR_ENGINE_KEY = 'ccc_pose3d_editor_engine'; // 'pose-editor' | 'vps'
+const VPS_URL = '/vps?cc=1';
+// ComfyUI のトップメニューは "vrm_pose_studio" で開く。同じ名前だと既存ウィンドウ（opener=ComfyUI）が
+// 再利用されて CC と繋がらないため、CC 専用の名前を使う
+const VPS_WINDOW_NAME = 'vrm_pose_studio_cc';
+// 撮影解像度: コマ外接矩形の長辺をこの範囲に収める（SVG座標は 0.01mm 単位で大きいため）
+const VPS_MIN_LONG_SIDE = 1024;
+const VPS_MAX_LONG_SIDE = 2048;
+
+let _vpsWin = null;        // 開いた VPS のウィンドウ
+let _vpsTarget = null;     // { pageName, panelId, frame } 送り先のコマ（🎛 Editor を押した時点で固定）
+let _vpsAvailable = null;  // /vps の有無（null=未確認）
+
+function _pose3dGetEditorEngine() {
+    try { return localStorage.getItem(POSE3D_EDITOR_ENGINE_KEY) === 'vps' ? 'vps' : 'pose-editor'; }
+    catch { return 'pose-editor'; }
+}
+
+function _pose3dSetEditorEngine(v) {
+    try { localStorage.setItem(POSE3D_EDITOR_ENGINE_KEY, v === 'vps' ? 'vps' : 'pose-editor'); } catch { /* ignore */ }
+}
+
+async function _vpsCheckAvailable() {
+    try {
+        const res = await fetch('/vps', { method: 'HEAD', cache: 'no-store' });
+        _vpsAvailable = res.ok;
+    } catch {
+        _vpsAvailable = false;
+    }
+    return _vpsAvailable;
+}
+
+function _vpsParsePoints(pointsStr) {
+    const nums = String(pointsStr || '').split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n));
+    const pts = [];
+    for (let i = 0; i + 1 < nums.length; i += 2) pts.push([nums[i], nums[i + 1]]);
+    return pts;
+}
+
+// コマの形を VPS に渡す枠へ変換する
+function _vpsBuildFrame(panel) {
+    if (!panel?.points) return null;
+    const bbox = getBoundingBoxFromPoints(panel.points);
+    if (!bbox || !bbox.width || !bbox.height) return null;
+    const points = _vpsParsePoints(panel.points).map(([x, y]) => [
+        (x - bbox.x) / bbox.width,
+        (y - bbox.y) / bbox.height,
+    ]);
+    if (points.length < 3) return null;
+    const longSide = Math.max(bbox.width, bbox.height);
+    const scale = Math.min(VPS_MAX_LONG_SIDE, Math.max(VPS_MIN_LONG_SIDE, longSide)) / longSide;
+    return {
+        width:  Math.max(64, Math.round(bbox.width  * scale)),
+        height: Math.max(64, Math.round(bbox.height * scale)),
+        points,
+        label: _vpsPanelLabel(panel),
+    };
+}
+
+// コマの表示名（コマ選択ドロップダウン updatePanelSelectDropdown と同じ付け方）。VPS の枠に表示する
+function _vpsPanelLabel(panel) {
+    const panels = state.activePage?.panels ?? [];
+    const numOf = (p) => (p.number !== undefined) ? p.number : panels.indexOf(p) + 1;
+    if (panel.parentPanelId) {
+        const parent = panels.find(p => p.id === panel.parentPanelId);
+        // ドロップダウン用の字下げ記号「└」は外す
+        return String(t('subpanel.optionLabel', parent ? numOf(parent) : '?')).replace(/^[\s└]+/, '');
+    }
+    return t('common.panelName', numOf(panel));
+}
+
+// 🎛 Editor（VPSモード）: 選択中のコマを送り先に固定し、VPSを開く（開いていれば枠だけ差し替える）
+function _pose3dOpenVps(ev, statusEl) {
+    const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
+    if (_vpsAvailable === false) {
+        // 起動後にインストールされた場合に備えて再確認しておく（次回クリックで反映）
+        _vpsCheckAvailable();
+        setStatus(t('layout.pose3dVpsNotFound'));
+        return;
+    }
+    const panelId = state.pose3d.activePanelId || state.selectedPanelId;
+    const panel = panelId ? state.activePage?.panels.find(p => p.id === panelId) : null;
+    if (!panel) { setStatus(t('layout.pose3dSelectPanelFirst')); return; }
+    const frame = _vpsBuildFrame(panel);
+    if (!frame) { setStatus(t('layout.pose3dVpsPanelMissing')); return; }
+    _vpsTarget = { pageName: state.activePage.name, panelId, frame };
+
+    // ポップアップブロックを避けるため、ここ（クリックの同期処理内）で必ず window.open する。
+    // URL を空で開くと、同名のウィンドウが既にあればそれを再読み込みせずに返す（CC を再読み込みした後も繋がる）
+    let win = (_vpsWin && !_vpsWin.closed) ? _vpsWin : null;
+    if (!win) {
+        win = window.open('', VPS_WINDOW_NAME, ev?.shiftKey ? 'width=1600,height=960,resizable=yes' : '');
+    }
+    if (!win) { setStatus(t('layout.pose3dVpsPopupBlocked')); return; }
+    _vpsWin = win;
+
+    let applied = false;
+    try {
+        if (typeof win.vpsApplyCcFrame === 'function') {
+            win.vpsApplyCcFrame(frame);
+            applied = true;
+        }
+    } catch { /* 別オリジンのページなど */ }
+    if (!applied) {
+        let blank = false;
+        try { blank = win.location.href === 'about:blank'; } catch { blank = false; }
+        let isVpsLoading = false;
+        try { isVpsLoading = win.location.pathname === '/vps'; } catch { /* ignore */ }
+        // 読み込み中の VPS なら起動時に ccGetPanelFrame() で新しい枠を取りに来るので何もしない
+        if (blank || !isVpsLoading) win.location.href = VPS_URL;
+    }
+    try { win.focus(); } catch { /* ignore */ }
+    setStatus(t('layout.pose3dVpsOpened'));
+}
+
+// VPS から呼ばれる: 送り先コマの枠
+window.ccGetPanelFrame = () => _vpsTarget?.frame ?? null;
+
+// VPS から呼ばれる: 撮影画像（コマと同じ比率）を送り先のコマへ挿入する。失敗は例外で返す（VPS側でトースト表示）
+window.ccReceiveVpsImage = async ({ dataUrl, width, height } = {}) => {
+    const tgt = _vpsTarget;
+    if (!tgt) throw new Error(t('layout.pose3dVpsNoTarget'));
+    if (!dataUrl || !width || !height) throw new Error('invalid image');
+    if (state.activePage?.name !== tgt.pageName) throw new Error(t('layout.pose3dVpsPageChanged'));
+    const panel = state.activePage.panels.find(p => p.id === tgt.panelId);
+    const bbox = panel?.points ? getBoundingBoxFromPoints(panel.points) : null;
+    if (!bbox) throw new Error(t('layout.pose3dVpsPanelMissing'));
+
+    // コマ外接矩形を覆うように配置（VPS側で枠を解除して比率が変わっていても歪ませない。はみ出しはコマのクリップで隠れる）
+    const ia = width / height, ba = bbox.width / bbox.height;
+    let pw, ph;
+    if (ia > ba) { ph = bbox.height; pw = ph * ia; }
+    else         { pw = bbox.width;  ph = pw / ia; }
+    const placement = {
+        x: bbox.x + (bbox.width - pw) / 2,
+        y: bbox.y + (bbox.height - ph) / 2,
+        width: pw, height: ph,
+    };
+
+    // insertImage は選択状態（下書き/オーバーレイ/コマ）で挿入先を決めるため、一時的に送り先コマを選択扱いにする
+    const prev = { panel: state.selectedPanelId, overlay: state.selectedOverlay, draft: state.selectedDraft };
+    state.selectedPanelId = tgt.panelId;
+    state.selectedOverlay = false;
+    state.selectedDraft = false;
+    let ok = false;
+    try {
+        ok = await insertImage(String(dataUrl), width, height, { 'data-vps-capture': '1' }, placement);
+    } finally {
+        state.selectedPanelId = prev.panel;
+        state.selectedOverlay = prev.overlay;
+        state.selectedDraft = prev.draft;
+    }
+    if (ok === false) throw new Error(t('layout.pose3dVpsPanelMissing'));
+    const statusEl = document.getElementById('pose3d-status');
+    if (statusEl) statusEl.textContent = t('layout.pose3dVpsInserted');
+    return true;
+};
+
+// 設定タブ「3Dポーズ エディタ」
+function _initPose3dEditorSetting() {
+    const sel = document.getElementById('settings-pose3d-editor');
+    if (!sel) return;
+    const statusEl = document.getElementById('settings-pose3d-editor-status');
+    const refresh = async () => {
+        sel.value = _pose3dGetEditorEngine();
+        if (!statusEl) return;
+        if (sel.value !== 'vps') { statusEl.textContent = ''; return; }
+        const ok = await _vpsCheckAvailable();
+        statusEl.textContent = t(ok ? 'settings.vpsFound' : 'settings.vpsNotFound');
+        statusEl.style.color = ok ? '#4caf50' : '#e57373';
+    };
+    sel.addEventListener('change', () => { _pose3dSetEditorEngine(sel.value); refresh(); });
+    refresh();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _initPose3dEditorSetting);
+else _initPose3dEditorSetting();
+
 function _arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
     let binary = '';

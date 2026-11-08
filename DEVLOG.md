@@ -2,6 +2,30 @@
 
 ---
 
+## 2026-11-08（v1.68.0: 3Dポーズの 🎛 Editor を VRM Pose Studio に切替可能に）
+
+**背景**: レイアウトタブ「3Dポーズ」の 🎛 Editor（comfyui-vrm-pose-editor の Light & Pose Editor）の代わりに、複数モデル・カメラ・タイムラインを扱える VRM Pose Studio（ComfyUI-VRM-Pose-Studio、`/vps`）でもポーズを作ってコマへ入れたい、という要望。VPS はライブラリではなく独立したSPAなので、従来のように動的importしてコマ上に重ねる方式は取れない。
+
+**方式**: CC（`/ccc`）と VPS（`/vps`）は同じ ComfyUI のオリジンで配信されるため、CC から `window.open` で開けば VPS の `window.opener` が CC になり、関数を直接呼び合える。iframe埋め込み（画面が狭い）やエンジンの直接import（VPS の大改修が必要）は不採用。
+
+**実装**（切り替わるのは 🎛 Editor ボタンの動作だけ。コマ上の3Dビュー・コマに配置・コマに確定は従来どおり）
+- 設定タブに「3Dポーズ エディタ」（localStorage `ccc_pose3d_editor_engine` = `pose-editor` / `vps`）。VPS を選ぶと `HEAD /vps` で有無を確認して表示。
+- `23-pose3d-bridge.js`: 🎛 Editor で、選択中のコマ（3Dビュー配置中ならそのコマ）を送り先に固定し、枠 `{ width, height, points, label }` を作る（points はコマ外接矩形を基準に0〜1へ正規化した多角形、解像度は長辺1024〜2048、label はコマ選択欄と同じ名前）。
+- CC が公開する関数: `window.ccGetPanelFrame()`（VPS が起動時に枠を取得）、`window.ccReceiveVpsImage({ dataUrl, width, height })`（VPS の「📤 CCのコマへ送る」で呼ばれ、コマ外接矩形を覆う配置で `insertImage`。ページ移動・コマ削除時は例外を返し VPS 側でトースト表示）。開いたままの VPS には `vpsWin.vpsApplyCcFrame(frame)` で枠だけ差し替える。
+- i18n 日英中、ヘルプ（3Dポーズサブタブ・設定タブ）、README 3言語。
+
+**落とし穴**
+- ComfyUI のトップメニューは `window.open(url, "vrm_pose_studio")` で VPS を開く。CC から同じ名前で開くと既存ウィンドウ（opener = ComfyUI）が再利用され CC とつながらないため、CC 専用の名前 `vrm_pose_studio_cc` を使う。
+- `window.open('', name)` は同名のウィンドウがあれば再読み込みせずに返すので、CC を再読み込みした後も開いたままの VPS につながる（空なら `/vps?cc=1` へ移動）。
+- `/vps` の有無を `fetch` で確かめてから開くとクリックの同期処理から外れてポップアップブロックされるため、有無の確認は設定画面で事前に行い、クリック時は必ず先に `window.open` する。
+- `insertImage` は選択状態（下書き/オーバーレイ/コマ）で挿入先を決める。ページ切替直後は `selectedOverlay = true` になっているため、挿入の間だけ送り先コマを選択扱いにして元に戻す。
+
+**VPS 側**（ComfyUI-VRM-Pose-Studio に同時に実装）: コマ枠の表示（外側をグレーの半透明、赤い点線、コマ名タグ）、出力サイズをコマに一時固定（プロジェクトには保存しない、「解除」で戻す）、送信ボタンを「CCのコマへ送る」に切替、CC から開いたときは背景透過・地面非表示で開始。あわせてビューポートを出力枠の外側まで描くパスパルトゥー表示に変更。
+
+**検証**: Kaptureが接続できなかったため、Playwright（ComfyUI :8189）で確認。設定の検出表示、斜めの5角形のコマの枠表示とコマ名タグ、開いたままの VPS への枠の差し替え（タブが増えない）、CC 再読み込み後の再接続、送信でコマの形にクリップされて挿入されること、元に戻す、VPS の保存データの出力サイズが変わらないこと、未保存扱いにならないこと、背景透過・地面非表示を確認。
+
+---
+
 ## 2026-11-05（v1.67.0: Imageタブ — Drawツールのカラーパレットとショートカット）
 
 **背景**: Drawツールの2段目（`ie-tool-options`）は空だった。ペイントのように色を並べ、基本色とカスタム色を登録したいという要望。

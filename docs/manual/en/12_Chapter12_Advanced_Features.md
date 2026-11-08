@@ -40,6 +40,22 @@ Place a 3D model in VRM, GLB, or GLTF format in a panel, pose it, and put it int
 > **Tip**
 > In the sample, create the pose of the customer opening the door on page 2, commit it, and use the image as a sketch. You can draw lines over it in the Image tab, or turn it into a manga-style picture with Chapter 10's "Generate" (I2I).
 
+### Building it in detail with VRM Pose Studio
+
+If the ComfyUI custom node "ComfyUI-VRM-Pose-Studio" (VRM Pose Studio, VPS below) is installed, you can switch "🎛 Editor" to open VPS. VPS is a 3D studio that handles several models, cameras, and a timeline. Only "🎛 Editor" changes; "Place in Panel", "Commit to Panel", and the rest work as before. In VPS, Comic Creator is shown as "CC".
+
+1. In the Settings tab, set "3D Pose Editor" to "VRM Pose Studio (new tab)" (Chapter 13).
+2. Select the panel and press "🎛 Editor" in "3D Pose". VPS opens in a new tab (Shift + click opens a separate window).
+3. The shape of the selected panel appears in VPS as a red dashed frame with the panel name. The output size is locked to the panel.
+4. Set the pose and camera inside the frame and press "📤 Send to CC panel". The view is inserted into the panel (clipped to the panel shape).
+
+| Situation | What happens |
+| --- | --- |
+| You want another panel while VPS stays open | Select another panel in CC and press "🎛 Editor"; only the frame changes, without reopening VPS |
+| You opened another page in CC before sending | The target is the panel selected when "🎛 Editor" was pressed, so nothing is inserted (go back to that page, or select a panel again) |
+| Background and ground | When opened from CC, VPS starts with a transparent background and the ground hidden |
+| You want to drop the panel size | "Release" at the top of VPS returns to the output size of the VPS project (the panel size is not saved in the project) |
+
 ### 3D Text: three-dimensional lettering
 
 Turn text (including Japanese) or SVG shapes into an extruded 3D image and put it into a panel.
