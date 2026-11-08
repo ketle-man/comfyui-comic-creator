@@ -2,6 +2,20 @@
 
 ---
 
+## 2026-11-08（v1.68.1: PixiJS FX が particle-pixijs をレジストリから入れ直すと開けない不具合を修正）
+
+**症状**: レイアウトタブ「画像」サブタブ・Imageタブの PixiJS FX を開くと「カスタムノード comfyUI-particle-pixijs の読み込みに失敗しました」のアラートが出て使えない。
+
+**原因**: comfyUI-particle-pixijs を Comfy Registry / Manager 経由で入れ直したことで、インストール先フォルダ名が `comfyUI-particle-pixijs` から小文字の `comfyui-particle-pixijs` に変わった。ComfyUI は `WEB_DIRECTORY` をフォルダ名で `/extensions/<フォルダ名>/` に配信し、aiohttp のルートは大文字小文字を区別するため、`pixifx.js` が固定で import していた `/extensions/comfyUI-particle-pixijs/particle_engine.js` が 404 になっていた（Windows のファイルパスは区別しないので、フォルダ自体は存在するように見える）。
+
+**修正**: `pixifx.js` の `EXT_BASE` を `EXT_BASES`（小文字→従来名の順）に変更し、`loadModules()` で順に import を試して、最初に成功したものを使う。どちらも失敗したときだけ従来のアラートを出す。particle-pixijs 側も v1.7.1 で `pyproject.toml` に `[tool.comfy] web = "web"` を追加し、どの入れ方でも小文字の URL で配信されるようにした。
+
+**点検**: 他の連携先の固定URLも確認した。`/extensions/comfyui-vrm-pose-editor/`（pose3d.js・text3d.js）はリポジトリ名・pyproject名・フォルダ名がすべて小文字で、入れ方によらず同じURLなので影響なし。`/vps`・`/mask_editor/...`・`/pose_library/...` は各ノードの Python で定義されたサーバーAPIルートで、フォルダ名に依存しない。
+
+**How to apply**: 他のカスタムノードの JS を `/extensions/...` で参照する場合は、フォルダ名がインストール方法で変わる（レジストリ=小文字の registry id、git clone=リポジトリ名）ことを前提に、小文字の pyproject 名を優先しつつフォールバックを持たせる。
+
+---
+
 ## 2026-11-08（v1.68.0: 3Dポーズの 🎛 Editor を VRM Pose Studio に切替可能に）
 
 **背景**: レイアウトタブ「3Dポーズ」の 🎛 Editor（comfyui-vrm-pose-editor の Light & Pose Editor）の代わりに、複数モデル・カメラ・タイムラインを扱える VRM Pose Studio（ComfyUI-VRM-Pose-Studio、`/vps`）でもポーズを作ってコマへ入れたい、という要望。VPS はライブラリではなく独立したSPAなので、従来のように動的importしてコマ上に重ねる方式は取れない。

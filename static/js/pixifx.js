@@ -14,7 +14,8 @@
 //                   meta = { bgVisible, width, height }
 //
 //  前提: ComfyUI に comfyUI-particle-pixijs がインストールされており、
-//        /extensions/comfyUI-particle-pixijs/ 以下から JS が配信されること。
+//        /extensions/comfyui-particle-pixijs/（または旧フォルダ名の
+//        /extensions/comfyUI-particle-pixijs/）以下から JS が配信されること。
 //
 //  type="module" として読み込まれる（ESモジュール化 G6）。まだESM化されていない
 //  main/以下の classic <script> から呼べるよう、末尾で window.pixiFxOpen としても公開している。
@@ -22,7 +23,10 @@
 
 import { t } from './i18n.js';
 
-    const EXT_BASE = '/extensions/comfyUI-particle-pixijs';
+    // ComfyUI は WEB_DIRECTORY を「フォルダ名」で配信し、URL は大文字小文字を区別する。
+    // レジストリ/Manager 経由だと小文字フォルダ(comfyui-particle-pixijs)、
+    // git clone だと従来名(comfyUI-particle-pixijs)になるため両方を試す。
+    const EXT_BASES = ['/extensions/comfyui-particle-pixijs', '/extensions/comfyUI-particle-pixijs'];
     const LS_KEY   = 'cccPixiFxSettings';
 
     // レンダラー最大辺: 原寸出力を優先し、GPU のテクスチャ上限までは縮小しない
@@ -46,12 +50,20 @@ import { t } from './i18n.js';
 
     async function loadModules() {
         if (_mods) return _mods;
-        let engine, filterLib;
-        try {
-            engine    = await import(`${EXT_BASE}/particle_engine.js`);
-            filterLib = await import(`${EXT_BASE}/filter_library.js`);
-        } catch (e) {
-            console.error('[pixifx] module load failed:', e);
+        let engine, filterLib, lastErr = null;
+        for (const base of EXT_BASES) {
+            try {
+                engine    = await import(`${base}/particle_engine.js`);
+                filterLib = await import(`${base}/filter_library.js`);
+                lastErr = null;
+                break;
+            } catch (e) {
+                lastErr = e;
+                engine = filterLib = undefined;
+            }
+        }
+        if (lastErr || !engine || !filterLib) {
+            console.error('[pixifx] module load failed:', lastErr);
             throw new Error(t('pixifx.moduleLoadFailed'));
         }
         await engine.loadPixiJS();
