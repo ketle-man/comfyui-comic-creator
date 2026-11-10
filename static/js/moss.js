@@ -8,6 +8,7 @@ import { state, switchTab } from './main/01-state.js';
 import { dbGet } from './main/00-db.js';
 import { insertImage, insertImageFromUrl, getBoundingBoxFromPoints } from './main/08-panels-images.js';
 import { prepareVramForGeneration } from './vram-prepare.js';
+import { createStageZoom } from './stage-zoom.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'ccc_moss_v1';
@@ -247,10 +248,9 @@ function layoutPayload() {
 }
 
 function renderCanvas() {
-    const cv = $('moss-layout-canvas'), wrap = $('moss-layout-wrap');
-    if (!cv || !wrap) return;
-    const maxW = Math.min(wrap.clientWidth || 480, 560), maxH = 620;
-    S.scale = Math.min(maxW / S.W, maxH / S.H);
+    const cv = $('moss-layout-canvas');
+    if (!cv) return;
+    S.scale = zoom ? zoom.scaleFor(S.W, S.H, 480, 620) : Math.min(480 / S.W, 620 / S.H);
     cv.style.width = `${Math.round(S.W * S.scale)}px`;
     cv.style.height = `${Math.round(S.H * S.scale)}px`;
     cv.innerHTML = '';
@@ -451,11 +451,18 @@ function canvasPoint(e) {
 }
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
+let zoom = null;
+
 function initCanvasInteraction() {
     const cv = $('moss-layout-canvas');
     let drag = null;   // { mode: 'draw'|'move'|'nw'..., item, start, orig }
+    zoom = createStageZoom({
+        wrap: $('moss-layout-wrap'), stage: cv, controls: $('moss-zoom-ctl'),
+        render: renderCanvas, isActive: () => !!$('moss-tab')?.classList.contains('active'),
+    });
 
     cv.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;   // 中ボタンはスクロール（stage-zoom.js）、右ボタンは何もしない
         if (e.target.classList.contains('moss-inline-edit')) return;   // 入力中のテキストエリアはドラッグ対象にしない
         const boxEl = e.target.closest('.moss-box');
         const p = canvasPoint(e);
@@ -1327,7 +1334,7 @@ async function initMossTabOnce() {
 }
 
 function initMossTab() {
-    if (S.inited) return;
+    if (S.inited) { renderCanvas(); return; }   // 表示中の領域の大きさに合わせ直す（非表示中は寸法が取れない）
     S.inited = true;
     S.initPromise = initMossTabOnce();
 }

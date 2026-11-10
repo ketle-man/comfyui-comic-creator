@@ -11,6 +11,7 @@ import { t } from '../i18n.js';
 import { getBackendDefaultUrl } from '../auto-ai-client.js';
 import { importOcrItems } from '../moss.js';
 import { switchTab } from './01-state.js';
+import { createStageZoom } from '../stage-zoom.js';
 import { prepareVramForGeneration, getVramSettings, beforeChatTe, afterChatTe } from '../vram-prepare.js';
 import {
     OCR_MODEL_DEFAULT, LAYOUT_MODEL_DEFAULT, OCR_CLASSES, OCR_CLASS_KEYS, VLM_CLASS_KEYS, OCR_PROMPT,
@@ -157,6 +158,7 @@ async function loadImageFile(file) {
     const b64 = cv.toDataURL('image/jpeg', 0.92).split(',')[1];
     O.img = { url, w: im.naturalWidth, h: im.naturalHeight, b64, el: im };
     O.boxes = []; O.selId = null; O.multi.clear(); O.nextId = 1;
+    zoom?.reset();   // 新しい画像は全体表示から
     clearUndo();   // 別の画像の枠を戻さないように（idも1から振り直すため衝突する）
     $('ocr-overall').value = '';
     $('ocr-run-btn').disabled = false;
@@ -178,15 +180,14 @@ function updateButtons() {
 const selBox = () => O.boxes.find(b => b.id === O.selId) || null;
 
 function renderStage() {
-    const stage = $('ocr-stage'), wrap = $('ocr-stage-wrap');
+    const stage = $('ocr-stage');
     stage.innerHTML = '';
     if (!O.img) {
         stage.style.width = ''; stage.style.height = '';
         const e = document.createElement('div'); e.className = 'ocr-empty'; e.textContent = t('ocr.empty'); stage.appendChild(e);
         return;
     }
-    const maxW = Math.min(wrap.clientWidth || 560, 640), maxH = 680;
-    O.scale = Math.min(maxW / O.img.w, maxH / O.img.h);
+    O.scale = zoom ? zoom.scaleFor(O.img.w, O.img.h) : 1;
     const W = Math.round(O.img.w * O.scale), H = Math.round(O.img.h * O.scale);
     stage.style.width = `${W}px`; stage.style.height = `${H}px`;
     const img = document.createElement('img'); img.src = O.img.url; img.draggable = false; stage.appendChild(img);
@@ -278,9 +279,15 @@ function initStageModeButtons() {
     $('ocr-draw-class').addEventListener('change', () => setStageMode('draw'));
 }
 
+let zoom = null;
+
 function initStageInteraction() {
     const stage = $('ocr-stage');
     let drag = null;
+    zoom = createStageZoom({
+        wrap: $('ocr-stage-wrap'), stage, controls: $('ocr-zoom-ctl'),
+        render: renderStage, isActive: () => !!$('ocr-tab')?.classList.contains('active'),
+    });
     initStageModeButtons();
     stage.addEventListener('pointerdown', (e) => {
         if (!O.img || e.button !== 0) return;

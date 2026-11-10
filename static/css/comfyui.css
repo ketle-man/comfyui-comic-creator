@@ -245,7 +245,7 @@
 /* ── OCRタブ ── */
 :root { --ocr-text: #4fd8ff; --ocr-balloon: #8be9fd; --ocr-sfx: #ff9f43; --ocr-caption: #a29bfe; --ocr-panel: #ffc107; --ocr-character: #ff69b4; --ocr-face: #ff8fc8; --ocr-object: #4caf50; }
 .ocr-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
-.ocr-stage { position: relative; background: #1a1a1a; border: 1px solid #444; touch-action: none; user-select: none; min-width: 320px; min-height: 240px; }
+.ocr-stage { position: relative; flex-shrink: 0; margin: auto; background: #1a1a1a; border: 1px solid #444; touch-action: none; user-select: none; min-width: 320px; min-height: 240px; }
 .ocr-stage.dragover { outline: 2px dashed #4fd8ff; }
 .ocr-stage img { display: block; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; }
 .ocr-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #777; font-size: 13px; pointer-events: none; }
@@ -268,6 +268,15 @@
 .ocr-row textarea { flex: 1; min-width: 0; background: #111; color: #fff; font-size: 12px; box-sizing: border-box; resize: vertical; }
 .ocr-actions { display: flex; gap: 6px; margin-top: 6px; }
 #ocr-tab .ocr-image-col { flex: 1; min-width: 0; }
+
+/* OCR / MOSS-Image のステージ: 高さ固定のスクロール領域（stage-zoom.js でズーム）。
+   中身は margin:auto で中央寄せ（justify-content:center だと拡大時に左・上へはみ出た部分へスクロールできない） */
+.stage-viewport { width: 100%; height: clamp(360px, calc(100vh - 300px), 1400px); display: flex; overflow: auto; padding: 8px; box-sizing: border-box; background: #111; border: 1px solid #333; border-radius: 4px; }
+.stage-viewport.panning { cursor: grabbing; }
+.stage-viewport.panning * { cursor: grabbing !important; }
+.stage-zoom-ctl { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
+.stage-zoom-ctl .stage-zoom-btn { min-width: 26px; padding-left: 6px; padding-right: 6px; }
+.stage-zoom-label { min-width: 44px; text-align: center; font-size: 12px; color: var(--text-secondary); cursor: help; }
 
 /* Nanobanana+タブ: ローカルモードではクラウド専用項目（Gemini/ネイティブ設定・履歴・シード）を隠す */
 #nanobanana-tab[data-mode="local"] .nb-cloud-only { display: none !important; }
