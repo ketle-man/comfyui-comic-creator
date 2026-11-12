@@ -64,6 +64,9 @@ In the Layout tab, use the "Undo" button in the control bar to undo.
 | Ctrl + Z | Bring back deleted boxes |
 | Esc / Ctrl + Enter | Finish typing in a text box |
 | Press a text box twice quickly | Edit its text again |
+| Ctrl + wheel | Zoom in or out around the cursor |
+| Middle-button drag | Move the visible area |
+| + / - / 0 | Zoom in / zoom out / fit |
 
 ### OCR tab
 
@@ -73,6 +76,9 @@ In the Layout tab, use the "Undo" button in the control bar to undo.
 | Delete | Delete the selected boxes |
 | Ctrl + Z | Bring back deleted boxes |
 | Ctrl + V | Paste and open an image |
+| Ctrl + wheel | Zoom in or out around the cursor |
+| Middle-button drag | Move the visible area |
+| + / - / 0 | Zoom in / zoom out / fit |
 
 ### Page tab
 

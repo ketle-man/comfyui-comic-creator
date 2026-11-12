@@ -309,7 +309,7 @@ See the in-app **Help** tab (available in Japanese, English, and Chinese, with s
 
 ## Manual
 
-A text-only beginner manual (for v1.69.1) is included: Japanese in [docs/manual/ja/](docs/manual/ja/), English in [docs/manual/en/](docs/manual/en/), and Simplified Chinese in [docs/manual/zh/](docs/manual/zh/). Start from `00_Contents.md` (English), `00_目次.md` (Japanese), or `00_目录.md` (Chinese).
+A text-only beginner manual (for v1.70.0) is included: Japanese in [docs/manual/ja/](docs/manual/ja/), English in [docs/manual/en/](docs/manual/en/), and Simplified Chinese in [docs/manual/zh/](docs/manual/zh/). Start from `00_Contents.md` (English), `00_目次.md` (Japanese), or `00_目录.md` (Chinese).
 
 ## Architecture
 

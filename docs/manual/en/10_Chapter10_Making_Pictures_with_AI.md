@@ -311,6 +311,18 @@ To draw again, choose "Object", "Panel", "Character", or "Text". The choice is s
 - Importing (such as "Import panels from current page") or sending from the OCR tab clears the earlier deletions from the undo history.
 - The undo history is lost when you reload the page.
 
+### Zooming the view
+
+The layout editor canvas is shown inside a view of fixed height. At first the whole canvas fits in the view (100%). When you draw or move small boxes, it is easier to zoom in first.
+
+- **"−" / "+" buttons**: zoom out / zoom in
+- **"Fit" button**: return to the whole view (100%)
+- **Ctrl + wheel**: zoom in or out around the cursor
+- **Drag with the middle button (wheel)**: move the visible area
+- **+ / - / 0 keys**: zoom in, zoom out, fit (not while typing text)
+
+While zoomed in, you can still draw, move, and resize boxes as usual.
+
 ### Text boxes
 
 - Right after you draw a "Text" box, you can type directly into it. Finish with Esc, Ctrl+Enter, or a click outside (Enter adds a line break).
@@ -446,6 +458,9 @@ Your choice of "Select" or "Draw" is saved in the browser.
 > **Caution**
 > The first model you use takes a while to load, and switching models can run GPU memory (VRAM) short. If "VRAM Management (Ollama)" in the "Settings" tab (Chapter 13) is on, other Ollama models are unloaded before detection.
 
+> **Tip**
+> The OCR tab image is also shown inside a view of fixed height. Use "−", "+", and "Fit" at the right end of the toolbar, Ctrl + wheel, middle-button drag, or the + / - / 0 keys to zoom, just like the MOSS-Image tab (10-6). Opening a new image returns the view to 100%.
+
 ### Modes
 
 Choosing a "Mode" switches the individual settings below all at once. If you change an individual setting by hand, the mode switches to "Custom" automatically.
@@ -528,3 +543,4 @@ Pressing "Insert" in the Layout tab's "Text" tool, or in the Image tab's text to
 > - The OCR tab reads the text and positions in an image with Ollama models. For covers with lots of vertical text, replacing box text with the "Whole-image read (Chat TE)" helps. Results can be sent to MOSS-Image or inserted as text
 > - In MOSS-Image and OCR, choose "Select" so that dragging never draws a box. Deleted boxes come back with "Undo" (Ctrl + Z)
 > - When you use the whole-image read (Chat TE) and image generation one after the other, the models in ComfyUI are swapped automatically (the first run after switching takes a few extra seconds)
+> - In MOSS-Image and OCR, zoom the image with "−" / "+" or Ctrl + wheel; "Fit" returns it to the full view

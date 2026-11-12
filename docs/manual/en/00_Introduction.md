@@ -30,7 +30,7 @@ Many integration features require another custom node or external software. For 
 
 ## Target Version
 
-This book is based on **Comic Creator v1.69.1**.
+This book is based on **Comic Creator v1.70.0**.
 Comic Creator is updated frequently, so in other versions button positions or names may differ. In that case, also check the in-app "Help" tab (Chapter 3).
 
 ## Notation

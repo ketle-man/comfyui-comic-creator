@@ -2,7 +2,7 @@
 
 Author: ketle-man
 
-Target version: v1.69.1 (`pyproject.toml`)
+Target version: v1.70.0 (`pyproject.toml`)
 
 ## Editions
 

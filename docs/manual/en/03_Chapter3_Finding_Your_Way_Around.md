@@ -149,7 +149,7 @@ The "Help" tab is a manual built into Comic Creator. It covers features in even 
 Help is available in Japanese, English, and Chinese, and follows the language chosen in the "Settings" tab.
 
 > **Tip**
-> This book is based on v1.69.1. If button names or positions differ from this book, search the Help tab to find the explanation for your current version.
+> This book is based on v1.70.0. If button names or positions differ from this book, search the Help tab to find the explanation for your current version.
 
 > **Chapter summary**
 > - The twelve tabs fall into three groups: "Create", "Create with AI", and "Support". The ones you use most are "Page" and "Layout"
