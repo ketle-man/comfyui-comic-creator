@@ -27,12 +27,15 @@ In every environment, custom nodes go inside `ComfyUI/custom_nodes/`.
 
 ComfyUI has a "Nodes Manager" where you can search for and install custom nodes. This is the easiest way.
 
-1. Start ComfyUI and open the "Extensions" menu at the top of the screen.
-2. Choose "Nodes Manager".
+1. Start ComfyUI and click the "Manage extensions" button (the puzzle-piece icon) at the top right of the screen.
+2. The "Custom Nodes Manager" opens.
 3. Type `comic creator` in the search box.
 
 4. Install "ComfyUI Comic Creator" from the search results.
 5. When installation finishes, restart ComfyUI.
+
+> **Tip**
+> The button name and position are from ComfyUI frontend v1.58.5. In older ComfyUI versions, open it from the "Manager" button or the "Extensions" menu at the top of the screen. If you cannot find it, hover over the icons to see their names.
 
 > **Tip**
 > If nodes with similar names appear, choose the one whose author is "statsu" (ketle-man on GitHub).
@@ -137,7 +140,7 @@ Settings for the AI image service (Nanobanana) and external software (Eagle, G'M
 | The "workflow studio" tab says "was not found" | ComfyUI-Workflow-Studio is not installed | Install it and restart ComfyUI if you want to use it. Otherwise you can ignore it |
 
 > **Chapter summary**
-> - Install by searching for `comic creator` in "Extensions" > "Nodes Manager", or manually by placing the folder in `custom_nodes`
+> - Open the Custom Nodes Manager with the "Manage extensions" button at the top right and install by searching for `comic creator`, or manually by placing the folder in `custom_nodes`
 > - Restart ComfyUI after installing. Open it with the **CC** button in the top bar
 > - Comic Creator's address is "ComfyUI's address + `/ccc`". Always use the same address
 > - It starts in Japanese. Switch with "設定" (Settings) > "言語" (Language) > "English"
