@@ -307,6 +307,10 @@ MOSS-Image 标签页顶部的状态显示"可用"即准备完毕。更新 `py/cc
   <img src="docs/17_3DPose_2.png" width="260" alt="Light & Pose Editor（Light/pose/Image标签、关键帧时间线）">
 </p>
 
+## 使用手册
+
+附带不含截图的入门手册（适用于 v1.69.1）。简体中文版位于 [docs/manual/zh/](docs/manual/zh/)，日文版位于 [docs/manual/ja/](docs/manual/ja/)，英文版位于 [docs/manual/en/](docs/manual/en/)。请从各文件夹的 `00_目录.md`（日文为 `00_目次.md`，英文为 `00_Contents.md`）开始阅读。
+
 ## 架构
 
 ```
