@@ -2418,7 +2418,11 @@
                   <div class="comfyui-field">
                     <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px;"><input type="checkbox" id="ocr-use-layout" checked> <span data-i18n="ocr.useLayout">レイアウト検出も行う（別のVLM）</span></label>
                   </div>
-                  <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.layoutModel">検出モデル:</label><select id="ocr-layout-model" class="comfyui-select"></select></div>
+                  <div class="comfyui-field"><label class="comfyui-label" data-i18n="ocr.layoutEngine">検出エンジン:</label>
+                    <select id="ocr-layout-engine" class="comfyui-select"><option value="ollama" data-i18n="ocr.engineOllama">Ollama の VLM</option><option value="wevisone" data-i18n="ocr.engineWevis">WeVisOne-VL（ComfyUI）</option></select></div>
+                  <div class="comfyui-field" id="ocr-layout-model-row"><label class="comfyui-label" data-i18n="ocr.layoutModel">検出モデル:</label><select id="ocr-layout-model" class="comfyui-select"></select></div>
+                  <div class="comfyui-field" id="ocr-wevis-model-row" style="display:none"><label class="comfyui-label" data-i18n="ocr.wevisModel">WeVisOne:</label><select id="ocr-wevis-model" class="comfyui-select"></select></div>
+                  <div style="font-size:11px; color:#888;" id="ocr-wevis-hint" data-i18n="ocr.wevisHint">WeVisOne-VL は ComfyUI 側で動きます（カスタムノード ComfyUI-WeVisOne-VL と重み wevisone_vl_4b_*.safetensors が必要）。コマ・フキダシ・擬音・顔の枠が正確ですが、説明文（caption）は付きません。全体プロンプトは引き続き上の「検出モデル」（Ollama）を使います。</div>
                   <div style="font-size:11px; color:#888;" data-i18n="ocr.vramHint">設定タブの「VRAM調整」が有効なら、検出の実行前と、意思決定モデルでの判定前にOllamaのモデルを退避して空きVRAMを作ります。</div>
                   <div style="font-size:11px; color:#888;" data-i18n="ocr.layoutHint">OCRモデルは文字の位置と本文だけを返します。コマ・キャラ・フキダシ等は、画像対応の汎用VLM（gemma4 など）で検出します。</div>
                   <div class="comfyui-field" style="margin-top:8px;">

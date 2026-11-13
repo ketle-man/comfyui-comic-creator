@@ -2,6 +2,20 @@
 
 ---
 
+## 2026-11-13（未リリース・試用: WeVisOne-VL を OCR レイアウト検出と Image タブの切り抜きに選択式で追加）
+
+**動機**: tencent/WeVisOne-VL-4B（Qwen3-VL-4B ベースの検出・OCR・マット特化モデル）を実測比較したところ、OCR タブのレイアウト検出は gemma4:e4b より大幅に正確（gemma4 はコマを格子状に当てはめるだけ）、写真の髪の切り抜きは SAM3 より上（ソフトな境界）だった。OCR の本文読みは LightOnOCR-3 のほうが上なので置き換えない。
+
+**内容**
+- `static/js/wevisone-client.js` を新設。ComfyUI に画像を上げ、paralaif/ComfyUI-WeVisOne-VL の `WeVisOneVLLoader` + `WeVisOneVLPerceive` を `/prompt` で実行し、出力（`<ref>…</ref><box><x1><y1><x2><y2></box>`、0-1000）とマスク画像（PreviewImage の temp）を返す。複数ジョブを1回のワークフローにまとめるのでモデルの読み込みは1回。
+- OCR タブ: 「検出エンジン」（Ollama の VLM / WeVisOne-VL）と WeVisOne の重みの選択を追加。WeVisOne ではクラスごとに1ラベルずつ問い合わせる（まとめて聞くとラベルを取り違える）。画像に無いラベル（4コマでのキャプション・擬音）はフキダシ枠を返してくるため、容器クラスどうしで重なった枠は「既存の一部だけを返した＝本物として付け替え、全部返した＝幻覚として捨てる」で処理（`ocr-core.js` の `wevisToBoxes`）。説明文（caption）は付かない。全体プロンプトは引き続き Ollama の検出モデル。
+- Image タブ: Mask ツールの SAM3 欄にエンジン選択（SAM3 / WeVisOne）。WeVisOne は task=matting でインスタンスごとのソフトなマスクを返し、既存の候補選択・適用 UI をそのまま使う。該当なしはマスク0枚で ComfyUI 側が失敗するため、空の結果として扱う。
+- ComfyUI 本体の `WeVisOneDetect` は Comfy-Org 版の重み向けで、paralaif 版の重みは本体の CLIPLoader で読めない（embed_tokens のサイズ不一致）。本体 Detect + paralaif ローダーはマスク生成だけ失敗するため、paralaif のノードに統一した。
+
+**検証**: Kapture で実機確認。OCR タブ（縦書きマンガページ、OCR + WeVisOne レイアウト）33件・24.9秒。Image タブで人物写真を person で切り抜き約4.6秒、半透明の境界が保たれることを確認。SAM3 への切り替え後も従来どおり動作。
+
+---
+
 ## 2026-11-12（v1.70.1: 中国語（簡体字）マニュアルを同梱、マニュアルを v1.70.0 対応に更新）
 
 ### マニュアルの v1.70.0 対応（日英中）

@@ -20,7 +20,9 @@ import {
     DECIDE_QUESTIONS, pickDecisionModel, parseDecision, applyDecision, OVERALL_PROMPT, cleanOverall, ocrLooksFailed,
     toTextInsertItems, OCR_MODE_PRESETS, MODE_QUESTIONS, MODE_MIN_PROB, modeByAspect, parseModeAnswer, tileRects, mapTileBoxes, dedupeTileBoxes,
     CHATTE_PROMPT, pickChatTeModel, chatTeThinking, parseChatTeLines, applyChatTeLines,
+    wevisLayoutJobs, wevisToBoxes,
 } from '../ocr-core.js';
+import { wevisoneStatus, pickWevisoneModel, runWevisone, parseWevisone } from '../wevisone-client.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'ccc_ocr_v1';
@@ -51,6 +53,7 @@ function saveSettings() {
         const classes = [...document.querySelectorAll('[data-ocr-class]')].filter(el => el.checked).map(el => el.dataset.ocrClass);
         localStorage.setItem(STORE_KEY, JSON.stringify({
             url: $('ocr-url').value, ocrModel: $('ocr-model').value, layoutModel: $('ocr-layout-model').value,
+            layoutEngine: $('ocr-layout-engine').value, wevisModel: $('ocr-wevis-model').value,
             useLayout: $('ocr-use-layout').checked, classes, merge: $('ocr-merge-containers').checked,
             useReread: $('ocr-use-reread').checked, rereadModel: $('ocr-reread-model').value,
             useChatte: $('ocr-use-chatte').checked, chatteUrl: $('ocr-chatte-url').value, chatteModel: $('ocr-chatte-model').value,
@@ -535,6 +538,46 @@ async function loadChatteModels(saved) {
     updateButtons();
 }
 
+// ─── WeVisOne-VL（ComfyUI）でのレイアウト検出 ───
+const useWevis = () => $('ocr-layout-engine').value === 'wevisone';
+
+function updateEngineRows() {
+    const w = useWevis();
+    $('ocr-wevis-model-row').style.display = w ? '' : 'none';
+    $('ocr-wevis-hint').style.display = w ? '' : 'none';
+}
+
+async function loadWevisModels(saved) {
+    const sel = $('ocr-wevis-model');
+    const st = await wevisoneStatus(location.origin);
+    fillModelSelect(sel, st.models, saved?.wevisModel || pickWevisoneModel(st.models), []);
+    const opt = $('ocr-layout-engine').querySelector('option[value="wevisone"]');
+    opt.disabled = !st.available;
+    if (!st.available && useWevis()) $('ocr-layout-engine').value = 'ollama';
+    updateEngineRows();
+}
+
+function b64ToBlob(b64, type = 'image/jpeg') {
+    const bin = atob(b64), u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return new Blob([u], { type });
+}
+
+/** 選択クラスを WeVisOne で検出する（クラスごとに1ラベル、1回のワークフローにまとめる） */
+async function wevisLayout(classes, prog) {
+    const model = $('ocr-wevis-model').value;
+    if (!model) throw new Error(t('ocr.wevisUnavailable'));
+    const jobs = wevisLayoutJobs(classes);
+    if (!jobs.length) return [];
+    await prepareVram(prog);   // 直前のOCRモデル（Ollama）を退避して ComfyUI 側に空きを作る
+    prog.textContent = t('ocr.progressWevis', 0);
+    const res = await runWevisone({
+        base: location.origin, image: b64ToBlob(O.img.b64), model, jobs,
+        onWait: (ms) => { prog.textContent = t('ocr.progressWevis', Math.round(ms / 1000)); },
+    });
+    return wevisToBoxes(jobs, res.map(r => parseWevisone(r.raw)));
+}
+
 /** 画像全体を読んで行の配列を返す。モデルが未ロード・別モデルなら先にロードする */
 async function chatteRead(prog) {
     const base = chatteBase(), model = $('ocr-chatte-model').value;
@@ -745,9 +788,13 @@ async function onRun() {
         let vlmBoxes = [];
         const classes = selectedLayoutClasses();
         if ($('ocr-use-layout').checked && classes.length) {
-            prog.textContent = t('ocr.progressLayout');
-            const raw = await ollamaChat($('ocr-layout-model').value, buildLayoutPrompt(classes), O.img.b64, 4096);
-            vlmBoxes = parseLayoutOutput(raw, O.img.w, O.img.h).filter(b => classes.includes(b.cls));
+            if (useWevis()) {
+                vlmBoxes = await wevisLayout(classes, prog);
+            } else {
+                prog.textContent = t('ocr.progressLayout');
+                const raw = await ollamaChat($('ocr-layout-model').value, buildLayoutPrompt(classes), O.img.b64, 4096);
+                vlmBoxes = parseLayoutOutput(raw, O.img.w, O.img.h).filter(b => classes.includes(b.cls));
+            }
         }
         O.boxes = mergeDetections(ocrBoxes, vlmBoxes).map(b => ({ ...b, id: O.nextId++ }));
         clearUndo();   // 検出し直した後に前回の枠が戻ると混ざるため
@@ -821,6 +868,8 @@ async function initOcrTabOnce() {
         document.querySelectorAll('[data-ocr-class]').forEach(el => { el.checked = saved.classes.includes(el.dataset.ocrClass); });
     }
     if (saved.useLayout === false) $('ocr-use-layout').checked = false;
+    if (saved.layoutEngine) $('ocr-layout-engine').value = saved.layoutEngine;
+    updateEngineRows();
     if (saved.useReread !== undefined) $('ocr-use-reread').checked = !!saved.useReread;
     if (saved.preprocess) $('ocr-preprocess').value = saved.preprocess;
     if (saved.useOverall !== undefined) $('ocr-use-overall').checked = !!saved.useOverall;
@@ -856,11 +905,12 @@ async function initOcrTabOnce() {
     $('ocr-run-btn').addEventListener('click', onRun);
     $('ocr-overall-btn').addEventListener('click', onOverallBtn);
     $('ocr-chatte-btn').addEventListener('click', onChatteBtn);
-    $('ocr-reload-models-btn').addEventListener('click', () => { loadModels(loadSettings()); loadChatteModels(loadSettings()); });
+    $('ocr-reload-models-btn').addEventListener('click', () => { loadModels(loadSettings()); loadChatteModels(loadSettings()); loadWevisModels(loadSettings()); });
+    $('ocr-layout-engine').addEventListener('change', updateEngineRows);
     $('ocr-copy-text-btn').addEventListener('click', () => copyText(collectText(O.boxes), 'ocr.copied'));
     $('ocr-copy-json-btn').addEventListener('click', () => copyText(boxesAsJson(), 'ocr.copied'));
     $('ocr-send-moss-btn').addEventListener('click', onSendMoss);
-    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers', 'ocr-use-reread', 'ocr-reread-model', 'ocr-use-decide', 'ocr-decide-model', 'ocr-use-overall', 'ocr-preprocess', 'ocr-use-ocr', 'ocr-mode', 'ocr-use-chatte', 'ocr-chatte-url', 'ocr-chatte-model']) $(id).addEventListener('change', saveSettings);
+    for (const id of ['ocr-url', 'ocr-model', 'ocr-layout-model', 'ocr-use-layout', 'ocr-merge-containers', 'ocr-use-reread', 'ocr-reread-model', 'ocr-use-decide', 'ocr-decide-model', 'ocr-use-overall', 'ocr-preprocess', 'ocr-use-ocr', 'ocr-mode', 'ocr-use-chatte', 'ocr-chatte-url', 'ocr-chatte-model', 'ocr-layout-engine', 'ocr-wevis-model']) $(id).addEventListener('change', saveSettings);
     $('ocr-chatte-url').addEventListener('change', () => loadChatteModels(loadSettings()));
     // 個別設定を手で変えたらモードは「カスタム」へ（プリセット適用中は除く）
     const toCustom = () => { if (!O.applyingPreset && $('ocr-mode').value !== 'custom') { $('ocr-mode').value = 'custom'; updateModeHint(); saveSettings(); } };
@@ -872,7 +922,7 @@ async function initOcrTabOnce() {
     window.addEventListener('resize', () => { if ($('ocr-tab')?.classList.contains('active')) renderStage(); });
 
     renderAll();
-    await Promise.all([loadModels(saved), loadChatteModels(saved)]);
+    await Promise.all([loadModels(saved), loadChatteModels(saved), loadWevisModels(saved)]);
     if (firstUse && OCR_MODE_PRESETS[$('ocr-mode').value]) applyPreset($('ocr-mode').value);   // モデル一覧が揃ってから（読み直し・判定の可否が決まる）
 }
 

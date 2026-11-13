@@ -116,6 +116,55 @@ export function parseLayoutOutput(raw, imgW = 0, imgH = 0) {
     return out;
 }
 
+// ── WeVisOne-VL（ComfyUI）でのレイアウト検出 ──
+// 複数ラベルを1問にまとめるとラベルを取り違えるため、クラスごとに1ラベルずつ問い合わせる
+export const WEVIS_QUERY = {
+    panel: 'comic panel',
+    balloon: 'speech bubble',
+    caption: 'caption box',
+    sfx: 'sound effect text',
+    character: 'person',
+    face: 'face',
+    object: 'object',
+};
+// 画像に無いラベルを聞くと、似た物（フキダシ・文字行）を返す。後ろのクラスほど疑わしいので、
+// 先に確定したクラスの枠とよく重なる枠は捨てる（例: 4コマで caption/sfx を聞くとフキダシ枠が返る）
+const WEVIS_ORDER = ['panel', 'balloon', 'character', 'face', 'caption', 'sfx', 'object'];
+const WEVIS_EXCLUSIVE = new Set(['balloon', 'caption', 'sfx']);   // 互いに排他な文字の容器
+const WEVIS_DUP_IOU = 0.6;
+
+/** 選択クラス → runWevisone 用のジョブ（WEVIS_ORDER 順） */
+export function wevisLayoutJobs(classes) {
+    return WEVIS_ORDER.filter(c => classes.includes(c) && WEVIS_QUERY[c]).map(c => ({ cls: c, task: 'detection', query: WEVIS_QUERY[c] }));
+}
+
+/**
+ * ジョブごとの検出結果（parseWevisone の出力）→ ボックス配列。ページ全体を覆う枠と同クラスの重複を除く。
+ * 容器クラス（フキダシ/キャプション/擬音）どうしが重なったとき、後のクラスが既存の容器の「一部だけ」を返したなら
+ * 選り分けている＝本物とみなしてラベルを付け替える。全部を返したなら幻覚とみなして捨てる。
+ */
+export function wevisToBoxes(jobs, parsedList) {
+    const kept = [];
+    jobs.forEach((j, i) => {
+        const boxes = (parsedList[i] || []).map(p => makeBox(j.cls, p.x1, p.y1, p.x2, p.y2))
+            .filter(b => b && (j.cls === 'panel' || area(b) <= 0.85));
+        if (WEVIS_EXCLUSIVE.has(j.cls)) {
+            const containers = kept.filter(k => WEVIS_EXCLUSIVE.has(k.cls));
+            const hitOf = (b) => containers.find(k => iou(k, b) > WEVIS_DUP_IOU);
+            const hits = new Set(boxes.map(hitOf).filter(Boolean));
+            const selective = hits.size > 0 && hits.size < containers.length;
+            for (const b of boxes) {
+                const h = hitOf(b);
+                if (!h) { if (!kept.some(k => k.cls === j.cls && iou(k, b) > 0.8)) kept.push(b); continue; }
+                if (selective) h.cls = j.cls;
+            }
+            return;
+        }
+        for (const b of boxes) if (!kept.some(k => k.cls === j.cls && iou(k, b) > 0.8)) kept.push(b);
+    });
+    return kept;
+}
+
 // ── 後処理 ──
 const area = (b) => (b.x2 - b.x1) * (b.y2 - b.y1);
 const center = (b) => ({ x: (b.x1 + b.x2) / 2, y: (b.y1 + b.y2) / 2 });

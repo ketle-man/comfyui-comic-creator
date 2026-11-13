@@ -32,6 +32,7 @@ import { _scriptMangaGetSelectedDialogue } from './main/21a-script-manga.js';
 import { openTextInsertModal } from './text-insert-modal.js';
 import { fitFontSize } from './ocr-core.js';
 import { resolveBackendError } from './i18n.js';
+import { wevisoneStatus, pickWevisoneModel, runWevisone, parseWevisone } from './wevisone-client.js';
 
 const TOOL_DEFS = [
     { id: "select",   icon: "▲",  label: "Select",    ready: true },
@@ -446,6 +447,10 @@ class ImageTab {
         this._sam3Loading   = false;
         this._sam3Mode      = "add";        // "add" | "erase"
         this._sam3Selected  = new Set();    // 選択中の結果インデックス
+        // テキスト指定の切り抜きエンジン: "sam3"（Mask Editor One）| "wevisone"（WeVisOne-VL / ComfyUI、ソフトな境界）
+        this._wevisAvailable = false;
+        this._wevisModel     = "";
+        try { this._segEngine = localStorage.getItem("ccc_image_seg_engine") || "sam3"; } catch { this._segEngine = "sam3"; }
         // ABR brush（comic-creator側に対応ルートが無い場合は常にfalse）
         this._abrAvailable = false;
         this._abrBrushTree = [];
@@ -594,8 +599,21 @@ class ImageTab {
             this._sam3Available = json.loaded === true || json.ckpt_found === true;
         } catch {
             this._sam3Available = false;
+        } finally {
+            await this._checkWevisAvailability();
         }
     }
+
+    async _checkWevisAvailability() {
+        const st = await wevisoneStatus(location.origin);
+        this._wevisAvailable = st.available;
+        this._wevisModel     = pickWevisoneModel(st.models);
+        // 片方しか無いときはそちらを使う
+        if (this._segEngine === "wevisone" && !this._wevisAvailable) this._segEngine = "sam3";
+        if (this._segEngine === "sam3" && !this._sam3Available && this._wevisAvailable) this._segEngine = "wevisone";
+    }
+
+    get _segAvailable() { return this._sam3Available || this._wevisAvailable; }
 
     async _checkAbrAvailability() {
         try {
@@ -1332,16 +1350,23 @@ class ImageTab {
 
         } else if (toolId === "mask") {
             const sub = this._maskSubtool ?? "paint";
-            const sam3Disabled = this._sam3Available ? "" : "disabled";
-            const sam3Title    = this._sam3Available ? "SAM3 Segment" : "SAM3 (Mask Editor One required)";
-            const sam3Ui = this._sam3Available && sub === "sam3" ? `
+            const sam3Disabled = this._segAvailable ? "" : "disabled";
+            const sam3Title    = this._segAvailable ? "SAM3 / WeVisOne Segment" : "SAM3 (Mask Editor One required)";
+            const useWevis     = this._segEngine === "wevisone";
+            const sam3Ui = this._segAvailable && sub === "sam3" ? `
+                <div class="ie-opt-group">
+                    <select id="ie-seg-engine" class="ie-opt-select" title="Segmentation engine" style="width:96px;">
+                        <option value="sam3"${!useWevis ? " selected" : ""}${this._sam3Available ? "" : " disabled"}>SAM3</option>
+                        <option value="wevisone"${useWevis ? " selected" : ""}${this._wevisAvailable ? "" : " disabled"}>WeVisOne</option>
+                    </select>
+                </div>
                 <div class="ie-opt-group">
                     <input type="text" id="ie-sam3-prompt" class="ie-opt-input"
-                        placeholder="e.g. cat, person..."
+                        placeholder="${useWevis ? "e.g. the girl in a red coat" : "e.g. cat, person..."}"
                         value="${this._sam3Prompt}"
                         style="width:160px;font-size:11px;padding:2px 6px;border:1px solid var(--it-border);border-radius:3px;background:var(--it-surface);color:var(--it-text);">
                 </div>
-                <div class="ie-opt-group">
+                <div class="ie-opt-group" style="${useWevis ? "display:none;" : ""}">
                     <label style="font-size:11px;color:var(--it-text-secondary);">Max</label>
                     <select id="ie-sam3-max" class="ie-opt-select" style="width:44px;">
                         ${[3,6,9,12].map(n => `<option value="${n}"${n === this._sam3MaxMasks ? " selected" : ""}>${n}</option>`).join("")}
@@ -1407,7 +1432,14 @@ class ImageTab {
                 this._switchMaskSubtool("shape");
             });
             document.getElementById("ie-mask-sam3-btn")?.addEventListener("click", () => {
-                if (this._sam3Available) this._switchMaskSubtool("sam3");
+                if (this._segAvailable) this._switchMaskSubtool("sam3");
+            });
+            document.getElementById("ie-seg-engine")?.addEventListener("change", e => {
+                this._segEngine = e.target.value;
+                try { localStorage.setItem("ccc_image_seg_engine", this._segEngine); } catch { /* ignore */ }
+                this._sam3Results = []; this._sam3Selected = new Set();
+                this._renderToolOptions("mask");
+                this._renderMaskProps("sam3");
             });
             document.getElementById("ie-mask-inpaint-btn")?.addEventListener("click", () => {
                 this._switchMaskSubtool("inpaint");
@@ -1908,7 +1940,7 @@ class ImageTab {
                                 style="cursor:pointer;border:2px solid ${borderColor};border-radius:4px;overflow:hidden;text-align:center;background:${bg};position:relative;">
                                 <img src="${r.mask_b64}" style="width:100%;display:block;background:#000;">
                                 <div style="font-size:10px;padding:2px 0;color:var(--it-text-secondary);">
-                                    ${Math.round((r.score ?? 0) * 100)}%
+                                    ${r.score == null ? (r.label || "") : `${Math.round(r.score * 100)}%`}
                                 </div>
                                 ${sel ? '<div style="position:absolute;top:2px;right:3px;font-size:12px;line-height:1;color:var(--it-primary);">✓</div>' : ""}
                             </div>`;
@@ -6322,6 +6354,12 @@ class ImageTab {
         this._renderMaskProps("sam3");
 
         try {
+            if (this._segEngine === "wevisone") {
+                this._sam3Results = await this._runWevisMatting(imageLayer, prompt);
+                if (this._sam3Results.length === 0) this._toast(window.t("image.msg.noMasksFound"), "info");
+                else this._toast(window.t("image.msg.masksFound", this._sam3Results.length), "success");
+                return;
+            }
             const dataUrl = imageLayer.canvas.toDataURL("image/png");
             await fetch("/mask_editor/store_image", {
                 method:  "POST",
@@ -6346,6 +6384,26 @@ class ImageTab {
             this._renderToolOptions("mask");
             this._renderMaskProps("sam3");
         }
+    }
+
+    /** WeVisOne-VL（ComfyUI）でテキスト指定のアルファマットを作り、SAM3 と同じ結果形式 [{mask_b64, score, label}] で返す */
+    async _runWevisMatting(imageLayer, prompt) {
+        if (!this._wevisModel) throw new Error("WeVisOne-VL not found");
+        const blob = await new Promise(resolve => imageLayer.canvas.toBlob(resolve, "image/png"));
+        const [res] = await runWevisone({
+            base: location.origin, image: blob, model: this._wevisModel,
+            jobs: [{ task: "matting", query: prompt, masks: true }],
+        });
+        const labels = parseWevisone(res.raw).map(b => b.label);
+        const toDataUrl = async (url) => {
+            const b = await (await fetch(url)).blob();
+            return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(b); });
+        };
+        const out = [];
+        for (let i = 0; i < res.maskUrls.length; i++) {
+            out.push({ mask_b64: await toDataUrl(res.maskUrls[i]), score: null, label: `#${i + 1} ${labels[i] || ""}`.trim().slice(0, 24) });
+        }
+        return out;
     }
 
     async _applySelectedSam3Masks() {
