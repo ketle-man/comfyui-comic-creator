@@ -60,7 +60,7 @@ ComfyUI 上で動作するマンガページ作成 SPA（シングルページ�
 - **Draw ツールのスポイト** — カラーピッカー横のボタンでキャンバス上の色を直接ブラシカラーに設定。**ペンタブレットでは筆圧に応じてブラシサイズ・不透明度が自動的に変化**（マウス操作時は従来通り一定）
 - **Shape ツールの Same Layer モード** — 図形を描くたびに新規レイヤーを作らず、同じレイヤーに重ね描き。矩形・楕円の塗りは単色に加えグラデーション・テクスチャ（位置 X/Y 指定可）に対応
 - **Fill ツール** — 単色塗り／線形・円形グラデーション塗り（カラーランプ・方向パッド）
-- **Mask ツール** — Paint/Color/Alpha/Text/Vector/Shape の各サブツール、SAM3 セグメンテーション・ABR ブラシにも対応（[comfyui-mask-editor-one](#acknowledgements) のツール構成を参考に実装）。Paint サブツールは**ペンタブレットの筆圧に応じてブラシサイズが自動的に変化**（マウス操作時は従来通り一定）。Workflow Studio 導入時はサブツールバーに **Inpaint** ボタンが追加され、マスク＋プロンプトによる生成 AI での部分修正が行える（[ComfyUI-Workflow-Studio](#依存関係任意) 連携）
+- **Mask ツール** — Paint/Color/Alpha/Text/Vector/Shape の各サブツール、SAM3 セグメンテーション・ABR ブラシにも対応。SAM3 欄で **WeVisOne-VL** に切り替えると髪などの境界を残したソフトマスクで切り抜ける（試用）（[comfyui-mask-editor-one](#acknowledgements) のツール構成を参考に実装）。Paint サブツールは**ペンタブレットの筆圧に応じてブラシサイズが自動的に変化**（マウス操作時は従来通り一定）。Workflow Studio 導入時はサブツールバーに **Inpaint** ボタンが追加され、マスク＋プロンプトによる生成 AI での部分修正が行える（[ComfyUI-Workflow-Studio](#依存関係任意) 連携）
 - **Outpaint（Workflow Studio 連携）** — Mask ツールの Inpaint 右隣の **Outpaint** ボタンから使用（事前のマスク作成は不要）。上下左右の余白（連動指定可）・余白の塗り方（拡張ピクセル／透明／白／黒）・Positive/Negative プロンプト・Grow Mask By・Denoise を指定して Run すると、①拡張後の下地画像合成 → ②余白部分=白（生成対象）／元画像部分=黒（維持）のマスク自動生成 → ③ Workflow Studio へ送信、を1回で実行し、成功時のみキャンバスを拡大して結果を新規レイヤーとして追加。拡散モデルの VAE エンコード/デコードは画像サイズが 64px 単位でないと数 px 切り詰められる（結果が透過の隙間を生む原因になる）ため、実際に拡張する辺のピクセル数を自動的に 64 の倍数へ調整して送信する。デフォルトワークフローは Inpaint 設定と独立した「Outpaint 設定」（設定タブ）で指定可能
 - **PixiJS FX** — ツールバーのボタンからアクティブレイヤーにパーティクル・フィルタ効果を適用。複数フィルタの重ね掛け・並び替えに対応し、組み合わせをプリセットとして保存・読込・削除できる（[comfyUI-particle-pixijs](#依存関係任意) 連携）
 - **レイヤーパネル** — 追加・複製・削除・重ね順変更・不透明度・調整レイヤー（明度/コントラスト/彩度など 12 種）。複数選択時は「統合」で選択レイヤーのみを1枚に統合（マスクレイヤー同士の統合結果もマスクレイヤーとして維持）。上部メニュー2行目の「📁 グループ」ボタンで、複数選択したレイヤーを折りたたみ可能なフォルダにまとめられる（一括表示切替・解除に対応、Undo 可）
@@ -113,9 +113,9 @@ ComfyUI 上で動作するマンガページ作成 SPA（シングルページ�
 <summary><strong>OCR（画像から bbox・文字を検出 → MOSS-Image へ連携）</strong></summary>
 
 - 画像（ドロップ・貼り付け・ファイル選択）から、文字（本文と位置）とコマ・キャラ・フキダシ等の位置（bbox）を検出する専用タブ。すべてローカルの Ollama で動作
-- 文字は OCR モデル（`maternion/LightOnOCR-3:4b`）、コマ・キャラ・顔・物体・フキダシ・擬音・キャプションは画像対応の汎用 VLM（既定 `gemma4:e4b`）で検出。検出するクラスはチェックで選択
+- 文字は OCR モデル（`maternion/LightOnOCR-3:4b`）、コマ・キャラ・顔・物体・フキダシ・擬音・キャプションは画像対応の汎用 VLM（既定 `gemma4:e4b`）で検出。検出するクラスはチェックで選択。「検出エンジン」で **WeVisOne-VL（ComfyUI）** を選ぶと、コマ・フキダシ・擬音・顔の枠をより正確・高速に検出できる（試用。説明文は付かない）
 - 検出枠はキャンバス上でドラッグ移動・角で拡縮・追加・削除でき、右の一覧でクラスと本文・説明を編集可能。「全文をコピー」「JSON をコピー」で出力
-- **MOSS-Image 連携** — 「MOSS-Imageタブへ送る」で物体・コマ・キャラ・文字の bbox として MOSS-Image のレイアウトへ取り込む。フキダシ等の枠に入った文字は 1 つの文字枠にまとめる。再送時は前回の OCR 取り込み分だけ入れ替え
+- **MOSS-Image 連携** — 「MOSS-Imageタブへ送る」で物体・コマ・キャラ・文字の bbox として MOSS-Image のレイアウトへ取り込む。フキダシ等の枠に入った文字は 1 つの文字枠にまとめる。送る前に MOSS-Image のレイアウトエディタを空にする（手で描いた枠も消える）
 - モデル設定欄は折りたたみ式（開閉状態を保存）
 - **全体読み（Chat TE）** — 縦書きの大きな見出しが多い雑誌表紙などは、ComfyUI のカスタムノード [Chat TE](https://github.com/ketle-man/comfyui-chat-te)（Qwen3-VL-8B）で画像全体を読ませて、OCR の枠の文字を置き換える（位置は出せないため文字だけを突き合わせる。雑誌表紙・文字のみモードで自動オン）。雑誌表紙 4 枚の実測では、LightOnOCR より多くの縦書き文字を読めた。Chat TE と MOSS-Image 等の画像生成モデルが同時に VRAM に載ると ComfyUI が落ちることがあるため、切り替えるときに ComfyUI のモデルを自動で降ろす
 - **切り抜きの読み直し** — 検出した文字枠を元画像から切り抜き、別モデル（既定はマンガ特化の PaddleOCR-VL、`ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M`）で本文を取り直す。縦書き・装飾文字の精度が上がる。「…」「！」「？」は自動で全角化。選択した枠だけの読み直しも可能
@@ -238,7 +238,7 @@ MOSS-Image タブ上部のステータスが「利用可能」になれば準備
 
 ### OCR タブを使う場合
 
-[Ollama](https://ollama.com/) に OCR モデルを用意します（`ollama pull maternion/LightOnOCR-3:4b`）。コマ・キャラ・フキダシ等も検出するときは、画像対応の汎用 VLM（例: `ollama pull gemma4:e4b`）も用意してください。OCR タブ上部のステータスが「利用可能」になれば準備完了です。
+[Ollama](https://ollama.com/) に OCR モデルを用意します（`ollama pull maternion/LightOnOCR-3:4b`）。コマ・キャラ・フキダシ等も検出するときは、画像対応の汎用 VLM（例: `ollama pull gemma4:e4b`）も用意してください。WeVisOne-VL を使う場合は、ComfyUI にカスタムノード [ComfyUI-WeVisOne-VL](https://huggingface.co/paralaif/ComfyUI-WeVisOne-VL) と重み `wevisone_vl_4b_*.safetensors`（`models/text_encoders`）を入れます。OCR タブ上部のステータスが「利用可能」になれば準備完了です。
 
 ### G'MIC を使う場合
 
@@ -378,6 +378,7 @@ MIT License — 詳細は [LICENSE](LICENSE) を参照。
 - **[PaddleOCR-VL-For-Manga](https://huggingface.co/jzhang533/PaddleOCR-VL-For-Manga)**（jzhang533、Apache 2.0）— OCR タブの「切り抜きの読み直し」で、縦書き・装飾文字の読み取りに推奨しているマンガ特化の OCR モデル。元モデルは [PaddleOCR-VL](https://huggingface.co/PaddlePaddle/PaddleOCR-VL)（PaddlePaddle、Apache 2.0）、Ollama 用 GGUF は [LunarOilRig/PaddleOCR-VL-manga-GGUF](https://huggingface.co/LunarOilRig/PaddleOCR-VL-manga-GGUF)。アプリには同梱せず、利用者が Ollama で取得して使う
 - **[LightOnOCR-3](https://huggingface.co/lightonai/LightOnOCR-3-4B)**（LightOn、Apache 2.0）— OCR タブの文字検出（本文と位置）に使うモデル。Ollama 版は [maternion/LightOnOCR-3:4b](https://ollama.com/maternion/LightOnOCR-3:4b)。アプリには同梱せず、利用者が Ollama で取得して使う
 - **[Gemma 4](https://ollama.com/library/gemma4)**（Google）— OCR タブのレイアウト検出（コマ・キャラ・フキダシ等）の既定モデル（`gemma4:e4b`）。同梱せず、Ollama で取得して使う
+- **[WeVisOne-VL](https://huggingface.co/tencent/WeVisOne-VL-4B)**（Tencent、Apache 2.0）— OCR タブのレイアウト検出と Image タブの切り抜きで選べるモデル（試用）。[ComfyUI-WeVisOne-VL](https://huggingface.co/paralaif/ComfyUI-WeVisOne-VL)（paralaif、Apache 2.0）経由で ComfyUI 上で動かし、同梱しない
 - **[MOSS-Image](https://github.com/OpenMOSS/MOSS-Image)**（OpenMOSS、Apache 2.0）— MOSS-Image タブが使う画像生成モデル。ComfyUI 本体のネイティブ対応を利用し、モデルは同梱しない
 - **[Ollama](https://ollama.com/)**（MIT）— OCR タブ・Auto タブ・VRAM 調整が利用するローカル LLM/VLM の実行環境
 - 同梱ライブラリ（`static/js/vendor/`、各ライセンスは同フォルダの README を参照）: [jsPDF](https://github.com/parallax/jsPDF)（MIT、PDF 出力）、[JSZip](https://github.com/Stuk/jszip)（MIT / GPLv3 デュアル、zip 保存）、[opentype.js](https://github.com/opentypejs/opentype.js)（MIT、3D テキストのフォント読込）

@@ -60,7 +60,7 @@
 - **Draw工具的滴管** — 通过取色器旁的按钮直接从画布拾取颜色作为笔刷颜色。**使用数位板时，画笔大小和不透明度会根据笔压自动变化**（鼠标操作时与以往一样保持固定）
 - **Shape工具的Same Layer模式** — 每次绘制图形时叠加到同一图层，而不是新建图层。矩形・椭圆的填充除纯色外还支持渐变和纹理（可指定X/Y位置）
 - **Fill工具** — 单色填充，或线性/放射状渐变填充（颜色渐变条与方向面板）
-- **Mask工具** — Paint/Color/Alpha/Text/Vector/Shape各子工具，也支持SAM3分割和ABR笔刷（工具构成参考了 [comfyui-mask-editor-one](#致谢) 实现）。Paint子工具的画笔大小**会根据数位板笔压自动变化**（鼠标操作时与以往一样保持固定）。安装 Workflow Studio 后子工具栏会新增 **Inpaint** 按钮，可通过遮罩+提示词进行生成式AI局部重绘（通过 [ComfyUI-Workflow-Studio](#可选依赖) 联动）
+- **Mask工具** — Paint/Color/Alpha/Text/Vector/Shape各子工具，也支持SAM3分割和ABR笔刷。在SAM3栏切换为 **WeVisOne-VL** 后，可用保留头发等边缘的软蒙版抠图（试用）（工具构成参考了 [comfyui-mask-editor-one](#致谢) 实现）。Paint子工具的画笔大小**会根据数位板笔压自动变化**（鼠标操作时与以往一样保持固定）。安装 Workflow Studio 后子工具栏会新增 **Inpaint** 按钮，可通过遮罩+提示词进行生成式AI局部重绘（通过 [ComfyUI-Workflow-Studio](#可选依赖) 联动）
 - **Outpaint（Workflow Studio联动）** — 通过Mask工具中Inpaint右侧的**Outpaint**按钮使用（无需提前创建蒙版图层）。设置上/右/下/左边距（可联动指定）、边距填充方式（扩展像素／透明／白色／黑色）、Positive/Negative提示词、Grow Mask By、Denoise后点击Run，即可一次性完成：①合成按边距扩展后的底图 → ②自动生成蒙版（白色=待生成的边距、黑色=需保留的原图）→ ③发送至Workflow Studio执行生成，成功后画布会实际扩大并将结果作为新图层添加。由于扩散模型的VAE编码/解码往返在图像尺寸不是64px倍数时会切除若干像素（导致结果出现透明缝隙），发送前会自动将实际扩展的边距调整为64px的倍数。默认工作流可在设置标签的"Outpaint设置"中独立于Inpaint设置指定
 - **PixiJS FX** — 通过工具栏按钮为当前图层应用粒子・滤镜效果。支持多个滤镜叠加与排序，组合可保存/读取/删除为预设（通过 [comfyUI-particle-pixijs](#可选依赖) 联动）
 - **图层面板** — 添加、复制、删除、调整层叠顺序、不透明度，以及12种调整图层（明度、对比度、饱和度等）。多选后点击"统合"可仅合并选中的图层（合并多个遮罩图层时，结果仍保持为遮罩图层）。工具栏第二行的「📁 分组」按钮可将多选的图层归入可折叠的分组文件夹（支持批量显示/隐藏切换与取消分组，可撤销）
@@ -113,9 +113,9 @@
 <summary><strong>OCR（从图像检测 bbox・文字，并联动 MOSS-Image）</strong></summary>
 
 - 专用标签页，从图像（拖放、粘贴或选择文件）中检测文字（内容和位置）以及分镜・角色・气泡等的位置（bbox）。全部通过本地 Ollama 运行
-- 文字由 OCR 模型（`maternion/LightOnOCR-3:4b`）读取；分镜・角色・脸部・物体・气泡・拟声词・旁白框由支持图像的通用 VLM（默认 `gemma4:e4b`）检测。检测的类别通过勾选选择
+- 文字由 OCR 模型（`maternion/LightOnOCR-3:4b`）读取；分镜・角色・脸部・物体・气泡・拟声词・旁白框由支持图像的通用 VLM（默认 `gemma4:e4b`）检测。检测的类别通过勾选选择。在"检测引擎"中选择 **WeVisOne-VL（ComfyUI）** 后，可更准确、更快地检测分镜・气泡・拟声词・脸部的框（试用，不生成说明）
 - 检测到的框可在画布上拖动移动、拖角缩放、添加和删除；右侧列表中可编辑类别、文字和说明。可用"复制全文""复制 JSON"导出
-- **MOSS-Image 联动** — 点击"作为布局发送"，将结果作为物体・分镜・角色・文字的 bbox 导入 MOSS-Image 布局。气泡等框内的文字会合并为一个文字框。再次发送时仅替换上次 OCR 导入的框
+- **MOSS-Image 联动** — 点击"作为布局发送"，将结果作为物体・分镜・角色・文字的 bbox 导入 MOSS-Image 布局。气泡等框内的文字会合并为一个文字框。发送前会清空 MOSS-Image 的布局编辑器（手绘的框也会被删除）
 - 模型设置区可折叠（会记住展开/折叠状态）
 - **整图识读（Chat TE）** — 对于竖排大标题很多的杂志封面等，用 ComfyUI 自定义节点 [Chat TE](https://github.com/ketle-man/comfyui-chat-te)（Qwen3-VL-8B）读取整张图像并替换 OCR 文字框中的文字（无法给出位置，因此只将文字与文字框匹配；在杂志封面・仅文字模式下自动开启）。在 4 张杂志封面上的实测中，比 LightOnOCR 读到更多的竖排文字。Chat TE 与 MOSS-Image 等图像生成模型同时载入显存时 ComfyUI 可能崩溃，因此在两者切换时会自动卸载 ComfyUI 中的模型
 - **裁剪重新识别** — 将检测到的文字框从原图中裁剪出来，用另一个模型（默认为面向漫画的 PaddleOCR-VL，`ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M`）重新读取文字，可提升竖排・装饰文字的精度。"…""!""?"会自动转为全角。也可只重新识别所选的框
@@ -238,7 +238,7 @@ MOSS-Image 标签页顶部的状态显示"可用"即准备完毕。更新 `py/cc
 
 ### 使用 OCR 标签页
 
-请在 [Ollama](https://ollama.com/) 中准备 OCR 模型（`ollama pull maternion/LightOnOCR-3:4b`）。若还需检测分镜・角色・气泡等，请同时准备支持图像的通用 VLM（例如 `ollama pull gemma4:e4b`）。OCR 标签页顶部的状态显示"可用"即准备完毕。
+请在 [Ollama](https://ollama.com/) 中准备 OCR 模型（`ollama pull maternion/LightOnOCR-3:4b`）。若还需检测分镜・角色・气泡等，请同时准备支持图像的通用 VLM（例如 `ollama pull gemma4:e4b`）。若使用 WeVisOne-VL，请在 ComfyUI 中安装自定义节点 [ComfyUI-WeVisOne-VL](https://huggingface.co/paralaif/ComfyUI-WeVisOne-VL) 和权重 `wevisone_vl_4b_*.safetensors`（`models/text_encoders`）。OCR 标签页顶部的状态显示"可用"即准备完毕。
 
 ### 使用 G'MIC
 
@@ -378,6 +378,7 @@ MIT License — 详见 [LICENSE](LICENSE)。
 - **[PaddleOCR-VL-For-Manga](https://huggingface.co/jzhang533/PaddleOCR-VL-For-Manga)**（jzhang533，Apache 2.0）— OCR 标签页"裁剪重新识别"中推荐用于读取竖排・装饰文字的漫画专用 OCR 模型。基于 [PaddleOCR-VL](https://huggingface.co/PaddlePaddle/PaddleOCR-VL)（PaddlePaddle，Apache 2.0），Ollama 用 GGUF 版本为 [LunarOilRig/PaddleOCR-VL-manga-GGUF](https://huggingface.co/LunarOilRig/PaddleOCR-VL-manga-GGUF)。应用不内置该模型，需用户通过 Ollama 自行获取
 - **[LightOnOCR-3](https://huggingface.co/lightonai/LightOnOCR-3-4B)**（LightOn，Apache 2.0）— OCR 标签页用于文字检测（内容和位置）的模型。Ollama 版本为 [maternion/LightOnOCR-3:4b](https://ollama.com/maternion/LightOnOCR-3:4b)。应用不内置，需用户通过 Ollama 自行获取
 - **[Gemma 4](https://ollama.com/library/gemma4)**（Google）— OCR 标签页布局检测（分镜・角色・气泡等）的默认模型（`gemma4:e4b`）。不内置，通过 Ollama 获取
+- **[WeVisOne-VL](https://huggingface.co/tencent/WeVisOne-VL-4B)**（Tencent，Apache 2.0）— OCR 标签页布局检测和 Image 标签页抠图中可选的模型（试用）。通过 [ComfyUI-WeVisOne-VL](https://huggingface.co/paralaif/ComfyUI-WeVisOne-VL)（paralaif，Apache 2.0）在 ComfyUI 上运行，不内置
 - **[MOSS-Image](https://github.com/OpenMOSS/MOSS-Image)**（OpenMOSS，Apache 2.0）— MOSS-Image 标签页使用的图像生成模型。依赖 ComfyUI 本体的原生支持，模型不内置
 - **[Ollama](https://ollama.com/)**（MIT）— OCR 标签页、Auto 标签页和 VRAM 调整使用的本地 LLM/VLM 运行环境
 - 内置库（`static/js/vendor/`，各自的许可证见该文件夹内的 README）：[jsPDF](https://github.com/parallax/jsPDF)（MIT，PDF 导出）、[JSZip](https://github.com/Stuk/jszip)（MIT / GPLv3 双许可，zip 保存）、[opentype.js](https://github.com/opentypejs/opentype.js)（MIT，3D 文字的字体加载）
