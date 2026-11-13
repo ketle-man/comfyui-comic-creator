@@ -6401,7 +6401,10 @@ class ImageTab {
         };
         const out = [];
         for (let i = 0; i < res.maskUrls.length; i++) {
-            out.push({ mask_b64: await toDataUrl(res.maskUrls[i]), score: null, label: `#${i + 1} ${labels[i] || ""}`.trim().slice(0, 24) });
+            // ラベルはモデル出力（＝プロンプトの反復）で、候補一覧の HTML テンプレートに入るためエスケープする
+            const label = `#${i + 1} ${labels[i] || ""}`.trim().slice(0, 24)
+                .replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+            out.push({ mask_b64: await toDataUrl(res.maskUrls[i]), score: null, label });
         }
         return out;
     }
