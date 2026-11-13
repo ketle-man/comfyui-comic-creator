@@ -1341,12 +1341,13 @@ function initMossTab() {
 
 // ─── OCRタブからの取り込み ───
 // items: ocr-core.js の toMossItems の結果（座標は0〜1）。aspect: 元画像の縦横比。
-// 前回OCRから取り込んだ枠（src:'ocr'）だけ入れ替え、手で足した枠・コマ/フキダシ取り込みの枠は残す。
-// prompt が空でなければ MOSS の全体プロンプトを置き換える。
+// clear=true ならレイアウトエディタの枠をすべて消してから入れる。false なら前回OCRから取り込んだ枠（src:'ocr'）だけ入れ替え、
+// 手で足した枠・コマ/フキダシ取り込みの枠は残す。prompt が空でなければ MOSS の全体プロンプトを置き換える。
 // キャンバスの縦横比が違えば元画像に合わせる（既存の枠も同じ比率で拡縮）。取り込み後のタブ切替は呼び出し側で行う
-async function importOcrItems(items, { aspect = 1, prompt = '' } = {}) {
+async function importOcrItems(items, { aspect = 1, prompt = '', clear = false } = {}) {
     initMossTab();
     await S.initPromise;   // 保存済みレイアウトの復元が終わってから足す（先に足すと復元で消える）
+    if (clear) { S.items = []; S.selId = null; S.multi.clear(); }
     if (Math.abs((S.W / S.H) / aspect - 1) > 0.02) {
         const { w, h } = sizeForAspect(aspect, PAGE_TARGET_PIXELS);
         const kx = w / S.W, ky = h / S.H;

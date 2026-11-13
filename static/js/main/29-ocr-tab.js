@@ -853,7 +853,7 @@ async function onSendMoss() {
     if (!items.length) { alert(t('ocr.noItems')); return; }
     await switchTab('moss');                       // MOSS側の初期化（保存済みレイアウトの復元）を先に済ませる
     const overall = $('ocr-use-overall').checked ? $('ocr-overall').value.trim() : '';   // ONで文章があるときだけMOSSのプロンプトを置き換える
-    const n = await importOcrItems(items, { aspect, prompt: overall });
+    const n = await importOcrItems(items, { aspect, prompt: overall, clear: true });   // レイアウトエディタを空にしてから入れる
     const msg = document.getElementById('moss-progress-text');
     if (msg) msg.textContent = t('ocr.sent', n);
 }
