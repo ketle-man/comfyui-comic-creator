@@ -1768,11 +1768,20 @@ async def handle_local_gmic_result_b64(request):
         result_path = data.get('result_path', '')
         if not result_path:
             return _error_response(CCCError('gmic_result_path_required', '結果パスが必要です'), status=400, key='detail')
-        # GMIC_TEMP_DIR 内のファイルのみ許可
+        # GMIC_TEMP_DIR 内のファイルのみ許可。
+        # Windows では UNC パス(\\host\share)は resolve() した時点で相手ホストへ
+        # Windows アカウントの資格情報付きで接続してしまうため、resolve() より前に
+        # ファイルシステムに触れない文字列処理(normpath)だけで検査する
         try:
-            resolved = _Path(result_path).resolve()
-            if not str(resolved).startswith(str(GMIC_TEMP_DIR.resolve()) + os.sep):
-                return _error_response(CCCError('gmic_invalid_path', '無効なパスです'), status=400, key='detail')
+            if result_path.startswith(('\\\\', '//')):
+                raise ValueError('UNC path')
+            base = GMIC_TEMP_DIR.resolve()
+            p = _Path(os.path.normpath(result_path))
+            if '..' in p.parts or not p.is_absolute():
+                raise ValueError('invalid path')
+            p.relative_to(base)           # 文字列上の検査(解決しない)
+            resolved = p.resolve()
+            resolved.relative_to(base)    # 多層防御(シンボリックリンク等)
         except Exception:
             return _error_response(CCCError('gmic_invalid_path', '無効なパスです'), status=400, key='detail')
         if not resolved.exists():
