@@ -221,6 +221,32 @@ Example: if Mike's hand looks wrong, paint around the hand with the Mask tool, c
 | "workflow studio" tab | Shows the Workflow Studio gallery. "ws reload" reloads it; "Open ws in new tab" opens it in a separate tab |
 | "wsI2I" in the Image tab | Sends the current image to Workflow Studio's I2I input. Press "Send CC (Image)" in the Workflow Studio gallery to bring the result back to the Image tab (as a new layer if you are working on layers, otherwise as a new canvas). Needs Workflow Studio v0.8.11 or later |
 
+### Writing prompts in your own language (prompt translation)
+
+With Workflow Studio v0.9.10 or later, prompts written in Japanese (or another language) can be translated into English by the Workflow Studio translator (a translation model running in Ollama on your own PC; PLaMo 3 Translate by default) before they are sent. Prepare and set up the translation model in the Workflow Studio settings (not covered in this book). Turn it on or off on the Comic Creator side with "Prompt Translation (Workflow Studio)" in the "Settings" tab (Chapter 13).
+
+What is translated:
+
+- **"Generate" in the Layout tab**: Positive / Negative (including the panel tabs)
+- **I2I, Inpaint, and Outpaint in the Image tab**: Positive / Negative
+- **"Batch-generate images (T2I / I2I)" in the Script tab (Chapter 11)**: Positive / Negative and each panel's image prompt
+- **"Local" mode of the Nanobanana+ tab (10-7)**: Positive Prompt / Negative Prompt
+- **Image generation in the Auto tab and Auto Layout (when the engine is Local; Chapter 11)**: the image prompt
+- **MOSS-Image tab (10-6)**: the prompt and the box descriptions (captions)
+
+There are two ways to use it.
+
+- **🌐 button**: press the 🌐 (globe) under a field to replace its text with the English translation right away. "Original" puts back the text from before (Ctrl + Z also works).
+- **Translate automatically when generating** (on by default): when you generate, only what is sent is translated. The fields keep your own text. When panels are generated one by one, all panels are translated in one go before generation starts.
+
+Prompt syntax such as commas, `(word:1.2)`, `<lora:...>`, `{a|b}`, and `BREAK` is kept, and only the parts in your own language are translated. Text inside 「」『』 is not translated either, so you can write text you want drawn in the image, such as the words on a sign, inside those brackets.
+
+> **Caution**
+> If translation fails, generation is stopped so that untranslated text is not sent ("Prompt translation failed, so nothing was generated"). Check the Workflow Studio translation settings and that Ollama is running.
+
+> **Tip**
+> Nanobanana (Gemini) understands other languages as they are, so it is not translated (no 🌐 appears). If you mix prompts in several languages, set the source language to "Auto" in the Workflow Studio translation settings.
+
 ### Using it alongside Ollama
 
 If you write scripts with a local AI (Ollama) while also generating images, GPU memory (VRAM) can run short. In the "Settings" tab, "VRAM Management (Ollama)" can unload Ollama's models before image generation (Chapter 13).
@@ -250,6 +276,7 @@ A status line at the top of the tab shows one of "MOSS-Image: ready", "model not
 
 ### The screen
 
+- **Far left**: the asset panel ("L", saved layouts). ▶ opens it and ◀ collapses it (see "Saving layouts" below).
 - **Left**: the layout editor, where you draw boxes to place objects, characters, and text.
 - **Middle**: three tabs, "Prompt", "JSON", and "Model / Sampler".
 - **Right**: the generate button, the seed, the results, and the buttons that place an image in the page.
@@ -260,7 +287,7 @@ A status line at the top of the tab shows one of "MOSS-Image: ready", "model not
 2. Open the "MOSS-Image" tab. In "Target" on the middle "Prompt" tab, set Mode to "Whole page".
 3. Press "Import panels from current page" on the left. The page's panels come in as "Object" boxes, and the canvas changes to the page's aspect ratio (about 2MP).
 4. Press "Import balloons and lines". Balloons with dialogue come in as "Text" boxes.
-5. In "Prompt", describe the whole image (English is recommended).
+5. In "Prompt", describe the whole image (English is recommended; with prompt translation (10-5) you can write in your own language and have it translated into English or Chinese).
 6. Press "Generate Images" on the right.
 7. When the result appears, press "Layout overlay". The image goes into the full-page overlay. To fix details, send it to the Image tab with "Open in Image tab".
 
@@ -352,6 +379,31 @@ Notes on importing:
 - Rotated text is imported as the outer rectangle of the rotated shape, because MOSS-Image boxes cannot express rotation.
 - The caption of text outside any balloon is always "narration". It used to be a sound effect for 6 characters or fewer, which mislabeled names and the like, so that guess was removed. To have something drawn as a sound effect, add that in English to the caption in "Selected item".
 
+### Saving layouts (asset panel "L")
+
+You can save a layout under a name and load it later. Saved layouts are listed in "L" of the asset panel at the far left.
+
+1. Press "▶" on the narrow strip at the far left to open the asset panel.
+2. Enter a name in the field at the top and press "Save". An empty name becomes "Layout 1" and so on. If the name already exists, you are asked whether to overwrite it.
+3. To load one, click its card to select it and press "Load into editor" (double-clicking the card also loads it).
+
+What is saved and loaded:
+
+- **Boxes**: object, character, text, and panel boxes, with their descriptions (captions), text, font size, and writing direction
+- **Canvas size**: width and height
+- **Writing direction**: "Horizontal" / "Vertical" (the direction for boxes you draw next)
+- **Overall prompt**: the whole-image description in the "Prompt" tab
+
+Each card shows the box arrangement in the kind colors (object = green, character = pink, text = cyan, panel = yellow). The "×" on a card deletes it.
+
+> **Caution**
+> Loading replaces every box in the editor (you are asked first when there are boxes). Save the current layout first if you want to keep it. Loading cannot be reverted with "Undo".
+
+> **Tip**
+> While the asset panel is open, the generate column on the right is hidden so the layout editor gets more room. To generate, collapse the panel with "◀" and the generate column comes back. The open/closed state is remembered.
+
+Saved layouts are stored in the browser and are included in the backup in the "Settings" tab (Chapter 13).
+
 ### Seed behavior
 
 - **Random** (default): a different seed every time. The value in the box is not used.
@@ -367,6 +419,7 @@ The seed actually used under Random is shown as "Last seed". If you like a resul
 - The "Model / Sampler" tab has presets (Standard, Light, Fast DMD 8-step, Fast Turbo 4-step) and the model, LoRA, steps, CFG, and so on.
 - Generated images are saved in ComfyUI's `output/cc_moss/`.
 - Settings and the layout are saved in the browser and come back when you reopen the tab.
+- When prompt translation (10-5) is on, the prompt and the box descriptions (captions) are translated when you generate. "Text to draw" (the content of text boxes) is not translated. The target language is English (default) or Chinese (Simplified), chosen in the "Settings" tab (Chapter 13). Nothing is translated when "Edit the JSON directly and send it" is used.
 - "VRAM Management (Ollama)" in the Settings tab (Chapter 13) also works before MOSS-Image generation.
 
 ## 10-7 Local Mode in Nanobanana+
@@ -390,6 +443,8 @@ You can register Image Edit workflows that have LoadImage nodes for the input im
 1. Write the Positive Prompt on the left.
 2. Put the reference (source) images in "Image-to-Image" on the right. In Local mode you can add **as many images as the workflow can use** (the limit is shown as "(count/limit)" next to the "Image-to-Image" heading).
 3. Press "Generate Images". Results are saved to the same `ComfyUI/output/cc_nanobanana/` as Nanobanana and can be used with "Insert into Panel".
+
+In Local mode, the prompt translation 🌐 (10-5) appears under the Positive Prompt and Negative Prompt (it does not appear in "Nanobanana" mode).
 
 Reference images go into the workflow's image inputs in order, starting from the first.
 
@@ -427,6 +482,7 @@ Text and box detection use models running in Ollama (a local AI). No cloud API k
   ```
 
 - A vision-capable model for "layout detection" (default: `gemma4:e4b`), used to find panels, characters, balloons, and so on.
+- (Optional) For more accurate panel and balloon boxes, the ComfyUI custom node "ComfyUI-WeVisOne-VL" and the `wevisone_vl_4b_*.safetensors` weights (see "Layout detection engine" below).
 - To read vertical and decorative text more accurately, a model for re-reading (optional; see "Re-read" below).
 
 A status line at the top of the tab shows "OCR: ready", "OCR: no OCR model found", or "OCR: cannot reach Ollama". After installing a model, press "Reload models".
@@ -483,6 +539,15 @@ Each box has a kind (class). You can change it later with the selector at the le
 
 "Classes to detect" chooses what layout detection looks for (text is always detected by OCR).
 
+### Layout detection engine
+
+Since v1.71.0 you can choose the "Detection engine" that finds panels, balloons, and so on.
+
+- **Ollama VLM** (default): detects with the Ollama model chosen in "Detection model" (such as `gemma4:e4b`). Boxes also get descriptions (captions).
+- **WeVisOne-VL (ComfyUI)**: runs WeVisOne-VL in ComfyUI. Panel, balloon, sound effect, and face boxes are accurate, but no descriptions (captions) are produced. A trial feature.
+
+With WeVisOne-VL, choose the weights in "WeVisOne:" next to it. If they are missing, "WeVisOne-VL not found" is shown. With either engine, the text itself is read by the "OCR model". The overall prompt is still made by the "Detection model" (Ollama) even when WeVisOne-VL is chosen.
+
 ### Settings that improve accuracy
 
 - **Re-read text boxes from crops with another model**: crops each detected text box and reads it again with another model. Strong on vertical and decorative text; takes time per box. `ollama pull hf.co/LunarOilRig/PaddleOCR-VL-manga-GGUF:Q4_K_M` (manga-tuned PaddleOCR-VL) suits this.
@@ -523,9 +588,12 @@ It uses the ComfyUI custom node "Chat TE" ([comfyui-chat-te](https://github.com/
 
 - **Copy all text**: copies the text in reading order (top to bottom, right to left).
 - **Copy JSON**: copies each box's position, kind, and text as JSON.
-- **Send to MOSS-Image tab**: puts the result into the MOSS-Image layout as object, panel, character, and text boxes (10-6). Boxes from a previous OCR import are replaced. "Merge text into balloon / sound effect / caption frames" chooses whether text inside a frame is combined into one.
+- **Send to MOSS-Image tab**: puts the result into the MOSS-Image layout as object, panel, character, and text boxes (10-6). The MOSS-Image layout is cleared before the result goes in (boxes you drew yourself are removed too). "Merge text into balloon / sound effect / caption frames" chooses whether text inside a frame is combined into one.
 
 Pressing "Insert" in the Layout tab's "Text" tool, or in the Image tab's text tool, opens the "Insert text" screen. Choose "OCR (text detected in the OCR tab)" as the source to insert the detected text as text at the positions of its boxes (Chapters 7 and 9).
+
+> **Caution**
+> MOSS-Image boxes removed by "Send to MOSS-Image tab" cannot be brought back with "Undo". Save any layout you want to keep in the MOSS-Image tab before sending (10-6, "Saving layouts").
 
 > **Tip**
 > The text and boxes are a temporary result for the current image. Finish what you need (send to MOSS-Image, copy, insert as text) before moving on to the next image.
@@ -544,3 +612,6 @@ Pressing "Insert" in the Layout tab's "Text" tool, or in the Image tab's text to
 > - In MOSS-Image and OCR, choose "Select" so that dragging never draws a box. Deleted boxes come back with "Undo" (Ctrl + Z)
 > - When you use the whole-image read (Chat TE) and image generation one after the other, the models in ComfyUI are swapped automatically (the first run after switching takes a few extra seconds)
 > - In MOSS-Image and OCR, zoom the image with "−" / "+" or Ctrl + wheel; "Fit" returns it to the full view
+> - With Workflow Studio v0.9.10 or later, prompts in your own language can be translated into English with 🌐 or automatically when generating (text inside 「」『』 is kept)
+> - MOSS-Image layouts can be saved under a name and loaded from "L" in the asset panel at the far left. While it is open, the generate column is hidden
+> - OCR layout detection can also use WeVisOne-VL (ComfyUI). "Send to MOSS-Image tab" clears the MOSS-Image layout before adding the result

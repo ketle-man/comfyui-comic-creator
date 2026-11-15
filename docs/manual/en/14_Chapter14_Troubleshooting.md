@@ -83,6 +83,10 @@ When something does not work, try these three things first. They solve most prob
 | 3D Pose / 3D Text shows an error | comfyui-vrm-pose-editor is not installed, or the folder name differs | Install it with the folder name `comfyui-vrm-pose-editor` (Chapter 2) |
 | PixiJS FX shows an error when opened | comfyUI-particle-pixijs is not installed | Install it and restart ComfyUI |
 | GPU memory runs out during image generation | Ollama models are using VRAM | "Settings" > "VRAM Management (Ollama)" (Chapter 13) |
+| "Prompt translation failed, so nothing was generated" appears | The Workflow Studio translation model is missing, Ollama is not running, or the text is too long | Check the translation model and the Ollama connection in the Workflow Studio settings. In a hurry, turn off "Translate automatically when generating" in "Settings" > "Prompt Translation" and write in English (Chapter 10, 10-5) |
+| The 🌐 button does not appear | Workflow Studio is missing or v0.9.9 or earlier; "Use prompt translation" is off. It never appears for Nanobanana (Gemini) or for Auto with the Gemini engine | Check the status in "Settings" > "Prompt Translation" (Chapter 13) |
+| Backup shows "Failed to save: Failed to execute 'showSaveFilePicker'..." | v1.71 or earlier, and making the zip took long because of a lot of data | Update to v1.72.0 or later (Chapter 13) |
+| Boxes I drew disappeared after sending from OCR to MOSS-Image | "Send to MOSS-Image tab" clears the layout before adding (since v1.71.0) | Save the layout in the MOSS-Image tab before sending (Chapter 10, 10-6) |
 | G'MIC does not open | The executable path is wrong | Check for a red warning in "Settings" > "G'MIC Settings" |
 
 > **Chapter summary**

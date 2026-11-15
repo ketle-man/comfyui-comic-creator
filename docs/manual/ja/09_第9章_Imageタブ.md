@@ -128,6 +128,13 @@ Draw ツールを使っている間は、次のキーが使えます（文字の
 
 Workflow Studio が入っていると、Mask ツールに「Inpaint」（範囲を AI で描き直す）と「Outpaint」（画像の外側を AI で描き足す）が表示されます（第10章）。
 
+カスタムノード「Mask Editor One」（SAM3）か「ComfyUI-WeVisOne-VL」（重み `wevisone_vl_4b_*.safetensors` も必要）が入っていると、切り抜きたい物を英語で指定して（例：cat、person）マスクを作る「SAM3」サブツールが使えます。v1.71.0 からは、その欄の左のドロップダウンで、切り抜きのエンジンを「SAM3」と「WeVisOne」から選べます（片方だけ入っているときは、そちらが選ばれます）。
+
+| エンジン | 向いているもの |
+| --- | --- |
+| SAM3 | 物の形をくっきり切り抜く。「Max」で候補の数を選べる |
+| WeVisOne | 髪の毛のような境界も半透明のまま残る、やわらかい切り抜き。写真の人物などに向く。指定は短い英文（例：the girl in a red coat）がおすすめ。試用の機能 |
+
 ### Blur・BG Remove・Upscale
 
 | ツール | 内容 |

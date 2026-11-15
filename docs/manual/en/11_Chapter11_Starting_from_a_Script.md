@@ -104,6 +104,9 @@ The Script tab also has buttons to generate images in bulk from each panel's "Im
 | Batch-generate images (I2I) | Workflow Studio (regenerating from the current image) |
 | Batch-generate images (Nanobanana) | Nanobanana (Chapter 10) |
 
+> **Tip**
+> "Batch-generate images (T2I)" and "Batch-generate images (I2I)" support prompt translation (Chapter 10, 10-5). A 🌐 appears under the Positive / Negative, and when generating, each panel's "Image Prompt" in your own language is also translated into English (all panels are translated in one go before generation starts). Nanobanana understands other languages as they are, so it is not translated.
+
 > **Caution**
 > Features that use Workflow Studio use the Workflow Studio embedded in Comic Creator's "workflow studio" tab. Switching workflows in Workflow Studio opened in a separate browser tab is not reflected.
 
@@ -211,7 +214,7 @@ Panel sizes are decided by the script's "Importance". Asymmetric and Diagonal se
 | --- | --- |
 | Split a panel | Click a panel with the "Split (V)" / "Split (H)" tools in the center |
 | Edit dialogue | Select a panel, choose a line in the properties on the right, and press "Edit"; "Add" adds a line |
-| Add an image | Enter a description in the properties on the right and press "Generate & assign" |
+| Add an image | Enter a description in the properties on the right and press "Generate & assign". When the image engine is Local (Workflow Studio), a 🌐 appears under the description, so you can write in your own language and have it translated into English (Chapter 10, 10-5) |
 
 In "Details" on the left, set the default font, default size, and panel border width for balloon text (the Font tab's "Set as default font" also changes it).
 

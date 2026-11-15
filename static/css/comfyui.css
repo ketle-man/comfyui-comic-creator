@@ -295,6 +295,8 @@
 .moss-layout-asset-save { display: flex; gap: 6px; padding: 10px 10px 4px; }
 .moss-layout-asset-save input { flex: 1; min-width: 0; background: #111; color: #fff; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px 6px; font-size: 12px; }
 .moss-layout-asset-status { font-size: 11px; padding: 0 10px; min-height: 1.2em; }
+/* 一覧（.page-thumb-grid は縦並びの flex）の中でカードが縮んで名前の行が切れないようにする */
+.moss-layout-card { flex-shrink: 0; }
 .moss-layout-card-thumb { width: 100%; aspect-ratio: 4/3; background: var(--bg-primary); }
 .moss-layout-card-info { display: flex; align-items: center; gap: 4px; padding: 4px 6px 0; font-size: 12px; }
 .moss-layout-card-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -121,6 +121,11 @@ Create mask layers to hide parts of an image or to mark areas for AI to redraw. 
 
 When Workflow Studio is installed, the Mask tool shows "Inpaint" (redraw an area with AI) and "Outpaint" (extend the image outward with AI) (Chapter 10).
 
+When the "Mask Editor One" custom node (SAM3) or "ComfyUI-WeVisOne-VL" (which also needs the `wevisone_vl_4b_*.safetensors` weights) is installed, the "SAM3" sub-tool is available: name what to cut out in English (for example, cat or person) to make a mask. Since v1.71.0, the drop-down at the left of that bar chooses the cut-out engine, "SAM3" or "WeVisOne" (when only one is installed, that one is selected).
+
+- **SAM3**: cuts out an object with sharp edges. "Max" sets the number of candidates.
+- **WeVisOne**: a soft cut-out that keeps edges such as hair semi-transparent; good for people in photos. A short English phrase (for example, the girl in a red coat) works best. A trial feature.
+
 ### Blur, BG Remove, Upscale
 
 | Tool | Description |

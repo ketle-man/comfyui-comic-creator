@@ -128,6 +128,13 @@
 
 安装了 Workflow Studio 时，Mask 工具中会显示“Inpaint”（用 AI 重绘范围）和“Outpaint”（用 AI 在图像外侧扩展绘制）（第10章）。
 
+安装了自定义节点“Mask Editor One”（SAM3）或“ComfyUI-WeVisOne-VL”（还需要权重 `wevisone_vl_4b_*.safetensors`）时，可以使用“SAM3”子工具：用英文指定要抠出的对象（例如 cat、person）来制作蒙版。从 v1.71.0 起，可以用该栏左侧的下拉菜单，在“SAM3”和“WeVisOne”之间选择抠图引擎（只安装了其中一个时，会自动选择它）。
+
+| 引擎 | 适合的用途 |
+| --- | --- |
+| SAM3 | 以清晰的边缘抠出物体。用“Max”选择候选数量 |
+| WeVisOne | 柔和的抠图，头发等边缘会保留半透明。适合照片中的人物。建议用简短的英文句子指定（例如 the girl in a red coat）。试用功能 |
+
 ### Blur、BG Remove、Upscale
 
 | 工具 | 内容 |

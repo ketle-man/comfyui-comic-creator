@@ -11,6 +11,7 @@ The "Settings" tab has the following items, from top to bottom.
 | Language | Display language (日本語 / English / 中文). The screen reloads when you switch | Chapter 2 |
 | Backup & Restore | Save all data to a zip / restore from a zip | 13-2 in this chapter |
 | VRAM Management (Ollama) | Unload Ollama's models before image generation to free GPU memory | Table below |
+| Prompt Translation (Workflow Studio) | Turn on or off translating prompts in your own language into English before sending | Below, and Chapter 10 |
 | Nanobanana | Nanobanana engine (Gemini API / ComfyUI native node), shared by the Nanobanana+ tab (Nanobanana mode), Semi-Auto Manga, and Auto | Chapter 10 |
 | 3D Pose Editor | Editor opened by "🎛 Editor" in the Layout tab's 3D Pose (3D Pose Editor / VRM Pose Studio) | Chapter 12 |
 | Eagle Settings | Eagle connection and auto-save | Chapter 12 |
@@ -32,6 +33,21 @@ Unloaded models are reloaded the next time they are used. Only Ollama on your ow
 
 This setting also works in the OCR tab: before detection, before judging with a decision model, and before a whole-image read with ComfyUI's Chat TE (Chapter 10, 10-8).
 
+Models that use no GPU memory (such as a prompt translation model running "CPU-resident") are not unloaded, because unloading them frees no GPU memory. The result of "Unload all now" says "Kept ... (CPU-resident, uses no VRAM)".
+
+### Prompt Translation (Workflow Studio)
+
+Settings for translating prompts written in your own language into English with the Workflow Studio translator before sending (how to use it: Chapter 10, 10-5). Requires Workflow Studio v0.9.10 or later.
+
+| Item | Description |
+| --- | --- |
+| Status | "Available — model: ... (CPU-resident / GPU)", or "Not available: requires Workflow Studio v0.9.10 or later" |
+| Use prompt translation | When on, a 🌐 button appears under the supported fields. Until you change it, it follows the Workflow Studio "Prompt Translation" on/off |
+| Translate automatically when generating | On by default. Translates only what is sent when generating (the fields keep your text). If translation fails, nothing is generated |
+| MOSS-Image target language | English (default) / Chinese (Simplified). MOSS-Image officially supports English and Chinese |
+
+The translation model, Ollama URL, source language, and where it runs (GPU / CPU-resident) come from the Workflow Studio settings. Comic Creator cannot change them.
+
 ### Inpaint Settings and Outpaint Settings
 
 Specify a workflow that Workflow Studio loads automatically when you run Inpaint or Outpaint in the Image tab.
@@ -52,7 +68,11 @@ As explained in Chapter 1, Comic Creator stores your works inside the browser. I
 
 1. Open the "Settings" tab.
 2. Press "Backup" under "Backup & Restore".
-3. A zip file named `ccc_backup_date-time.zip` is saved.
+3. When the save dialog opens, choose where to save (the file name is `ccc_backup_date-time.zip`). In browsers without a save dialog, it is saved to your downloads folder.
+4. When the zip is finished, "Saved." is shown. With many works it can take a few tens of seconds.
+
+> **Tip**
+> Before v1.72.0, with a lot of data the backup could fail with "Failed to save: Failed to execute 'showSaveFilePicker'..." (the save dialog was opened only after the zip was made). v1.72.0 asks for the save location first.
 
 ### What is and is not included
 
@@ -63,7 +83,9 @@ As explained in Chapter 1, Comic Creator stores your works inside the browser. I
 | Script tab works | Images saved in `ComfyUI/output/` (Nanobanana, Gallery, etc.) |
 | Auto works and AI settings | `.env` (API keys) |
 | Font tab styles, presets, and categories | G'MIC Settings |
-| Integration settings (Eagle, workflows, PixiJS FX, VRAM Management, etc.) | ComfyUI's own settings |
+| Integration settings (Eagle, workflows, PixiJS FX, VRAM Management, prompt translation, decision model, etc.) | ComfyUI's own settings |
+| Nanobanana+, MOSS-Image, and OCR tab settings (including layouts saved in MOSS-Image) | |
+| The Image tab Draw palette | |
 | Display language, export settings, etc. | |
 
 > **Caution**
@@ -91,7 +113,7 @@ Restore merges data: items with the same name are overwritten by the zip content
 > Restore in your usual browser at your usual address. If you restore while opened at a different address, the data is saved for that address (Chapter 1).
 
 > **Chapter summary**
-> - The "Settings" tab has language, backup, VRAM Management, Eagle, G'MIC, and Inpaint/Outpaint settings
-> - "Backup" saves all data inside the browser to one zip
+> - The "Settings" tab has language, backup, VRAM Management, prompt translation, Eagle, G'MIC, and Inpaint/Outpaint settings
+> - "Backup" saves all data inside the browser (including layouts saved in MOSS-Image) to one zip. The save location is chosen first
 > - Copy the `assets` folder (assets, Image tab projects) and the images in `output` separately
 > - "Restore" overwrites items with the same name and keeps everything else

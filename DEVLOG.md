@@ -2,6 +2,22 @@
 
 ---
 
+## 2026-11-15（マニュアル v1.72.0 対応（日英中・同梱版）: プロンプト翻訳、MOSS レイアウト保存、v1.71.0 の WeVisOne-VL・OCR→MOSS のクリア、バックアップ）
+
+原稿（`eagle_comic_creator_spa/manual/{ja,en,zh}`、git 管理外。改訂前を `manual_backup_20261115_before_v1_72.zip` に保存）を改訂し、`cc_bundle_manual.py` で `docs/manual/{ja,en,zh}` を再生成（`--check` で mismatch 0）。対象バージョン表記は v1.72.0（次のリリースを想定。はじめに・目次・第3章）。v1.71.0 の分（WeVisOne-VL・OCR→MOSS 送信時のクリア）は未反映だったので一緒に入れた。
+- 第3章: アセットパネル「L」（MOSS-Image タブのみ、▶／◀ で開閉）、MOSS-Image の画面の見分け方。
+- 第9章: Mask の SAM3 サブツールと切り抜きエンジン（SAM3／WeVisOne）。
+- 第10章: 10-5 に「日本語でプロンプトを書く（プロンプト翻訳）」（対象一覧・🌐 と原文・生成時の自動翻訳・訳さないもの・失敗時は生成しない・Gemini は対象外）。10-6 に「レイアウトを保存する（アセットパネル「L」）」と画面構成の行、翻訳の注記。10-7 に 🌐。10-8 に「レイアウト検出のエンジン」、MOSS へ送るとレイアウトを空にする（元に戻せない）旨の表と注意。まとめ3項目。
+- 第11章: 一括生成（T2I／I2I）とオートレイアウトの「生成して割り当て」で翻訳が使えること。
+- 第13章: 設定表に「プロンプト翻訳（Workflow Studio）」、VRAM調整で CPU常駐モデルを残す旨、プロンプト翻訳の節、バックアップの手順（先に保存先を選ぶ・v1.72.0 で直した保存エラー）、含まれるものの追加。
+- 第14章: 翻訳失敗・🌐 が出ない・バックアップの showSaveFilePicker エラー・OCR→MOSS で枠が消えた、の4行。付録の用語集にプロンプト翻訳・WeVisOne-VL。
+- 検証: `check_translation.py`（zh／en）で章ごとの画像枠数・見出し数が日本語版と一致、problems 0。画像枠は追加していない。
+- 撮影（同日、Kapture、日本語・中文）: 撮り直し 048（設定タブ）・049（MOSS-Image タブ）・052（OCR タブ。「モデル」欄を開き検出エンジン WeVisOne-VL。見本は Qwen Image 2.1 で新しく作った縦書きマンガ）、新規 053（アセットパネル「L」を開いた MOSS-Image タブ）。053 の画像枠を3言語の 10-6 に追加し、`kindle/sync_images.py` の ORDER に挿入（出現順 45）。Image タブの Mask には元々画像枠が無いので撮影不要だった。撮影前に MOSS・OCR の保存値と表示言語を退避し、撮影後に戻して差分なしを確認。撮影用のレイアウト3件は削除し、ユーザーの保存レイアウトは画面上で隠しただけ。
+- 撮影中に見つけた不具合を修正: アセットパネル「L」のカードが一覧（縦並びの flex）の中で縮み、名前と「枠 N 個・W×H」の行が切れていた → `.moss-layout-card { flex-shrink: 0; }`（`static/css/comfyui.css`）。
+- EPUB（同日）: 表紙（`kindle/make_cover.py` の版表記）と metadata の版を v1.72.0 にして作り直し、`sync_images.py` → `build.sh` で日英中をビルド（各 53/53 枚）。EPUB 内の画像のハッシュで 048・049・052・053 が正しい位置に入っていることを確認。`compress_epub.py` で `kindle/release/ComicCreator_manual_v1.72.0_{ja,en,zh}.epub`（4.5〜4.9MB）を作成。Google ドライブへの公開は未実施。
+
+---
+
 ## 2026-11-15（未リリース: 一括バックアップの保存失敗「Must be handling a user gesture to show a file picker」を修正）
 
 **原因**: `_workBackupExport`（`11a-work-manager.js`）が IndexedDB の全ストア読み出しと zip 作成（実測 約248MB・約26秒）の後に `_saveBlob` → `showSaveFilePicker` を呼んでいた。保存ダイアログはクリック直後（ユーザー操作の有効期限内）にしか開けないため SecurityError になる。データが増えて作成に時間がかかるようになり表面化した。PDF／EPUB／ZIP 書き出しは既に「先に `_pickSaveTarget` で保存先を確保→後で書き込み」の形だったが、バックアップだけ旧来の形のままだった。

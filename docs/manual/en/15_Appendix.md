@@ -34,6 +34,8 @@
 | bbox (box) | A rectangle within an image. Used in the MOSS-Image layout and in OCR results | Chapter 10 |
 | Chat TE | A ComfyUI custom node that lets you chat with a text encoder (such as Qwen3-VL). Used for OCR's whole-image read | Chapter 10 |
 | VRAM | GPU memory | Chapter 13 |
+| Prompt translation | Translating prompts in your own language into English (for MOSS-Image, Chinese is also possible) before sending, with the Workflow Studio translation model (such as PLaMo 3 Translate) | Chapters 10 and 13 |
+| WeVisOne-VL | An AI that finds things in an image and makes boxes or cut-outs. Usable for OCR layout detection and Image tab cut-outs (trial) | Chapters 9 and 10 |
 | dpi | Dots per inch. How fine a print is | Chapter 5 |
 
 ## B Keyboard and Mouse Operations

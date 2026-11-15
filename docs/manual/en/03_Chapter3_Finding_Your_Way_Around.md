@@ -68,10 +68,11 @@ At the top of the asset panel is a row of one-letter tabs. Hover over one to see
 | T | Templates | Panel-layout templates. "Insert as Page" creates a new page |
 | F | Font | Styles and presets made in the Font tab |
 | I | Image | Image projects saved in the Image tab |
+| L | MOSS-Image layouts | Layouts saved in the MOSS-Image tab (Chapter 10, 10-6). Shown only in the MOSS-Image tab |
 
 If a list is out of date, press "↺" (Refresh asset list) at the top right.
 
-The asset panel is not shown on the "Page" tab. On the "Image" tab only A, F, and I are shown; on the "Script" tab only S (Saved Works / Page Works) is shown.
+The asset panel is not shown on the "Page" tab. On the "Image" tab only A, F, and I are shown; on the "Script" tab only S (Saved Works / Page Works); on the "MOSS-Image" tab only L (saved layouts). On the MOSS-Image tab the asset panel can be opened and collapsed with ▶ / ◀ (it starts collapsed).
 
 ### ② Tool pane
 
@@ -133,7 +134,7 @@ Other tabs are explained in their own chapters. Here is just how to tell them ap
 | Font | A list of fonts and a preview |
 | Nanobanana+ | A "Nanobanana / Local" switch at the top, and two sub-tabs, "Generation" and "Nanobanana History" (the right half of "Generation" holds the reference images) |
 | OCR | The image and boxes on the left; mode, settings, and results on the right |
-| MOSS-Image | Layout editor on the left; three tabs in the middle ("Prompt", "JSON", "Model / Sampler"); the generate button and results on the right |
+| MOSS-Image | Asset panel (L, collapsed) at the far left, then the layout editor; three tabs in the middle ("Prompt", "JSON", "Model / Sampler"); the generate button and results on the right |
 | Auto | Two sub-tabs: "Story & Script" and "Auto Layout" |
 | Script | Asset panel (S) on the left, plot in the center |
 
@@ -149,7 +150,7 @@ The "Help" tab is a manual built into Comic Creator. It covers features in even 
 Help is available in Japanese, English, and Chinese, and follows the language chosen in the "Settings" tab.
 
 > **Tip**
-> This book is based on v1.70.0. If button names or positions differ from this book, search the Help tab to find the explanation for your current version.
+> This book is based on v1.72.0. If button names or positions differ from this book, search the Help tab to find the explanation for your current version.
 
 > **Chapter summary**
 > - The twelve tabs fall into three groups: "Create", "Create with AI", and "Support". The ones you use most are "Page" and "Layout"
