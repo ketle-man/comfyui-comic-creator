@@ -1397,4 +1397,43 @@ async function importOcrItems(items, { aspect = 1, prompt = '', clear = false } 
     return items.length;
 }
 
-export { initMossTab, extractBalloons, extractFreeTexts, importOcrItems };
+// ─── 保存レイアウト（アセットペイン「L」から使う。保存・一覧は moss-layout-assets.js） ───
+// 保存するのは枠・キャンバスサイズ・新しく描く文字の書字方向・全体プロンプト（レイアウト使用時は summary）
+async function getMossLayoutSnapshot() {
+    initMossTab();
+    await S.initPromise;
+    return {
+        W: S.W, H: S.H, writingVertical: !!S.writingVertical,
+        items: JSON.parse(JSON.stringify(S.items)),
+        prompt: $('moss-prompt').value,
+    };
+}
+
+/** 保存レイアウトをエディタへ読み込む（今の枠はすべて置き換える。確認は呼び出し側で行う） */
+async function applyMossLayoutSnapshot(snap) {
+    initMossTab();
+    await S.initPromise;
+    const items = Array.isArray(snap?.items) ? JSON.parse(JSON.stringify(snap.items)) : [];
+    let id = 1;
+    for (const it of items) it.id = id++;   // 保存時の id は使わず振り直す（重複・欠番を避ける）
+    S.items = items;
+    S.nextId = id;
+    S.selId = null; S.multi.clear();
+    clearUndo();
+    S.writingVertical = !!snap?.writingVertical;
+    setWritingToggle(S.writingVertical);
+    if (snap?.W > 0 && snap?.H > 0) setSize(snap.W, snap.H);
+    if (typeof snap?.prompt === 'string') $('moss-prompt').value = snap.prompt;
+    syncProps();
+    renderCanvas(); schedulePreview(); scheduleSave();
+    return items.length;
+}
+
+/** 今のエディタに枠があるか（読み込み前の確認用） */
+async function mossLayoutHasItems() {
+    initMossTab();
+    await S.initPromise;
+    return S.items.length > 0;
+}
+
+export { initMossTab, extractBalloons, extractFreeTexts, importOcrItems, getMossLayoutSnapshot, applyMossLayoutSnapshot, mossLayoutHasItems };

@@ -53,8 +53,11 @@
               <button class="asset-panel-tab-btn" data-panel-tab="fonts" data-i18n-title="nav.font" title="フォント">F</button>
               <button class="asset-panel-tab-btn" data-panel-tab="images" title="Image" id="asset-panel-tab-images" style="display:none;">I</button>
               <button class="asset-panel-tab-btn" data-panel-tab="script" data-i18n-title="nav.script" title="スクリプト" id="asset-panel-tab-script" style="display:none;">S</button>
+              <button class="asset-panel-tab-btn" data-panel-tab="mosslayouts" data-i18n-title="asset.tabMossLayouts" title="MOSS-Image のレイアウト" id="asset-panel-tab-mosslayouts" style="display:none;">L</button>
             </div>
             <button id="asset-refresh-btn" class="asset-refresh-btn" data-i18n-title="asset.refreshTitle" title="アセット一覧を更新">↺</button>
+            <!-- MOSS-Image タブでのみ表示する開閉ボタン（moss-layout-assets.js） -->
+            <button id="asset-collapse-btn" class="asset-collapse-btn" style="display:none;" data-i18n-title="mossLayout.collapseTitle" title="">◀</button>
           </div>
           <div id="asset-panel-view-assets" class="asset-panel-view active">
             <div id="asset-tree" class="asset-panel-content">
@@ -103,6 +106,19 @@
               <button id="image-asset-insert-btn" class="btn secondary">
                 Open
               </button>
+            </div>
+          </div>
+          <div id="asset-panel-view-mosslayouts" class="asset-panel-view">
+            <div class="moss-layout-asset-save">
+              <input type="text" id="moss-layout-asset-name" maxlength="80" data-i18n-placeholder="mossLayout.namePlaceholder" placeholder="レイアウト名" />
+              <button id="moss-layout-asset-save-btn" class="btn small primary" data-i18n="mossLayout.save" data-i18n-title="mossLayout.saveTitle">保存</button>
+            </div>
+            <div id="moss-layout-asset-status" class="moss-layout-asset-status"></div>
+            <div id="moss-layout-asset-list" class="page-thumb-grid">
+              <p class="empty-message" data-i18n="mossLayout.empty">保存したレイアウトはありません</p>
+            </div>
+            <div class="asset-footer">
+              <button id="moss-layout-asset-load-btn" class="btn secondary" disabled data-i18n="mossLayout.load" data-i18n-title="mossLayout.loadTitle">エディタに読み込む</button>
             </div>
           </div>
           <div id="asset-panel-view-script" class="asset-panel-view">

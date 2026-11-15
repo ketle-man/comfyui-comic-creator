@@ -2,6 +2,20 @@
 
 ---
 
+## 2026-11-15（未リリース: MOSS-Image タブのレイアウト保存、アセットペイン「L」と開閉・生成列の排他表示）
+
+**動機**: MOSS-Image のレイアウト（bbox の枠）を保存して使い回したい。一覧は左端のアセットペインに折りたたみ式で出し、MOSS タブでは「L（レイアウト）」だけを表示。開いている間は右端の生成ボタン列を隠して、エディタの幅を確保したい。
+
+**内容**
+- `static/js/moss-layout-assets.js` を新設。保存先は IndexedDB の settings ストア（id = `moss_layout:<時刻>`。既存の一括バックアップにそのまま含まれる）。中身は `moss.js` の `getMossLayoutSnapshot()`（枠・キャンバスサイズ・新規文字枠の書字方向・全体プロンプト）＋名前・保存日時。保存（名前が空なら「レイアウト N」、同名は確認して上書き）、カードのクリックで選択→「エディタに読み込む」またはダブルクリックで読み込み（枠があれば確認、id は振り直し、Undo 履歴は消す）、× で削除。サムネイルは枠からエディタと同じ色の SVG を描く（座標は数値化してから埋め込む。バックアップの復元で外から入るため）。
+- `moss.js`: `getMossLayoutSnapshot` / `applyMossLayoutSnapshot` / `mossLayoutHasItems` を export。
+- アセットペイン（全タブ共通の左サイドバー）: 「L」タブ（`data-panel-tab="mosslayouts"`）と開閉ボタン（`#asset-collapse-btn`）を追加。`switchTab` で MOSS では L だけを表示（従来 MOSS はアセットペイン非表示だった）、他タブでは L を隠す。開閉は MOSS のときだけ（`.asset-panel.collapsed` は幅 34px）、開いている間は `#moss-tab.moss-assets-open .comfyui-right-col { display:none }`。開閉状態は `ccc_moss_asset_open`（既定は閉、バックアップ対象に追加）。幅が変わるので resize を出してキャンバスを合わせ直す。
+- i18n（ja/en/zh）、ヘルプの MOSS-Image タブに「レイアウトの保存（アセットペイン「L」）」、README 3言語の MOSS-Image 節に1項目。
+
+**検証**（Kapture）: MOSS タブでアセットペインが L のみ・たたんだ状態（幅35px、生成列あり）→ ▶ で開くと幅251px・生成列が非表示・エディタ幅 1279→1424px。保存→カード（枠8個・1728×1152、サムネイルの rect）→ダブルクリック読み込みで同じ枠・プロンプト、同名保存で上書き確認（カード数は1のまま）、× で削除して空表示。別内容のレコード（1024×1536・縦書き・枠2個）を読み込むとサイズ入力・枠・書字方向ボタン・全体プロンプトが置き換わり id は 1,2 に振り直し、元のレイアウトに戻してテストレコードを削除。レイアウト／Image／スクリプト／Nanobanana+ タブのアセットペインは従来どおり（APTFI／AFI／S／非表示、開閉ボタンなし）。コンソールエラーなし。
+
+---
+
 ## 2026-11-15（未リリース: プロンプト翻訳 — Workflow Studio の翻訳API（PLaMo 3 Translate）を使う）
 
 **動機**: Auto タブ（ローカル生成）や MOSS-Image のプロンプト・caption を日本語で書けるようにしたい。WFS v0.9.10 で他のフロントエンドから使える翻訳API（記法の保護・`target_lang`・`protect_quotes`・`api` 版）が整ったため、CC はそれを同一オリジンの相対URLで呼ぶ（Ollama を直接呼ぶ案は、翻訳処理と設定が二重になるため不採用）。

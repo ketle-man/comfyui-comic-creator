@@ -281,3 +281,23 @@
 /* Nanobanana+タブ: ローカルモードではクラウド専用項目（Gemini/ネイティブ設定・履歴・シード）を隠す */
 #nanobanana-tab[data-mode="local"] .nb-cloud-only { display: none !important; }
 #nanobanana-tab:not([data-mode="local"]) .nb-local-only { display: none !important; }
+
+/* ── MOSS-Image: アセットペイン「L（レイアウト）」と開閉（moss-layout-assets.js） ── */
+.asset-collapse-btn { background: none; border: 1px solid var(--border-color); color: var(--text-color); font-size: 12px; cursor: pointer; padding: 2px 6px; border-radius: 4px; line-height: 1.2; }
+.asset-collapse-btn:hover { background-color: rgba(255, 255, 255, 0.1); }
+.asset-panel.collapsed { width: 34px; }
+.asset-panel.collapsed .asset-panel-header { padding: 8px 4px; justify-content: center; }
+.asset-panel.collapsed .asset-panel-tabs,
+.asset-panel.collapsed .asset-refresh-btn,
+.asset-panel.collapsed .asset-panel-view { display: none !important; }
+/* アセットペインを開いている間は右端の生成列を隠して、エディタの幅を確保する */
+#moss-tab.moss-assets-open .comfyui-right-col { display: none; }
+.moss-layout-asset-save { display: flex; gap: 6px; padding: 10px 10px 4px; }
+.moss-layout-asset-save input { flex: 1; min-width: 0; background: #111; color: #fff; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px 6px; font-size: 12px; }
+.moss-layout-asset-status { font-size: 11px; padding: 0 10px; min-height: 1.2em; }
+.moss-layout-card-thumb { width: 100%; aspect-ratio: 4/3; background: var(--bg-primary); }
+.moss-layout-card-info { display: flex; align-items: center; gap: 4px; padding: 4px 6px 0; font-size: 12px; }
+.moss-layout-card-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moss-layout-card-del { background: none; border: 0; color: var(--text-secondary, #999); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+.moss-layout-card-del:hover { color: #e66; }
+.moss-layout-card-meta { font-size: 10px; color: var(--text-secondary, #999); padding: 0 6px 5px; }

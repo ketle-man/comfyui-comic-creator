@@ -40,6 +40,7 @@ import { initVideoTab, hideVideoOverlay } from './27-video-bridge.js';
 import { initAutoTab } from './28-auto-tab.js';
 import { initVramSettings } from '../vram-prepare.js';
 import { initPromptTranslateSettings } from '../prompt-translate.js';
+import { applyMossAssetPanel, renderMossLayoutAssets } from '../moss-layout-assets.js';
 import { initSubPanelTool } from './24-sub-panels.js';
 import { initSplitPanelTool } from './24a-panel-split.js';
 import { initDeformPanelTool } from './24b-panel-deform.js';
@@ -238,6 +239,7 @@ function initAssetPanelTabs() {
             if (target === 'templates') renderAssetTemplateGrid();
             if (target === 'fonts') renderAssetFontGrid();
             if (target === 'script') _scriptRenderAssetPanelLists();
+            if (target === 'mosslayouts') renderMossLayoutAssets();
         });
     });
     initAssetFontBgPicker();
@@ -367,7 +369,7 @@ async function switchTab(tabId) {
     updateTemplateSidePanel(tabId === 'layout');
 
     // アセットパネル（左サイドバー）を非表示にするタブ
-    const _hideAssetPanelTabs = ['output', 'wfmgallery', 'nanobanana', 'moss', 'ocr', 'auto', 'settings', 'fontmgr', 'help'];
+    const _hideAssetPanelTabs = ['output', 'wfmgallery', 'nanobanana', 'ocr', 'auto', 'settings', 'fontmgr', 'help'];
     const assetPanel = document.getElementById('asset-panel');
     if (assetPanel) assetPanel.style.display = _hideAssetPanelTabs.includes(tabId) ? 'none' : '';
 
@@ -417,6 +419,20 @@ async function switchTab(tabId) {
             document.querySelector('.asset-panel-tab-btn[data-panel-tab="assets"]')?.click();
         }
     }
+    // MOSS-Image タブではアセットパネルは「L（保存レイアウト）」タブのみ使用（他は非表示）。他タブでは逆にLを隠す。
+    // MOSS では開閉でき、開いている間は右端の生成列を隠す（moss-layout-assets.js）
+    const mossLayoutsBtn = document.getElementById('asset-panel-tab-mosslayouts');
+    if (mossLayoutsBtn) mossLayoutsBtn.style.display = tabId === 'moss' ? '' : 'none';
+    if (tabId === 'moss') {
+        ['assets', 'pages', 'templates', 'fonts', 'images', 'script'].forEach(key => {
+            const btn = document.querySelector(`.asset-panel-tab-btn[data-panel-tab="${key}"]`);
+            if (btn) btn.style.display = 'none';
+        });
+        mossLayoutsBtn?.click();
+    } else if (document.querySelector('.asset-panel-tab-btn.active')?.dataset.panelTab === 'mosslayouts') {
+        document.querySelector(`.asset-panel-tab-btn[data-panel-tab="${tabId === 'project' ? 'script' : 'assets'}"]`)?.click();
+    }
+    applyMossAssetPanel(tabId === 'moss');
     // アセット挿入ボタンの文言をタブに応じて切替（レイアウト=コマへ挿入／Image=レイヤーとして挿入）
     const assetInsertBtn = document.getElementById('asset-insert-btn');
     if (assetInsertBtn) assetInsertBtn.textContent = tabId === 'image' ? t('asset.insertAsLayer') : t('asset.insertToPanel');

@@ -579,7 +579,7 @@ const _BACKUP_LS_KEYS = [
     // Nanobanana+ タブ（生成方式・履歴の自動記録・ローカルモードのワークフロー一覧とシード）
     'ccc_nanobanana_engine', 'ccc_nanobanana_history_auto', 'ccc_nanobanana_local',
     // MOSS-Image タブ（モデル・生成設定・レイアウト枠、描画ツール・サブタブ・折りたたみ状態）
-    'ccc_moss_v1', 'ccc_moss_draw_type', 'ccc_moss_subtab', 'ccc_moss_target_open',
+    'ccc_moss_v1', 'ccc_moss_draw_type', 'ccc_moss_subtab', 'ccc_moss_target_open', 'ccc_moss_asset_open',
     // OCR タブ（モデル・モード・検出設定、ステージの表示モード・折りたたみ状態）
     'ccc_ocr_v1', 'ccc_ocr_stage_mode', 'ccc_ocr_mode_open', 'ccc_ocr_models_open',
     // Image タブ（ドローのパレット・切り抜きエンジン）・テキスト挿入モーダル・3Dポーズのエディタ選択
