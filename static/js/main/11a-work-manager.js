@@ -25,7 +25,7 @@ import { _clearObjectSelection, updatePanelSelectDropdown } from './08-panels-im
 import { updateBalloonPanelSelect } from './09e-text-tool.js';
 import { _activateOutputSubtab, _setOutputFilterGroup, renderOutputPageList } from './10-output-pages.js';
 import { _pageMgrGroups, renderPageMgrGrid } from './11b-page-manager-tab.js';
-import { _saveBlob } from './13-export-pdf-epub.js';
+import { _saveBlob, _pickSaveTarget } from './13-export-pdf-epub.js';
 import { state, switchTab } from './01-state.js';
 import { hidePose3DCanvas } from './23-pose3d-bridge.js';
 import { hideVideoOverlay } from './27-video-bridge.js';
@@ -599,6 +599,17 @@ const _BACKUP_FORMAT = 'comfyui-comic-creator-backup';
 async function _workBackupExport() {
     if (typeof JSZip === 'undefined') { alert(t('page.msgJszipLoadFailed')); return; }
     const btn = document.getElementById('work-backup-btn');
+    // 保存先ダイアログ（showSaveFilePicker）はクリック直後にしか開けない。DBの読み出し・zip作成の後に開くと
+    // 「Must be handling a user gesture」で失敗するため、先に保存先を確保してから作る
+    const fileName = `ccc_backup_${_workTimestampStr()}.zip`;
+    let saveTarget;
+    try {
+        saveTarget = await _pickSaveTarget(fileName, 'application/zip', '.zip', t('page.backupFileDesc'));
+    } catch (e) {
+        alert(t('page.msgBackupFailed', e.message));
+        return;
+    }
+    if (saveTarget === null) return;   // キャンセル
     if (btn) btn.disabled = true;
     try {
         const zip = new JSZip();
@@ -628,7 +639,7 @@ async function _workBackupExport() {
             compression: 'DEFLATE',
             compressionOptions: { level: 6 },
         });
-        await _saveBlob(blob, `ccc_backup_${_workTimestampStr()}.zip`, 'application/zip', '.zip', t('page.backupFileDesc'));
+        await _saveBlob(blob, fileName, 'application/zip', '.zip', t('page.backupFileDesc'), saveTarget);
     } catch (e) {
         console.error('[Backup] エクスポート失敗:', e);
         alert(t('page.msgBackupFailed', e.message));

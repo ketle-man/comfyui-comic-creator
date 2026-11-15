@@ -585,7 +585,17 @@ async function handleExport() {
                     await writable.close();
                 } catch (err) {
                     if (err.name === 'AbortError') return;
-                    throw err;
+                    // 描画に時間がかかりユーザー操作の有効期限が切れてダイアログを開けないときは、通常のダウンロードで保存する
+                    if (err.name !== 'SecurityError' && err.name !== 'NotAllowedError') throw err;
+                    console.warn('[PNG export] save dialog unavailable, falling back to download:', err.message);
+                    const dlUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = dlUrl;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(dlUrl);
                 }
             } else {
                 // フォールバック: <a> タグでダウンロード

@@ -2,6 +2,19 @@
 
 ---
 
+## 2026-11-15（未リリース: 一括バックアップの保存失敗「Must be handling a user gesture to show a file picker」を修正）
+
+**原因**: `_workBackupExport`（`11a-work-manager.js`）が IndexedDB の全ストア読み出しと zip 作成（実測 約248MB・約26秒）の後に `_saveBlob` → `showSaveFilePicker` を呼んでいた。保存ダイアログはクリック直後（ユーザー操作の有効期限内）にしか開けないため SecurityError になる。データが増えて作成に時間がかかるようになり表面化した。PDF／EPUB／ZIP 書き出しは既に「先に `_pickSaveTarget` で保存先を確保→後で書き込み」の形だったが、バックアップだけ旧来の形のままだった。
+
+**修正**
+- バックアップ: クリック直後に `_pickSaveTarget` で保存先を確保してから zip を作り、`_saveBlob(..., saveTarget)` で書き込む（キャンセル時は何も作らない）。
+- `_pickSaveTarget`（`13-export-pdf-epub.js`）: `SecurityError` / `NotAllowedError` でダイアログを開けないときは失敗にせず `<a download>` のダウンロードへ切り替える（保険）。
+- 1ページの PNG 書き出し（`12-text-png-export.js`）: 描画後にダイアログを開く作りのため、同じエラーのときは通常のダウンロードへ切り替える。
+
+**検証**（Kapture、`showSaveFilePicker` を差し替え）: 保存先の確保→zip 書き込み（248,351,161 bytes）→「保存しました」の順。SecurityError を投げる差し替えでは `ccc_backup_*.zip` のダウンロードに切り替わりエラー表示なし。
+
+---
+
 ## 2026-11-15（未リリース: MOSS-Image タブのレイアウト保存、アセットペイン「L」と開閉・生成列の排他表示）
 
 **動機**: MOSS-Image のレイアウト（bbox の枠）を保存して使い回したい。一覧は左端のアセットペインに折りたたみ式で出し、MOSS タブでは「L（レイアウト）」だけを表示。開いている間は右端の生成ボタン列を隠して、エディタの幅を確保したい。

@@ -282,6 +282,12 @@ async function _pickSaveTarget(fileName, mimeType, ext, description) {
         return { handle };
     } catch (err) {
         if (err.name === 'AbortError') return null;
+        // ユーザー操作の有効期限切れ（SecurityError: Must be handling a user gesture）などでダイアログを開けないときは、
+        // 失敗にせず通常のダウンロードで保存する
+        if (err.name === 'SecurityError' || err.name === 'NotAllowedError') {
+            console.warn('[_pickSaveTarget] save dialog unavailable, falling back to download:', err.message);
+            return { fallback: true };
+        }
         throw err;
     }
 }
