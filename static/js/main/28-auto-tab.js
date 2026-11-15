@@ -21,6 +21,7 @@ import {
     AUTO_TOOLS, getToolPrompt, buildChatSystemMessage, buildImagePromptMessages,
 } from '../auto-story-core.js';
 import { generateAutoImage, listWorkflowFilenames } from './28a-auto-image.js';
+import { attachTranslateButton, refreshTranslateButtons } from '../prompt-translate.js';
 import { LAYOUT_STYLES, READING_ORDERS } from '../auto-layout-core.js';
 import { initAutoLayoutSubtab } from './28b-auto-layout-tab.js';
 import { estimateScript } from '../auto-decision.js';
@@ -1055,7 +1056,9 @@ function bindEvents() {
     // 右ペイン: 画像生成
     document.querySelectorAll('input[name="auto-imggen-engine"]').forEach((r) => r.addEventListener('change', () => {
         saveAiSettings({ imageEngine: checkedValue('auto-imggen-engine') });   // エンジンの選択だけは即時に保存する
+        refreshTranslateButtons();   // 🌐はローカル（Workflow Studio）のときだけ
     }));
+    attachTranslateButton($('auto-img-prompt'), { visible: () => loadAiSettings().imageEngine !== 'gemini' });
     $('auto-img-make-prompt-btn').addEventListener('click', onMakeImagePrompt);
     $('auto-img-generate-btn').addEventListener('click', onGenerateImage);
     $('auto-img-wf-refresh-btn').addEventListener('click', () => refreshWorkflowList(false));

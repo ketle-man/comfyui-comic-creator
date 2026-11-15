@@ -6,6 +6,7 @@
 import { t, resolveBackendError } from './i18n.js';
 import { insertImage } from './main/08-panels-images.js';
 import { saveToEagle, _eagleSettings, sendMultiImageI2IToWorkflowStudio } from './main/14-integrations.js';
+import { attachTranslateButton, refreshTranslateButtons, autoTranslateTexts } from './prompt-translate.js';
 import { state } from './main/01-state.js';
 import { maxImageSlots } from './nb-image-slots.js';
 
@@ -73,6 +74,10 @@ class NanobananaManager {
         console.log('NanobananaManager Initializing...');
         this.restoreEngineSetting();
         this.restoreModeSetting();
+        // 🌐はローカル（Workflow Studio）のときだけ。Nanobanana（Gemini）は日本語をそのまま理解するので訳さない
+        for (const id of ['nanobanana-prompt', 'nanobanana-negative']) {
+            attachTranslateButton(document.getElementById(id), { visible: () => this.isLocal() });
+        }
         await this.refreshApiKey();
         this.bindEvents();
         this.renderI2IGrid();
@@ -209,6 +214,7 @@ class NanobananaManager {
         this.refreshLocalMax();
         const ctl = document.getElementById('nanobanana-local-controls');
         if (ctl) ctl.style.display = this.isLocal() ? 'inline-flex' : 'none';
+        refreshTranslateButtons();
     }
 
     renderLocalSelect() {
@@ -649,6 +655,9 @@ class NanobananaManager {
         btn.disabled = true;
 
         try {
+            // 設定タブ「プロンプト翻訳」で自動翻訳がオンなら、送る Positive/Negative だけ英語に訳す（入力欄はそのまま。失敗したら生成しない）
+            const [promptTr, negativeTr] = await autoTranslateTexts([prompt, negative || ''],
+                { onStart: () => { progress.textContent = t('pt.running'); } });
             const blobs = [];
             for (const img of this.i2iImages) blobs.push(await (await fetch(img.b64)).blob());
 
@@ -656,7 +665,7 @@ class NanobananaManager {
             for (let i = 0; i < batchSize; i++) {
                 progress.textContent = batchSize > 1 ? `${t('nb.generating')} (${i + 1}/${batchSize})` : t('nb.generating');
                 const seed = baseSeed + i;   // 枚数ごとに+1して同一画像を避ける
-                const result = await sendMultiImageI2IToWorkflowStudio(blobs, { positive: prompt, negative, width, height, steps, cfg, denoise, sampler_name, scheduler, seed }, cur.file);
+                const result = await sendMultiImageI2IToWorkflowStudio(blobs, { positive: promptTr, negative: negativeTr, width, height, steps, cfg, denoise, sampler_name, scheduler, seed }, cur.file);
                 if (!result?.ok || !result.url) throw new Error(result?.message || t('nb.generateFailed'));
                 if (i === 0 && result.slotCount != null && blobs.length > result.slotCount) {
                     alert(t('nb.localTruncated', result.usedImages, blobs.length, result.slotCount));

@@ -250,7 +250,15 @@ MOSS-Image 标签页顶部的状态显示"可用"即准备完毕。更新 `py/cc
 
 ### Ollama 与图像生成争用显存时
 
-在设置标签的"显存调整（Ollama）"中，可以在通过 Workflow Studio 生成图像（T2I・I2I・Inpaint・Outpaint）之前卸载 Ollama 的模型。可选择"仅在空闲显存低于目标时卸载所需的部分"（从显存占用大的模型开始逐个卸载，直到达到目标空闲 GB）或"每次全部卸载"。空闲显存以 `nvidia-smi` 的实测值判断（ComfyUI 显示的空闲显存可能不反映 Ollama 的占用）。对象为本机的 Ollama（默认的 `127.0.0.1:11434`、Auto 标签的本地 LLM、决策模型）。使用 Ollama 时，Auto 标签的"卸载模型"也会卸载所有已加载的模型。
+在设置标签的"显存调整（Ollama）"中，可以在通过 Workflow Studio 生成图像（T2I・I2I・Inpaint・Outpaint）之前卸载 Ollama 的模型。可选择"仅在空闲显存低于目标时卸载所需的部分"（从显存占用大的模型开始逐个卸载，直到达到目标空闲 GB）或"每次全部卸载"。空闲显存以 `nvidia-smi` 的实测值判断（ComfyUI 显示的空闲显存可能不反映 Ollama 的占用）。对象为本机的 Ollama（默认的 `127.0.0.1:11434`、Auto 标签的本地 LLM、决策模型）。使用 Ollama 时，Auto 标签的"卸载模型"也会卸载所有已加载的模型。不占用显存的模型（如设为常驻 CPU 的提示词翻译模型）不会被卸载。
+
+### 用母语书写提示词（提示词翻译）
+
+安装 [ComfyUI-Workflow-Studio](https://github.com/ketle-man/ComfyUI-Workflow-Studio) v0.9.10 或更高版本后，可在设置标签的"提示词翻译（Workflow Studio）"中，使用 Workflow Studio 的翻译功能（Ollama 本地模型，默认为 [PLaMo 3 Translate](https://huggingface.co/pfnet/plamo-3-translate-2b-GGUF)）将用日语等语言书写的提示词翻译成英语。适用于布局标签的 Generate、Image 标签的 I2I・Inpaint・Outpaint、脚本标签的半自动漫画批量生成（含各分格的图像提示词）、Nanobanana+ 标签的本地模式、Auto 标签和自动布局的图像生成（引擎为本地时），以及 MOSS-Image 的提示词和说明（caption）。Gemini（Nanobanana）可以直接理解日语，因此不翻译。
+
+- 开启"使用提示词翻译"后，输入框下方会显示 🌐 按钮（可用"原文"恢复）。"生成时自动翻译"（默认开启）只翻译发送的内容，输入框中的文字保持不变。翻译失败时不生成。
+- 逗号、`(word:1.2)`、`<lora:...>`、`{a|b}`、`BREAK` 等语法以及「」『』内的文字（招牌等绘制在图像中的文字）不翻译。MOSS-Image 的"绘制的文字"也不发送。MOSS-Image 的目标语言可选英语（默认）或中文（简体）。
+- 模型、Ollama 的 URL、源语言和 GPU／常驻 CPU 与 Workflow Studio 的设置共享（模型也在 Workflow Studio 的设置界面中准备）。PLaMo 3 Translate 个人・非商业使用免费（PLaMo Community License）。
 
 ### 可选依赖
 
@@ -260,7 +268,7 @@ MOSS-Image 标签页顶部的状态显示"可用"即准备完毕。更新 `py/cc
 |---|---|
 | **comfyui-vrm-pose-editor** | 排版标签・Image标签的 3D姿势／3D文字（手动安装时请将文件夹命名为 `comfyui-vrm-pose-editor`） |
 | **ComfyUI-VRM-Pose-Studio** | 用 VRM Pose Studio 打开排版标签“3D姿势”的 🎛 Editor（在设置标签的“3D姿势编辑器”中切换） |
-| **ComfyUI-Workflow-Studio** | I2I联动、Image标签的Inpaint、workflow studio标签的嵌入式图库、从图库标签发送视频（MP4，视频工具） |
+| **ComfyUI-Workflow-Studio** | I2I联动、Image标签的Inpaint、提示词翻译（v0.9.10 及以上）、workflow studio标签的嵌入式图库、从图库标签发送视频（MP4，视频工具） |
 | **comfyUI-particle-pixijs** | 排版标签"图像"子标签及Image标签的 PixiJS FX（粒子・滤镜效果弹窗） |
 
 ## 使用方法

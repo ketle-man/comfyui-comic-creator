@@ -33,6 +33,7 @@ import { openTextInsertModal } from './text-insert-modal.js';
 import { fitFontSize } from './ocr-core.js';
 import { resolveBackendError } from './i18n.js';
 import { wevisoneStatus, pickWevisoneModel, runWevisone, parseWevisone } from './wevisone-client.js';
+import { attachTranslateButton, autoTranslateTexts } from './prompt-translate.js';
 
 const TOOL_DEFS = [
     { id: "select",   icon: "▲",  label: "Select",    ready: true },
@@ -1703,6 +1704,8 @@ class ImageTab {
         });
         document.getElementById("ie-sel-i2i-positive")?.addEventListener("input", e => { this._selectI2IPositive = e.target.value; });
         document.getElementById("ie-sel-i2i-negative")?.addEventListener("input", e => { this._selectI2INegative = e.target.value; });
+        attachTranslateButton(document.getElementById("ie-sel-i2i-positive"));
+        attachTranslateButton(document.getElementById("ie-sel-i2i-negative"));
         document.getElementById("ie-sel-i2i-denoise")?.addEventListener("input", e => {
             this._selectI2IDenoise = Math.max(0, Math.min(1, parseFloat(e.target.value)));
             if (Number.isNaN(this._selectI2IDenoise)) this._selectI2IDenoise = 1.0;
@@ -1757,11 +1760,14 @@ class ImageTab {
         setStatus("Uploading...");
 
         try {
+            // 設定タブ「プロンプト翻訳」で自動翻訳がオンなら、送る Positive/Negative だけ英語に訳す（失敗したら生成しない）
+            const [positive, negative] = await autoTranslateTexts([this._selectI2IPositive || "", this._selectI2INegative || ""],
+                { onStart: () => setStatus(window.t("pt.running")) });
             const imageBlob = await new Promise(resolve => sourceCanvas.toBlob(resolve, "image/png"));
             setStatus("Generating...");
             const result = await sendI2IRunToWorkflowStudio(imageBlob, {
-                positive: this._selectI2IPositive,
-                negative: this._selectI2INegative,
+                positive,
+                negative,
                 denoise:  this._selectI2IDenoise,
             }, {
                 // Runは常にパネルに今表示されているチェックボックス/ファイル名の値を使う
@@ -2001,6 +2007,8 @@ class ImageTab {
             `;
             document.getElementById("ie-inpaint-positive")?.addEventListener("input", e => { this._inpaintPositive = e.target.value; });
             document.getElementById("ie-inpaint-negative")?.addEventListener("input", e => { this._inpaintNegative = e.target.value; });
+            attachTranslateButton(document.getElementById("ie-inpaint-positive"));
+            attachTranslateButton(document.getElementById("ie-inpaint-negative"));
             document.getElementById("ie-inpaint-grow-mask")?.addEventListener("input", e => {
                 this._inpaintGrowMaskBy = parseInt(e.target.value) || 0;
             });
@@ -2100,6 +2108,8 @@ class ImageTab {
             });
             document.getElementById("ie-outpaint-positive")?.addEventListener("input", e => { this._outpaintPositive = e.target.value; });
             document.getElementById("ie-outpaint-negative")?.addEventListener("input", e => { this._outpaintNegative = e.target.value; });
+            attachTranslateButton(document.getElementById("ie-outpaint-positive"));
+            attachTranslateButton(document.getElementById("ie-outpaint-negative"));
             document.getElementById("ie-outpaint-grow-mask")?.addEventListener("input", e => {
                 this._outpaintGrowMaskBy = parseInt(e.target.value) || 0;
             });
@@ -2875,10 +2885,13 @@ class ImageTab {
             const maskCanvas = this._exportMaskCanvas(maskLayer);
             const maskBlob   = await new Promise((resolve) => maskCanvas.toBlob(resolve, "image/png"));
 
+            // 設定タブ「プロンプト翻訳」で自動翻訳がオンなら、送る Positive/Negative だけ英語に訳す（失敗したら生成しない）
+            const [inpaintPos, inpaintNeg] = await autoTranslateTexts([this._inpaintPositive || "", this._inpaintNegative || ""],
+                { onStart: () => setStatus(window.t("pt.running")) });
             setStatus("Generating...");
             const result = await sendInpaintToWorkflowStudio(imageBlob, maskBlob, {
-                positive:   this._inpaintPositive,
-                negative:   this._inpaintNegative,
+                positive:   inpaintPos,
+                negative:   inpaintNeg,
                 growMaskBy: this._inpaintGrowMaskBy,
                 denoise:    this._inpaintDenoise,
             });
@@ -2974,10 +2987,13 @@ class ImageTab {
             mctx.fillRect(left, top, origW, origH);
             const maskBlob = await new Promise((resolve) => maskCanvas.toBlob(resolve, "image/png"));
 
+            // 設定タブ「プロンプト翻訳」で自動翻訳がオンなら、送る Positive/Negative だけ英語に訳す（失敗したら生成しない）
+            const [outpaintPos, outpaintNeg] = await autoTranslateTexts([this._outpaintPositive || "", this._outpaintNegative || ""],
+                { onStart: () => setStatus(window.t("pt.running")) });
             setStatus("Generating...");
             const result = await sendOutpaintToWorkflowStudio(imageBlob, maskBlob, {
-                positive:   this._outpaintPositive,
-                negative:   this._outpaintNegative,
+                positive:   outpaintPos,
+                negative:   outpaintNeg,
                 growMaskBy: this._outpaintGrowMaskBy,
                 denoise:    this._outpaintDenoise,
             });

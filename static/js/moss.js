@@ -9,6 +9,7 @@ import { dbGet } from './main/00-db.js';
 import { insertImage, insertImageFromUrl, getBoundingBoxFromPoints } from './main/08-panels-images.js';
 import { prepareVramForGeneration } from './vram-prepare.js';
 import { createStageZoom } from './stage-zoom.js';
+import { attachTranslateButton, refreshTranslateButtons, autoTranslateTexts, mossTargetLang } from './prompt-translate.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'ccc_moss_v1';
@@ -433,6 +434,7 @@ function syncProps() {
     $('moss-item-no').textContent = `#${S.items.indexOf(it) + 1}`;
     $('moss-item-type').value = it.type;
     $('moss-item-caption').value = it.caption;
+    refreshTranslateButtons();   // 別の要素の caption に替わったら「原文」ボタンを隠す
     $('moss-item-text').value = it.text;
     $('moss-item-text-field').style.display = it.type === 'text' ? '' : 'none';
     $('moss-item-font-field').style.display = it.type === 'text' ? '' : 'none';
@@ -1052,8 +1054,13 @@ function renderPanelList() {
         const ta = document.createElement('textarea');
         ta.rows = 2; ta.value = p.caption; ta.placeholder = t('moss.panelPlaceholder');
         ta.addEventListener('input', () => { p.caption = ta.value; });
-        row.append(cb, label, ta);
+        const cell = document.createElement('div');
+        cell.style.cssText = 'flex:1; min-width:0; display:flex; flex-direction:column;';
+        ta.style.width = '100%';
+        cell.appendChild(ta);
+        row.append(cb, label, cell);
         box.appendChild(row);
+        attachTranslateButton(ta, { targetLang: mossTargetLang });
     });
 }
 
@@ -1111,6 +1118,11 @@ function initSeedControls() {
 }
 
 
+// 設定タブ「プロンプト翻訳」で自動翻訳がオンのとき、MOSS-Image へ送る文を翻訳先の言語（英語／中国語）に訳す
+function translateForMoss(texts, progress) {
+    return autoTranslateTexts(texts, { targetLang: mossTargetLang(), onStart: () => { progress.textContent = t('pt.running'); } });
+}
+
 async function postGenerate(body) {
     const r = await fetch('/api/ccc/moss/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -1140,8 +1152,16 @@ async function onGenerate() {
         } else {
             progress.textContent = t('moss.generating');
             const body = { ...base, width: S.W, height: S.H, num_images: Number($('moss-batch').value) || 1 };
-            if (manual) body.prompt = $('moss-json-preview').value;
-            else { body.prompt = mainPrompt; body.layout = layoutPayload(); }
+            if (manual) body.prompt = $('moss-json-preview').value;   // 直接編集したJSONは訳さない
+            else {
+                // 自動翻訳がオンなら、全体プロンプトと caption だけを訳す（text＝画像に描く文字は日本語のまま）
+                const layout = layoutPayload();
+                const out = await translateForMoss([mainPrompt, ...layout.items.map(i => i.caption || '')], progress);
+                body.prompt = out[0];
+                layout.items.forEach((it, k) => { it.caption = out[k + 1]; });
+                body.layout = layout;
+                progress.textContent = t('moss.generating');
+            }
             const d = await postGenerate(body);
             showResults(d.images.map(im => ({ url: viewUrl(im), im, w: d.width, h: d.height })));
             afterSeedUsed(d.seed, d.seed + body.num_images);
@@ -1162,11 +1182,13 @@ async function generatePanels(base, mainPrompt, progress) {
     if (!targets.length) { alert(t('moss.noPanels')); return; }
     const all = [];
     let firstSeed = null;
+    // 自動翻訳がオンなら、生成を始める前に全体プロンプトと各コマの説明をまとめて訳す（途中で失敗して一部だけ生成されないように）
+    const [mainOut, ...captionsOut] = await translateForMoss([mainPrompt, ...targets.map(p => p.caption.trim())], progress);
     for (let i = 0; i < targets.length; i++) {
         const p = targets[i];
         progress.textContent = t('moss.generatingPanel', i + 1, targets.length);
         const { w, h } = sizeForAspect(p.bbox.width / p.bbox.height, PANEL_TARGET_PIXELS);
-        const prompt = [mainPrompt, p.caption.trim()].filter(Boolean).join('\n');
+        const prompt = [mainOut, captionsOut[i]].filter(Boolean).join('\n');
         if (!prompt) { alert(t('moss.promptEmpty')); return; }
         const d = await postGenerate({ ...base, prompt, width: w, height: h, num_images: 1, seed: base.seed >= 0 ? base.seed + i : -1 });
         if (firstSeed == null) firstSeed = d.seed;
@@ -1314,6 +1336,8 @@ async function initMossTabOnce() {
     $('moss-preset').addEventListener('change', () => { applyPreset($('moss-preset').value); scheduleSave(); });
     $('moss-mode').addEventListener('change', () => { updateModeUi(); scheduleSave(); });
     $('moss-prompt').addEventListener('input', schedulePreview);
+    attachTranslateButton($('moss-prompt'), { targetLang: mossTargetLang });
+    attachTranslateButton($('moss-item-caption'), { targetLang: mossTargetLang });
     $('moss-json-manual').addEventListener('change', onJsonManualToggle);
     $('moss-json-preview').addEventListener('input', scheduleSave);
     $('moss-layout-import-btn').addEventListener('click', importPagePanels);

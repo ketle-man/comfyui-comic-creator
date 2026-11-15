@@ -17,6 +17,7 @@ import { LAYOUT_STYLES, READING_ORDERS, bubbleTypeToBalloonShape, quadsToPageLay
 import { blankDialogue, BUBBLE_TYPES } from '../auto-story-core.js';
 import { generateAutoImage } from './28a-auto-image.js';
 import { loadAiSettings, validateAiSettings } from '../auto-ai-client.js';
+import { attachTranslateButton, refreshTranslateButtons } from '../prompt-translate.js';
 import { state, switchTab } from './01-state.js';
 import { dbGet, dbPut } from './00-db.js';
 import { loadPages, renderLayoutTab, renderPageSelector, updateLayoutPageNav, pushHistory } from './07-pages.js';
@@ -497,6 +498,7 @@ function renderProperties() {
 
     $('alo-prop-image-prompt').value = $('alo-prop-image-prompt').dataset.panelIdx === String(alo.selectedPanel) ? $('alo-prop-image-prompt').value : (panel.action || '');
     $('alo-prop-image-prompt').dataset.panelIdx = String(alo.selectedPanel);
+    refreshTranslateButtons();   // 別のコマの文に替わったら「原文」ボタンを隠す
     const preview = $('alo-prop-image-preview');
     if (panel.imageUrl) { preview.src = panel.imageUrl; preview.style.display = ''; } else { preview.style.display = 'none'; }
     renderImageGallery();
@@ -819,6 +821,8 @@ function bindEvents() {
     $('alo-prop-dialogue-cancel-btn').addEventListener('click', () => { editingDialogueIdx = null; $('alo-prop-dialogue-edit').style.display = 'none'; });
 
     $('alo-prop-image-generate-btn').addEventListener('click', onImageGenerate);
+    // 送り先のエンジン（Autoタブの画像生成エンジン）がローカルのときだけ🌐を出す
+    attachTranslateButton($('alo-prop-image-prompt'), { visible: () => loadAiSettings().imageEngine !== 'gemini' });
     $('alo-prop-image-clear-btn').addEventListener('click', onImageClear);
     $('alo-prop-image-gallery').addEventListener('click', onImageGalleryClick);
 

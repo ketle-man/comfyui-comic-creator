@@ -2,6 +2,56 @@
 
 ---
 
+## 2026-11-15（未リリース: プロンプト翻訳 — Workflow Studio の翻訳API（PLaMo 3 Translate）を使う）
+
+**動機**: Auto タブ（ローカル生成）や MOSS-Image のプロンプト・caption を日本語で書けるようにしたい。WFS v0.9.10 で他のフロントエンドから使える翻訳API（記法の保護・`target_lang`・`protect_quotes`・`api` 版）が整ったため、CC はそれを同一オリジンの相対URLで呼ぶ（Ollama を直接呼ぶ案は、翻訳処理と設定が二重になるため不採用）。
+
+**内容**
+- `static/js/prompt-translate.js` を新設。起動時に `GET /api/wfm/translate/config` で使えるか判定（404 または `api` 無し＝WFS 未導入／v0.9.9 以前は使わない）。翻訳は `POST /api/wfm/translate/prompt`（`texts` でまとめて1回、`protect_quotes: true`）。WFS の `prompt-translate.js` は app.js を巻き込むため import しない。
+- 🌐（翻訳）と「原文」ボタンを入力欄の下に表示: Auto タブの画像プロンプト・オートレイアウトのコマの画像プロンプト（画像生成エンジンがローカルのときだけ。Gemini は出さない）、MOSS-Image のプロンプト・選択中の要素の caption・コマ単位モードの各コマの説明。
+- 生成時の自動翻訳（送る文だけ訳し、入力欄は書き換えない。失敗したら生成しない）: Auto/オートレイアウトのローカル生成（プロンプトとネガティブ）、MOSS-Image の1頁／自由サイズ（全体プロンプト＋全要素の caption。`text`＝画像に描く文字は送らない）とコマ単位（生成前に全コマ分をまとめて訳す）。JSON 直接編集モードは訳さない。
+- 設定タブに「プロンプト翻訳（Workflow Studio）」: 状態（モデル・GPU/CPU常駐）、「使う」（未設定のうちは WFS のオン／オフに従う）、「生成時に自動で翻訳する」（既定オン）、「MOSS-Image の翻訳先」（英語／中国語簡体字。どちらが良いかは未比較）。モデル等は WFS の設定を共有。CPU常駐モードでは翻訳欄に最初にフォーカスしたとき `warmup`（`ignore_enabled: true`）。
+- VRAM調整（`py/ccc.py` の `_vram_prepare`）: `size_vram == 0`（CPU常駐の翻訳モデル）を外さず `kept_cpu` で返す（キー無しの古い Ollama は従来どおり対象。WFS の `vram_routes.py` と同じ判定）。設定タブの結果表示に「CPU常駐のため残しました」。
+- i18n（ja/en/zh）追加。
+
+**検証**: Kapture（ComfyUI_5 8189、WFS v0.9.10、PLaMo 2B CPU常駐）。設定タブの状態表示、MOSS の🌐で「夕焼けの海辺に立つ少女、看板に『営業中』…, (長い黒髪:1.2)」→英訳で『営業中』と重み記法が残る・「原文」で復元、生成API をフックして1頁モードの送信内容が英訳され `text`（「WeVisOne-VL対応」）が日本語のまま・入力欄は元のまま、`zh-hans` への翻訳、Auto/オートレイアウトの🌐がローカルで表示・Gemini で非表示、翻訳失敗（502 を模擬）で「生成を中止」のエラー、config 404 を模擬して「使えません」表示とボタン非表示。`_vram_prepare` はモックで size_vram=0 を残しキー無しを外すことを確認。
+
+**再起動後の確認（同日）**: `/api/ccc/vram/prepare` の all で PLaMo（size_vram=0）が残り `kept_cpu` に入る、設定タブ「今すぐすべてアンロード」に「CPU常駐のため残しました」。MOSS 1頁モードの実生成（「雨の夜の路地裏で傘をさす少女、ネオン看板に『ラーメン』」→英訳して送信）で、看板の「ラーメン」と text の「WeVisOne-VL対応」が日本語で描かれた（MOSS_00312_）。Auto のローカル生成（`generateAutoImage` を直接呼び、作品には記録しない）で WFS の GenerateUI に英訳済みのプロンプトが渡り、内容どおりの画像（auto_local_1794727071882）。設定欄の英語・中国語の文言。MOSS の翻訳先比較（同じシード、レイアウトなし、駅名標『しらかば』を含む文）: 英語・中国語とも駅名標は日本語のまま正しく描かれ、構図・内容もほぼ同等（中国語は指示に無い人物が1人増えた）。1組だけなので既定は英語のまま。
+
+**追加（同日）: レイアウトタブの Generate と Image タブの I2I にも対応**
+- レイアウトの Generate モーダル（`15-pixifx-bridge.js`）: Positive／Negative に🌐。Run では送る直前に訳す（`_li2iTranslate`。未選択・ページ無しなどの事前チェックの後）。ページ全体＋バッチは、全コマ分の合成プロンプトを生成前にまとめて訳す（途中失敗で一部のコマだけ生成されないように）。タブ切替で「原文」ボタンを更新。
+- Image タブの Select → I2I（`image-tab.js` の `_runSelectI2I`）: Positive／Negative に🌐、Run で送る文だけ訳す。
+- WFS 側の受け口（`_wfmReceiveGenerateRequest` 等）は workflowOverride 経路で WFS の自動翻訳を通らないため、CC 側で訳しても二重にはならない。
+- 設定タブの説明文（ja/en/zh）の対象一覧に追加。
+- 検証（Kapture、WFS の受け口を差し替えて送信内容だけ記録し生成はさせない）: レイアウト Generate の🌐、ページ全体 T2I・ページ全体＋バッチ（3コマ）で Positive「森の中の小さな木の家、窓から暖かい光」／Negative「ぼやけた、低品質」が英訳されて渡る。Image タブ I2I で「水彩画風、柔らかい色合い」→「Watercolor style, soft colors」。
+
+**追加（同日）: 半自動マンガの一括生成と Image タブの Inpaint／Outpaint にも対応**
+- 半自動マンガ（`26-auto-comic-bridge.js`）: T2I／I2I 一括生成モーダルの Positive／Negative に🌐。Run では、対象コマが決まった後・`pushHistory` の前に、全コマ分の合成プロンプト（モーダルの全体＋スクリプトのコマの画像プロンプト）と Negative をまとめて訳す（`_autoComicTranslate`）。Run ボタンのハンドラが例外を受けないため、翻訳の失敗はヘルパー内で alert し `{ok:false}` で終える。Nanobanana の一括生成（Gemini）は訳さない。
+- Image タブの Inpaint／Outpaint: Positive／Negative に🌐、Run で送る文だけ訳す（既存の try 内なので失敗時はエラー表示で止まる）。
+- 設定タブの説明文（ja/en/zh）の対象一覧に追加。
+- 検証（WFS の受け口を差し替えて送信内容だけ記録）: 半自動 T2I で3コマとも「アニメ調、明るい色」＋コマの画像プロンプトが英訳されて渡る。半自動 I2I は対象ページのコマに画像が無く送信前に失敗（既存の動作）したが、翻訳 API には3コマ分がまとめて送られ英訳されたことを確認。Inpaint「赤い花」→「Red Flower」、Outpaint「広がる青空」→「The Wide Blue Sky」。🌐ボタンが4欄とも表示。
+- 気づき: 試した作品のコマの画像プロンプトは中国語だが、WFS の翻訳設定の元言語が「ja」固定のため「三花」が "Mika" / "Sanka" と揺れた。母語以外が混じるなら WFS の設定で元言語を「自動」にする（CC からは変えない）。
+
+**追加（同日）: Nanobanana+ タブのローカルモードにも対応**
+- `nanobanana.js`: プロンプト／Negative に🌐（ローカルモードのときだけ表示、`applyModeUi` で切り替え）。`generateLocal` で送る文だけ訳してから `sendMultiImageI2IToWorkflowStudio` へ渡す（try 内なので失敗時はエラー表示で止まる）。Gemini／ネイティブノードの経路は訳さない。
+- 検証: モード切替で🌐が Nanobanana では非表示・ローカルでは表示。WFS の受け口を差し替えて、「この画像の人物を水彩画風にして、背景に『カフェ』の看板」が英訳され『カフェ』が残って渡ることを確認。
+
+**未確認**: コマ単位モード（MOSS）の実生成（生成結果がページに自動配置されるため使い捨ての作品で行う）、レイアウト Generate／Image I2I・Inpaint・Outpaint／半自動マンガ／Nanobanana+ ローカルの実生成。マニュアルは未更新。
+
+**実生成の確認（同日）**: 使い捨て作品「翻訳テスト_20261115164234」（A4横_3コマ）で実施。保存済みのワークフロー設定は変えず、モーダルの欄（保存しない）または WFS の受け口のラップでワークフローを指定。
+- レイアウト Generate（ページ全体＋バッチ T2I、qwen_image2.1_t2i_1）: 全体「白黒マンガ、カフェの店内」＋コマ別の日本語が英訳され3コマ生成・配置。3コマ目の札『準備中』が日本語で描かれた（Qwen_image_2.1_00401〜00403）。
+- 半自動マンガ T2I（既存スクリプト「猫咖啡馆的早晨」を対応付け、qwen_image2.1_t2i_1）と I2I（cc_i2i_default、denoise 0.6、「水彩画風、淡い色」）: どちらも3コマ生成・配置（00404〜00406、ComfyUI_11683〜11685）。スクリプトのデータは変更していない。
+- Image タブ I2I（cc_i2i_default）「夕暮れのオレンジ色の光」/Negative「雪」→夕景に変化（ComfyUI_11686）。Inpaint（ws_inpaint_basic、addLayer('mask') に矩形）「赤い花が咲いた植木鉢」→マスク位置に植木鉢（11687）。Outpaint（outpaint_test、上に128px）「雪が降る灰色の空」→上に空が広がる（雪は描かれず、ワークフロー側の効き方）（11688）。
+- Nanobanana+ ローカル（Qwen2.1 (2枚)、入力画像1枚）「少年のマフラーを青色に変えて、駅のホームに黒猫を一匹座らせて」→青いマフラー・黒猫（2匹描かれた）（cc_nanobanana/nanobanana_local_0_1794729290342）。
+- MOSS コマ単位: 全体「白黒マンガ、スクリーントーン」＋3コマの説明が英訳され3コマ生成・配置。
+- 後始末: テスト用の入力・モード・入力画像を元に戻し、localStorage にテスト文が残っていないことを確認。作業前の MOSS のプロンプト欄の値（"thumbnail"）が、最初の確認時の戻し方（input イベントを出さなかった）のせいでテスト文のまま保存されていたので直した。開いている作品は元の「これはTEST」に戻した。使い捨て作品は残してある（不要なら削除）。
+
+**バックアップ・復元の対象キーの漏れを修正（同日）**: コード内の localStorage キーを全抽出して `_BACKUP_LS_KEYS`（`11a-work-manager.js`）と照合。IndexedDB の4ストアは全て対象だったが、localStorage は v1.54 以降に増えたタブの設定が漏れていた。追加: Nanobanana+（`ccc_nanobanana_engine` / `_history_auto` / `_local`）、MOSS-Image（`ccc_moss_v1` / `_draw_type` / `_subtab` / `_target_open`）、OCR（`ccc_ocr_v1` / `_stage_mode` / `_mode_open` / `_models_open`）、Image タブ（`ie_draw_palette_v1` / `ccc_image_seg_engine`）、`ccc_text_insert_v1`、`ccc_pose3d_editor_engine`、`ccc_prompt_translate`、`wfm_decision_settings`（WFS と共有）。意図して対象外: `vrmPoseEditor_*`（別ノード）、`auto_layout_staged_template`（一時）、`ccc_default_templates_seeded_v1`（フラグ）、`ccc_pdf_meta`・`eagleComicProject*`（旧キー）。どれも APIキー等の秘密は含まない（APIキー・G'MIC のパスはサーバー側の settings.json／.env で対象外）。ヘルプ「バックアップと復元」（日英中）に含まれる設定と、サーバー側の設定・生成画像ファイルは含まれない旨を追記。検証: ブラウザ上の本アプリのキーで対象外はフラグ1件のみ（40キーが書き出し対象）。テスト用 zip で復元し、`ccc_prompt_translate` が書き戻されて再読み込み後の設定に反映、一覧外のキーは無視されることを確認（テスト値は削除済み）。
+
+**ヘルプ・README（同日）**: ヘルプの設定タブに「プロンプト翻訳（Workflow Studio）」を日英中で追加（対象・🌐と原文・自動翻訳・訳さないもの・MOSS の翻訳先・WFS の設定を共有・元言語は「自動」推奨・PLaMo のライセンス）。「VRAM調整」に CPU常駐モデルを残す旨を追記。README 3言語の「任意設定」に「日本語でプロンプトを書く（プロンプト翻訳）」節を追加、VRAM の節に一文、依存関係表の Workflow Studio の行に「プロンプト翻訳（v0.9.10 以降）」。日本語ヘルプの表示を Kapture で確認（英中は構文チェックのみ）。
+
+---
+
 ## 2026-11-13（v1.71.0: WeVisOne-VL を OCR レイアウト検出と Image タブの切り抜きに選択式で追加（試用）、OCR から MOSS-Image へ送るときレイアウトエディタを空にする）
 
 **動機**: tencent/WeVisOne-VL-4B（Qwen3-VL-4B ベースの検出・OCR・マット特化モデル）を実測比較したところ、OCR タブのレイアウト検出は gemma4:e4b より大幅に正確（gemma4 はコマを格子状に当てはめるだけ）、写真の髪の切り抜きは SAM3 より上（ソフトな境界）だった。OCR の本文読みは LightOnOCR-3 のほうが上なので置き換えない。

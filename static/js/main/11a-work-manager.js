@@ -576,6 +576,20 @@ const _BACKUP_LS_KEYS = [
     'fontmgr_style_preview_bg', 'fontmgr_text_presets', 'fontmgr_asset_thumb_bg',
     // テンプレートウィザード
     'tmplwiz_grid_settings',
+    // Nanobanana+ タブ（生成方式・履歴の自動記録・ローカルモードのワークフロー一覧とシード）
+    'ccc_nanobanana_engine', 'ccc_nanobanana_history_auto', 'ccc_nanobanana_local',
+    // MOSS-Image タブ（モデル・生成設定・レイアウト枠、描画ツール・サブタブ・折りたたみ状態）
+    'ccc_moss_v1', 'ccc_moss_draw_type', 'ccc_moss_subtab', 'ccc_moss_target_open',
+    // OCR タブ（モデル・モード・検出設定、ステージの表示モード・折りたたみ状態）
+    'ccc_ocr_v1', 'ccc_ocr_stage_mode', 'ccc_ocr_mode_open', 'ccc_ocr_models_open',
+    // Image タブ（ドローのパレット・切り抜きエンジン）・テキスト挿入モーダル・3Dポーズのエディタ選択
+    'ie_draw_palette_v1', 'ccc_image_seg_engine', 'ccc_text_insert_v1', 'ccc_pose3d_editor_engine',
+    // プロンプト翻訳（CC 側のオン／オフ・自動翻訳・MOSS の翻訳先）
+    'ccc_prompt_translate',
+    // 意思決定モデルの接続設定（Workflow Studio と共有するキー。同じ値を書き戻すだけなので WFS 側にも害はない）
+    'wfm_decision_settings',
+    // 対象外にしているキー: vrmPoseEditor_*（comfyui-vrm-pose-editor のもの）、auto_layout_staged_template（一時データ）、
+    // ccc_default_templates_seeded_v1（初回の既定テンプレート投入済みフラグ）、ccc_pdf_meta・eagleComicProject*（旧キー）
 ];
 
 /** バックアップzip内マニフェスト(backup.json)のフォーマット識別子 */

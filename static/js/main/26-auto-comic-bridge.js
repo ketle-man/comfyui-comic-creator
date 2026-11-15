@@ -40,6 +40,7 @@ import { loadAiSettings } from '../auto-ai-client.js';
 import { requestPanelImageFromWorkflowStudio, sendI2IRunToWorkflowStudio, getI2ISettingsState, saveI2ISettingsState, getT2ISettingsState, saveT2ISettingsState } from './14-integrations.js';
 import { requestNanobananaGenerate, saveNanobananaImageAndMaybeEagle, checkNanobananaKeyStatus } from '../nanobanana.js';
 import { _getPanelImageBlob, _composeOverallPrompt } from './15-pixifx-bridge.js';
+import { attachTranslateButton, autoTranslateTexts } from '../prompt-translate.js';
 
 // フキダシ形状が未指定（プロット「フキダシ形状」列が空）の場合のフォールバック値
 const AUTO_BALLOON_TYPE = 'rect';
@@ -178,6 +179,23 @@ async function _handleAutoBalloonGenerateClick() {
 // （I2I設定とは独立の_t2iSettings、14-integrations.js）を持つ。
 // ============================================================
 
+// 設定タブ「プロンプト翻訳」で自動翻訳がオンなら、生成を始める前に全コマ分（全体＋コマの画像プロンプト）と
+// Negative をまとめて英語に訳す（送る文だけ。途中で失敗して一部のコマだけ生成されないように）。失敗したら throw。
+// Workflow Studio 経由の T2I / I2I だけで使う（Nanobanana＝Gemini は日本語のまま理解するので訳さない）。
+// 失敗したら通知して null を返す（呼び出し側は何も生成せずに終わる。Run ボタンのハンドラは例外を受けないため）
+async function _autoComicTranslate(positive, negative, targets, statusEl) {
+    try {
+        const [negativeTr, ...positivesTr] = await autoTranslateTexts(
+            [negative || '', ...targets.map(item => _composeOverallPrompt(positive, item.imagePrompt))],
+            { onStart: () => { if (statusEl) statusEl.textContent = t('pt.running'); } });
+        return { positivesTr, negativeTr };
+    } catch (e) {
+        if (statusEl) statusEl.textContent = '';
+        alert(e.message || String(e));
+        return null;
+    }
+}
+
 let _autoT2IPositive = '';
 let _autoT2INegative = '';
 let _autoT2ISkipEmptyPrompt = false;
@@ -199,6 +217,10 @@ async function _runAutoImageGenerateT2I({ positive, negative, skipEmptyPrompt, w
         : mapped;
     if (targets.length === 0) { alert(t('script.autoComicGenerateNoPrompt')); return { ok: false }; }
 
+    const tr = await _autoComicTranslate(positive, negative, targets, statusEl);
+    if (!tr) return { ok: false };
+    const { positivesTr, negativeTr } = tr;
+
     pushHistory();
 
     let successCount = 0;
@@ -213,7 +235,7 @@ async function _runAutoImageGenerateT2I({ positive, negative, skipEmptyPrompt, w
 
         const { width, height } = pickSdxlResolution(bbox.width / bbox.height);
         const genResult = await requestPanelImageFromWorkflowStudio(
-            _composeOverallPrompt(positive, item.imagePrompt), width, height, negative,
+            positivesTr[i], width, height, negativeTr,
             { enabled: wfEnabled, file: wfFile },
         );
         if (!genResult?.ok || !genResult.url) {
@@ -312,6 +334,8 @@ function _openAutoComicT2IModal() {
 
     $('at2i-positive').addEventListener('input', e => { _autoT2IPositive = e.target.value; });
     $('at2i-negative').addEventListener('input', e => { _autoT2INegative = e.target.value; });
+    attachTranslateButton($('at2i-positive'));
+    attachTranslateButton($('at2i-negative'));
     $('at2i-skip-empty-prompt').addEventListener('change', e => { _autoT2ISkipEmptyPrompt = e.target.checked; });
 
     // T2I設定（I2I設定とは独立のデフォルトワークフロー、14-integrations.js）
@@ -397,6 +421,10 @@ async function _runAutoImageGenerateI2I({ positive, negative, denoise, skipEmpty
         : mapped;
     if (targets.length === 0) { alert(t('script.autoComicGenerateNoPrompt')); return { ok: false }; }
 
+    const tr = await _autoComicTranslate(positive, negative, targets, statusEl);
+    if (!tr) return { ok: false };
+    const { positivesTr, negativeTr } = tr;
+
     pushHistory();
 
     let successCount = 0;
@@ -415,8 +443,8 @@ async function _runAutoImageGenerateI2I({ positive, negative, denoise, skipEmpty
             if (!blob) { failCount++; continue; }
 
             const genResult = await sendI2IRunToWorkflowStudio(blob, {
-                positive: _composeOverallPrompt(positive, item.imagePrompt),
-                negative,
+                positive: positivesTr[i],
+                negative: negativeTr,
                 denoise,
             }, { enabled: wfEnabled, file: wfFile });
             if (!genResult?.ok || !genResult.url) {
@@ -515,6 +543,8 @@ function _openAutoComicI2IModal() {
 
     $('ai2i-positive').addEventListener('input', e => { _autoI2IPositive = e.target.value; });
     $('ai2i-negative').addEventListener('input', e => { _autoI2INegative = e.target.value; });
+    attachTranslateButton($('ai2i-positive'));
+    attachTranslateButton($('ai2i-negative'));
     $('ai2i-denoise').addEventListener('input', e => {
         _autoI2IDenoise = Math.max(0, Math.min(1, parseFloat(e.target.value)));
         if (Number.isNaN(_autoI2IDenoise)) _autoI2IDenoise = 1.0;

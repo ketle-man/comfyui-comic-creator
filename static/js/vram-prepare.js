@@ -72,6 +72,12 @@ const gb = (mb) => (mb / 1024).toFixed(1);
 
 /** 結果を1行の文に（設定タブの状態表示・生成前の通知で共通） */
 export function describeVramResult(d) {
+    // CPU常駐のモデル（VRAMを使わない翻訳モデルなど）はアンロードしない。残したことを末尾に添える
+    const kept = d.kept_cpu?.length ? ' / ' + t('vram.keptCpu', d.kept_cpu.join(', ')) : '';
+    return describeVramMain(d) + kept;
+}
+
+function describeVramMain(d) {
     if (d.unloaded.length) {
         let msg = t('vram.unloaded', d.unloaded.map((u) => u.name).join(', '), gb(d.free_before_mb), gb(d.free_after_mb));
         if (d.failed.length) msg += ' / ' + t('vram.failedModels', d.failed.join(', '));

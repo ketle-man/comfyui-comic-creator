@@ -25,6 +25,7 @@ import {
 } from './14-integrations.js';
 import { getAutoWork } from './28-auto-tab.js';
 import { pickSdxlResolution } from '../auto-comic-core.js';
+import { attachTranslateButton, refreshTranslateButtons, autoTranslateTexts } from '../prompt-translate.js';
 import { pixiFxOpen } from '../pixifx.js';
 import { state, switchTab } from './01-state.js';
 import { _drawShapeGetBounds, _drawShapeSetBounds, updateDrawShapeHandles } from './17c-layer-draw-handles.js';
@@ -323,14 +324,22 @@ async function _li2iInsertIntoPanel(url, panelId, bbox) {
     );
 }
 
+// 設定タブ「プロンプト翻訳」で自動翻訳がオンなら、Workflow Studio へ送る Positive/Negative を英語に訳す
+// （送る文だけ。モーダルの入力は書き換えない）。失敗したら throw して生成しない
+async function _li2iTranslate(positive, negative, setStatus) {
+    const [p, n] = await autoTranslateTexts([positive || '', negative || ''], { onStart: () => setStatus(t('pt.running')) });
+    return { positive: p, negative: n };
+}
+
 // 対象=選択画像: 従来通り、選択中の画像1枚（I2I）またはそのアスペクト比に合わせた新規生成（T2I）を
 // 実行し、既存の挿入ロジック（既定位置・サイズ）で結果を挿入する。プロンプトは常に「全体」タブを使う。
 async function _li2iRunSelected(isT2I, wf, denoise, setStatus) {
-    const prompt = _li2iPromptSlot('overall');
+    const slot = _li2iPromptSlot('overall');
     let result;
     if (!isT2I) {
         const blob = await _getSelectedImageBlob();
         if (!blob) return null;
+        const prompt = await _li2iTranslate(slot.positive, slot.negative, setStatus);   // 事前チェックの後に訳す
         setStatus(t('layout.i2iStatusGenerating'));
         result = await sendI2IRunToWorkflowStudio(blob, { positive: prompt.positive, negative: prompt.negative, denoise }, wf);
     } else {
@@ -339,6 +348,7 @@ async function _li2iRunSelected(isT2I, wf, denoise, setStatus) {
         const w = parseFloat(imgEl.getAttribute('width')) || 1;
         const h = parseFloat(imgEl.getAttribute('height')) || 1;
         const { width, height } = pickSdxlResolution(w / h);
+        const prompt = await _li2iTranslate(slot.positive, slot.negative, setStatus);   // 事前チェックの後に訳す
         setStatus(t('layout.i2iStatusGenerating'));
         result = await requestPanelImageFromWorkflowStudio(prompt.positive, width, height, prompt.negative, wf);
     }
@@ -350,12 +360,13 @@ async function _li2iRunSelected(isT2I, wf, denoise, setStatus) {
 // 合わせた新規生成（T2I）を実行し、結果は選択中のコマに関わらず常にオーバーレイへページ全面
 // サイズで追加する（ラフ用途の従来動作）。プロンプトは常に「全体」タブを使う。
 async function _li2iRunWholePage(isT2I, wf, denoise, setStatus) {
-    const prompt = _li2iPromptSlot('overall');
+    const slot = _li2iPromptSlot('overall');
     let result, pageW, pageH;
     if (!isT2I) {
         const pageResult = await _getPageBlob();
         if (!pageResult) return null;
         pageW = pageResult.pageW; pageH = pageResult.pageH;
+        const prompt = await _li2iTranslate(slot.positive, slot.negative, setStatus);   // 事前チェックの後に訳す
         setStatus(t('layout.i2iStatusGenerating'));
         result = await sendI2IRunToWorkflowStudio(pageResult.blob, { positive: prompt.positive, negative: prompt.negative, denoise }, wf);
     } else {
@@ -363,6 +374,7 @@ async function _li2iRunWholePage(isT2I, wf, denoise, setStatus) {
         if (!size) return null;
         pageW = size.svgW; pageH = size.svgH;
         const { width, height } = pickSdxlResolution(pageW / pageH);
+        const prompt = await _li2iTranslate(slot.positive, slot.negative, setStatus);   // 事前チェックの後に訳す
         setStatus(t('layout.i2iStatusGenerating'));
         result = await requestPanelImageFromWorkflowStudio(prompt.positive, width, height, prompt.negative, wf);
     }
@@ -381,16 +393,18 @@ async function _li2iRunPanelTab(panelId, isT2I, wf, denoise, setStatus) {
     const bbox = panel?.points ? getBoundingBoxFromPoints(panel.points) : null;
     if (!bbox || !bbox.width || !bbox.height) { alert(t('layout.i2iMsgPanelNotFound')); return null; }
 
-    const prompt = _li2iPromptSlot(panelId);
+    const slot = _li2iPromptSlot(panelId);
     const { width, height } = pickSdxlResolution(bbox.width / bbox.height);
 
     let result;
     if (!isT2I) {
         const blob = await _getPanelImageBlob(panel, bbox, width, height);
         if (!blob) { alert(t('layout.i2iMsgPanelNotFound')); return null; }
+        const prompt = await _li2iTranslate(slot.positive, slot.negative, setStatus);   // 事前チェックの後に訳す
         setStatus(t('layout.i2iStatusGenerating'));
         result = await sendI2IRunToWorkflowStudio(blob, { positive: prompt.positive, negative: prompt.negative, denoise }, wf);
     } else {
+        const prompt = await _li2iTranslate(slot.positive, slot.negative, setStatus);   // 事前チェックの後に訳す
         setStatus(t('layout.i2iStatusGenerating'));
         result = await requestPanelImageFromWorkflowStudio(prompt.positive, width, height, prompt.negative, wf);
     }
@@ -405,9 +419,17 @@ async function _li2iRunBatch(isT2I, wf, denoise, setStatus) {
     const panels = state.activePage?.panels || [];
     if (panels.length === 0) { alert(t('layout.msgNoActivePage')); return null; }
 
+    // 自動翻訳がオンなら、生成を始める前に全コマ分（全体＋コマのプロンプトを合成した文）をまとめて訳す。
+    // 途中で翻訳に失敗して一部のコマだけ生成される、ということが起きないようにするため
+    const overall = _li2iPromptSlot('overall');
+    const composed = panels.map(panel => {
+        const panelPrompt = _li2iPromptSlot(panel.id);
+        return [_composeOverallPrompt(overall.positive, panelPrompt.positive), _composeOverallPrompt(overall.negative, panelPrompt.negative)];
+    });
+    const translated = await autoTranslateTexts(composed.flat(), { onStart: () => setStatus(t('pt.running')) });
+
     pushHistory();
 
-    const overall = _li2iPromptSlot('overall');
     let successCount = 0, failCount = 0;
     for (let i = 0; i < panels.length; i++) {
         const panel = panels[i];
@@ -416,9 +438,8 @@ async function _li2iRunBatch(isT2I, wf, denoise, setStatus) {
         const bbox = panel.points ? getBoundingBoxFromPoints(panel.points) : null;
         if (!bbox || !bbox.width || !bbox.height) { failCount++; continue; }
 
-        const panelPrompt = _li2iPromptSlot(panel.id);
-        const positive = _composeOverallPrompt(overall.positive, panelPrompt.positive);
-        const negative = _composeOverallPrompt(overall.negative, panelPrompt.negative);
+        const positive = translated[i * 2];
+        const negative = translated[i * 2 + 1];
         const { width, height } = pickSdxlResolution(bbox.width / bbox.height);
 
         try {
@@ -563,6 +584,7 @@ function openLayoutI2IModal() {
         const slot = _li2iPromptSlot(_layoutI2IActiveTab);
         $('li2i-positive').value = slot.positive;
         $('li2i-negative').value = slot.negative;
+        refreshTranslateButtons();   // 別のタブの文に替わったら「原文」ボタンを隠す
     };
     const syncTabButtons = () => {
         dialog.querySelectorAll('.li2i-tab-btn').forEach(b => {
@@ -609,6 +631,8 @@ function openLayoutI2IModal() {
 
     $('li2i-positive').addEventListener('input', e => { _li2iPromptSlot(_layoutI2IActiveTab).positive = e.target.value; });
     $('li2i-negative').addEventListener('input', e => { _li2iPromptSlot(_layoutI2IActiveTab).negative = e.target.value; });
+    attachTranslateButton($('li2i-positive'));
+    attachTranslateButton($('li2i-negative'));
 
     $('li2i-denoise').value = _layoutI2IDenoise;
     $('li2i-denoise').addEventListener('input', e => {

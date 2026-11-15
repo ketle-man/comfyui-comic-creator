@@ -1580,13 +1580,20 @@ def _ollama_bases(urls):
 
 def _vram_prepare(mode, target_mb, bases):
     free_before, free_src = _free_vram_mb()
-    cands, unreachable = [], []
+    cands, unreachable, kept_cpu = [], [], []
     for base in bases:
         try:
             _, raw = _ollama_json(base, '/api/ps', timeout=5)
             for m in json.loads(raw.decode('utf-8')).get('models', []):
-                if m.get('name'):
-                    cands.append({'base': base, 'name': m['name'], 'vram_mb': int(m.get('size_vram', 0) / _MB)})
+                if not m.get('name'):
+                    continue
+                # size_vram == 0: すべてメインメモリに載っているモデル（Workflow Studio のプロンプト翻訳の
+                # CPU常駐モードなど）。外しても VRAM は空かず、次の翻訳で再読み込みが起きるだけなので残す。
+                # キーが無い古い Ollama は従来どおり対象にする（WFS の vram_routes.py と同じ判定）
+                if 'size_vram' in m and not m.get('size_vram'):
+                    kept_cpu.append(m['name'])
+                    continue
+                cands.append({'base': base, 'name': m['name'], 'vram_mb': int(m.get('size_vram', 0) / _MB)})
         except Exception as e:
             # Ollamaが起動していない等。既定URLが無いのは普通なので失敗扱いにはしないが、原因はログに残す
             # 応答には理由を含めない（呼び出し側が指定したローカルホストのポートの状態を知らせないため）
@@ -1617,6 +1624,7 @@ def _vram_prepare(mode, target_mb, bases):
         'free_before_mb': round(free_before), 'free_after_mb': round(free_after),
         'unloaded': strip(unloaded), 'failed': [c['name'] for c in failed],
         'unreachable': unreachable,
+        'kept_cpu': kept_cpu,
         'reached': free_after >= target_mb,
     }
 
@@ -1624,6 +1632,7 @@ async def handle_vram_prepare(request):
     """POST {mode:'auto'|'all', target_gb, urls:[OllamaのURL]}。
     auto: 空きVRAMが target_gb 未満のときだけ、VRAM使用量の大きいモデルから必要な分だけアンロード。
     all: ロード中のモデルをすべてアンロード（「モデルをアンロード」ボタンもこれを使う）。
+    VRAM を使っていないモデル（size_vram == 0、CPU常駐の翻訳モデルなど）はどちらでも外さず kept_cpu に返す。
     接続先はローカルホストに限る（既定の127.0.0.1:11434も常に対象）。"""
     # 他サイトからの単純リクエスト（text/plain等、CORSのプリフライト無し）でモデルを外されないよう、JSONのみ受け付ける
     if request.content_type != 'application/json':

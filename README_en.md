@@ -250,7 +250,15 @@ In the Settings tab's "Eagle Settings", check/change the Eagle API URL (default:
 
 ### When Ollama and image generation compete for VRAM
 
-"VRAM Management (Ollama)" in the Settings tab can unload Ollama models right before image generation through Workflow Studio (T2I, I2I, Inpaint, Outpaint). Choose "Unload only as much as needed when free VRAM is below the target" (one model at a time, largest VRAM first, until the target free GB is reached) or "Unload everything every time". Free VRAM is measured with `nvidia-smi` (the free VRAM ComfyUI reports may not reflect what Ollama uses). It targets Ollama on localhost (the default `127.0.0.1:11434`, the local LLM in the Auto tab, and the decision model). The Auto tab's "Unload Model" also unloads every loaded model when the backend is Ollama.
+"VRAM Management (Ollama)" in the Settings tab can unload Ollama models right before image generation through Workflow Studio (T2I, I2I, Inpaint, Outpaint). Choose "Unload only as much as needed when free VRAM is below the target" (one model at a time, largest VRAM first, until the target free GB is reached) or "Unload everything every time". Free VRAM is measured with `nvidia-smi` (the free VRAM ComfyUI reports may not reflect what Ollama uses). It targets Ollama on localhost (the default `127.0.0.1:11434`, the local LLM in the Auto tab, and the decision model). The Auto tab's "Unload Model" also unloads every loaded model when the backend is Ollama. Models that use no VRAM (such as a prompt translation model in CPU-resident mode) are not unloaded.
+
+### Writing prompts in your own language (prompt translation)
+
+With [ComfyUI-Workflow-Studio](https://github.com/ketle-man/ComfyUI-Workflow-Studio) v0.9.10 or later installed, "Prompt Translation (Workflow Studio)" in the Settings tab translates prompts written in Japanese or another language into English with the Workflow Studio translator (a local Ollama model, [PLaMo 3 Translate](https://huggingface.co/pfnet/plamo-3-translate-2b-GGUF) by default). It applies to the Layout tab Generate, the Image tab I2I / Inpaint / Outpaint, the Script tab semi-auto manga batch generation (including the image prompt of each panel), the Nanobanana+ tab Local mode, image generation in the Auto tab and Auto Layout (when the engine is Local), and the MOSS-Image prompt and captions. Gemini (Nanobanana) understands Japanese as it is, so it is not translated.
+
+- "Use prompt translation" shows a 🌐 button under these fields ("Original" restores your text). "Translate automatically when generating" (on by default) translates only what is sent and leaves the fields as you wrote them. If translation fails, nothing is generated.
+- Prompt syntax such as commas, `(word:1.2)`, `<lora:...>`, `{a|b}` and `BREAK`, and text inside 「」『』 (text drawn in the image, such as a sign) is not translated. The MOSS-Image "Text to draw" is not sent either. MOSS-Image can be translated into English (default) or Chinese (Simplified).
+- The model, Ollama URL, source language and GPU / CPU-resident mode are shared with the Workflow Studio settings (prepare the model in the Workflow Studio settings). PLaMo 3 Translate is free for personal and non-commercial use (PLaMo Community License).
 
 ### Optional dependencies
 
@@ -260,7 +268,7 @@ Installing the following custom nodes enables the corresponding features. Nothin
 |---|---|
 | **comfyui-vrm-pose-editor** | 3D Pose / 3D Text in the Layout tab and the Image tab (for a manual install, name the folder `comfyui-vrm-pose-editor`) |
 | **ComfyUI-VRM-Pose-Studio** | Opens the 🎛 Editor of the Layout tab 3D Pose tool in VRM Pose Studio (switch under "3D Pose Editor" in the Settings tab) |
-| **ComfyUI-Workflow-Studio** | I2I integration, Inpaint in the Image tab, the embedded gallery in the workflow studio tab, and sending videos (MP4) from the Gallery tab (Video tool) |
+| **ComfyUI-Workflow-Studio** | I2I integration, Inpaint in the Image tab, prompt translation (v0.9.10 or later), the embedded gallery in the workflow studio tab, and sending videos (MP4) from the Gallery tab (Video tool) |
 | **comfyUI-particle-pixijs** | PixiJS FX (particle/filter effects modal) in the Layout tab's "Image" sub-tab and the Image tab |
 
 ## Usage

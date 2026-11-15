@@ -12,6 +12,7 @@
 import { t } from '../i18n.js';
 import { requestPanelImageFromWorkflowStudio } from './14-integrations.js';
 import { requestNanobananaGenerate } from '../nanobanana.js';
+import { autoTranslateTexts } from '../prompt-translate.js';
 
 // WFS経由の生成結果は発行元ページ限りのblob URLで返ることがあるため、保存前にdata URLへ変換する
 async function urlToDataUrl(url) {
@@ -71,7 +72,9 @@ async function generateLocal(settings, prompt) {
     const width = Math.max(64, parseInt(settings.imgLocalWidth, 10) || 1024);
     const height = Math.max(64, parseInt(settings.imgLocalHeight, 10) || 1024);
     const wf = { enabled: !!settings.imgLocalWfEnabled && !!settings.imgLocalWfFile, file: settings.imgLocalWfFile || '' };
-    const result = await requestPanelImageFromWorkflowStudio(prompt, width, height, settings.imgLocalNegative || '', wf);
+    // 設定タブ「プロンプト翻訳」で自動翻訳がオンなら、送る文だけ英語に訳す（Gemini は日本語のまま理解するので訳さない）
+    const [promptEn, negativeEn] = await autoTranslateTexts([prompt, settings.imgLocalNegative || '']);
+    const result = await requestPanelImageFromWorkflowStudio(promptEn, width, height, negativeEn, wf);
     if (!result?.ok || !result.url) throw new Error(result?.message || t('auto.errImageGenFailed'));
     return urlToDataUrl(result.url);
 }
