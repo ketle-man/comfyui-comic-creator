@@ -318,7 +318,9 @@ See the in-app **Help** tab (available in Japanese, English, and Chinese, with s
 
 ## Manual
 
-A text-only beginner manual (for v1.70.0) is included: Japanese in [docs/manual/ja/](docs/manual/ja/), English in [docs/manual/en/](docs/manual/en/), and Simplified Chinese in [docs/manual/zh/](docs/manual/zh/). Start from `00_Contents.md` (English), `00_目次.md` (Japanese), or `00_目录.md` (Chinese).
+A text-only beginner manual (for v1.72.0) is included: Japanese in [docs/manual/ja/](docs/manual/ja/), English in [docs/manual/en/](docs/manual/en/), and Simplified Chinese in [docs/manual/zh/](docs/manual/zh/). Start from `00_Contents.md` (English), `00_目次.md` (Japanese), or `00_目录.md` (Chinese).
+
+The illustrated EPUB edition (Japanese, English, Chinese) is available in [this shared Google Drive folder](https://drive.google.com/drive/folders/1FE3RyYejQftbsK1kBnFwEi1SEjfJHF4Z).
 
 ## Architecture
 
