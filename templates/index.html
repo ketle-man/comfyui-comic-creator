@@ -1305,6 +1305,7 @@
             <div class="output-subtab-nav">
               <button class="output-subtab-btn active" data-output-subtab="work" data-i18n="page.subtabWork">作品管理</button>
               <button class="output-subtab-btn" data-output-subtab="template" data-i18n="asset.tabTemplates">テンプレート</button>
+              <button class="output-subtab-btn" data-output-subtab="mosslayout" data-i18n="page.subtabMossLayout" data-i18n-title="page.subtabMossLayoutTitle" title="MOSS-Image タブで保存したレイアウトの一覧とグループ管理">レイアウト</button>
               <button class="output-subtab-btn" data-output-subtab="export" data-i18n="page.subtabExport">出力</button>
             </div>
 
@@ -1446,6 +1447,53 @@
                     <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="page.tmplOpsHeader">テンプレート操作</div>
                     <button id="tmpl-assign-group-btn" class="btn small secondary" style="width:100%; margin-bottom:4px;" disabled data-i18n="page.tmplAssignGroup">グループに追加</button>
                     <button id="tmpl-remove-group-btn" class="btn small danger" style="width:100%;" disabled data-i18n="page.tmplRemoveGroup">グループから削除</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- === サブタブ: レイアウト（MOSS-Image の保存レイアウト。moss-layout-assets.js） === -->
+            <div id="output-subtab-mosslayout" class="output-subtab-content" style="display:none;">
+              <div class="actions">
+                <button id="mosslayout-open-btn" class="btn" disabled data-i18n="mossLayout.pmOpen" data-i18n-title="mossLayout.pmOpenTitle" title="選択したレイアウトを MOSS-Image タブのエディタに読み込んで開きます">MOSS-Image で開く</button>
+                <button id="mosslayout-rename-btn" class="btn secondary" disabled data-i18n="page.rename">名前変更</button>
+                <button id="mosslayout-delete-btn" class="btn danger" disabled data-i18n="common.delete">削除</button>
+                <select id="mosslayout-group-filter" style="margin-left:8px; padding:4px 8px; font-size:13px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);">
+                  <option value="" data-i18n="layout.fontCatAll">すべて</option>
+                </select>
+                <span style="font-size:12px; color:var(--text-secondary);" data-i18n="mossLayout.pmHint">新しいレイアウトは MOSS-Image タブ左のアセットペイン「L」で保存します</span>
+              </div>
+              <div style="display:flex; gap:0; flex:1; overflow:hidden;">
+                <div id="mosslayout-list" class="template-grid" style="flex:1; overflow-y:auto; align-content:start;">
+                  <p class="empty-message" data-i18n="mossLayout.pmEmpty">保存したレイアウトはありません</p>
+                </div>
+                <div id="mosslayout-side-panel" style="width:200px; flex-shrink:0; border-left:1px solid var(--border-color); padding:12px; overflow-y:auto; font-size:13px; display:flex; flex-direction:column; gap:10px;">
+                  <div>
+                    <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="page.propsHeader">プロパティ</div>
+                    <div id="mosslayout-prop-name" style="font-size:12px; color:var(--text-secondary); word-break:break-all;" data-i18n="layout.notSelected">未選択</div>
+                    <div id="mosslayout-prop-meta" style="font-size:11px; color:var(--text-secondary); margin-top:2px;"></div>
+                    <div id="mosslayout-prop-group" style="font-size:12px; color:var(--text-secondary); margin-top:2px;"></div>
+                  </div>
+                  <hr style="border:none; border-top:1px solid var(--border-color); margin:0;">
+                  <div>
+                    <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="page.groupMgmtHeader">グループ管理</div>
+                    <div style="display:flex; gap:4px; margin-bottom:6px;">
+                      <input type="text" id="mosslayout-group-name-input" maxlength="80" data-i18n-placeholder="page.groupNamePlaceholder" placeholder="グループ名" style="flex:1; min-width:0; padding:4px 6px; font-size:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);" />
+                      <button id="mosslayout-group-add-btn" class="btn small secondary" data-i18n="font.addBtn" data-i18n-title="page.groupAddTitle" title="グループを作成">追加</button>
+                    </div>
+                    <div style="display:flex; gap:4px; margin-bottom:6px;">
+                      <select id="mosslayout-group-select" style="flex:1; min-width:0; padding:4px 6px; font-size:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-primary); color:var(--text-primary);">
+                        <option value="" data-i18n="page.groupSelectOption">グループを選択</option>
+                      </select>
+                      <button id="mosslayout-group-rename-btn" class="btn small secondary" data-i18n-title="page.groupRenameTitle" title="グループ名変更">✎</button>
+                      <button id="mosslayout-group-delete-btn" class="btn small danger" data-i18n-title="page.groupDeleteTitle" title="グループを削除">✕</button>
+                    </div>
+                  </div>
+                  <hr style="border:none; border-top:1px solid var(--border-color); margin:0;">
+                  <div>
+                    <div style="font-weight:bold; margin-bottom:6px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;" data-i18n="mossLayout.pmOpsHeader">レイアウト操作</div>
+                    <button id="mosslayout-assign-group-btn" class="btn small secondary" style="width:100%; margin-bottom:4px;" disabled data-i18n="page.tmplAssignGroup">グループに追加</button>
+                    <button id="mosslayout-remove-group-btn" class="btn small danger" style="width:100%;" disabled data-i18n="page.tmplRemoveGroup">グループから削除</button>
                   </div>
                 </div>
               </div>

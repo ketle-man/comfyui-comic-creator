@@ -303,3 +303,10 @@
 .moss-layout-card-del { background: none; border: 0; color: var(--text-secondary, #999); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
 .moss-layout-card-del:hover { color: #e66; }
 .moss-layout-card-meta { font-size: 10px; color: var(--text-secondary, #999); padding: 0 6px 5px; }
+/* アセットペイン L のグループ見出し（.asset-folder と .asset-tmpl-group-list をアセット T と共用） */
+#moss-layout-asset-list .moss-layout-group { flex-shrink: 0; padding: 6px 4px; font-size: 13px; }
+#moss-layout-asset-list .asset-tmpl-group-list { flex-shrink: 0; padding-left: 8px; }
+#moss-layout-asset-list .asset-folder.collapsed .asset-folder-icon { transform: none; }   /* 向きは ▼/▶ の文字で表す */
+/* ページタブ「レイアウト」サブタブ（テンプレートサブタブの .template-grid / .template-card を共用） */
+.moss-layout-pm-thumb { width: 100%; height: 150px; background: var(--bg-primary); }
+.moss-layout-pm-sub { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }

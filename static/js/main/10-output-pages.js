@@ -22,6 +22,7 @@ import { _workMeta, renderWorkList } from './11a-work-manager.js';
 import { _pageMgrGroups, renderPageMgrGrid } from './11b-page-manager-tab.js';
 import { handleExport } from './12-text-png-export.js';
 import { state } from './01-state.js';
+import { renderMossLayoutManager } from '../moss-layout-assets.js';
 
 // ==============================
 // 出力管理
@@ -799,6 +800,8 @@ async function _activateOutputSubtab(target) {
         await renderOutputPageList();
     } else if (target === 'template') {
         renderTemplateList();
+    } else if (target === 'mosslayout') {
+        await renderMossLayoutManager();
     } else if (target === 'work') {
         await renderWorkList();
         await renderPageMgrGrid();
