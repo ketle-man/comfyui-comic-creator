@@ -2,6 +2,55 @@
 
 ---
 
+## 2026-11-23（v1.73.0: Gemini 4 の思考レベルを選べるように（Auto タブの設定・MOSS の AI レイアウト作成））
+
+**動機**: Gemini 4（gemini-4-hydrogen / neon / carbon / argon）への対応。CC のテキスト呼び出しは思考パラメータを送っていないので、何も変えなくても動く。ただ、Gemini 4 は既定の思考が深くて遅い（Neon で 48〜61 秒）。思考レベルを選んで、速さとコストを調整できるようにしたい。
+
+**調査**（2026-11-23）: Gemini 4 は `thinkingConfig.thinkingLevel` だけで思考を指定し、`thinkingBudget` と `MINIMAL` は 400 エラーになる。temperature/topP/topK は無視され、明示的なコンテキストキャッシュは非対応。API で直接確かめた結果: `LOW` と `low` はどちらも通る。Carbon に `XHIGH`、Gemini 4 に `MINIMAL` を送ると 400 になる。既定は Hydrogen・Neon が HIGH、Carbon・Argon が MEDIUM。
+
+**内容**
+- `py/ccc.py`: `_gemini_thinking_level(model, level)` を追加。Gemini 4 のときだけ LOW/MEDIUM/HIGH/XHIGH を送り、Carbon・Argon への XHIGH は HIGH に置き換える。Gemini 3.x 以前には送らない。`handle_auto_gemini_text` が body の `thinking_level` を受け取る。
+- 待ち時間: Gemini 4 は 180 秒から 600 秒に延ばした（Carbon・HIGH の4コマが 180 秒で時間切れになった）。時間切れは `auto_gemini_timeout`（「思考レベルを下げるか、別のモデルを選んでください」）で表示する。`HTTPError` は `URLError` の子クラスなので、タイムアウト以外はそのまま投げ直して、従来の Google API Error 表示を残した。
+- `auto-ai-client.js`: 設定に `geminiThinkingLevel` を追加。`geminiThinkingLevels(model)`（選べる値）と `geminiThinkingOptions(model)`（ラベル付き。先頭は「モデル既定（HIGH/MEDIUM）」）を追加し、`aiChat` → `geminiChat` で中継へ渡す。
+- 画面: Auto タブの設定（Gemini モデルの下）と MOSS の「AIでレイアウト作成」に「思考レベル」を追加した。Gemini 4 のときだけ表示し、XHIGH は Hydrogen・Neon のときだけ出す。モデルを替えて値が使えなくなったら「モデル既定」に戻す。設定はそれぞれ別に保存する。
+- ヘルプ（Auto に「Gemini 4 の思考レベル」）、README 3言語、i18n（`aiThink.*`、`err.autoGeminiTimeout`）。
+
+**検証**（8189、サーバー経由、AIレイアウト作成のプロンプトで具体例と4コマ）: Neon の LOW は 18〜20 秒、MEDIUM は 29〜33 秒、既定 HIGH は 48〜61 秒。Hydrogen の LOW は 9〜10 秒。Carbon（XHIGH 指定→HIGH）は 120〜156 秒。どれも自動チェックの全項目を満たした。ブラウザでは、モデルに応じて選択肢が切り替わること（3.5 flash では非表示）と、選んだ値が保存されることを確認した。180 秒を超えるケースが 600 秒の待ちで成功することは、実地では未確認（再実行が 155.8 秒で返ったため）。
+
+---
+
+## 2026-11-23（v1.73.0: MOSS-Image の「AIでレイアウト作成」）
+
+**動機**: サイズと指示（「雑誌の表紙」のような大まかなものから、「上部にタイトル"ABC"、その下に3段。各段は顔とサブタイトルを左右交互、両脇に縦書きで"おはよう"」のような具体的なものまで）から、レイアウトエディタの枠を AI で作りたい。AI エンジンは Auto タブと同じにする。
+
+**品質の事前確認**（同日）: 5つの指示（表紙・具体例・横長ポスター・縦4コマ・カフェ告知）を、ローカル4モデルと Gemini 3モデルに同じプロンプトで出して比較した。Gemini 3.5 flash（12〜15 秒）と 3.1 pro は全件で指示どおり。flash-lite は4コマでコマ枠しか出さない。ローカルは qwen3.8:27b（50〜110 秒）と qwen3.5:9b の思考オンが次点で、gemma4:e4b と mimo-v2.6 は具体的な指示に従えなかった。実際に MOSS（DMD 8step）で生成すると、3.5 flash のレイアウトは5件とも指示どおりの画像になった。ローカルの縦書き枠は縦いっぱいに取られていて、MOSS が同じ文字を繰り返し描き、ゴミ文字も混ざった。**長い方向だけ文字の量に合わせて詰める**と直った（両方向を詰めるとタイトルが小さくなりすぎる）。qwen3.8 は「Subtitle 1」のような仮の文字と、実在の雑誌名を使った。
+
+**内容**
+- `static/js/moss-llm-layout.js` を新設。英語の system プロンプトで `{prompt, items:[{type,caption,text,vertical,x,y,w,h}]}` を出させる。仮の文字と実在のブランド名は禁止し、文字は指示と同じ言語で書かせる。Ollama には JSON スキーマ（`format`）を渡し、Gemini は JSON モードを使う。
+- `normalizeLayout`: 不正な枠と空の文字枠を捨て、はみ出しをクランプし、最大30個にする。文字枠は短い方向から字の大きさを決め、長い方向が必要量の 1.3 倍を超えたら 1.15 倍まで詰める（中心は保つ）。`fontSize` もエディタの見積もりに合わせて設定する。読み込みは既存の `applyMossLayoutSnapshot`。
+- 画面: プロンプトタブの「生成対象」の下に折りたたみ欄を置いた。AI エンジンは Gemini（既定 gemini-3.5-flash）かローカル（接続先は Auto タブの設定）。モデル、思考モード（ローカルのみ）、指示、「レイアウトを作成」（経過秒数を表示）がある。サイズは「生成対象」のサイズを使う。枠があるときは置き換える前に確認する。設定は `ccc_moss_ai_layout` に保存する。
+- ローカルで作成したあとは、モデルをアンロードする（続けて MOSS で生成するときの VRAM の重なり対策）。
+- `auto-ai-client.js`: `applyGenOptions` に `settings.format` と `settings.numCtx` を追加した（Ollama のみ。渡したときだけ効くので、Auto タブの動作は変わらない）。
+
+**検証**（8189、claude-in-chrome で confirm を差し替え）: Gemini は具体例で 12 秒・枠 9 個になり、交互配置・両脇の縦書き・意味のあるサブタイトルが揃った。その枠から MOSS で生成した画像も指示どおりだった。ローカルの qwen3.5:9b はカフェ告知で 18 秒、表紙で 8 秒。作成後に Ollama のモデルがアンロードされること、設定が再読み込み後も残ることを確認した。
+
+---
+
+## 2026-11-23（v1.73.0: MOSS-Image レイアウトのグループ管理、ページタブ「レイアウト」サブタブ、アセット「L」のグループ折りたたみ表示）
+
+**動機**: 保存した MOSS-Image のレイアウトを、テンプレート（アセット「T」）と同じようにページタブで一覧表示し、グループで管理したい。アセット「L」もグループごとに折りたたんで表示したい。
+
+**内容**
+- 保存形式: 所属グループはレイアウトのレコードの `group` に持つ。グループ一覧（空のグループも残すため）は settings ストアの `moss_layout_groups`（`{ id, groups: [...] }`）に置く。どちらも一括バックアップにそのまま含まれる。表示するグループ名は「一覧 ∪ レイアウトが参照している名前」にした（バックアップの復元で片方だけ入っても見えるように）。
+- `moss-layout-assets.js`: グループの作成・名前変更（所属レイアウトも書き換える）・削除（所属レイアウトはグループなしに戻す）、レイアウトの名前変更・グループ割り当てを追加した。同じ名前で上書き保存してもグループは引き継ぐ。片方の一覧で変更したら両方を描き直す（`refreshAll`）。
+- ページタブ「レイアウト」サブタブ（`index.html`、テンプレートサブタブと同じ構成）: 一覧（SVG サムネイル・枠の数・サイズ・グループ）、「MOSS-Image で開く」（またはダブルクリック。読み込んでから `switchTab('moss')`）、名前変更、削除、グループで絞り込み、右パネルのグループ管理とグループへの割り当て。絞り込み中のグループの名前を変えたら、新しい名前で絞り込みを続ける。
+- アセット「L」: グループに入っているレイアウトは折りたためる見出しの下に、グループなしはその後に並べる（アセット T と同じ。空のグループは出さず、最初は全部たたむ）。向きは ▼/▶ の文字で表す（`.asset-folder.collapsed` の回転は打ち消した）。
+- `10-output-pages.js`: サブタブ `mosslayout` を開いたら `renderMossLayoutManager()` を呼ぶ。i18n は日英中。
+
+**検証**（8189）: 一覧表示、グループの作成・割り当て、アセット L での折りたたみ（リロード後も保持）、絞り込み、グループ名の変更（絞り込みとアセット L が追従）、グループの削除（レイアウトはグループなしに戻る）、名前の変更（同じ名前は拒否）、「MOSS-Image で開く」で MOSS タブへ切り替わることを確認した。Kapture では confirm を閉じられなかったので、confirm のテストは claude-in-chrome で window.confirm を差し替えて行った。
+
+---
+
 ## 2026-11-15（マニュアル v1.72.0 対応（日英中・同梱版）: プロンプト翻訳、MOSS レイアウト保存、v1.71.0 の WeVisOne-VL・OCR→MOSS のクリア、バックアップ）
 
 原稿（`eagle_comic_creator_spa/manual/{ja,en,zh}`、git 管理外。改訂前を `manual_backup_20261115_before_v1_72.zip` に保存）を改訂し、`cc_bundle_manual.py` で `docs/manual/{ja,en,zh}` を再生成（`--check` で mismatch 0）。対象バージョン表記は v1.72.0（次のリリースを想定。はじめに・目次・第3章）。v1.71.0 の分（WeVisOne-VL・OCR→MOSS 送信時のクリア）は未反映だったので一緒に入れた。
