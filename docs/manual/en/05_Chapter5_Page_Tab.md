@@ -2,12 +2,13 @@
 
 The "Page" tab is where you organize works and pages, manage templates, and export finished pages. This chapter looks in detail at the operations used in Chapter 4.
 
-The "Page" tab has three sub-tabs at the top.
+The "Page" tab has four sub-tabs at the top.
 
 | Sub-tab | What you can do |
 | --- | --- |
 | Works | Create, open, and delete works; reorder, duplicate, move, and delete pages; trash |
 | Templates | Create, import, rename, and delete templates; group them |
+| Layouts | List, rename, and delete layouts saved in the MOSS-Image tab; group them (5-4) |
 | Export | Export pages as images, SVG, PDF, or EPUB |
 
 ## 5-1 Works
@@ -232,8 +233,38 @@ The SVG format exports the page as shapes and text data instead of a picture. Te
 > **Tip**
 > The export libraries are built into the app, so every format can be exported without an internet connection. However, pages using web fonts such as Google Fonts may be exported with a substitute font if the font has not been loaded yet.
 
+## 5-4 Layouts (MOSS-Image layouts)
+
+The "Layouts" sub-tab lists the layouts saved in the MOSS-Image tab (Chapter 10, 10-6), in the same way as templates. Use it to rename layouts and sort them into groups as their number grows.
+
+Each card shows the box arrangement (object = green, character = pink, text = cyan, panel = yellow), the name, the number of boxes and the canvas size, and the group name.
+
+| Button | What it does |
+| --- | --- |
+| Open in MOSS-Image | Loads the selected layout into the MOSS-Image editor and opens the MOSS-Image tab (double-clicking a card does the same) |
+| Rename | Renames the selected layout. A name used by another layout cannot be used |
+| Delete | Deletes the selected layout (cannot be undone) |
+
+> **Caution**
+> "Open in MOSS-Image" replaces the boxes and the overall prompt in the editor (you are asked first when there are boxes). Save the current layout in the MOSS-Image tab first if you want to keep it.
+
+### Grouping
+
+The steps are the same as for templates.
+
+1. In "Group Management" on the right, enter a group name and press "Add".
+2. Select a layout, choose the group, and press "Add to Group". To take it out, press "Remove from Group".
+
+Press "✎" (pencil) to rename a group and "✕" (cross) to delete it. Deleting a group does not delete its layouts; they go back to having no group.
+
+Choose a group in the drop-down above the list to show only that group's layouts. The asset panel "L" in the MOSS-Image tab also shows the layouts folded by group.
+
+> **Tip**
+> New layouts are saved from the asset panel "L" in the MOSS-Image tab (this sub-tab has no save button). Groups are also included in the backup in the "Settings" tab (Chapter 13).
+
 > **Chapter summary**
 > - In "Works", create, open, and export works, and reorder, move, and delete pages. Deleted pages can be restored from the trash
 > - Make or import templates in "Templates". Use "Insert as Page" to add pages to a work
+> - In "Layouts", rename, delete, and group the layouts saved in the MOSS-Image tab. "Open in MOSS-Image" loads one into the editor
 > - In "Export", check the format, resolution, and pages before pressing "Save". Use 300–350 dpi for printing
 > - Exporting as SVG lets you re-edit text and shapes in Inkscape and similar software

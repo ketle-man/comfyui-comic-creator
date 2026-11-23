@@ -129,7 +129,7 @@ Other tabs are explained in their own chapters. Here is just how to tell them ap
 
 | Tab | What the screen looks like |
 | --- | --- |
-| Page | Three sub-tabs at the top: "Works", "Templates", and "Export". No asset panel |
+| Page | Four sub-tabs at the top: "Works", "Templates", "Layouts", and "Export". No asset panel |
 | Image | Asset panel (A, F, I) on the left, tool buttons at the top, layers on the right |
 | Font | A list of fonts and a preview |
 | Nanobanana+ | A "Nanobanana / Local" switch at the top, and two sub-tabs, "Generation" and "Nanobanana History" (the right half of "Generation" holds the reference images) |
@@ -150,7 +150,7 @@ The "Help" tab is a manual built into Comic Creator. It covers features in even 
 Help is available in Japanese, English, and Chinese, and follows the language chosen in the "Settings" tab.
 
 > **Tip**
-> This book is based on v1.72.0. If button names or positions differ from this book, search the Help tab to find the explanation for your current version.
+> This book is based on v1.73.0. If button names or positions differ from this book, search the Help tab to find the explanation for your current version.
 
 > **Chapter summary**
 > - The twelve tabs fall into three groups: "Create", "Create with AI", and "Support". The ones you use most are "Page" and "Layout"

@@ -132,6 +132,9 @@ In the "Auto" tab, AI creates a story and script from a theme, and even the pane
 > Gemini charges according to usage.
 
 > **Tip**
+> When you choose a Gemini 4 model (gemini-4-hydrogen / neon / carbon / argon) in "Gemini model", "Thinking level" appears. Choose from "Model default" (HIGH for Hydrogen and Neon, MEDIUM for Carbon and Argon), LOW, MEDIUM, HIGH, and XHIGH (Hydrogen and Neon only). Lower levels answer faster and cost less (for example, Neon takes about 50-60 seconds at HIGH and about 20 seconds at LOW). Gemini 4 can take minutes to answer, so the app waits up to 600 seconds. It is not shown for Gemini 3.x and earlier models. The same choice is available in "Create layout with AI" in the MOSS-Image tab (saved separately).
+
+> **Tip**
 > Even without AI, you can try the whole Auto flow with "Sample" in 11-5.
 
 ## 11-5 Creating a Story and Script with Auto

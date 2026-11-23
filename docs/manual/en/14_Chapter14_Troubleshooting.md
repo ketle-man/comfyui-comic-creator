@@ -87,6 +87,9 @@ When something does not work, try these three things first. They solve most prob
 | The 🌐 button does not appear | Workflow Studio is missing or v0.9.9 or earlier; "Use prompt translation" is off. It never appears for Nanobanana (Gemini) or for Auto with the Gemini engine | Check the status in "Settings" > "Prompt Translation" (Chapter 13) |
 | Backup shows "Failed to save: Failed to execute 'showSaveFilePicker'..." | v1.71 or earlier, and making the zip took long because of a lot of data | Update to v1.72.0 or later (Chapter 13) |
 | Boxes I drew disappeared after sending from OCR to MOSS-Image | "Send to MOSS-Image tab" clears the layout before adding (since v1.71.0) | Save the layout in the MOSS-Image tab before sending (Chapter 10, 10-6) |
+| "Create layout with AI" shows "The AI response could not be read as a layout" | The model could not answer in the required form (JSON) | Press it again. If that does not help, choose another model (such as gemini-3.5-flash) |
+| "Create layout with AI" does not follow the request | The model is not capable enough (such as a small local model) | Use Gemini. For a local model, use 9B or larger with "Thinking mode". Write a more specific request |
+| "Gemini did not respond within 600 seconds" appears | The Gemini 4 thinking level is high and the answer took too long | Lower the "Thinking level" or choose another model (Chapter 11, 11-4) |
 | G'MIC does not open | The executable path is wrong | Check for a red warning in "Settings" > "G'MIC Settings" |
 
 > **Chapter summary**

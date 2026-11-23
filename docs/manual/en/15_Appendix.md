@@ -30,6 +30,7 @@
 | API key | Your personal key for using services such as Gemini | Chapter 10 |
 | Local LLM | A text-generating AI running on your own PC (Ollama, etc.) | Chapter 11 |
 | Decision model | An AI that answers questions with probabilities instead of writing text | Chapters 11 and 10 |
+| Thinking level | How much Gemini 4 thinks before answering (LOW to XHIGH). Lower is faster and cheaper | Chapter 11 |
 | OCR | Reading the text in an image. In the OCR tab, it also finds each text's position (box) | Chapter 10 |
 | bbox (box) | A rectangle within an image. Used in the MOSS-Image layout and in OCR results | Chapter 10 |
 | Chat TE | A ComfyUI custom node that lets you chat with a text encoder (such as Qwen3-VL). Used for OCR's whole-image read | Chapter 10 |

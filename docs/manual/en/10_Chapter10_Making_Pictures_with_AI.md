@@ -404,6 +404,38 @@ Each card shows the box arrangement in the kind colors (object = green, characte
 
 Saved layouts are stored in the browser and are included in the backup in the "Settings" tab (Chapter 13).
 
+When you have many saved layouts, you can rename them and sort them into groups in the "Layouts" sub-tab of the "Page" tab (Chapter 5, 5-4). Grouped layouts are also shown folded by group in the asset panel "L" (press "▶" to open a group; groups start folded). Layouts without a group are listed below the groups.
+
+### Creating a layout with AI
+
+Describe the picture you want in words, and the AI creates the layout editor boxes (object, character, text) and the overall prompt. Both rough requests like "a magazine cover" and detailed ones that fix positions and counts work.
+
+1. Set the picture size with "Size" under "Target". The AI makes the layout at this size.
+2. Open "Create layout with AI" in the "Prompt" tab.
+3. Choose "Gemini" or "Local" in "AI engine", then choose the model next to it.
+4. Write the picture you want in "Request".
+5. Press "Create layout". The elapsed seconds are shown while it works; when it finishes, the boxes appear in the editor and the "Prompt" field is rewritten.
+
+Examples of requests:
+
+- **"A magazine cover"**: the AI comes up with cover-like boxes such as the magazine name, headlines, and a person. It also writes the text (magazine name, headlines)
+- **"Title "ABC" at the top, three rows below, each with a face and a subtitle alternating left and right, vertical text "Good morning" on both sides"**: the boxes follow the positions, counts, order, and writing directions you wrote. Text in quotes is used as is
+
+AI engines:
+
+- **Gemini**: the default model is gemini-3.5-flash (about 10-20 seconds per run). The API key is shared with Nanobanana (10-3). It is charged by usage. Gemini 4 models also let you choose a "Thinking level" (Chapter 11, 11-4)
+- **Local**: a local LLM such as Ollama. The connection uses the "Auto" tab settings (Chapter 11, 11-4). For detailed requests, a 9B or larger model with "Thinking mode" is recommended (tens of seconds to about 2 minutes). The model is unloaded from VRAM afterwards
+
+> **Caution**
+> Creating replaces the boxes and the overall prompt in the editor (you are asked first when there are boxes). "Undo" cannot bring them back, so save any layout you want to keep first.
+
+> **Tip**
+> - The text the AI writes (titles, headlines, etc.) is in the same language as your request. The box descriptions (captions) are written in English.
+> - The AI answer is not used as is: boxes that stick out of the canvas are moved inside, and text boxes are shortened to fit their text before loading (a vertical text box that is too long makes MOSS-Image draw the same text over and over).
+> - You can move the created boxes and edit their text like any other box. Save the layout in the asset panel "L" if you like it.
+> - The result changes a little each time, even with the same request. Press the button again if you do not like it.
+> - Small local models may not follow detailed requests (alternating, vertical text on both sides, and so on). In that case use Gemini or a larger model.
+
 ### Seed behavior
 
 - **Random** (default): a different seed every time. The value in the box is not used.
@@ -607,6 +639,7 @@ Pressing "Insert" in the Layout tab's "Text" tool, or in the Image tab's text to
 > - "Nanobanana" in the Settings tab switches between the Gemini API and the native node (`COMFY_API_KEY`)
 > - The MOSS-Image tab generates a whole page on your own PC, with boxes that say where objects, characters, and text go. Panels and dialogue can be imported from the page
 > - In the layout, "New" removes every box and "Clear Imported" removes only imported ones. Stacking order can also be changed with "Bring to front" and "Send to back"
+> - "Create layout with AI" lets the AI create the boxes and the overall prompt from a request. Saved layouts can be grouped in "Layouts" in the "Page" tab
 > - The "Local" mode of Nanobanana+ generates with Workflow Studio workflows. With Qwen Image 2.1, the inputs grow or shrink to match the number of images you add (up to 10)
 > - The OCR tab reads the text and positions in an image with Ollama models. For covers with lots of vertical text, replacing box text with the "Whole-image read (Chat TE)" helps. Results can be sent to MOSS-Image or inserted as text
 > - In MOSS-Image and OCR, choose "Select" so that dragging never draws a box. Deleted boxes come back with "Undo" (Ctrl + Z)

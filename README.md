@@ -321,7 +321,7 @@ MOSS-Image タブ上部のステータスが「利用可能」になれば準備
 
 ## マニュアル
 
-画像なしの入門マニュアル（v1.72.0対応）を同梱しています。日本語は [docs/manual/ja/](docs/manual/ja/)、英語は [docs/manual/en/](docs/manual/en/)、中国語（簡体字）は [docs/manual/zh/](docs/manual/zh/) です。目次は各フォルダの `00_目次.md`（英語は `00_Contents.md`、中国語は `00_目录.md`）から。
+画像なしの入門マニュアル（v1.73.0対応）を同梱しています。日本語は [docs/manual/ja/](docs/manual/ja/)、英語は [docs/manual/en/](docs/manual/en/)、中国語（簡体字）は [docs/manual/zh/](docs/manual/zh/) です。目次は各フォルダの `00_目次.md`（英語は `00_Contents.md`、中国語は `00_目录.md`）から。
 
 画像入りの EPUB 版（日本語・英語・中国語）は [Google ドライブの共有フォルダ](https://drive.google.com/drive/folders/1FE3RyYejQftbsK1kBnFwEi1SEjfJHF4Z) で公開しています。
 
