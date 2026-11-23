@@ -1279,10 +1279,24 @@ async def handle_save_auto_image(request):
     except Exception as e:
         return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+# Gemini 4 の思考レベル（generationConfig.thinkingConfig.thinkingLevel）。Gemini 4 は thinkingBudget と MINIMAL を受け付けず、
+# XHIGH は Hydrogen / Neon だけ（Carbon / Argon に送ると 400）。2026-11-23 に API で確認。Gemini 3.x 以前には送らない（従来どおり）
+_GEMINI4_THINKING_LEVELS = ('LOW', 'MEDIUM', 'HIGH', 'XHIGH')
+
+def _gemini_thinking_level(model, level):
+    """送ってよい思考レベル（大文字）を返す。送らない場合は None（空・未知の値・Gemini 4 以外のモデル）"""
+    level = str(level or '').strip().upper()
+    if level not in _GEMINI4_THINKING_LEVELS or not str(model).startswith('gemini-4'):
+        return None
+    if level == 'XHIGH' and not any(k in model for k in ('hydrogen', 'neon')):
+        return 'HIGH'
+    return level
+
 async def handle_auto_gemini_text(request):
     """Gemini APIでテキストを生成する（Autoタブのストーリー・脚本生成とChat用）。
     APIキーはサーバー側（NANOBANANA_API_KEY、Nanobananaタブと共通）にのみ置き、ブラウザへは出さない。
-    body: { model, messages:[{role:'system'|'user'|'assistant', content}], json?:bool, temperature?, max_tokens? }"""
+    body: { model, messages:[{role:'system'|'user'|'assistant', content}], json?:bool, temperature?, max_tokens?, thinking_level? }
+    thinking_level は Gemini 4 のときだけ送る（LOW/MEDIUM/HIGH/XHIGH、空ならモデル既定）"""
     try:
         if not NANOBANANA_API_KEY:
             return _error_response(CCCError('nanobanana_api_key_missing', 'Gemini APIキーが設定されていません。プラグインフォルダ直下の .env に NANOBANANA_API_KEY=... を記載し、ComfyUIを再起動してください。'), status=400)
@@ -1309,6 +1323,9 @@ async def handle_auto_gemini_text(request):
             generation_config['maxOutputTokens'] = max_tokens
         if data.get('json'):
             generation_config['responseMimeType'] = 'application/json'
+        thinking_level = _gemini_thinking_level(model, data.get('thinking_level'))
+        if thinking_level:
+            generation_config['thinkingConfig'] = {'thinkingLevel': thinking_level}
         payload = {'contents': contents}
         if system_parts:
             payload['systemInstruction'] = {'parts': system_parts}
@@ -1318,12 +1335,19 @@ async def handle_auto_gemini_text(request):
         # APIキーはURLクエリではなくヘッダーで送る（URLはログ・プロキシに残りやすいため）
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         req_body = json.dumps(payload).encode('utf-8')
+        # Gemini 4 は深く考えると 180 秒を超えることがある（Carbon・HIGH の4コマで実測）ので長めに待つ
+        timeout_s = 600 if model.startswith('gemini-4') else 180
         def _call():
             req = urllib.request.Request(api_url, data=req_body, headers={'Content-Type': 'application/json', 'x-goog-api-key': NANOBANANA_API_KEY}, method='POST')
-            with urllib.request.urlopen(req, timeout=180) as resp:
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
                 return json.loads(resp.read().decode('utf-8'))
         loop = asyncio.get_event_loop()
-        rd = await loop.run_in_executor(None, _call)
+        try:
+            rd = await loop.run_in_executor(None, _call)
+        except (TimeoutError, urllib.error.URLError) as e:
+            if isinstance(e, TimeoutError) or isinstance(getattr(e, 'reason', None), TimeoutError):
+                raise CCCError('auto_gemini_timeout', f'Gemini の応答が {timeout_s} 秒以内に返りませんでした', seconds=timeout_s)
+            raise
         texts = []
         for cand in rd.get('candidates', [])[:1]:
             for part in cand.get('content', {}).get('parts', []):

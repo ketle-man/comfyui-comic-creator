@@ -1766,6 +1766,10 @@
                             <select id="auto-gemini-model-select" class="comfyui-select auto-grow"></select>
                             <button id="auto-gemini-refresh-btn" class="btn small secondary" data-i18n="auto.refresh">更新</button>
                           </div>
+                          <div class="auto-row" id="auto-gemini-thinking-row" style="display:none">
+                            <label for="auto-gemini-thinking" data-i18n="aiThink.label">思考レベル:</label>
+                            <select id="auto-gemini-thinking" class="comfyui-select"></select>
+                          </div>
                           <div id="auto-gemini-key-status" class="auto-hint"></div>
                           <p class="auto-hint" data-i18n="auto.geminiHint">APIキーはNanobananaタブと共通です。</p>
                         </div>
@@ -2299,6 +2303,10 @@
                         </select>
                         <select id="moss-ai-model" class="comfyui-select" style="flex:1; min-width:0"></select>
                         <button id="moss-ai-refresh-btn" class="btn small secondary" data-i18n-title="mossAi.refreshTitle" title="モデル一覧を再取得">↻</button>
+                      </div>
+                      <div class="comfyui-field" id="moss-ai-gemini-thinking-field" style="display:none">
+                        <label class="comfyui-label" data-i18n="aiThink.label">思考レベル:</label>
+                        <select id="moss-ai-gemini-thinking" class="comfyui-select" style="width:auto"></select>
                       </div>
                       <div id="moss-ai-local-note" style="font-size:11px; color:#888; margin-bottom:4px; display:none" data-i18n="mossAi.localNote">ローカルの接続先（Ollama 等）は Auto タブの設定を使います。指示が具体的なときは 9B 以上のモデル＋思考オンを推奨（数十秒〜2分ほど）</div>
                       <div class="comfyui-field" id="moss-ai-think-field" style="display:none">

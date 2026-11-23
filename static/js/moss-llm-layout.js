@@ -12,7 +12,7 @@
 import { t } from './i18n.js';
 import {
     aiChat, loadAiSettings, validateAiSettings, fetchModels, fetchGeminiTextModels,
-    getBackendDefaultUrl, getGeminiKeyStatus, stripThinkingTags, unloadModel,
+    getBackendDefaultUrl, getGeminiKeyStatus, stripThinkingTags, unloadModel, geminiThinkingOptions,
 } from './auto-ai-client.js';
 import { getMossLayoutSnapshot, applyMossLayoutSnapshot, mossLayoutHasItems } from './moss.js';
 
@@ -157,6 +157,7 @@ function chatSettings() {
         geminiModel: engine === 'gemini' ? model : auto.geminiModel,
         model: engine === 'local' ? model : auto.model,
         thinkingMode: engine === 'local' && !!$('moss-ai-think')?.checked,
+        geminiThinkingLevel: engine === 'gemini' ? ($('moss-ai-gemini-thinking')?.value || '') : '',
         maxTokens: 0,
         format: SCHEMA,
         numCtx: 16384,   // 思考オンだと既定の長さでは足りないことがある
@@ -168,6 +169,19 @@ function setStatus(text, color) {
     if (!el) return;
     el.textContent = text || '';
     el.style.color = color || '';
+}
+
+// Gemini 4 のときだけ思考レベルを出す（モデルごとに選べる値が違う。保存した値がそのモデルに無ければ既定）
+function renderGeminiThinking() {
+    const field = $('moss-ai-gemini-thinking-field');
+    const sel = $('moss-ai-gemini-thinking');
+    if (!field || !sel) return;
+    const model = $('moss-ai-engine').value === 'gemini' ? $('moss-ai-model').value : '';
+    const opts = geminiThinkingOptions(model);
+    field.style.display = opts.length ? '' : 'none';
+    sel.replaceChildren(...opts.map((o) => new Option(o.label, o.value)));
+    const want = loadPrefs().geminiThinkingLevel || '';
+    sel.value = opts.some((o) => o.value === want) ? want : '';
 }
 
 async function loadModelList() {
@@ -192,9 +206,11 @@ async function loadModelList() {
         }
         sel.replaceChildren(...list.map((m) => new Option(m, m)));
         if (list.includes(want)) sel.value = want;
+        renderGeminiThinking();
         setStatus('');
     } catch (e) {
         sel.innerHTML = '';
+        renderGeminiThinking();
         setStatus(t('mossAi.modelsFailed', e.message || String(e)), '#e66');
     }
 }
@@ -263,7 +279,9 @@ function initMossLlmLayout() {
     engineSel.addEventListener('change', () => { savePrefs({ engine: engineSel.value }); loadModelList(); });
     $('moss-ai-model').addEventListener('change', (e) => {
         savePrefs(engineSel.value === 'gemini' ? { geminiModel: e.target.value } : { localModel: e.target.value });
+        renderGeminiThinking();
     });
+    $('moss-ai-gemini-thinking').addEventListener('change', (e) => savePrefs({ geminiThinkingLevel: e.target.value }));
     $('moss-ai-refresh-btn').addEventListener('click', () => loadModelList());
     $('moss-ai-think').addEventListener('change', (e) => savePrefs({ think: e.target.checked }));
     $('moss-ai-instruction').addEventListener('input', (e) => savePrefs({ instruction: e.target.value }));

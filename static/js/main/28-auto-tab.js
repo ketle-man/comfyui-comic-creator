@@ -13,6 +13,7 @@ import { t, getLang } from '../i18n.js';
 import {
     getBackendDefaultUrl, isValidBackendUrl, loadAiSettings, saveAiSettings, validateAiSettings, aiChat,
     fetchModels, testConnection, unloadModel, getGeminiKeyStatus, fetchGeminiTextModels, suggestHostMatchedUrl,
+    geminiThinkingLevels, geminiThinkingOptions,
 } from '../auto-ai-client.js';
 import { requestVramPrepare, describeVramResult, isLoopbackUrl } from '../vram-prepare.js';
 import {
@@ -547,6 +548,11 @@ function fillSelect(id, names, selected) {
     sel.value = selected || '';
 }
 
+function fillThinkingLevelSelect(sel, model, value) {
+    sel.replaceChildren(...geminiThinkingOptions(model).map((o) => new Option(o.label, o.value)));
+    sel.value = value || '';
+}
+
 function updateEngineSections() {
     const engine = checkedValue('auto-engine');
     $('auto-set-local').style.display = engine === 'local' ? '' : 'none';
@@ -562,6 +568,7 @@ function renderSettings() {
     $('auto-thinking').checked = !!s.thinkingMode;
     $('auto-max-tokens').value = s.maxTokens || 0;
     fillSelect('auto-gemini-model-select', [], s.geminiModel);
+    renderGeminiThinking(s.geminiThinkingLevel);
     updateEngineSections();
     // 画像生成: エンジンの選択（Chat側）と、各エンジンの設定
     setRadio('auto-imggen-engine', s.imageEngine);
@@ -620,10 +627,19 @@ async function refreshGeminiModels(silent) {
     try {
         const models = await fetchGeminiTextModels();
         fillSelect('auto-gemini-model-select', models, $('auto-gemini-model-select').value);
+        renderGeminiThinking($('auto-gemini-thinking').value || loadAiSettings().geminiThinkingLevel);
         if (!silent) setStatus('auto-settings-status', 'ok', t('auto.msgModelsLoaded', models.length));
     } catch (e) {
         if (!silent) setStatus('auto-settings-status', 'error', t('auto.msgModelsFailed', e.message));
     }
+}
+
+// Gemini 4 の思考レベル（Gemini 4 以外のモデルでは行ごと隠す。選んだ値がそのモデルに無ければ既定に戻す）
+function renderGeminiThinking(value) {
+    const model = $('auto-gemini-model-select').value;
+    const levels = geminiThinkingLevels(model);
+    $('auto-gemini-thinking-row').style.display = levels.length ? '' : 'none';
+    fillThinkingLevelSelect($('auto-gemini-thinking'), model, levels.includes(value) ? value : '');
 }
 
 async function onTestConnection() {
@@ -668,6 +684,7 @@ function onSaveSettings() {
         thinkingMode: $('auto-thinking').checked,
         maxTokens: Math.max(0, parseInt($('auto-max-tokens').value, 10) || 0),
         geminiModel: $('auto-gemini-model-select').value,
+        geminiThinkingLevel: geminiThinkingLevels($('auto-gemini-model-select').value).length ? $('auto-gemini-thinking').value : '',
         imgLocalWfEnabled: $('auto-img-wf-enabled').checked,
         imgLocalWfFile: $('auto-img-wf-select').value,
         imgLocalWidth: Math.max(64, parseInt($('auto-img-width').value, 10) || 1024),
@@ -1078,6 +1095,7 @@ function bindEvents() {
     $('auto-unload-btn').addEventListener('click', onUnloadModel);
     $('auto-model-refresh-btn').addEventListener('click', () => refreshLocalModels(false));
     $('auto-gemini-refresh-btn').addEventListener('click', () => refreshGeminiModels(false));
+    $('auto-gemini-model-select').addEventListener('change', () => renderGeminiThinking($('auto-gemini-thinking').value));
     $('auto-settings-save-btn').addEventListener('click', onSaveSettings);
     $('auto-decision-test-btn').addEventListener('click', onDecisionTest);
 }

@@ -12,7 +12,7 @@
 // 翻訳・VLM（画像入力）用の関数は移植していない（導入時に追加する）。
 // ============================================================
 
-import { resolveBackendError } from './i18n.js';
+import { resolveBackendError, t } from './i18n.js';
 
 export const LOCAL_BACKENDS = ['ollama', 'lmstudio', 'lemonade', 'unsloth'];
 
@@ -63,6 +63,7 @@ export const DEFAULT_AI_SETTINGS = Object.freeze({
     thinkingMode: false,
     maxTokens: 0,           // 0=バックエンド任せ
     geminiModel: '',
+    geminiThinkingLevel: '',   // Gemini 4 の思考レベル（''=モデル既定。geminiThinkingLevels を参照）
     // 画像生成（Chatの画像生成ボタン）。エンジンの選択はChat側、各エンジンの設定は設定タブ
     imageEngine: 'local',            // 'local'（Workflow Studio経由）| 'gemini'（Nanobanana）
     imgLocalWfEnabled: false,        // 専用ワークフローを使う
@@ -266,6 +267,22 @@ export async function fetchGeminiTextModels() {
         .filter((name) => /^gemini-/.test(name) && !/image|imagen|tts|audio|live|embedding|robotics|computer-use|aqa/i.test(name));
 }
 
+// Gemini 4 の思考レベルの選択肢（Gemini 4 以外は [] ＝選べない）。XHIGH は Hydrogen / Neon だけ。
+// 既定（''）は Hydrogen / Neon が HIGH、Carbon / Argon が MEDIUM（Google のドキュメントより）
+export function geminiThinkingLevels(model) {
+    const m = String(model || '');
+    if (!m.startsWith('gemini-4')) return [];
+    return /hydrogen|neon/.test(m) ? ['LOW', 'MEDIUM', 'HIGH', 'XHIGH'] : ['LOW', 'MEDIUM', 'HIGH'];
+}
+
+// 思考レベルのセレクト用の選択肢 [{ value, label }]（先頭は「モデル既定」）。Gemini 4 以外は []
+export function geminiThinkingOptions(model) {
+    const levels = geminiThinkingLevels(model);
+    if (!levels.length) return [];
+    const def = /hydrogen|neon/.test(model) ? 'HIGH' : 'MEDIUM';
+    return [{ value: '', label: t('aiThink.default', def) }, ...levels.map((v) => ({ value: v, label: t(`aiThink.${v}`) }))];
+}
+
 export async function geminiChat(model, messages, opts = {}) {
     const data = await geminiRequest('/api/ccc/auto/gemini-text', {
         method: 'POST',
@@ -276,6 +293,7 @@ export async function geminiChat(model, messages, opts = {}) {
             json: !!opts.json,
             temperature: opts.temperature,
             max_tokens: opts.maxTokens,
+            thinking_level: opts.thinkingLevel || '',
         }),
     });
     return data.text || '';
@@ -300,7 +318,7 @@ export function validateAiSettings(settings) {
 // 戻り値: { content, toolCalls }
 export async function aiChat(settings, messages, opts = {}) {
     if (settings.engine === 'gemini') {
-        const content = await geminiChat(settings.geminiModel, messages, { json: opts.json });
+        const content = await geminiChat(settings.geminiModel, messages, { json: opts.json, thinkingLevel: settings.geminiThinkingLevel });
         return { content, toolCalls: null };
     }
     const url = (settings.backendUrl || getBackendDefaultUrl(settings.backend)).replace(/\/+$/, '');
