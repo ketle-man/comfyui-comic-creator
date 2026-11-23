@@ -2287,6 +2287,36 @@
                       <div id="moss-panel-list"></div>
                     </div>
                   </details>
+                  <!-- AIでレイアウト作成（moss-llm-layout.js） -->
+                  <details id="moss-ai-details" class="moss-collapse" style="margin-top:8px">
+                    <summary data-i18n="mossAi.title">AIでレイアウト作成</summary>
+                    <div class="comfyui-field-group">
+                      <div class="comfyui-field">
+                        <label class="comfyui-label" data-i18n="mossAi.engine">AIエンジン:</label>
+                        <select id="moss-ai-engine" class="comfyui-select" style="width:auto">
+                          <option value="gemini">Gemini</option>
+                          <option value="local" data-i18n="mossAi.engineLocal">ローカル</option>
+                        </select>
+                        <select id="moss-ai-model" class="comfyui-select" style="flex:1; min-width:0"></select>
+                        <button id="moss-ai-refresh-btn" class="btn small secondary" data-i18n-title="mossAi.refreshTitle" title="モデル一覧を再取得">↻</button>
+                      </div>
+                      <div id="moss-ai-local-note" style="font-size:11px; color:#888; margin-bottom:4px; display:none" data-i18n="mossAi.localNote">ローカルの接続先（Ollama 等）は Auto タブの設定を使います。指示が具体的なときは 9B 以上のモデル＋思考オンを推奨（数十秒〜2分ほど）</div>
+                      <div class="comfyui-field" id="moss-ai-think-field" style="display:none">
+                        <label class="comfyui-checkbox-label" style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+                          <input type="checkbox" id="moss-ai-think"> <span data-i18n="mossAi.think">思考モード（遅くなるが指示に従いやすい）</span>
+                        </label>
+                      </div>
+                      <div class="comfyui-field">
+                        <label class="comfyui-label" data-i18n="mossAi.instruction">指示:</label>
+                        <textarea id="moss-ai-instruction" rows="4" class="comfyui-textarea" style="width:100%; background:#111; color:#fff; box-sizing:border-box;" data-i18n-placeholder="mossAi.placeholder" placeholder="例: 雑誌の表紙"></textarea>
+                      </div>
+                      <div style="font-size:11px; color:#888; margin-bottom:6px;" data-i18n="mossAi.note">サイズは「生成対象」のサイズで作ります。エディタの今の枠と全体プロンプトは置き換わります（作成後に手で直したり、アセット「L」に保存したりできます）</div>
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <button id="moss-ai-create-btn" class="btn small primary" data-i18n="mossAi.create">レイアウトを作成</button>
+                        <span id="moss-ai-status" style="font-size:12px;"></span>
+                      </div>
+                    </div>
+                  </details>
                   <div class="comfyui-field-group" style="margin-top:12px">
                     <div class="comfyui-field">
                       <label class="comfyui-label" data-i18n="moss.promptLabel">プロンプト（画像全体の説明。レイアウト使用時はsummaryになる）:</label>
@@ -3069,6 +3099,7 @@
     <script type="module" src="/ccc_static/js/i18n.js"></script>
     <script type="module" src="/ccc_static/js/nanobanana.js"></script>
     <script type="module" src="/ccc_static/js/moss.js"></script>
+    <script type="module" src="/ccc_static/js/moss-llm-layout.js"></script>
     <script type="module" src="/ccc_static/js/pixifx.js"></script>
     <script type="module" src="/ccc_static/js/text-style-modal.js"></script>
     <script type="module" src="/ccc_static/js/pose3d.js"></script>

@@ -115,6 +115,9 @@ function applyGenOptions(body, backend, settings) {
     if (backend === 'ollama') {
         body.think = !!settings?.thinkingMode;
         if (maxTokens > 0) body.options = { ...(body.options || {}), num_predict: maxTokens };
+        // 構造化出力（JSONスキーマ）とコンテキスト長は、使う側が settings で渡したときだけ付ける（MOSSのAIレイアウト作成）
+        if (settings?.format) body.format = settings.format;
+        if (settings?.numCtx > 0) body.options = { ...(body.options || {}), num_ctx: settings.numCtx };
     } else if (maxTokens > 0) {
         body.max_tokens = maxTokens;
     }
